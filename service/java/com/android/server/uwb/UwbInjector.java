@@ -17,23 +17,26 @@
 package com.android.server.uwb;
 
 import static android.Manifest.permission.UWB_RANGING;
-import static android.content.PermissionChecker.PERMISSION_GRANTED;
+import static android.permission.PermissionManager.PERMISSION_GRANTED;
 
 import android.annotation.NonNull;
 import android.content.ApexEnvironment;
 import android.content.AttributionSource;
 import android.content.Context;
-import android.content.PermissionChecker;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.ServiceManager;
+import android.permission.PermissionManager;
 import android.provider.Settings;
 import android.util.AtomicFile;
+import android.util.Log;
 import android.uwb.IUwbAdapter;
 
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
 /**
  * To be used for dependency injection (especially helps mocking static dependencies).
@@ -44,6 +47,7 @@ public class UwbInjector {
     private static final String VENDOR_SERVICE_NAME = "uwb_vendor";
 
     private final Context mContext;
+    private final PermissionManager mPermissionManager;
     private final UwbSettingsStore mUwbSettingsStore;
     private final Looper mLooper;
 
@@ -54,6 +58,7 @@ public class UwbInjector {
         mLooper = uwbHandlerThread.getLooper();
 
         mContext = context;
+        mPermissionManager = context.getSystemService(PermissionManager.class);
         mUwbSettingsStore = new UwbSettingsStore(
                 context, new Handler(mLooper),
                 new AtomicFile(new File(getDeviceProtectedDataDir(),
@@ -68,9 +73,17 @@ public class UwbInjector {
      * @return Returns the vendor service handle.
      */
     public IUwbAdapter getVendorService() {
-        IBinder b = ServiceManager.getService(VENDOR_SERVICE_NAME);
-        if (b == null) return null;
-        return IUwbAdapter.Stub.asInterface(b);
+        // TODO(b/196225233): Remove this when qorvo stack is integrated.
+        try {
+            Method getServiceMethod = ServiceManager.class.getMethod("getService", String.class);
+            IBinder b = (IBinder) getServiceMethod.invoke(null, VENDOR_SERVICE_NAME);
+            if (b == null) return null;
+            return IUwbAdapter.Stub.asInterface(b);
+        } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException
+                | InvocationTargetException e) {
+            Log.e(TAG, "Reflection failure", e);
+            return null;
+        }
     }
 
     /**
@@ -83,8 +96,8 @@ public class UwbInjector {
         if (!attributionSource.checkCallingUid()) {
             throw new SecurityException("Invalid attribution source " + attributionSource);
         }
-        int permissionCheckResult = PermissionChecker.checkPermissionForPreflight(
-                mContext, UWB_RANGING, attributionSource);
+        int permissionCheckResult = mPermissionManager.checkPermissionForPreflight(
+                UWB_RANGING, attributionSource);
         if (permissionCheckResult != PERMISSION_GRANTED) {
             throw new SecurityException("Caller does not hold UWB_RANGING permission");
         }
@@ -98,8 +111,8 @@ public class UwbInjector {
      */
     public boolean checkUwbRangingPermissionForDataDelivery(
             @NonNull AttributionSource attributionSource, @NonNull String message) {
-        int permissionCheckResult = PermissionChecker.checkPermissionForDataDelivery(
-                mContext, UWB_RANGING, -1, attributionSource, message);
+        int permissionCheckResult = mPermissionManager.checkPermissionForDataDelivery(
+                UWB_RANGING, attributionSource, message);
         return permissionCheckResult == PERMISSION_GRANTED;
     }
 
