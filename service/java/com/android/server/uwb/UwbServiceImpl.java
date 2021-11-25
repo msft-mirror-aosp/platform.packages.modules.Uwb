@@ -28,7 +28,6 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.os.PersistableBundle;
 import android.os.RemoteException;
-import android.os.SystemProperties;
 import android.provider.Settings;
 import android.util.ArrayMap;
 import android.util.Log;
@@ -40,6 +39,7 @@ import android.uwb.IUwbRangingCallbacks2;
 import android.uwb.RangingReport;
 import android.uwb.RangingSession;
 import android.uwb.SessionHandle;
+import android.uwb.UwbAddress;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.uwb.UwbService;
@@ -249,7 +249,7 @@ public class UwbServiceImpl extends IUwbAdapter2.Stub implements IBinder.DeathRe
             throws IllegalStateException, RemoteException {
         if (mVendorUwbAdapter != null) return mVendorUwbAdapter;
         // TODO(b/196225233): Remove this when qorvo stack is integrated.
-        if (SystemProperties.getBoolean("persist.uwb.enable_uci_stack", false)) {
+        if (mUwbInjector.isUciStackEnabled()) {
             Log.i(TAG, "Using the UCI stack");
             mVendorUwbAdapter = new UwbService(mContext, new NativeUwbManager(), mUwbMetrics,
                     mUwbInjector).getIUwbAdapter();
@@ -365,6 +365,37 @@ public class UwbServiceImpl extends IUwbAdapter2.Stub implements IBinder.DeathRe
     public void closeRanging(SessionHandle sessionHandle) throws RemoteException {
         enforceUwbPrivilegedPermission();
         getVendorUwbAdapter().closeRanging(sessionHandle);
+    }
+
+    @Override
+    public void addControlee(SessionHandle sessionHandle, PersistableBundle params) {
+        enforceUwbPrivilegedPermission();
+        // TODO(b/200678461): Implement this.
+    }
+
+    @Override
+    public void removeControlee(SessionHandle sessionHandle, PersistableBundle params) {
+        enforceUwbPrivilegedPermission();
+        // TODO(b/200678461): Implement this.
+    }
+
+    @Override
+    public void suspend(SessionHandle sessionHandle, PersistableBundle params) {
+        enforceUwbPrivilegedPermission();
+        // TODO(b/200678461): Implement this.
+    }
+
+    @Override
+    public void resume(SessionHandle sessionHandle, PersistableBundle params) {
+        enforceUwbPrivilegedPermission();
+        // TODO(b/200678461): Implement this.
+    }
+
+    @Override
+    public void sendData(SessionHandle sessionHandle, UwbAddress remoteDeviceAddress,
+            PersistableBundle params, byte[] data) {
+        enforceUwbPrivilegedPermission();
+        // TODO(b/200678461): Implement this.
     }
 
     @Override
