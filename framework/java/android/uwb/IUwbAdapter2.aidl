@@ -19,6 +19,7 @@ package android.uwb;
 import android.content.AttributionSource;
 import android.os.PersistableBundle;
 import android.uwb.IUwbAdapterStateCallbacks;
+import android.uwb.IUwbAdfProvisionStateCallbacks;
 import android.uwb.IUwbRangingCallbacks2;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
@@ -29,6 +30,7 @@ import android.uwb.UwbAddress;
  * Temporary AIDL interface name for the interface between UwbManager & UwbService.
  * The existing IUwbAdapter interface is kept behind for providing backwards
  * compatibility with the old UWB architecture.
+ * TODO(b/211025367): Remove all the duplicate javadocs here.
  */
 interface IUwbAdapter2 {
   /*
@@ -276,28 +278,43 @@ interface IUwbAdapter2 {
    */
   int getAdapterState();
 
-   /**
-    * Returns a list of UWB chip identifiers.
-    *
-    * Callers can invoke methods on a specific UWB chip by passing its {@code chipId} to the
-    * method.
-    *
-    * @return list of UWB chip identifiers for a multi-HAL system, or a list of a single chip
-    * identifier for a single HAL system.
-    */
-   List<String> getChipIds();
+  /**
+   * Returns a list of UWB chip identifiers.
+   *
+   * Callers can invoke methods on a specific UWB chip by passing its {@code chipId} to the
+   * method.
+   *
+   * @return list of UWB chip identifiers for a multi-HAL system, or a list of a single chip
+   * identifier for a single HAL system.
+   */
+  List<String> getChipIds();
 
-   /**
-    * Returns the default UWB chip identifier.
-    *
-    * If callers do not pass a specific {@code chipId} to UWB methods, then the method will be
-    * invoked on the default chip, which is determined at system initialization from a configuration
-    * file.
-    *
-    * @return default UWB chip identifier for a multi-HAL system, or the identifier of the only UWB
-    * chip in a single HAL system.
-    */
-   String getDefaultChipId();
+  /**
+   * Returns the default UWB chip identifier.
+   *
+   * If callers do not pass a specific {@code chipId} to UWB methods, then the method will be
+   * invoked on the default chip, which is determined at system initialization from a configuration
+   * file.
+   *
+   * @return default UWB chip identifier for a multi-HAL system, or the identifier of the only UWB
+   * chip in a single HAL system.
+   */
+  String getDefaultChipId();
+
+  PersistableBundle addServiceProfile(in PersistableBundle parameters);
+
+  int removeServiceProfile(in PersistableBundle parameters);
+
+  PersistableBundle getAllServiceProfiles();
+
+  PersistableBundle getAdfProvisioningAuthorities(in PersistableBundle parameters);
+
+  PersistableBundle getAdfCertificateAndInfo(in PersistableBundle parameters);
+
+  void provisionProfileAdfByScript(in PersistableBundle serviceProfileBundle,
+            in IUwbAdfProvisionStateCallbacks callback);
+
+  int removeProfileAdf(in PersistableBundle serviceProfileBundle);
 
   /**
    * The maximum allowed time to open a ranging session.
