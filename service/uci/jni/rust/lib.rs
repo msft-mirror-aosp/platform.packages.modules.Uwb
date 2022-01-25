@@ -3,11 +3,11 @@ use android_logger::FilterBuilder;
 use jni::JNIEnv;
 use jni::objects::{JObject, JValue};
 use jni::sys::{jboolean, jbyte, jbyteArray, jint, jintArray, jlong, jobject};
-use log::{error, info, warn, LevelFilter};
+use log::{error, info, LevelFilter};
 use uwb_uci_rust::event_manager::EventManager;
 use uwb_uci_rust::error::UwbErr;
 use uwb_uci_rust::uci::{Dispatcher, JNICommand, uci_hrcv::UciResponse};
-use uwb_uci_packets::StatusCode;
+use uwb_uci_packets::{StatusCode, SessionGetAppConfigRspBuilder, SessionSetAppConfigRspBuilder};
 
 const STATUS_OK: i8 = 0;
 const STATUS_FAILED: i8 = 2;
@@ -135,20 +135,47 @@ pub extern "system" fn Java_com_android_uwb_jni_NativeUwbManager_nativeGetSessio
 
 /// set app configurations
 #[no_mangle]
-pub extern "system" fn Java_com_android_uwb_jni_NativeUwbManager_nativeSetAppConfigurations(env: JNIEnv, _obj: JObject, _session_id: jint, _no_of_params: jint, _app_config_param_len: jint, _app_config_params: jbyteArray) -> jbyteArray {
+pub extern "system" fn Java_com_android_uwb_jni_NativeUwbManager_nativeSetAppConfigurations(env: JNIEnv, obj: JObject, session_id: jint, no_of_params: jint, app_config_param_len: jint, app_config_params: jbyteArray) -> jbyteArray {
     info!("Java_com_android_uwb_jni_NativeUwbManager_nativeSetAppConfigurations: enter");
-    // TODO: implement this function
-    let buf = [1; 10];
-    env.byte_array_from_slice(&buf).unwrap()
+    match set_app_configurations(env, obj, session_id as u32, no_of_params as u32, app_config_param_len as u32, app_config_params) {
+        Ok(data) => {
+            let mut buf = vec![0u8; data.cfg_status.len() + 2];
+            buf[0] = data.status as u8;
+            buf[1] = data.cfg_status.len() as u8;
+            if !data.cfg_status.is_empty() {
+                for idx in 0..data.cfg_status.len() {
+                    buf[idx * 2 + 2] = data.cfg_status[idx].cfg_id as u8;
+                    buf[idx * 2 + 3] = data.cfg_status[idx].status as u8;
+                }
+            }
+            env.byte_array_from_slice(&buf).unwrap()
+        }
+        Err(e) => {
+            error!("SetAppConfig failed with: {:?}", e);
+            *JObject::null()
+        },
+    }
 }
 
 /// get app configurations
 #[no_mangle]
-pub extern "system" fn Java_com_android_uwb_jni_NativeUwbManager_nativeGetAppConfigurations(env: JNIEnv, _obj: JObject, _session_id: jint, _no_of_params: jint, _app_config_param_len: jint, _app_config_params: jbyteArray) -> jbyteArray {
+pub extern "system" fn Java_com_android_uwb_jni_NativeUwbManager_nativeGetAppConfigurations(env: JNIEnv, obj: JObject, session_id: jint, no_of_params: jint, app_config_param_len: jint, app_config_params: jbyteArray) -> jbyteArray {
     info!("Java_com_android_uwb_jni_NativeUwbManager_nativeGetAppConfigurations: enter");
-    // TODO: implement this function
-    let buf = [1; 10];
-    env.byte_array_from_slice(&buf).unwrap()
+    match get_app_configurations(env, obj, session_id as u32, no_of_params as u32, app_config_param_len as u32, app_config_params) {
+        Ok(data) => {
+            let mut buf: Vec<u8> = vec![data.status as u8, data.tlvs.len() as u8];
+            for tlv in data.tlvs {
+                buf.push(tlv.cfg_id as u8);
+                buf.push(tlv.v.len() as u8);
+                buf.extend(&tlv.v);
+            }
+            env.byte_array_from_slice(&buf).unwrap()
+        }
+        Err(e) => {
+            error!("GetAppConfig failed with: {:?}", e);
+            *JObject::null()
+        },
+    }
 }
 
 /// update multicast list
@@ -198,7 +225,7 @@ fn do_initialize(env: JNIEnv, obj: JObject) -> Result<(), UwbErr> {
             }
         },
         Err(e) => {
-            warn!("Failed to get device info with: {:?}", e);
+            error!("GetDeviceInfo failed with: {:?}", e);
             return Err(UwbErr::failed());
         },
     }
@@ -207,11 +234,11 @@ fn do_initialize(env: JNIEnv, obj: JObject) -> Result<(), UwbErr> {
             info!("set_core_device_configurations is success");
             return Ok(());
         },
-        _ => info!("set_core_device_configurations is failed"),
+        Err(e) => error!("set_core_device_configurations failed with: {:?}", e),
     };
     match uwa_disable(false) {
         Ok(()) => info!("UWA_disable(false) success."),
-        _ => warn!("UWA_disable(false) is failed."),
+        _ => error!("UWA_disable(false) is failed."),
     };
     Err(UwbErr::failed())
 }
@@ -227,7 +254,7 @@ fn get_specification_info<'a>(env: JNIEnv, obj: JObject) -> Result<[JValue<'a>; 
     let mut para = [JValue::Int(0); 16];
     let dispatcher = get_dispatcher(env, obj)?;
     if dispatcher.device_info.is_none() {
-        warn!("Fail to get specification info.");
+        error!("Fail to get specification info.");
         return Err(UwbErr::failed());
     }
     if let Some(data) = &dispatcher.device_info {
@@ -309,6 +336,28 @@ fn get_session_state(env: JNIEnv, obj: JObject, session_id: u32) -> Result<jbyte
     }
 }
 
+fn set_app_configurations(env: JNIEnv, obj: JObject, session_id: u32, no_of_params: u32, app_config_param_len: u32, app_config_params: jintArray) -> Result<SessionSetAppConfigRspBuilder, UwbErr> {
+    let app_configs = env.convert_byte_array(app_config_params)?;
+    let dispatcher = get_dispatcher(env, obj)?;
+    match dispatcher.block_on_jni_command(JNICommand::UciSetAppConfig{session_id, no_of_params, app_config_param_len, app_configs})? {
+        UciResponse::SessionSetAppConfigRsp(data) => {
+            Ok(data)
+        },
+        _ => Err(UwbErr::failed()),
+    }
+}
+
+fn get_app_configurations(env: JNIEnv, obj: JObject, session_id: u32, no_of_params: u32, app_config_param_len: u32, app_config_params: jintArray) -> Result<SessionGetAppConfigRspBuilder, UwbErr> {
+    let app_configs = env.convert_byte_array(app_config_params)?;
+    let dispatcher = get_dispatcher(env, obj)?;
+    match dispatcher.block_on_jni_command(JNICommand::UciGetAppConfig{session_id, no_of_params, app_config_param_len, app_configs})? {
+        UciResponse::SessionGetAppConfigRsp(data) => {
+            Ok(data)
+        },
+        _ => Err(UwbErr::failed()),
+    }
+}
+
 fn multicast_list_update(env: JNIEnv, obj: JObject, session_id: u32, action: u8, no_of_controlee: u8, address: jbyteArray, sub_session_id: jintArray) -> Result<(), UwbErr> {
     let address_list = env.convert_byte_array(address)?;
     let mut sub_session_id_list = vec![0i32; env.get_array_length(sub_session_id)?.try_into().unwrap()];
@@ -345,7 +394,7 @@ fn get_dispatcher<'a>(env: JNIEnv, obj: JObject) -> Result<&'a mut Dispatcher, U
     let dispatcher_ptr_value = env.get_field(obj, "mDispatcherPointer", "J")?;
     let dispatcher_ptr = dispatcher_ptr_value.j()?;
     if dispatcher_ptr == 0i64 {
-        warn!("The dispatcher is not initialized.");
+        error!("The dispatcher is not initialized.");
         return Err(UwbErr::NoneDispatcher);
     }
     // Safety: dispatcher pointer must not be a null pointer and it must point to a valid dispatcher object.
