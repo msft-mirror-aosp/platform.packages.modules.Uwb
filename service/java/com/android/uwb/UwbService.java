@@ -42,6 +42,7 @@ import android.uwb.UwbManager.AdapterStateCallback;
 import com.android.server.uwb.UwbCountryCode;
 import com.android.server.uwb.UwbMetrics;
 import com.android.uwb.data.UwbUciConstants;
+import com.android.uwb.data.UwbVendorUciResponse;
 import com.android.uwb.info.UwbSpecificationInfo;
 import com.android.uwb.jni.INativeUwbManager;
 import com.android.uwb.jni.NativeUwbManager;
@@ -52,7 +53,17 @@ import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+/**
+ * Implementation of {@link android.uwb.IUwbAdapter2} binder service.
+ * TODO(b/196225233): Merge with {@link com.android.uwb.server.UwbServiceImpl}.
+ */
 public class UwbService implements INativeUwbManager.DeviceNotification,
         INativeUwbManager.VendorNotification {
     private static final String TAG = "UwbService";
@@ -63,6 +74,8 @@ public class UwbService implements INativeUwbManager.DeviceNotification,
     private static final int TASK_DISABLE = 2;
 
     private static final int WATCHDOG_MS = 10000;
+    private static final int SEND_VENDOR_CMD_TIMEOUT_MS = 10000;
+
     private final PowerManager.WakeLock mUwbWakeLock;
     private final Context mContext;
     private final UwbAdapterService mUwbAdapterService;
@@ -117,11 +130,13 @@ public class UwbService implements INativeUwbManager.DeviceNotification,
         mUwbCountryCode = uwbCountryCode;
         mSessionManager = new UwbSessionManager(mNativeUwbManager, mUwbMetrics, serviceLooper);
 
-        initIntentFilter();
+        // TODO(b/196225233):  Let UwbServiceImpl handle APM mode.
+        // initIntentFilter();
         updateState(AdapterStateCallback.STATE_DISABLED, StateChangeReason.SYSTEM_BOOT);
 
         mEnableDisableTask = new EnableDisableTask(serviceLooper);
-        mEnableDisableTask.execute(TASK_ENABLE);
+        // TODO(b/196225233): Let UwbServiceImpl initialize the stack based on toggle state.
+        // mEnableDisableTask.execute(TASK_ENABLE);
     }
 
     // TODO(b/196225233): Remove this when qorvo stack is integrated.
@@ -163,20 +178,14 @@ public class UwbService implements INativeUwbManager.DeviceNotification,
     }
 
     @Override
-    public void onVendorUciResponseReceived(int gid, int oid, byte[] payload)
-            throws RemoteException {
-        Log.i(TAG, "onVendorUciResponseReceived");
-        if (mCallBack != null) {
-            mCallBack.onVendorResponseReceived(gid, oid, payload);
-        }
-    }
-
-    @Override
-    public void onVendorUciNotificationReceived(int gid, int oid, byte[] payload)
-            throws RemoteException {
+    public void onVendorUciNotificationReceived(int gid, int oid, byte[] payload) {
         Log.i(TAG, "onVendorUciNotificationReceived");
         if (mCallBack != null) {
-            mCallBack.onVendorNotificationReceived(gid, oid, payload);
+            try {
+                mCallBack.onVendorNotificationReceived(gid, oid, payload);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Failed to send vendor notification", e);
+            }
         }
     }
 
@@ -250,14 +259,12 @@ public class UwbService implements INativeUwbManager.DeviceNotification,
             mAdapterMap.remove(pid);
         }
 
-        public void registerVendorExtensionCallback(IUwbVendorUciCallback callbacks)
-                throws RemoteException {
+        public void registerVendorExtensionCallback(IUwbVendorUciCallback callbacks) {
             Log.e(TAG, "Register the callback");
             mCallBack = callbacks;
         }
 
-        public void unregisterVendorExtensionCallback(IUwbVendorUciCallback callbacks)
-                throws RemoteException {
+        public void unregisterVendorExtensionCallback(IUwbVendorUciCallback callbacks) {
             Log.e(TAG, "Unregister the callback");
             mCallBack = null;
         }
@@ -361,20 +368,55 @@ public class UwbService implements INativeUwbManager.DeviceNotification,
             int task = enabled ? TASK_ENABLE : TASK_DISABLE;
 
             if (enabled && isUwbEnabled()) {
-                throw new RemoteException("Uwb is already enabled");
+                Log.w(TAG, "Uwb is already enabled");
             } else if (!enabled && !isUwbEnabled()) {
-                throw new RemoteException("Uwb is already disabled");
+                Log.w(TAG, "Uwb is already disabled");
             }
 
             mEnableDisableTask.execute(task);
         }
 
+        private void sendVendorUciResponse(int gid, int oid, byte[] payload) {
+            Log.i(TAG, "onVendorUciResponseReceived");
+            if (mCallBack != null) {
+                try {
+                    mCallBack.onVendorResponseReceived(gid, oid, payload);
+                } catch (RemoteException e) {
+                    Log.e(TAG, "Failed to send vendor response", e);
+                }
+            }
+        }
+
         public synchronized int sendVendorUciMessage(int gid, int oid, byte[] payload) {
             if ((!isUwbEnabled())) {
-                Log.e(TAG, "sendRawUci : Uwb is not enabled");
+                Log.e(TAG, "sendRawVendor : Uwb is not enabled");
                 return UwbUciConstants.STATUS_CODE_FAILED;
             }
-            return mNativeUwbManager.sendRawUci(gid, oid, payload);
+            // TODO(b/211445008): Consolidate to a single uwb thread.
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            FutureTask<Byte> sendVendorCmdTask = new FutureTask<>(
+                    () -> {
+                        UwbVendorUciResponse response =
+                                mNativeUwbManager.sendRawVendorCmd(gid, oid, payload);
+                        if (response.status == UwbUciConstants.STATUS_CODE_OK) {
+                            sendVendorUciResponse(response.gid, response.oid, response.payload);
+                        }
+                        return response.status;
+                    });
+            executor.submit(sendVendorCmdTask);
+            int status = UwbUciConstants.STATUS_CODE_FAILED;
+            try {
+                status = sendVendorCmdTask.get(
+                        IUwbAdapter.RANGING_SESSION_OPEN_THRESHOLD_MS, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                executor.shutdownNow();
+                Log.i(TAG, "Failed to send vendor command - status : TIMEOUT");
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+            return status;
         }
     }
 

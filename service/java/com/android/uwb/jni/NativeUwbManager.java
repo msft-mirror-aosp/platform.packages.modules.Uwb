@@ -22,7 +22,10 @@ import com.android.server.uwb.UwbInjector;
 import com.android.uwb.data.UwbMulticastListUpdateStatus;
 import com.android.uwb.data.UwbRangingData;
 import com.android.uwb.data.UwbUciConstants;
+import com.android.uwb.data.UwbVendorUciResponse;
 import com.android.uwb.info.UwbSpecificationInfo;
+
+import com.google.uwb.support.multichip.ChipInfoParams;
 
 import java.util.List;
 
@@ -296,23 +299,33 @@ public class NativeUwbManager {
         }
     }
 
-    public byte sendRawUci(int gid, int oid, byte[] payload) {
-        // TODO(b/210933436): Implement native stack.
-        return UwbUciConstants.STATUS_CODE_OK;
+    @NonNull
+    public UwbVendorUciResponse sendRawVendorCmd(int gid, int oid, byte[] payload) {
+        synchronized (mSessionFnLock) {
+            return nativeSendRawVendorCmd(gid, oid, payload);
+        }
     }
 
     /**
-     * Returns a list of UWB chip identifiers.
+     * Returns a list of UWB chip infos in a {@link ChipInfoParams} object.
      *
      * Callers can invoke methods on a specific UWB chip by passing its {@code chipId} to the
-     * method.
+     * method, which can be determined by calling:
+     * <pre>
+     * List<ChipInfoParams> chipInfos = getChipInfos();
+     * for (ChipInfoParams chipInfo : chipInfos) {
+     *     String chipId = chipInfo.getChipId();
+     * }
+     * </pre>
      *
-     * @return list of UWB chip identifiers for a multi-HAL system, or a list of a single chip
-     * identifier for a single HAL system.
+     * @return list of {@link ChipInfoParams} containing info about UWB chips for a multi-HAL
+     * system, or a list of info for a single chip for a single HAL system.
      */
-    public List<String> getChipIds() {
+    public List<ChipInfoParams> getChipInfos() {
         // TODO(b/206150133): Get list of chip ids from configuration file
-        return List.of(getDefaultChipId());
+        ChipInfoParams chipInfo =
+                ChipInfoParams.createBuilder().setChipId(getDefaultChipId()).build();
+        return List.of(chipInfo);
     }
 
     /**
@@ -370,4 +383,6 @@ public class NativeUwbManager {
             byte noOfControlee, byte[] address, int[]subSessionId);
 
     private native byte nativeSetCountryCode(byte[] countryCode);
+
+    private native UwbVendorUciResponse nativeSendRawVendorCmd(int gid, int oid, byte[] payload);
 }
