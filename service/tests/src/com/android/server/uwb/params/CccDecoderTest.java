@@ -51,23 +51,22 @@ import java.util.List;
 @Presubmit
 public class CccDecoderTest {
     private static final byte[] TEST_CCC_RANGING_OPENED_TLV_DATA =
-            UwbUtil.getByteArray("0a0400010002"
+            UwbUtil.getByteArray("0a0402000100"
                             + "a01001000200000000000000000000000000"
-                            + "a1080001000200010002"
-                            + "090400010002"
+                            + "a1080200010002000100"
+                            + "090402000100"
                             + "140101");
     private static final int TEST_CCC_RANGING_OPENED_TLV_NUM_PARAMS = 5;
     private static final byte[] TEST_CCC_SPECIFICATION_TLV_DATA =
-            UwbUtil.getByteArray("a0020102"
-                    + "a10100"
-                    + "a20112"
-                    + "a3040000000a"
-                    + "a4020309"
-                    + "a5020208"
-                    + "a6020509"
-                    + "a70101"
-                    + "a8020102");
-    private static final int TEST_CCC_SPECIFICATION_TLV_NUM_PARAMS = 9;
+            UwbUtil.getByteArray("a00111"
+                    + "a10400000082"
+                    + "a20168"
+                    + "a30103"
+                    + "a4020102"
+                    + "a50100"
+                    + "a60112"
+                    + "a7040a000000");
+    private static final int TEST_CCC_SPECIFICATION_TLV_NUM_PARAMS = 8;
     private final CccDecoder mCccDecoder = new CccDecoder();
 
     @Test
