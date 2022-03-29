@@ -15,13 +15,15 @@
  */
 package com.android.server.uwb;
 
+import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
+import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
+
 import android.annotation.Nullable;
 import android.content.AttributionSource;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
-import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.util.Log;
 import android.util.Pair;
@@ -113,7 +115,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         Log.d(TAG, "onMulticastListUpdateNotificationReceived");
         UwbSession uwbSession = getUwbSession((int) multicastListUpdateStatus.getSessionId());
         if (uwbSession == null) {
-            Log.d(TAG, "onSessionStatusNotificationReceived - invalid session");
+            Log.d(TAG, "onMulticastListUpdateNotificationReceived - invalid session");
             return;
         }
         uwbSession.setMulticastListUpdateStatus(multicastListUpdateStatus);
@@ -143,7 +145,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         switch (state) {
             case UwbUciConstants.UWB_SESSION_STATE_IDLE:
                 if (prevState == UwbUciConstants.UWB_SESSION_STATE_ACTIVE) {
-                    mSessionNotificationManager.onRangingStopped(uwbSession, reasonCode);
+                    mSessionNotificationManager.onRangingStoppedWithUciReasonCode(
+                            uwbSession, reasonCode);
                     mUwbMetrics.longRangingStopEvent(uwbSession);
                 } else if (prevState == UwbUciConstants.UWB_SESSION_STATE_IDLE) {
                     //mSessionNotificationManager.onRangingReconfigureFailed(
@@ -180,7 +183,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         if (isExistedSession(sessionId)) {
             Log.i(TAG, "Duplicated sessionId");
             rangingCallbacks.onRangingOpenFailed(sessionHandle, RangingChangeReason.UNKNOWN,
-                    UwbSessionNotificationHelper.convertStatusToParam(protocolName,
+                    UwbSessionNotificationHelper.convertUciStatusToParam(protocolName,
                             UwbUciConstants.STATUS_CODE_ERROR_SESSION_DUPLICATE));
             mUwbMetrics.logRangingInitEvent(uwbSession,
                     UwbUciConstants.STATUS_CODE_ERROR_SESSION_DUPLICATE);
@@ -191,7 +194,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             Log.i(TAG, "Max Sessions Exceeded");
             rangingCallbacks.onRangingOpenFailed(sessionHandle,
                     RangingChangeReason.MAX_SESSIONS_REACHED,
-                    UwbSessionNotificationHelper.convertStatusToParam(protocolName,
+                    UwbSessionNotificationHelper.convertUciStatusToParam(protocolName,
                             UwbUciConstants.STATUS_CODE_ERROR_MAX_SESSIONS_EXCEEDED));
             mUwbMetrics.logRangingInitEvent(uwbSession,
                     UwbUciConstants.STATUS_CODE_ERROR_MAX_SESSIONS_EXCEEDED);
@@ -206,7 +209,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             uwbSession.binderDied();
             Log.e(TAG, "linkToDeath fail - sessionID : " + uwbSession.getSessionId());
             rangingCallbacks.onRangingOpenFailed(sessionHandle, RangingChangeReason.UNKNOWN,
-                    UwbSessionNotificationHelper.convertStatusToParam(protocolName,
+                    UwbSessionNotificationHelper.convertUciStatusToParam(protocolName,
                             UwbUciConstants.STATUS_CODE_FAILED));
             mUwbMetrics.logRangingInitEvent(uwbSession,
                     UwbUciConstants.STATUS_CODE_FAILED);
@@ -353,7 +356,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         Log.d(TAG, "deinitAllSession()");
         for (Map.Entry<Integer, UwbSession> sessionEntry : mSessionTable.entrySet()) {
             UwbSession uwbSession = sessionEntry.getValue();
-            mSessionNotificationManager.onRangingClosedWithReasonCode(uwbSession,
+            mSessionNotificationManager.onRangingClosedWithApiReasonCode(uwbSession,
                     RangingChangeReason.SYSTEM_POLICY);
             mUwbMetrics.logRangingCloseEvent(uwbSession, UwbUciConstants.STATUS_CODE_OK);
             removeSession(uwbSession);
@@ -386,23 +389,15 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         return mSessionTable.keySet();
     }
 
-    public int reconfigure(SessionHandle sessionHandle, PersistableBundle params) {
+    public int reconfigure(SessionHandle sessionHandle, @Nullable Params params) {
         Log.i(TAG, "reconfigure() - Session Handle : " + sessionHandle);
         int status = UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST;
         if (!isExistedSession(sessionHandle)) {
             Log.i(TAG, "Not initialized session ID");
             return status;
         }
-
-        /*
-         FiraRangingReconfigureParams is only implemented
-         TODO - CccRangingReconfiguredParams should be implemented
-         */
-        FiraRangingReconfigureParams param = FiraRangingReconfigureParams.fromBundle(params);
-
-        Pair<SessionHandle, Params> info = new Pair<SessionHandle, Params>(sessionHandle, param);
+        Pair<SessionHandle, Params> info = new Pair<>(sessionHandle, params);
         mEventTask.execute(SESSION_RECONFIG_RANGING, info);
-
         return 0;
     }
 
@@ -650,11 +645,17 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             }
         }
 
-        private void reconfigure(SessionHandle sessionHandle, Params param) {
+        private void reconfigure(SessionHandle sessionHandle, @Nullable Params param) {
+            UwbSession uwbSession = getUwbSession(getSessionId(sessionHandle));
+            if (!(param instanceof FiraRangingReconfigureParams)) {
+                Log.e(TAG, "Invalid reconfigure params: " + param);
+                mSessionNotificationManager.onRangingReconfigureFailed(
+                        uwbSession, UwbUciConstants.STATUS_CODE_INVALID_PARAM);
+                return;
+            }
             FiraRangingReconfigureParams rangingReconfigureParams =
                     (FiraRangingReconfigureParams) param;
             // TODO(b/211445008): Consolidate to a single uwb thread.
-            UwbSession uwbSession = getUwbSession(getSessionId(sessionHandle));
             ExecutorService executor = Executors.newSingleThreadExecutor();
             FutureTask<Integer> cmdTask = new FutureTask<>(
                     () -> {
@@ -688,6 +689,15 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                                         ArrayUtils.toPrimitive(dstAddressList),
                                         subSessionIdList);
                                 if (status != UwbUciConstants.STATUS_CODE_OK) {
+                                    if (rangingReconfigureParams.getAction()
+                                            == MULTICAST_LIST_UPDATE_ACTION_ADD) {
+                                        mSessionNotificationManager.onControleeAddFailed(
+                                                uwbSession, status);
+                                    } else if (rangingReconfigureParams.getAction()
+                                            == MULTICAST_LIST_UPDATE_ACTION_DELETE) {
+                                        mSessionNotificationManager.onControleeRemoveFailed(
+                                                uwbSession, status);
+                                    }
                                     return status;
                                 }
 
@@ -697,18 +707,36 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                                         uwbSession.getMulticastListUpdateStatus();
                                 if (multicastList != null) {
                                     if (rangingReconfigureParams.getAction()
-                                            == FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD) {
+                                            == MULTICAST_LIST_UPDATE_ACTION_ADD) {
                                         for (int i = 0; i < multicastList.getNumOfControlee();
                                                 i++) {
                                             if (multicastList.getStatus()[i]
                                                     != UwbUciConstants.STATUS_CODE_OK) {
-                                                //TODO - Need implement for partial fail case.
-                                                return UwbUciConstants.STATUS_CODE_FAILED;
+                                                status = UwbUciConstants.STATUS_CODE_FAILED;
+                                                break;
                                             }
                                         }
                                     }
                                 }
-
+                            }
+                            if (status != UwbUciConstants.STATUS_CODE_OK) {
+                                if (rangingReconfigureParams.getAction()
+                                        == MULTICAST_LIST_UPDATE_ACTION_ADD) {
+                                    mSessionNotificationManager.onControleeAddFailed(
+                                            uwbSession, status);
+                                } else if (rangingReconfigureParams.getAction()
+                                        == MULTICAST_LIST_UPDATE_ACTION_DELETE) {
+                                    mSessionNotificationManager.onControleeRemoveFailed(
+                                            uwbSession, status);
+                                }
+                                return status;
+                            }
+                            if (rangingReconfigureParams.getAction()
+                                    == MULTICAST_LIST_UPDATE_ACTION_ADD) {
+                                mSessionNotificationManager.onControleeAdded(uwbSession);
+                            } else if (rangingReconfigureParams.getAction()
+                                    == MULTICAST_LIST_UPDATE_ACTION_DELETE) {
+                                mSessionNotificationManager.onControleeRemoved(uwbSession);
                             }
 
                             status = mConfigurationManager.setAppConfigurations(
