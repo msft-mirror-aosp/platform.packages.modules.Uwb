@@ -24,13 +24,17 @@ import static com.google.uwb.support.ccc.CccParams.HOPPING_SEQUENCE_DEFAULT;
 import static com.google.uwb.support.ccc.CccParams.PULSE_SHAPE_SYMMETRICAL_ROOT_RAISED_COSINE;
 import static com.google.uwb.support.ccc.CccParams.SLOTS_PER_ROUND_6;
 import static com.google.uwb.support.ccc.CccParams.UWB_CHANNEL_9;
+import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
+import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_UNICAST;
+import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_RESPONDER;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLLER;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE;
 
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -48,7 +52,6 @@ import android.content.Context;
 import android.os.IBinder;
 import android.os.PersistableBundle;
 import android.os.PowerManager;
-import android.os.RemoteException;
 import android.os.test.TestLooper;
 import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
@@ -75,8 +78,10 @@ import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccPulseShapeCombo;
 import com.google.uwb.support.ccc.CccSpecificationParams;
 import com.google.uwb.support.ccc.CccStartRangingParams;
+import com.google.uwb.support.fira.FiraControleeParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
+import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.fira.FiraSpecificationParams;
 
 import org.junit.After;
@@ -199,7 +204,7 @@ public class UwbServiceCoreTest {
         when(mUwbConfigurationManager.getCapsInfo(eq(CccParams.PROTOCOL_NAME), any()))
                 .thenReturn(Pair.create(UwbUciConstants.STATUS_CODE_OK, cccSpecificationParams));
 
-        PersistableBundle specifications = mUwbServiceCore.getIUwbAdapter().getSpecificationInfo();
+        PersistableBundle specifications = mUwbServiceCore.getSpecificationInfo();
         assertThat(specifications).isNotNull();
         assertThat(specifications.getPersistableBundle(FiraParams.PROTOCOL_NAME))
                 .isEqualTo(firaSpecificationBundle);
@@ -219,7 +224,7 @@ public class UwbServiceCoreTest {
         verifyGetSpecificationInfoSuccess();
         clearInvocations(mUwbConfigurationManager);
 
-        PersistableBundle specifications = mUwbServiceCore.getIUwbAdapter().getSpecificationInfo();
+        PersistableBundle specifications = mUwbServiceCore.getSpecificationInfo();
         assertThat(specifications).isNotNull();
         assertThat(specifications.getPersistableBundle(FiraParams.PROTOCOL_NAME)).isNotNull();
         assertThat(specifications.getPersistableBundle(CccParams.PROTOCOL_NAME)).isNotNull();
@@ -229,16 +234,16 @@ public class UwbServiceCoreTest {
 
     private void enableUwb() throws Exception {
         when(mNativeUwbManager.doInitialize()).thenReturn(true);
-        when(mUwbCountryCode.setCountryCode()).thenReturn(true);
+        when(mUwbCountryCode.setCountryCode(anyBoolean())).thenReturn(true);
 
-        mUwbServiceCore.getIUwbAdapter().setEnabled(true);
+        mUwbServiceCore.setEnabled(true);
         mTestLooper.dispatchAll();
     }
 
     private void disableUwb() throws Exception {
         when(mNativeUwbManager.doDeinitialize()).thenReturn(true);
 
-        mUwbServiceCore.getIUwbAdapter().setEnabled(false);
+        mUwbServiceCore.setEnabled(false);
         mTestLooper.dispatchAll();
     }
 
@@ -246,12 +251,12 @@ public class UwbServiceCoreTest {
     public void testEnable() throws Exception {
         IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
         when(cb.asBinder()).thenReturn(mock(IBinder.class));
-        mUwbServiceCore.getIUwbAdapter().registerAdapterStateCallbacks(cb);
+        mUwbServiceCore.registerAdapterStateCallbacks(cb);
 
         enableUwb();
 
         verify(mNativeUwbManager).doInitialize();
-        verify(mUwbCountryCode).setCountryCode();
+        verify(mUwbCountryCode).setCountryCode(true);
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE,
                 StateChangeReason.SYSTEM_POLICY);
     }
@@ -260,12 +265,12 @@ public class UwbServiceCoreTest {
     public void testEnableWhenAlreadyEnabled() throws Exception {
         IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
         when(cb.asBinder()).thenReturn(mock(IBinder.class));
-        mUwbServiceCore.getIUwbAdapter().registerAdapterStateCallbacks(cb);
+        mUwbServiceCore.registerAdapterStateCallbacks(cb);
 
         enableUwb();
 
         verify(mNativeUwbManager).doInitialize();
-        verify(mUwbCountryCode).setCountryCode();
+        verify(mUwbCountryCode).setCountryCode(true);
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE,
                 StateChangeReason.SYSTEM_POLICY);
 
@@ -280,7 +285,7 @@ public class UwbServiceCoreTest {
     public void testDisable() throws Exception {
         IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
         when(cb.asBinder()).thenReturn(mock(IBinder.class));
-        mUwbServiceCore.getIUwbAdapter().registerAdapterStateCallbacks(cb);
+        mUwbServiceCore.registerAdapterStateCallbacks(cb);
 
         // Enable first
         enableUwb();
@@ -296,12 +301,12 @@ public class UwbServiceCoreTest {
     @Test
     public void testDisableWhenAlreadyDisabled() throws Exception {
         when(mNativeUwbManager.doInitialize()).thenReturn(true);
-        when(mUwbCountryCode.setCountryCode()).thenReturn(true);
+        when(mUwbCountryCode.setCountryCode(anyBoolean())).thenReturn(true);
         when(mNativeUwbManager.doDeinitialize()).thenReturn(true);
 
         IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
         when(cb.asBinder()).thenReturn(mock(IBinder.class));
-        mUwbServiceCore.getIUwbAdapter().registerAdapterStateCallbacks(cb);
+        mUwbServiceCore.registerAdapterStateCallbacks(cb);
 
         // Enable first
         enableUwb();
@@ -324,12 +329,13 @@ public class UwbServiceCoreTest {
 
         SessionHandle sessionHandle = mock(SessionHandle.class);
         IUwbRangingCallbacks cb = mock(IUwbRangingCallbacks.class);
+        AttributionSource attributionSource = mock(AttributionSource.class);
         FiraOpenSessionParams params = TEST_FIRA_OPEN_SESSION_PARAMS.build();
-        mUwbServiceCore.getIUwbAdapter().openRanging(
-                mock(AttributionSource.class), sessionHandle, cb,
-                params.toBundle());
+        mUwbServiceCore.openRanging(
+                attributionSource, sessionHandle, cb, params.toBundle());
 
         verify(mUwbSessionManager).initSession(
+                eq(attributionSource),
                 eq(sessionHandle), eq(params.getSessionId()), eq(FiraParams.PROTOCOL_NAME),
                 argThat(p -> ((FiraOpenSessionParams) p).getSessionId() == params.getSessionId()),
                 eq(cb));
@@ -343,11 +349,12 @@ public class UwbServiceCoreTest {
         SessionHandle sessionHandle = mock(SessionHandle.class);
         IUwbRangingCallbacks cb = mock(IUwbRangingCallbacks.class);
         CccOpenRangingParams params = TEST_CCC_OPEN_RANGING_PARAMS.build();
-        mUwbServiceCore.getIUwbAdapter().openRanging(
-                mock(AttributionSource.class), sessionHandle, cb,
-                params.toBundle());
+        AttributionSource attributionSource = mock(AttributionSource.class);
+        mUwbServiceCore.openRanging(
+                attributionSource, sessionHandle, cb, params.toBundle());
 
         verify(mUwbSessionManager).initSession(
+                eq(attributionSource),
                 eq(sessionHandle), eq(params.getSessionId()), eq(CccParams.PROTOCOL_NAME),
                 argThat(p -> ((CccOpenRangingParams) p).getSessionId() == params.getSessionId()),
                 eq(cb));
@@ -360,11 +367,11 @@ public class UwbServiceCoreTest {
         CccOpenRangingParams params = TEST_CCC_OPEN_RANGING_PARAMS.build();
 
         try {
-            mUwbServiceCore.getIUwbAdapter().openRanging(
+            mUwbServiceCore.openRanging(
                     mock(AttributionSource.class), sessionHandle, cb,
                     params.toBundle());
             fail();
-        } catch (RemoteException e) {
+        } catch (IllegalStateException e) {
             // pass
         }
 
@@ -381,7 +388,7 @@ public class UwbServiceCoreTest {
                 .setRanMultiplier(6)
                 .setSessionId(1)
                 .build();
-        mUwbServiceCore.getIUwbAdapter().startRanging(sessionHandle, params.toBundle());
+        mUwbServiceCore.startRanging(sessionHandle, params.toBundle());
 
         verify(mUwbSessionManager).startRanging(eq(sessionHandle),
                 argThat(p -> ((CccStartRangingParams) p).getSessionId() == params.getSessionId()));
@@ -392,7 +399,7 @@ public class UwbServiceCoreTest {
         enableUwb();
 
         SessionHandle sessionHandle = mock(SessionHandle.class);
-        mUwbServiceCore.getIUwbAdapter().startRanging(sessionHandle, new PersistableBundle());
+        mUwbServiceCore.startRanging(sessionHandle, new PersistableBundle());
 
         verify(mUwbSessionManager).startRanging(eq(sessionHandle), argThat(p -> (p == null)));
     }
@@ -402,10 +409,75 @@ public class UwbServiceCoreTest {
         enableUwb();
 
         SessionHandle sessionHandle = mock(SessionHandle.class);
-        PersistableBundle params = mock(PersistableBundle.class);
-        mUwbServiceCore.getIUwbAdapter().reconfigureRanging(sessionHandle, params);
+        final FiraRangingReconfigureParams parameters =
+                new FiraRangingReconfigureParams.Builder()
+                        .setBlockStrideLength(6)
+                        .setRangeDataNtfConfig(RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY)
+                        .setRangeDataProximityFar(6)
+                        .setRangeDataProximityNear(4)
+                        .build();
+        mUwbServiceCore.reconfigureRanging(sessionHandle, parameters.toBundle());
+        verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
+                argThat((x) ->
+                        ((FiraRangingReconfigureParams) x).getBlockStrideLength().equals(6)));
+    }
 
-        verify(mUwbSessionManager).reconfigure(sessionHandle, params);
+    @Test
+    public void testAddControlee() throws Exception {
+        enableUwb();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        UwbAddress uwbAddress1 = UwbAddress.fromBytes(new byte[] {1, 2});
+        UwbAddress uwbAddress2 = UwbAddress.fromBytes(new byte[] {4, 5});
+        UwbAddress[] addressList = new UwbAddress[] {uwbAddress1, uwbAddress2};
+        int[] subSessionIdList = new int[] {3, 4};
+        FiraControleeParams params =
+                new FiraControleeParams.Builder()
+                        .setAddressList(addressList)
+                        .setSubSessionIdList(subSessionIdList)
+                        .build();
+
+        mUwbServiceCore.addControlee(sessionHandle, params.toBundle());
+        verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
+                argThat((x) -> {
+                    FiraRangingReconfigureParams reconfigureParams =
+                            (FiraRangingReconfigureParams) x;
+                    return reconfigureParams.getAction().equals(MULTICAST_LIST_UPDATE_ACTION_ADD)
+                            && Arrays.equals(
+                                    reconfigureParams.getAddressList(), params.getAddressList())
+                            && Arrays.equals(
+                                    reconfigureParams.getSubSessionIdList(),
+                                    params.getSubSessionIdList());
+                }));
+    }
+
+    @Test
+    public void testRemoveControlee() throws Exception {
+        enableUwb();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        UwbAddress uwbAddress1 = UwbAddress.fromBytes(new byte[] {1, 2});
+        UwbAddress uwbAddress2 = UwbAddress.fromBytes(new byte[] {4, 5});
+        UwbAddress[] addressList = new UwbAddress[] {uwbAddress1, uwbAddress2};
+        int[] subSessionIdList = new int[] {3, 4};
+        FiraControleeParams params =
+                new FiraControleeParams.Builder()
+                        .setAddressList(addressList)
+                        .setSubSessionIdList(subSessionIdList)
+                        .build();
+
+        mUwbServiceCore.removeControlee(sessionHandle, params.toBundle());
+        verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
+                argThat((x) -> {
+                    FiraRangingReconfigureParams reconfigureParams =
+                            (FiraRangingReconfigureParams) x;
+                    return reconfigureParams.getAction().equals(MULTICAST_LIST_UPDATE_ACTION_DELETE)
+                            && Arrays.equals(
+                                    reconfigureParams.getAddressList(), params.getAddressList())
+                            && Arrays.equals(
+                                    reconfigureParams.getSubSessionIdList(),
+                                    params.getSubSessionIdList());
+                }));
     }
 
     @Test
@@ -413,7 +485,7 @@ public class UwbServiceCoreTest {
         enableUwb();
 
         SessionHandle sessionHandle = mock(SessionHandle.class);
-        mUwbServiceCore.getIUwbAdapter().stopRanging(sessionHandle);
+        mUwbServiceCore.stopRanging(sessionHandle);
 
         verify(mUwbSessionManager).stopRanging(sessionHandle);
     }
@@ -424,7 +496,7 @@ public class UwbServiceCoreTest {
         enableUwb();
 
         SessionHandle sessionHandle = mock(SessionHandle.class);
-        mUwbServiceCore.getIUwbAdapter().closeRanging(sessionHandle);
+        mUwbServiceCore.closeRanging(sessionHandle);
 
         verify(mUwbSessionManager).deInitSession(sessionHandle);
     }
@@ -432,11 +504,11 @@ public class UwbServiceCoreTest {
     @Test
     public void testGetAdapterState() throws Exception {
         enableUwb();
-        assertThat(mUwbServiceCore.getIUwbAdapter().getAdapterState())
+        assertThat(mUwbServiceCore.getAdapterState())
                 .isEqualTo(AdapterState.STATE_ENABLED_INACTIVE);
 
         disableUwb();
-        assertThat(mUwbServiceCore.getIUwbAdapter().getAdapterState())
+        assertThat(mUwbServiceCore.getAdapterState())
                 .isEqualTo(AdapterState.STATE_DISABLED);
     }
 
@@ -454,13 +526,9 @@ public class UwbServiceCoreTest {
                 .thenReturn(rsp);
 
         IUwbVendorUciCallback vendorCb = mock(IUwbVendorUciCallback.class);
-        // TODO(b/196225233): Remove this casting when qorvo stack is integrated.
-        ((UwbServiceCore.UwbAdapterService) mUwbServiceCore.getIUwbAdapter())
-                .registerVendorExtensionCallback(vendorCb);
+        mUwbServiceCore.registerVendorExtensionCallback(vendorCb);
 
-        // TODO(b/196225233): Remove this casting when qorvo stack is integrated.
-        assertThat(((UwbServiceCore.UwbAdapterService) mUwbServiceCore.getIUwbAdapter())
-                .sendVendorUciMessage(0, 0, new byte[0]))
+        assertThat(mUwbServiceCore.sendVendorUciMessage(0, 0, new byte[0]))
                 .isEqualTo(UwbUciConstants.STATUS_CODE_OK);
 
         verify(vendorCb).onVendorResponseReceived(gid, oid, payload);
@@ -470,7 +538,7 @@ public class UwbServiceCoreTest {
     public void testDeviceStateCallback() throws Exception {
         IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
         when(cb.asBinder()).thenReturn(mock(IBinder.class));
-        mUwbServiceCore.getIUwbAdapter().registerAdapterStateCallbacks(cb);
+        mUwbServiceCore.registerAdapterStateCallbacks(cb);
 
         enableUwb();
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE,
@@ -486,9 +554,7 @@ public class UwbServiceCoreTest {
         enableUwb();
 
         IUwbVendorUciCallback vendorCb = mock(IUwbVendorUciCallback.class);
-        // TODO(b/196225233): Remove this casting when qorvo stack is integrated.
-        ((UwbServiceCore.UwbAdapterService) mUwbServiceCore.getIUwbAdapter())
-                .registerVendorExtensionCallback(vendorCb);
+        mUwbServiceCore.registerVendorExtensionCallback(vendorCb);
         int gid = 0;
         int oid = 0;
         byte[] payload = new byte[0];
