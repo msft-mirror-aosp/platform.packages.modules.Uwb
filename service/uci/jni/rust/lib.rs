@@ -1,12 +1,11 @@
 //! jni for uwb native stack
-use android_logger::FilterBuilder;
 use jni::objects::{JObject, JValue};
 use jni::sys::{
     jarray, jboolean, jbyte, jbyteArray, jint, jintArray, jlong, jobject, jshort, jshortArray,
     jsize,
 };
 use jni::JNIEnv;
-use log::{error, info, LevelFilter};
+use log::{error, info};
 use num_traits::ToPrimitive;
 use uwb_uci_packets::{
     GetCapsInfoRspPacket, Packet, SessionGetAppConfigRspPacket, SessionSetAppConfigRspPacket,
@@ -17,9 +16,6 @@ use uwb_uci_packets::{
 use uwb_uci_rust::error::UwbErr;
 use uwb_uci_rust::event_manager::EventManagerImpl as EventManager;
 use uwb_uci_rust::uci::{uci_hrcv::UciResponse, Dispatcher, DispatcherImpl, JNICommand};
-
-const STATUS_OK: i8 = 0;
-const STATUS_FAILED: i8 = 2;
 
 trait Context<'a> {
     fn convert_byte_array(&self, array: jbyteArray) -> Result<Vec<u8>, jni::errors::Error>;
@@ -93,15 +89,11 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeIn
     _env: JNIEnv,
     _obj: JObject,
 ) -> jboolean {
-    let crates_log_lvl_filter = FilterBuilder::new()
-        .filter(None, LevelFilter::Trace) // default log level
-        .filter(Some("jni"), LevelFilter::Info) // reduced log level for jni crate
-        .build();
-    android_logger::init_once(
-        android_logger::Config::default()
-            .with_tag("uwb")
+    logger::init(
+        logger::Config::default()
+            .with_tag_on_device("uwb")
             .with_min_level(log::Level::Trace)
-            .with_filter(crates_log_lvl_filter),
+            .with_filter("trace,jni=info"),
     );
     info!("Java_com_android_server_uwb_jni_NativeUwbManager_nativeInit: enter");
     true as jboolean
@@ -428,9 +420,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
         Ok((gid, oid, payload)) => *env
             .new_object(
                 uwb_vendor_uci_response_class,
-                "(BIIB])V",
+                "(BII[B)V",
                 &[
-                    JValue::Byte(STATUS_OK),
+                    JValue::Byte(StatusCode::UciStatusOk.to_i8().unwrap()),
                     JValue::Int(gid.to_i32().unwrap()),
                     JValue::Int(oid.to_i32().unwrap()),
                     JValue::Object(JObject::from(
@@ -443,9 +435,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
             error!("send raw uci cmd failed with: {:?}", e);
             *env.new_object(
                 uwb_vendor_uci_response_class,
-                "(BIIB])V",
+                "(BII[B)V",
                 &[
-                    JValue::Byte(STATUS_FAILED),
+                    JValue::Byte(StatusCode::UciStatusFailed.to_i8().unwrap()),
                     JValue::Int(-1),
                     JValue::Int(-1),
                     JValue::Object(JObject::null()),
@@ -489,10 +481,15 @@ fn boolean_result_helper(result: Result<(), UwbErr>, function_name: &str) -> jbo
 
 fn byte_result_helper(result: Result<(), UwbErr>, function_name: &str) -> jbyte {
     match result {
-        Ok(()) => STATUS_OK,
+        Ok(()) => StatusCode::UciStatusOk.to_i8().unwrap(),
         Err(err) => {
             error!("{} failed with: {:?}", function_name, err);
-            STATUS_FAILED
+            match err {
+                UwbErr::StatusCode(status_code) => status_code
+                    .to_i8()
+                    .unwrap_or_else(|| StatusCode::UciStatusFailed.to_i8().unwrap()),
+                _ => StatusCode::UciStatusFailed.to_i8().unwrap(),
+            }
         }
     }
 }
@@ -516,8 +513,8 @@ fn do_initialize<'a, T: Context<'a>>(context: &T) -> Result<(), UwbErr> {
 
 fn do_deinitialize<'a, T: Context<'a>>(context: &T) -> Result<(), UwbErr> {
     let dispatcher = context.get_dispatcher()?;
-    dispatcher.block_on_jni_command(JNICommand::Disable(true))?;
-    dispatcher.send_jni_command(JNICommand::Exit)?;
+    dispatcher.send_jni_command(JNICommand::Disable(true))?;
+    dispatcher.wait_for_exit()?;
     Ok(())
 }
 
@@ -580,7 +577,10 @@ fn session_deinit<'a, T: Context<'a>>(context: &T, session_id: u32) -> Result<()
 fn get_session_count<'a, T: Context<'a>>(context: &T) -> Result<jbyte, UwbErr> {
     let dispatcher = context.get_dispatcher()?;
     match dispatcher.block_on_jni_command(JNICommand::UciSessionGetCount)? {
-        UciResponse::SessionGetCountRsp(data) => Ok(data.get_session_count() as jbyte),
+        UciResponse::SessionGetCountRsp(rsp) => match status_code_to_res(rsp.get_status()) {
+            Ok(()) => Ok(rsp.get_session_count() as jbyte),
+            Err(err) => Err(err),
+        },
         _ => Err(UwbErr::failed()),
     }
 }
@@ -749,10 +749,10 @@ fn send_raw_vendor_cmd<'a, T: Context<'a>>(
     }
 }
 
-fn status_code_to_res(status: StatusCode) -> Result<(), UwbErr> {
-    match status {
+fn status_code_to_res(status_code: StatusCode) -> Result<(), UwbErr> {
+    match status_code {
         StatusCode::UciStatusOk => Ok(()),
-        _ => Err(UwbErr::failed()),
+        _ => Err(UwbErr::StatusCode(status_code)),
     }
 }
 
@@ -853,8 +853,15 @@ mod tests {
 
     #[test]
     fn test_byte_result_helper() {
-        assert_eq!(STATUS_OK, byte_result_helper(Ok(()), "Foo"));
-        assert_eq!(STATUS_FAILED, byte_result_helper(Err(UwbErr::Undefined), "Foo"));
+        assert_eq!(StatusCode::UciStatusOk.to_i8().unwrap(), byte_result_helper(Ok(()), "Foo"));
+        assert_eq!(
+            StatusCode::UciStatusFailed.to_i8().unwrap(),
+            byte_result_helper(Err(UwbErr::Undefined), "Foo")
+        );
+        assert_eq!(
+            StatusCode::UciStatusRejected.to_i8().unwrap(),
+            byte_result_helper(Err(UwbErr::StatusCode(StatusCode::UciStatusRejected)), "Foo")
+        );
     }
 
     #[test]
@@ -886,9 +893,8 @@ mod tests {
     #[test]
     fn test_do_deinitialize() {
         let mut dispatcher = MockDispatcher::new();
-        dispatcher
-            .expect_block_on_jni_command(JNICommand::Disable(true), Ok(UciResponse::DisableRsp));
-        dispatcher.expect_send_jni_command(JNICommand::Exit, Ok(()));
+        dispatcher.expect_send_jni_command(JNICommand::Disable(true), Ok(()));
+        dispatcher.expect_wait_for_exit(Ok(()));
         let context = MockContext::new(dispatcher);
 
         let result = do_deinitialize(&context);
