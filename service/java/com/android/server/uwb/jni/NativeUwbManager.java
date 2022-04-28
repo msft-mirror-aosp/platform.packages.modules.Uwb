@@ -25,7 +25,7 @@ import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbTlvData;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.data.UwbVendorUciResponse;
-import com.android.server.uwb.info.UwbSpecificationInfo;
+import com.android.server.uwb.info.UwbPowerStats;
 
 public class NativeUwbManager {
     private static final String TAG = NativeUwbManager.class.getSimpleName();
@@ -47,12 +47,7 @@ public class NativeUwbManager {
     }
 
     protected void loadLibrary() {
-        // TODO(b/197341298): Remove this when rust native stack is ready.
-        if (mUwbInjector.isUciRustStackEnabled()) {
-            System.loadLibrary("uwb_uci_jni_rust");
-        } else {
-            System.loadLibrary("uwb_uci_jni");
-        }
+        System.loadLibrary("uwb_uci_jni_rust");
         nativeInit();
     }
 
@@ -101,7 +96,7 @@ public class NativeUwbManager {
      * @return : If this returns true, UWB is on
      */
     public synchronized boolean doInitialize() {
-        if (mUwbInjector.isUciRustStackEnabled() && this.mDispatcherPointer == 0L) {
+        if (this.mDispatcherPointer == 0L) {
             this.mDispatcherPointer = nativeDispatcherNew();
         }
         return nativeDoInitialize();
@@ -113,22 +108,16 @@ public class NativeUwbManager {
      * @return : If this returns true, UWB is off
      */
     public synchronized boolean doDeinitialize() {
-        boolean res = nativeDoDeinitialize();
-        if (res && mUwbInjector.isUciRustStackEnabled()) {
-            nativeDispatcherDestroy();
-            this.mDispatcherPointer = 0L;
-        }
-        return res;
+        nativeDoDeinitialize();
+        nativeDispatcherDestroy();
+        this.mDispatcherPointer = 0L;
+        return true;
     }
 
     public synchronized long getTimestampResolutionNanos() {
         return 0L;
         /* TODO: Not Implemented in native stack
         return nativeGetTimestampResolutionNanos(); */
-    }
-
-    public UwbSpecificationInfo getSpecificationInfo() {
-        return nativeGetSpecificationInfo();
     }
 
     /**
@@ -138,6 +127,14 @@ public class NativeUwbManager {
      */
     public int getMaxSessionNumber() {
         return nativeGetMaxSessionNumber();
+    }
+
+    /**
+     * Retrieves power related stats
+     *
+     */
+    public UwbPowerStats getPowerStats() {
+        return nativeGetPowerStats();
     }
 
     /**
@@ -319,7 +316,7 @@ public class NativeUwbManager {
 
     private native long nativeGetTimestampResolutionNanos();
 
-    private native UwbSpecificationInfo nativeGetSpecificationInfo();
+    private native UwbPowerStats nativeGetPowerStats();
 
     private native int nativeGetMaxSessionNumber();
 
