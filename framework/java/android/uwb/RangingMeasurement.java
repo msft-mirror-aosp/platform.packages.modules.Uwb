@@ -226,16 +226,16 @@ public final class RangingMeasurement implements Parcelable {
     public static final int MEASUREMENT_FOCUS_RANGE = 1;
 
     /**
-     * Ranging measurement was done with a focus on ANGLE_OF_ARRIVAL azimuth calculation in terms of
+     * Ranging measurement was done with a focus on Angle of arrival azimuth calculation in terms of
      * antenna selection.
      */
-    public static final int MEASUREMENT_FOCUS_ANGLE_OF_ARRIVAL_AZIMUTH = 1;
+    public static final int MEASUREMENT_FOCUS_ANGLE_OF_ARRIVAL_AZIMUTH = 2;
 
     /**
-     * Ranging measurement was done with a focus on ANGLE_OF_ARRIVAL azimuth calculation in terms of
-     * antenna selection.
+     * Ranging measurement was done with a focus on Angle of arrival elevation calculation in terms
+     * of antenna selection.
      */
-    public static final int MEASUREMENT_FOCUS_ANGLE_OF_ARRIVAL_ELEVATION = 2;
+    public static final int MEASUREMENT_FOCUS_ANGLE_OF_ARRIVAL_ELEVATION = 3;
 
     /**
      * Gets the measurement focus in terms of antenna used for this measurement.
@@ -257,12 +257,14 @@ public final class RangingMeasurement implements Parcelable {
 
         if (obj instanceof RangingMeasurement) {
             RangingMeasurement other = (RangingMeasurement) obj;
-            return mRemoteDeviceAddress.equals(other.getRemoteDeviceAddress())
+            return Objects.equals(mRemoteDeviceAddress, other.getRemoteDeviceAddress())
                     && mStatus == other.getStatus()
                     && mElapsedRealtimeNanos == other.getElapsedRealtimeNanos()
-                    && mDistanceMeasurement.equals(other.getDistanceMeasurement())
-                    && mAngleOfArrivalMeasurement.equals(other.getAngleOfArrivalMeasurement())
-                    && mDestinationAngleOfArrivalMeasurement.equals(
+                    && Objects.equals(mDistanceMeasurement, other.getDistanceMeasurement())
+                    && Objects.equals(
+                            mAngleOfArrivalMeasurement, other.getAngleOfArrivalMeasurement())
+                    && Objects.equals(
+                            mDestinationAngleOfArrivalMeasurement,
                             other.getDestinationAngleOfArrivalMeasurement())
                     && mLineOfSight == other.getLineOfSight()
                     && mMeasurementFocus == other.getMeasurementFocus()
