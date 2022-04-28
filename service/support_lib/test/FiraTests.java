@@ -51,6 +51,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
 import com.google.uwb.support.base.Params;
+import com.google.uwb.support.fira.FiraControleeParams;
 import com.google.uwb.support.fira.FiraMulticastListUpdateStatusCode;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
@@ -350,6 +351,28 @@ public class FiraTests {
     }
 
     @Test
+    public void testControleeParams() {
+        UwbAddress uwbAddress1 = UwbAddress.fromBytes(new byte[] {1, 2});
+        UwbAddress uwbAddress2 = UwbAddress.fromBytes(new byte[] {4, 5});
+        UwbAddress[] addressList = new UwbAddress[] {uwbAddress1, uwbAddress2};
+        int[] subSessionIdList = new int[] {3, 4};
+        FiraControleeParams params =
+                new FiraControleeParams.Builder()
+                        .setAddressList(addressList)
+                        .setSubSessionIdList(subSessionIdList)
+                        .build();
+
+        assertArrayEquals(params.getAddressList(), addressList);
+        assertArrayEquals(params.getSubSessionIdList(), subSessionIdList);
+        FiraControleeParams fromBundle =
+                FiraControleeParams.fromBundle(params.toBundle());
+        assertArrayEquals(fromBundle.getAddressList(), addressList);
+        assertArrayEquals(fromBundle.getSubSessionIdList(), subSessionIdList);
+        verifyProtocolPresent(params);
+        verifyBundlesEqual(params, fromBundle);
+    }
+
+    @Test
     public void testStatusCode() {
         int statusCode = STATUS_CODE_ERROR_ADDRESS_ALREADY_PRESENT;
         FiraStatusCode params = new FiraStatusCode.Builder().setStatusCode(statusCode).build();
@@ -493,7 +516,6 @@ public class FiraTests {
         assertEquals(psduDataRateCapabilities, fromBundle.getPsduDataRateCapabilities());
         assertEquals(bprfCapabilities, fromBundle.getBprfParameterSetCapabilities());
         assertEquals(hprfCapabilities, fromBundle.getHprfParameterSetCapabilities());
-
         verifyProtocolPresent(params);
         verifyBundlesEqual(params, fromBundle);
     }
