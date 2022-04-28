@@ -5,13 +5,14 @@ use uwb_uci_packets::GetDeviceInfoRspPacket;
 use uwb_uci_rust::error::UwbErr;
 use uwb_uci_rust::uci::{uci_hrcv::UciResponse, Dispatcher, JNICommand, Result};
 
+#[cfg(test)]
 #[derive(Default)]
 pub struct MockDispatcher {
     expected_calls: RefCell<VecDeque<ExpectedCall>>,
     device_info: Option<GetDeviceInfoRspPacket>,
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 impl MockDispatcher {
     pub fn new() -> Self {
         Default::default()
@@ -33,17 +34,19 @@ impl MockDispatcher {
             .push_back(ExpectedCall::BlockOnJniCommand { expected_cmd, out })
     }
 
-    pub fn expect_exit(&mut self, out: Result<()>) {
-        self.expected_calls.borrow_mut().push_back(ExpectedCall::Exit { out })
+    pub fn expect_wait_for_exit(&mut self, out: Result<()>) {
+        self.expected_calls.borrow_mut().push_back(ExpectedCall::WaitForExit { out })
     }
 }
 
+#[cfg(test)]
 impl Drop for MockDispatcher {
     fn drop(&mut self) {
         assert!(self.expected_calls.borrow().is_empty());
     }
 }
 
+#[cfg(test)]
 impl Dispatcher for MockDispatcher {
     fn send_jni_command(&self, cmd: JNICommand) -> Result<()> {
         let mut expected_calls = self.expected_calls.borrow_mut();
@@ -69,10 +72,10 @@ impl Dispatcher for MockDispatcher {
             None => Err(UwbErr::Undefined),
         }
     }
-    fn exit(&mut self) -> Result<()> {
+    fn wait_for_exit(&mut self) -> Result<()> {
         let mut expected_calls = self.expected_calls.borrow_mut();
         match expected_calls.pop_front() {
-            Some(ExpectedCall::Exit { out }) => out,
+            Some(ExpectedCall::WaitForExit { out }) => out,
             Some(call) => {
                 expected_calls.push_front(call);
                 Err(UwbErr::Undefined)
@@ -90,8 +93,9 @@ impl Dispatcher for MockDispatcher {
     }
 }
 
+#[cfg(test)]
 enum ExpectedCall {
     SendJniCommand { expected_cmd: JNICommand, out: Result<()> },
     BlockOnJniCommand { expected_cmd: JNICommand, out: Result<UciResponse> },
-    Exit { out: Result<()> },
+    WaitForExit { out: Result<()> },
 }
