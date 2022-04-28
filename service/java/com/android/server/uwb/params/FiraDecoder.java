@@ -98,8 +98,7 @@ public class FiraDecoder extends TlvDecoder {
         return (flags & mask) != 0;
     }
 
-    // TODO(b/208678993): Plumb the output of GetCapsInfo to getSpecificationInfo API using this.
-    public FiraSpecificationParams getFiraSpecificationParamsFromTlvBuffer(TlvDecoderBuffer tlvs) {
+    private FiraSpecificationParams getFiraSpecificationParamsFromTlvBuffer(TlvDecoderBuffer tlvs) {
         FiraSpecificationParams.Builder builder = new FiraSpecificationParams.Builder();
         byte[] phyVersions = tlvs.getByteArray(SUPPORTED_FIRA_PHY_VERSION_RANGE);
         builder.setMinPhyVersionSupported(FiraProtocolVersion.fromBytes(phyVersions, 0));
@@ -221,16 +220,18 @@ public class FiraDecoder extends TlvDecoder {
         builder.setRframeCapabilities(rframeConfigFlag);
 
         byte bprfSets = tlvs.getByte(SUPPORTED_BPRF_PARAMETER_SETS);
+        int bprfSetsValue = Integer.valueOf(bprfSets);
+        EnumSet<BprfParameterSetCapabilityFlag> bprfFlag;
+        bprfFlag = FlagEnum.toEnumSet(bprfSetsValue, BprfParameterSetCapabilityFlag.values());
+        builder.setBprfParameterSetCapabilities(bprfFlag);
+
         byte[] hprfSets = tlvs.getByteArray(SUPPORTED_HPRF_PARAMETER_SETS);
-        builder.setBprfParameterSetCapabilities(
-                FlagEnum.toEnumSet(Integer.valueOf(bprfSets),
-                        BprfParameterSetCapabilityFlag.values()));
         // Extend the 5 bytes from HAL to 8 bytes for long.
-        long hprfSetFlags = new BigInteger(hprfSets).longValue();
-        builder.setHprfParameterSetCapabilities(
-                FlagEnum.longToEnumSet(
-                        hprfSetFlags,
-                        HprfParameterSetCapabilityFlag.values()));
+        long hprfSetsValue = new BigInteger(hprfSets).longValue();
+        EnumSet<HprfParameterSetCapabilityFlag> hprfFlag;
+        hprfFlag = FlagEnum.longToEnumSet(
+                hprfSetsValue, HprfParameterSetCapabilityFlag.values());
+        builder.setHprfParameterSetCapabilities(hprfFlag);
 
         EnumSet<FiraParams.PrfCapabilityFlag> prfFlag =
                 EnumSet.noneOf(FiraParams.PrfCapabilityFlag.class);
