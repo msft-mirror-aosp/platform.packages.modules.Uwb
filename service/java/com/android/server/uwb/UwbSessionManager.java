@@ -15,10 +15,14 @@
  */
 package com.android.server.uwb;
 
+import static com.android.server.uwb.data.UwbUciConstants.REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS;
+
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
 
+import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.AlarmManager;
 import android.content.AttributionSource;
 import android.os.Handler;
 import android.os.IBinder;
@@ -37,6 +41,7 @@ import androidx.annotation.VisibleForTesting;
 
 import com.android.server.uwb.data.UwbMulticastListUpdateStatus;
 import com.android.server.uwb.data.UwbRangingData;
+import com.android.server.uwb.data.UwbTwoWayMeasurement;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.INativeUwbManager;
 import com.android.server.uwb.jni.NativeUwbManager;
@@ -79,22 +84,35 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
     final ConcurrentHashMap<Integer, UwbSession> mSessionTable = new ConcurrentHashMap();
     private final NativeUwbManager mNativeUwbManager;
     private final UwbMetrics mUwbMetrics;
-    private final UwbSessionNotificationManager mSessionNotificationManager;
     private final UwbConfigurationManager mConfigurationManager;
+    private final UwbSessionNotificationManager mSessionNotificationManager;
+    private final UwbInjector mUwbInjector;
+    private final AlarmManager mAlarmManager;
     private final int mMaxSessionNumber;
     private final EventTask mEventTask;
 
     public UwbSessionManager(UwbConfigurationManager uwbConfigurationManager,
             NativeUwbManager nativeUwbManager, UwbMetrics uwbMetrics,
             UwbSessionNotificationManager uwbSessionNotificationManager,
-            Looper serviceLooper) {
+            UwbInjector uwbInjector, AlarmManager alarmManager, Looper serviceLooper) {
         mNativeUwbManager = nativeUwbManager;
         mNativeUwbManager.setSessionListener(this);
         mUwbMetrics = uwbMetrics;
         mConfigurationManager = uwbConfigurationManager;
         mSessionNotificationManager = uwbSessionNotificationManager;
+        mUwbInjector = uwbInjector;
+        mAlarmManager = alarmManager;
         mMaxSessionNumber = mNativeUwbManager.getMaxSessionNumber();
         mEventTask = new EventTask(serviceLooper);
+    }
+
+    private static boolean hasAllRangingResultError(@NonNull UwbRangingData rangingData) {
+        for (UwbTwoWayMeasurement measure : rangingData.getRangingTwoWayMeasures()) {
+            if (measure.getRangingStatus() == UwbUciConstants.STATUS_CODE_OK) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -104,6 +122,11 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         if (uwbSession != null) {
             mUwbMetrics.logRangingResult(uwbSession.getProfileType(), rangingData);
             mSessionNotificationManager.onRangingResult(uwbSession, rangingData);
+            if (hasAllRangingResultError(rangingData)) {
+                uwbSession.startRangingResultErrorStreakTimerIfNotSet();
+            } else {
+                uwbSession.stopRangingResultErrorStreakTimerIfSet();
+            }
         } else {
             Log.i(TAG, "Session is not initialized or Ranging Data is Null");
         }
@@ -145,9 +168,13 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         switch (state) {
             case UwbUciConstants.UWB_SESSION_STATE_IDLE:
                 if (prevState == UwbUciConstants.UWB_SESSION_STATE_ACTIVE) {
-                    mSessionNotificationManager.onRangingStoppedWithUciReasonCode(
-                            uwbSession, reasonCode);
-                    mUwbMetrics.longRangingStopEvent(uwbSession);
+                    // If session was stopped explicitly, then the onStopped() is sent from
+                    // stopRanging method.
+                    if (reasonCode != REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS) {
+                        mSessionNotificationManager.onRangingStoppedWithUciReasonCode(
+                                uwbSession, reasonCode);
+                        mUwbMetrics.longRangingStopEvent(uwbSession);
+                    }
                 } else if (prevState == UwbUciConstants.UWB_SESSION_STATE_IDLE) {
                     //mSessionNotificationManager.onRangingReconfigureFailed(
                     //      uwbSession, reasonCode);
@@ -182,7 +209,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                 protocolName, params, rangingCallbacks);
         if (isExistedSession(sessionId)) {
             Log.i(TAG, "Duplicated sessionId");
-            rangingCallbacks.onRangingOpenFailed(sessionHandle, RangingChangeReason.UNKNOWN,
+            rangingCallbacks.onRangingOpenFailed(sessionHandle, RangingChangeReason.BAD_PARAMETERS,
                     UwbSessionNotificationHelper.convertUciStatusToParam(protocolName,
                             UwbUciConstants.STATUS_CODE_ERROR_SESSION_DUPLICATE));
             mUwbMetrics.logRangingInitEvent(uwbSession,
@@ -643,6 +670,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             if (status != UwbUciConstants.STATUS_CODE_FAILED) {
                 mUwbMetrics.longRangingStopEvent(uwbSession);
             }
+            // Reset any stored error streak timestamp when session is stopped.
+            uwbSession.stopRangingResultErrorStreakTimerIfSet();
         }
 
         private void reconfigure(SessionHandle sessionHandle, @Nullable Params param) {
@@ -810,6 +839,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
     }
 
     public class UwbSession implements IBinder.DeathRecipient {
+        // Amount of time we allow continuous failures before stopping the session.
+        @VisibleForTesting
+        public static final long RANGING_RESULT_ERROR_STREAK_TIMER_TIMEOUT_MS = 30_000L;
+        private static final String RANGING_RESULT_ERROR_STREAK_TIMER_TAG =
+                "UwbSessionRangingResultError";
+
         private final AttributionSource mAttributionSource;
         private final SessionHandle mSessionHandle;
         private final int mSessionId;
@@ -822,6 +857,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         private int mSessionState;
         private UwbMulticastListUpdateStatus mMulticastListUpdateStatus;
         private final int mProfileType;
+        private AlarmManager.OnAlarmListener mRangingResultErrorStreakTimerListener;
 
         UwbSession(AttributionSource attributionSource, SessionHandle sessionHandle, int sessionId,
                 String protocolName, Params params, IUwbRangingCallbacks iUwbRangingCallbacks) {
@@ -920,6 +956,34 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
 
         public WaitObj getWaitObj() {
             return mWaitObj;
+        }
+
+        /**
+         * Starts a timer to detect if the error streak is longer than
+         * {@link #RANGING_RESULT_ERROR_STREAK_TIMER_TIMEOUT_MS}.
+         */
+        public void startRangingResultErrorStreakTimerIfNotSet() {
+            // Start a timer on first failure to detect continuous failures.
+            if (mRangingResultErrorStreakTimerListener == null) {
+                mRangingResultErrorStreakTimerListener = () -> {
+                    Log.w(TAG, "Continuous errors or no ranging results detected for 30 seconds."
+                            + " Stopping session");
+                    stopRanging(mSessionHandle);
+                };
+                mAlarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        mUwbInjector.getElapsedSinceBootMillis()
+                                + RANGING_RESULT_ERROR_STREAK_TIMER_TIMEOUT_MS,
+                        RANGING_RESULT_ERROR_STREAK_TIMER_TAG,
+                        mRangingResultErrorStreakTimerListener, mEventTask);
+            }
+        }
+
+        public void stopRangingResultErrorStreakTimerIfSet() {
+            // Cancel error streak timer on any success.
+            if (mRangingResultErrorStreakTimerListener != null) {
+                mAlarmManager.cancel(mRangingResultErrorStreakTimerListener);
+                mRangingResultErrorStreakTimerListener = null;
+            }
         }
 
         @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,23 @@
  * limitations under the License.
  */
 
-package android.uwb;
+package com.android.server.uwb;
 
-import android.uwb.StateChangeReason;
-import android.uwb.AdapterState;
+import android.os.Build;
 
-/**
- * @hide
- */
-oneway interface IUwbAdapterStateCallbacks {
-  /**
-     * Called whenever the adapter state changes
-     *
-     * @param state UWB state; enabled_active, enabled_inactive, or disabled.
-     * @param reason the reason that the state has changed
-     */
-    void onAdapterStateChanged(AdapterState state, StateChangeReason reason);
+class SystemBuildProperties {
+    /** @return if it is an eng build. */
+    public boolean isEngBuild() {
+        return Build.TYPE.equals("eng");
+    }
+
+    /** @return if it is an userdebug build. */
+    public boolean isUserdebugBuild() {
+        return Build.TYPE.equals("userdebug");
+    }
+
+    /** @return if it is a normal user build. */
+    public boolean isUserBuild() {
+        return Build.TYPE.equals("user");
+    }
 }
