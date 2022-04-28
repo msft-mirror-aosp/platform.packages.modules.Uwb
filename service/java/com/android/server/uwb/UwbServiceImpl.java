@@ -87,6 +87,7 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         }
         mUwbSettingsStore.dump(fd, pw, args);
         mUwbInjector.getUwbMetrics().dump(fd, pw, args);
+        mUwbServiceCore.dump(fd, pw, args);
         mUwbInjector.getUwbCountryCode().dump(fd, pw, args);
     }
 
@@ -107,9 +108,7 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             throws RemoteException {
         Log.i(TAG, "Register the callback");
         enforceUwbPrivilegedPermission();
-        // TODO(b/210933436): Implement this.
-        throw new IllegalStateException("Not implemented");
-        /** mUwbServiceCore.registerVendorExtensionCallback(callbacks); */
+        mUwbServiceCore.registerVendorExtensionCallback(callbacks);
     }
 
     @Override
@@ -117,9 +116,7 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             throws RemoteException {
         Log.i(TAG, "Unregister the callback");
         enforceUwbPrivilegedPermission();
-        // TODO(b/210933436): Implement this.
-        throw new IllegalStateException("Not implemented");
-        /** mUwbServiceCore.unregisterVendorExtensionCallback(callbacks); */
+        mUwbServiceCore.unregisterVendorExtensionCallback(callbacks);
     }
 
 
@@ -186,25 +183,19 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     public synchronized int sendVendorUciMessage(int gid, int oid, byte[] payload)
             throws RemoteException {
         enforceUwbPrivilegedPermission();
-        // TODO(b/210933436): Implement this.
-        throw new IllegalStateException("Not implemented");
-        /**
-        return mUwbServiceCore.sendVendorUciMessage(rawUCi);
-         **/
+        return mUwbServiceCore.sendVendorUciMessage(gid, oid, payload);
     }
 
     @Override
     public void addControlee(SessionHandle sessionHandle, PersistableBundle params) {
         enforceUwbPrivilegedPermission();
-        // TODO(b/200678461): Implement this.
-        throw new IllegalStateException("Not implemented");
+        mUwbServiceCore.addControlee(sessionHandle, params);
     }
 
     @Override
     public void removeControlee(SessionHandle sessionHandle, PersistableBundle params) {
         enforceUwbPrivilegedPermission();
-        // TODO(b/200678461): Implement this.
-        throw new IllegalStateException("Not implemented");
+        mUwbServiceCore.removeControlee(sessionHandle, params);
     }
 
     @Override
