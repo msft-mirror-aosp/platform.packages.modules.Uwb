@@ -56,7 +56,7 @@ import android.os.Process;
 import android.os.RemoteException;
 import android.util.ArrayMap;
 import android.util.Pair;
-import android.uwb.IUwbRangingCallbacks2;
+import android.uwb.IUwbRangingCallbacks;
 import android.uwb.RangingReport;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
@@ -77,6 +77,7 @@ import com.google.uwb.support.ccc.CccStartRangingParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
+import com.google.uwb.support.generic.GenericSpecificationParams;
 
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
@@ -109,6 +110,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     // These don't require root access.
     // However, these do perform permission checks in the corresponding UwbService methods.
     private static final String[] NON_PRIVILEGED_COMMANDS = {
+            "help",
             "status",
             "get-country-code",
             "enable-uwb",
@@ -130,11 +132,11 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     .setSessionId(1)
                     .setChannelNumber(9)
                     .setDeviceType(RANGING_DEVICE_TYPE_CONTROLLER)
-                    .setDeviceRole(RANGING_DEVICE_ROLE_RESPONDER)
+                    .setDeviceRole(RANGING_DEVICE_ROLE_INITIATOR)
                     .setDeviceAddress(UwbAddress.fromBytes(new byte[] { 0x4, 0x6}))
                     .setDestAddressList(Arrays.asList(UwbAddress.fromBytes(new byte[] { 0x4, 0x6})))
                     .setMultiNodeMode(MULTI_NODE_MODE_UNICAST)
-                    .setRangingRoundUsage(RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE)
+                    .setRangingRoundUsage(RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE)
                     .setVendorId(new byte[]{0x5, 0x78})
                     .setStaticStsIV(new byte[]{0x1a, 0x55, 0x77, 0x47, 0x7e, 0x7d});
 
@@ -182,7 +184,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         }
     }
 
-    private static final class UwbRangingCallbacks extends IUwbRangingCallbacks2.Stub {
+    private static final class UwbRangingCallbacks extends IUwbRangingCallbacks.Stub {
         private final SessionInfo mSessionInfo;
         private final PrintWriter mPw;
         private final CompletableFuture mRangingOpenedFuture;
@@ -280,9 +282,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         public void onControleeRemoveFailed(SessionHandle sessionHandle, int reason,
                 PersistableBundle params) {}
 
-        public void onRangingSuspended(SessionHandle sessionHandle, PersistableBundle params) {}
+        public void onRangingPaused(SessionHandle sessionHandle, PersistableBundle params) {}
 
-        public void onRangingSuspendFailed(SessionHandle sessionHandle, int reason,
+        public void onRangingPauseFailed(SessionHandle sessionHandle, int reason,
                 PersistableBundle params) {}
 
         public void onRangingResumed(SessionHandle sessionHandle, PersistableBundle params) {}
@@ -798,16 +800,22 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 }
                 case "get-specification-info": {
                     PersistableBundle bundle = mUwbService.getSpecificationInfo(null);
-                    PersistableBundle fira_bundle = bundle.getPersistableBundle(
-                            FiraParams.PROTOCOL_NAME);
-                    PersistableBundle ccc_bundle = bundle.getPersistableBundle(
-                            CccParams.PROTOCOL_NAME);
-                    pw.println("FIRA Specification info: " + bundleToString(fira_bundle));
-                    pw.println("CCC Specification info: " + bundleToString(ccc_bundle));
+                    pw.println("Specification info: " + bundleToString(bundle));
                     return 0;
                 }
                 case "get-power-stats": {
-                    pw.println(mNativeUwbManager.getPowerStats());
+                    PersistableBundle bundle = mUwbService.getSpecificationInfo(null);
+                    GenericSpecificationParams params =
+                            GenericSpecificationParams.fromBundle(bundle);
+                    if (params == null) {
+                        pw.println("Spec info is empty");
+                        return -1;
+                    }
+                    if (params.hasPowerStatsSupport()) {
+                        pw.println(mNativeUwbManager.getPowerStats());
+                    } else {
+                        pw.println("power stats query is not supported");
+                    }
                     return 0;
                 }
                 default:
