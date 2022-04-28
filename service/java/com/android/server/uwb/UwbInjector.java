@@ -20,28 +20,30 @@ import static android.Manifest.permission.UWB_RANGING;
 import static android.permission.PermissionManager.PERMISSION_GRANTED;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
+import android.app.ActivityManager;
+import android.app.AlarmManager;
 import android.content.ApexEnvironment;
 import android.content.AttributionSource;
+import android.content.Context;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.IBinder;
 import android.os.Looper;
-import android.os.ServiceManager;
 import android.os.SystemClock;
 import android.os.SystemProperties;
+import android.os.UserHandle;
 import android.permission.PermissionManager;
 import android.provider.Settings;
 import android.util.AtomicFile;
 import android.util.Log;
-import android.uwb.IUwbAdapter;
 
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
 
 import java.io.File;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.Locale;
 
 /**
@@ -59,6 +61,8 @@ public class UwbInjector {
      */
     private static final String UWB_APEX_PATH =
             new File("/apex", APEX_NAME).getAbsolutePath();
+    private static final int APP_INFO_FLAGS_SYSTEM_APP =
+            ApplicationInfo.FLAG_SYSTEM | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP;
 
     private final UwbContext mContext;
     private final Looper mLooper;
@@ -66,11 +70,12 @@ public class UwbInjector {
     private final UwbSettingsStore mUwbSettingsStore;
     private final NativeUwbManager mNativeUwbManager;
     private final UwbCountryCode mUwbCountryCode;
-    // TODO(b/196225233): Make these final when qorvo stack is integrated.
-    private UwbServiceCore mUwbService;
+    private final UwbServiceCore mUwbService;
     private final UwbMetrics mUwbMetrics;
     private final DeviceConfigFacade mDeviceConfigFacade;
     private final UwbMultichipData mUwbMultichipData;
+    private final SystemBuildProperties mSystemBuildProperties;
+    private final UwbDiagnostics mUwbDiagnostics;
 
     public UwbInjector(@NonNull UwbContext context) {
         // Create UWB service thread.
@@ -90,6 +95,18 @@ public class UwbInjector {
         mUwbMetrics = new UwbMetrics(this);
         mDeviceConfigFacade = new DeviceConfigFacade(new Handler(mLooper), this);
         mUwbMultichipData = new UwbMultichipData(mContext);
+        UwbConfigurationManager uwbConfigurationManager =
+                new UwbConfigurationManager(mNativeUwbManager);
+        UwbSessionNotificationManager uwbSessionNotificationManager =
+                new UwbSessionNotificationManager(this);
+        UwbSessionManager uwbSessionManager =
+                new UwbSessionManager(uwbConfigurationManager, mNativeUwbManager, mUwbMetrics,
+                        uwbSessionNotificationManager, this,
+                        mContext.getSystemService(AlarmManager.class), mLooper);
+        mUwbService = new UwbServiceCore(mContext, mNativeUwbManager, mUwbMetrics,
+                mUwbCountryCode, uwbSessionManager, uwbConfigurationManager, this, mLooper);
+        mSystemBuildProperties = new SystemBuildProperties();
+        mUwbDiagnostics = new UwbDiagnostics(mContext, this, mSystemBuildProperties);
     }
 
     public UwbSettingsStore getUwbSettingsStore() {
@@ -117,36 +134,11 @@ public class UwbInjector {
     }
 
     public UwbServiceCore getUwbServiceCore() {
-        // TODO(b/196225233): Remove this lazy initialization when qorvo stack is integrated.
-        if (mUwbService == null) {
-            UwbConfigurationManager uwbConfigurationManager =
-                    new UwbConfigurationManager(mNativeUwbManager);
-            UwbSessionNotificationManager uwbSessionNotificationManager =
-                    new UwbSessionNotificationManager();
-            UwbSessionManager uwbSessionManager =
-                    new UwbSessionManager(uwbConfigurationManager, mNativeUwbManager, mUwbMetrics,
-                            uwbSessionNotificationManager, mLooper);
-            mUwbService = new UwbServiceCore(mContext, mNativeUwbManager, mUwbMetrics,
-                    mUwbCountryCode, uwbSessionManager, uwbConfigurationManager, mLooper);
-        }
         return mUwbService;
     }
 
-    /**
-     * @return Returns the vendor service handle.
-     */
-    public IUwbAdapter getVendorService() {
-        // TODO(b/196225233): Remove this when qorvo stack is integrated.
-        try {
-            Method getServiceMethod = ServiceManager.class.getMethod("getService", String.class);
-            IBinder b = (IBinder) getServiceMethod.invoke(null, VENDOR_SERVICE_NAME);
-            if (b == null) return null;
-            return IUwbAdapter.Stub.asInterface(b);
-        } catch (NoSuchMethodException | IllegalAccessException | IllegalArgumentException
-                | InvocationTargetException e) {
-            Log.e(TAG, "Reflection failure", e);
-            return null;
-        }
+    public UwbDiagnostics getUwbDiagnostics() {
+        return mUwbDiagnostics;
     }
 
     /**
@@ -157,20 +149,6 @@ public class UwbInjector {
     }
 
     /**
-     * @return Returns whether the UCI stack is enabled or not (Disabled by default).
-     */
-    public boolean isUciStackEnabled() {
-        return SystemProperties.getBoolean("persist.uwb.enable_uci_stack", false);
-    }
-
-    /**
-     * @return Returns whether the UCI rust stack is enabled or not (Enabled by default).
-     */
-    public boolean isUciRustStackEnabled() {
-        return SystemProperties.getBoolean("persist.uwb.enable_uci_rust_stack", true);
-    }
-
-    /**
      * Throws security exception if the UWB_RANGING permission is not granted for the calling app.
      *
      * <p>Should be used in situations where the app op should not be noted.
@@ -178,7 +156,8 @@ public class UwbInjector {
     public void enforceUwbRangingPermissionForPreflight(
             @NonNull AttributionSource attributionSource) {
         if (!attributionSource.checkCallingUid()) {
-            throw new SecurityException("Invalid attribution source " + attributionSource);
+            throw new SecurityException("Invalid attribution source " + attributionSource
+                    + ", callingUid: " + Binder.getCallingUid());
         }
         int permissionCheckResult = mPermissionManager.checkPermissionForPreflight(
                 UWB_RANGING, attributionSource);
@@ -251,6 +230,15 @@ public class UwbInjector {
     }
 
     /**
+     * Returns nanoseconds since boot, including time spent in sleep.
+     *
+     * @return Current time since boot in milliseconds.
+     */
+    public long getElapsedSinceBootNanos() {
+        return SystemClock.elapsedRealtimeNanos();
+    }
+
+    /**
      * Is this a valid country code
      * @param countryCode A 2-Character alphanumeric country code.
      * @return true if the countryCode is valid, false otherwise.
@@ -268,5 +256,64 @@ public class UwbInjector {
     public String getOemDefaultCountryCode() {
         String country = SystemProperties.get(BOOT_DEFAULT_UWB_COUNTRY_CODE);
         return isValidCountryCode(country) ? country.toUpperCase(Locale.US) : null;
+    }
+
+    /**
+     * Helper method creating a context based on the app's uid (to deal with multi user scenarios)
+     */
+    @Nullable
+    private Context createPackageContextAsUser(int uid) {
+        Context userContext;
+        try {
+            userContext = mContext.createPackageContextAsUser(mContext.getPackageName(), 0,
+                    UserHandle.getUserHandleForUid(uid));
+        } catch (PackageManager.NameNotFoundException e) {
+            Log.e(TAG, "Unknown package name");
+            return null;
+        }
+        if (userContext == null) {
+            Log.e(TAG, "Unable to retrieve user context for " + uid);
+            return null;
+        }
+        return userContext;
+    }
+
+    /** Helper method to check if the app is a system app. */
+    public boolean isSystemApp(int uid, @NonNull String packageName) {
+        try {
+            ApplicationInfo info = createPackageContextAsUser(uid)
+                    .getPackageManager()
+                    .getApplicationInfo(packageName, 0);
+            return (info.flags & APP_INFO_FLAGS_SYSTEM_APP) != 0;
+        } catch (PackageManager.NameNotFoundException e) {
+            // In case of exception, assume unknown app (more strict checking)
+            // Note: This case will never happen since checkPackage is
+            // called to verify validity before checking App's version.
+            Log.e(TAG, "Failed to get the app info", e);
+        }
+        return false;
+    }
+
+    /** Helper method to retrieve app importance. */
+    private int getPackageImportance(int uid, @NonNull String packageName) {
+        try {
+            return createPackageContextAsUser(uid)
+                    .getSystemService(ActivityManager.class)
+                    .getPackageImportance(packageName);
+        } catch (SecurityException e) {
+            Log.e(TAG, "Failed to retrieve the app importance", e);
+            return ActivityManager.RunningAppProcessInfo.IMPORTANCE_GONE;
+        }
+    }
+
+    /** Helper method to check if the app is from foreground app/service. */
+    public boolean isForegroundAppOrService(int uid, @NonNull String packageName) {
+        try {
+            return getPackageImportance(uid, packageName)
+                    <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE;
+        } catch (SecurityException e) {
+            Log.e(TAG, "Failed to retrieve the app importance", e);
+            return false;
+        }
     }
 }

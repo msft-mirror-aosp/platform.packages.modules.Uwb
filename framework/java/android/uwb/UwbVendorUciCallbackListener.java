@@ -30,11 +30,11 @@ import java.util.concurrent.Executor;
  */
 public final class UwbVendorUciCallbackListener extends IUwbVendorUciCallback.Stub{
     private static final String TAG = "Uwb.UwbVendorUciCallbacks";
-    private final IUwbAdapter2 mAdapter;
+    private final IUwbAdapter mAdapter;
     private boolean mIsRegistered = false;
     private final Map<UwbVendorUciCallback, Executor> mCallbackMap = new HashMap<>();
 
-    public UwbVendorUciCallbackListener(@NonNull IUwbAdapter2 adapter) {
+    public UwbVendorUciCallbackListener(@NonNull IUwbAdapter adapter) {
         mAdapter = adapter;
     }
 
@@ -80,9 +80,7 @@ public final class UwbVendorUciCallbackListener extends IUwbVendorUciCallback.St
             final long identity = Binder.clearCallingIdentity();
             try {
                 for (UwbVendorUciCallback callback : mCallbackMap.keySet()) {
-                    // sendCallback(cb,data);
                     Executor executor = mCallbackMap.get(callback);
-                    //final long identity = Binder.clearCallingIdentity();
                     executor.execute(() -> callback.onVendorUciResponse(gid, oid, payload));
                 }
             } catch (RuntimeException ex) {
@@ -100,9 +98,7 @@ public final class UwbVendorUciCallbackListener extends IUwbVendorUciCallback.St
             final long identity = Binder.clearCallingIdentity();
             try {
                 for (UwbVendorUciCallback callback : mCallbackMap.keySet()) {
-                    // sendCallback(cb,data);
                     Executor executor = mCallbackMap.get(callback);
-                    //final long identity = Binder.clearCallingIdentity();
                     executor.execute(() -> callback.onVendorUciNotification(gid, oid, payload));
                 }
             } catch (RuntimeException ex) {
