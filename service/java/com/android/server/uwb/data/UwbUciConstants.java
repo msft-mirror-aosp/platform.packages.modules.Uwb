@@ -16,6 +16,8 @@
 package com.android.server.uwb.data;
 
 import static android.hardware.uwb.fira_android.UwbVendorSessionInitSessionType.CCC;
+import static android.hardware.uwb.fira_android.UwbVendorStatusCodes.STATUS_ERROR_CCC_LIFECYCLE;
+import static android.hardware.uwb.fira_android.UwbVendorStatusCodes.STATUS_ERROR_CCC_SE_BUSY;
 
 import com.google.uwb.support.fira.FiraParams;
 
@@ -54,8 +56,7 @@ public class UwbUciConstants {
     public static final int REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS = 0x00;
     /* Below reason codes shall be reported with SESSION_STATE_IDLE state only. */
     public static final int REASON_MAX_RANGING_ROUND_RETRY_COUNT_REACHED = 0x01;
-
-
+    public static final int REASON_MAX_NUMBER_OF_MEASUREMENTS_REACHED = 0x02;
     public static final int REASON_ERROR_SLOT_LENGTH_NOT_SUPPORTED = 0x20;
     public static final int REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR = 0x21;
     public static final int REASON_ERROR_MAC_ADDRESS_MODE_NOT_SUPPORTED = 0x22;
@@ -171,6 +172,9 @@ public class UwbUciConstants {
             FiraParams.STATUS_CODE_RANGING_RX_MAC_IE_DEC_FAILED;
     public static final int STATUS_CODE_RANGING_RX_MAC_IE_MISSING =
             FiraParams.STATUS_CODE_RANGING_RX_MAC_IE_MISSING;
+
+    public static final int STATUS_CODE_CCC_SE_BUSY = STATUS_ERROR_CCC_SE_BUSY;
+    public static final int STATUS_CODE_CCC_LIFECYCLE = STATUS_ERROR_CCC_LIFECYCLE;
 
     /* UWB Data Session Specific Status Codes */
     public static final int STATUS_CODE_DATA_MAX_TX_APDU_SIZE_EXCEEDED = 0x30;
