@@ -21,6 +21,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.ActiveCountryCodeChangedCallback;
 import android.os.Handler;
@@ -31,6 +32,7 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.HandlerExecutor;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
@@ -51,6 +53,9 @@ import java.util.Set;
  */
 public class UwbCountryCode {
     private static final String TAG = "UwbCountryCode";
+    // To be used when there is no country code available.
+    @VisibleForTesting
+    public static final String DEFAULT_COUNTRY_CODE = "00";
     private static final DateTimeFormatter FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
@@ -109,8 +114,10 @@ public class UwbCountryCode {
                 },
                 new IntentFilter(TelephonyManager.ACTION_NETWORK_COUNTRY_CHANGED),
                 null, mHandler);
-        mContext.getSystemService(WifiManager.class).registerActiveCountryCodeChangedCallback(
-                new HandlerExecutor(mHandler), new WifiCountryCodeCallback());
+        if (mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI)) {
+            mContext.getSystemService(WifiManager.class).registerActiveCountryCodeChangedCallback(
+                    new HandlerExecutor(mHandler), new WifiCountryCodeCallback());
+        }
 
         Log.d(TAG, "Default country code from system property is "
                 + mUwbInjector.getOemDefaultCountryCode());
@@ -138,7 +145,7 @@ public class UwbCountryCode {
         } else {
             mTelephonyCountryCode = countryCode.toUpperCase(Locale.US);
         }
-        return setCountryCode();
+        return setCountryCode(false);
     }
 
     private boolean setWifiCountryCode(String countryCode) {
@@ -151,7 +158,7 @@ public class UwbCountryCode {
         } else {
             mWifiCountryCode = countryCode.toUpperCase(Locale.US);
         }
-        return setCountryCode();
+        return setCountryCode(false);
     }
 
     private String pickCountryCode() {
@@ -170,15 +177,17 @@ public class UwbCountryCode {
     /**
      * Set country code
      *
+     * @param forceUpdate Force update the country code even if it was the same as previously cached
+     *                    value.
      * @return true if the country code is set successfully, false otherwise.
      */
-    public boolean setCountryCode() {
+    public boolean setCountryCode(boolean forceUpdate) {
         String country = pickCountryCode();
         if (country == null) {
-            Log.i(TAG, "No valid country code");
-            return false;
+            Log.i(TAG, "No valid country code, reset to " + DEFAULT_COUNTRY_CODE);
+            country = DEFAULT_COUNTRY_CODE;
         }
-        if (Objects.equals(country, mCountryCode)) {
+        if (!forceUpdate && Objects.equals(country, mCountryCode)) {
             Log.i(TAG, "Ignoring already set country code: " + country);
             return false;
         }
@@ -229,7 +238,7 @@ public class UwbCountryCode {
             return;
         }
         mOverrideCountryCode = countryCode.toUpperCase(Locale.US);
-        setCountryCode();
+        setCountryCode(true);
     }
 
     /**
@@ -237,7 +246,7 @@ public class UwbCountryCode {
      */
     public synchronized void clearOverrideCountryCode() {
         mOverrideCountryCode = null;
-        setCountryCode();
+        setCountryCode(true);
     }
 
     /**
