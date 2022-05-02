@@ -15,6 +15,8 @@
  */
 package com.android.server.uwb;
 
+import static com.android.server.uwb.data.UwbUciConstants.REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS;
+
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
 
@@ -166,9 +168,13 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         switch (state) {
             case UwbUciConstants.UWB_SESSION_STATE_IDLE:
                 if (prevState == UwbUciConstants.UWB_SESSION_STATE_ACTIVE) {
-                    mSessionNotificationManager.onRangingStoppedWithUciReasonCode(
-                            uwbSession, reasonCode);
-                    mUwbMetrics.longRangingStopEvent(uwbSession);
+                    // If session was stopped explicitly, then the onStopped() is sent from
+                    // stopRanging method.
+                    if (reasonCode != REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS) {
+                        mSessionNotificationManager.onRangingStoppedWithUciReasonCode(
+                                uwbSession, reasonCode);
+                        mUwbMetrics.longRangingStopEvent(uwbSession);
+                    }
                 } else if (prevState == UwbUciConstants.UWB_SESSION_STATE_IDLE) {
                     //mSessionNotificationManager.onRangingReconfigureFailed(
                     //      uwbSession, reasonCode);
@@ -203,7 +209,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                 protocolName, params, rangingCallbacks);
         if (isExistedSession(sessionId)) {
             Log.i(TAG, "Duplicated sessionId");
-            rangingCallbacks.onRangingOpenFailed(sessionHandle, RangingChangeReason.UNKNOWN,
+            rangingCallbacks.onRangingOpenFailed(sessionHandle, RangingChangeReason.BAD_PARAMETERS,
                     UwbSessionNotificationHelper.convertUciStatusToParam(protocolName,
                             UwbUciConstants.STATUS_CODE_ERROR_SESSION_DUPLICATE));
             mUwbMetrics.logRangingInitEvent(uwbSession,
