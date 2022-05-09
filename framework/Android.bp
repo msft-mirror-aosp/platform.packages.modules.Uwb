@@ -57,10 +57,11 @@ filegroup {
 java_defaults {
     name: "framework-uwb-defaults",
     defaults: ["uwb-module-sdk-version-defaults"],
-    static_libs : [],
+    static_libs : [
+        "modules-utils-preconditions",
+    ],
     libs: [
         "unsupportedappusage", // for android.compat.annotation.UnsupportedAppUsage
-        "modules-utils-preconditions",
     ],
     srcs: [
         ":framework-uwb-updatable-sources",
@@ -94,8 +95,11 @@ java_sdk_library {
     },
     hostdex: true, // for hiddenapi check
 
-    // TODO(b/186585880): Fix all @hide dependencies.
-    impl_library_visibility: ["//visibility:public"],
+    impl_library_visibility: [
+        "//cts/tests/uwb:__subpackages__",
+        "//external/sl4a/Common:__subpackages__",
+        "//packages/modules/Uwb:__subpackages__",
+    ],
 
     apex_available: [
         "com.android.uwb",
@@ -103,7 +107,7 @@ java_sdk_library {
     permitted_packages: [
         "android.uwb",
         // Created by jarjar rules.
-        "com.android.uwb.x",
+        "com.android.x.uwb",
     ],
     lint: {
         strict_updatability_linting: true,
@@ -117,13 +121,17 @@ java_defaults {
     libs: [
         "framework-uwb.impl",
     ],
+    defaults_visibility: [
+        "//packages/modules/Uwb/framework/tests:__subpackages__",
+        "//packages/modules/Uwb/service/tests:__subpackages__",
+    ],
 }
 
 // TODO(b/186585880): Fix all @hide dependencies.
 // defaults for CTS tests that need to build against framework-uwb's @hide APIs
 java_defaults {
     name: "framework-uwb-cts-defaults",
-    sdk_version: "core_Tiramisu",
+    sdk_version: "core_current",
     libs: [
         // order matters: classes in framework-uwb are resolved before framework, meaning
         // @hide APIs in framework-uwb are resolved before @SystemApi stubs in framework
@@ -133,7 +141,9 @@ java_defaults {
         // if sdk_version="" this gets automatically included, but here we need to add manually.
         "framework-res",
     ],
-    defaults_visibility: ["//visibility:public"],
+    defaults_visibility: [
+        "//cts/tests/uwb:__subpackages__"
+    ],
 }
 
 filegroup {
