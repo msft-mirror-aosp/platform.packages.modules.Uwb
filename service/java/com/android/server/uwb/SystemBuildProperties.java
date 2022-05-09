@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.android.server.uwb;
 
-import android.content.Context;
+import android.os.Build;
 
-public class UwbPermissions {
-    /**
-     * Uwb ADMIN permission - only for system apps
-     */
-    private static final String TAG = "UwbPermissions";
-    private static final String ADMIN_PERM = android.Manifest.permission.WRITE_SECURE_SETTINGS;
-    private static final String ADMIN_PERM_ERROR = "WRITE_SECURE_SETTINGS permission required";
+class SystemBuildProperties {
+    /** @return if it is an eng build. */
+    public boolean isEngBuild() {
+        return Build.TYPE.equals("eng");
+    }
 
-    public static void enforceAdminPermissions(Context context) {
-        context.enforceCallingOrSelfPermission(ADMIN_PERM, ADMIN_PERM_ERROR);
+    /** @return if it is an userdebug build. */
+    public boolean isUserdebugBuild() {
+        return Build.TYPE.equals("userdebug");
+    }
+
+    /** @return if it is a normal user build. */
+    public boolean isUserBuild() {
+        return Build.TYPE.equals("user");
     }
 }
