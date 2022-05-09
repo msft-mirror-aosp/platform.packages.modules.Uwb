@@ -24,6 +24,7 @@ import static org.mockito.Mockito.when;
 
 import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
+import android.uwb.RangingMeasurement;
 
 import androidx.test.runner.AndroidJUnit4;
 
@@ -183,7 +184,8 @@ public class UwbMetricsTest {
                 UwbStatsLog.UWB_SESSION_CLOSED__DURATION_BUCKET__TEN_SEC_TO_ONE_MIN,
                 VALID_RANGING_COUNT + 1, VALID_RANGING_COUNT,
                 UwbStatsLog.UWB_SESSION_CLOSED__RANGING_COUNT_BUCKET__FIVE_TO_TWENTY,
-                UwbStatsLog.UWB_SESSION_CLOSED__RANGING_COUNT_BUCKET__ONE_TO_FIVE));
+                UwbStatsLog.UWB_SESSION_CLOSED__RANGING_COUNT_BUCKET__ONE_TO_FIVE,
+                2, 1, 0));
     }
 
     @Test
@@ -215,7 +217,7 @@ public class UwbMetricsTest {
                 UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA,
                 UwbStatsLog.UWB_RANGING_MEASUREMENT_RECEIVED__NLOS__NLOS,
                 true, DISTANCE_DEFAULT_CM, DISTANCE_DEFAULT_CM / 50,
-                UwbMetrics.DISTANCE_FOM_DEFAULT,
+                RangingMeasurement.RSSI_UNKNOWN,
                 true, AZIMUTH_DEFAULT_DEGREE, AZIMUTH_DEFAULT_DEGREE / 10, AZIMUTH_FOM_DEFAULT,
                 true, ELEVATION_DEFAULT_DEGREE, ELEVATION_DEFAULT_DEGREE / 10, ELEVATION_FOM_DEFAULT
         ));
@@ -231,7 +233,7 @@ public class UwbMetricsTest {
                 UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA,
                 UwbStatsLog.UWB_RANGING_MEASUREMENT_RECEIVED__NLOS__NLOS,
                 true, DISTANCE_DEFAULT_CM, DISTANCE_DEFAULT_CM / 50,
-                UwbMetrics.DISTANCE_FOM_DEFAULT,
+                RangingMeasurement.RSSI_UNKNOWN,
                 true, AZIMUTH_DEFAULT_DEGREE, AZIMUTH_DEFAULT_DEGREE / 10, AZIMUTH_FOM_DEFAULT,
                 true, ELEVATION_DEFAULT_DEGREE, ELEVATION_DEFAULT_DEGREE / 10, ELEVATION_FOM_DEFAULT
         ), times(0));
@@ -255,10 +257,24 @@ public class UwbMetricsTest {
                 UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__CCC,
                 UwbStatsLog.UWB_RANGING_MEASUREMENT_RECEIVED__NLOS__LOS,
                 false, UwbMetrics.INVALID_DISTANCE, 0,
-                UwbMetrics.DISTANCE_FOM_DEFAULT,
+                RangingMeasurement.RSSI_UNKNOWN,
                 false, -10, 0, 0,
                 false, -20, 0, 0
         ));
+    }
+
+    @Test
+    public void testReportDeviceSuccessErrorCount() throws Exception {
+        mUwbMetrics.incrementDeviceInitFailureCount();
+        ExtendedMockito.verify(() -> UwbStatsLog.write(UwbStatsLog.UWB_DEVICE_ERROR_REPORTED,
+                UwbStatsLog.UWB_DEVICE_ERROR_REPORTED__TYPE__INIT_ERROR));
+        mUwbMetrics.incrementDeviceInitSuccessCount();
+        mUwbMetrics.incrementDeviceStatusErrorCount();
+        ExtendedMockito.verify(() -> UwbStatsLog.write(UwbStatsLog.UWB_DEVICE_ERROR_REPORTED,
+                UwbStatsLog.UWB_DEVICE_ERROR_REPORTED__TYPE__DEVICE_STATUS_ERROR));
+        mUwbMetrics.incrementUciGenericErrorCount();
+        ExtendedMockito.verify(() -> UwbStatsLog.write(UwbStatsLog.UWB_DEVICE_ERROR_REPORTED,
+                UwbStatsLog.UWB_DEVICE_ERROR_REPORTED__TYPE__UCI_GENERIC_ERROR));
     }
 
     @Test
