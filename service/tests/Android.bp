@@ -53,15 +53,17 @@ android_test {
         "android.test.runner",
         "android.test.base",
         "android.test.mock",
+        "framework-annotations-lib",
         "framework-uwb-pre-jarjar",
         "ServiceUwbResources",
+        "framework-statsd.stubs.module_lib",
+        "framework-wifi.stubs.module_lib"
     ],
 
     jni_libs: [
         // these are needed for Extended Mockito
         "libdexmakerjvmtiagent",
         "libstaticjvmtiagent",
-        "libuwb_uci_jni",
     ],
     compile_multilib: "both",
 
