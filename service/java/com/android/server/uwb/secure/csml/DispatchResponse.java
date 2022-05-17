@@ -16,6 +16,7 @@
 package com.android.server.uwb.secure.csml;
 
 import android.annotation.IntDef;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -39,6 +40,7 @@ import java.util.Optional;
  * Response of Dispatch APDU, See CSML 1.0 - 8.2.2.14.2.9
  */
 public class DispatchResponse extends FiRaResponse {
+    private static final String LOG_TAG = "DispatchResponse";
     @VisibleForTesting
     static final Tag STATUS_TAG = new Tag((byte) 0x80);
     @VisibleForTesting
@@ -201,6 +203,7 @@ public class DispatchResponse extends FiRaResponse {
         Map<Tag, List<TlvDatum>> proprietaryTlvsMap = TlvParser.parseTlvs(responseApdu);
         List<TlvDatum> proprietaryTlv = proprietaryTlvsMap.get(PROPRIETARY_RESPONSE_TAG);
         if (proprietaryTlv == null || proprietaryTlv.size() == 0) {
+            logw("no valid dispatch response, root tag is empty.");
             return;
         }
 
@@ -210,8 +213,7 @@ public class DispatchResponse extends FiRaResponse {
 
         List<TlvDatum> statusTlvs = tlvsMap.get(STATUS_TAG);
         if (statusTlvs == null || statusTlvs.size() == 0) {
-            // no status attached.
-            // TODO: must have status according to the FiRa spec.
+            logw("no status tag is attached, required by FiRa");
             return;
         }
         mTransactionStatus = parseTransctionStatus(statusTlvs.get(0).value);
@@ -389,5 +391,9 @@ public class DispatchResponse extends FiRaResponse {
             this.target = target;
             this.data = data;
         }
+    }
+
+    private void logw(@NonNull String dbgMsg) {
+        Log.w(LOG_TAG, dbgMsg);
     }
 }
