@@ -45,6 +45,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
 import android.os.PersistableBundle;
+import android.os.Process;
 import android.platform.test.annotations.Presubmit;
 import android.provider.Settings;
 import android.test.suitebuilder.annotation.SmallTest;
@@ -57,6 +58,7 @@ import android.uwb.UwbAddress;
 
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
 import com.android.server.uwb.pm.ProfileManager;
@@ -316,6 +318,7 @@ public class UwbServiceImplTest {
         verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, true);
         verify(mUwbServiceCore).setEnabled(false);
 
+        when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(false);
         mUwbServiceImpl.setEnabled(false);
         verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, false);
         verify(mUwbServiceCore, times(2)).setEnabled(false);
@@ -349,6 +352,21 @@ public class UwbServiceImplTest {
         mApmModeBroadcastReceiver.getValue().onReceive(
                 mContext, new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED));
         verify(mUwbServiceCore, times(2)).setEnabled(true);
+    }
+
+    @Test
+    public void testToggleFromRootedShellWhenApmModeOn() throws Exception {
+        BinderUtil.setUid(Process.ROOT_UID);
+        when(mUwbInjector.getSettingsInt(Settings.Global.AIRPLANE_MODE_ON, 0)).thenReturn(1);
+
+        mUwbServiceImpl.setEnabled(true);
+        verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, true);
+        verify(mUwbServiceCore).setEnabled(true);
+
+        when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(false);
+        mUwbServiceImpl.setEnabled(false);
+        verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, false);
+        verify(mUwbServiceCore).setEnabled(false);
     }
 
     @Test
@@ -513,12 +531,19 @@ public class UwbServiceImplTest {
 
     @Test
     public void testRemoveServiceProfile() throws Exception {
-        final PersistableBundle parameters = new PersistableBundle();
+        UUID serviceInstanceID = new UUID(100, 50);
 
-        try {
-            mUwbServiceImpl.removeServiceProfile(parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        when(mUwbInjector.getProfileManager()).thenReturn(mProfileManager);
+        when(mProfileManager.removeServiceProfile(any()))
+                .thenReturn(UwbUciConstants.STATUS_CODE_OK);
+
+        UuidBundleWrapper uuidBundleWrapper = new UuidBundleWrapper.Builder()
+                .setServiceInstanceID(Optional.of(serviceInstanceID))
+                .build();
+        int status = mUwbServiceImpl.removeServiceProfile(uuidBundleWrapper.toBundle());
+
+        verify(mProfileManager).removeServiceProfile(any());
+        assertEquals(status, UwbUciConstants.STATUS_CODE_OK);
     }
 
     @Test
