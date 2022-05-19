@@ -27,6 +27,7 @@ import android.content.IntentFilter;
 import android.os.Binder;
 import android.os.ParcelFileDescriptor;
 import android.os.PersistableBundle;
+import android.os.Process;
 import android.os.RemoteException;
 import android.provider.Settings;
 import android.util.Log;
@@ -37,6 +38,8 @@ import android.uwb.IUwbRangingCallbacks;
 import android.uwb.IUwbVendorUciCallback;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
+
+import com.android.server.uwb.data.UwbUciConstants;
 
 import com.google.uwb.support.multichip.ChipInfoParams;
 import com.google.uwb.support.profile.ServiceProfile;
@@ -234,6 +237,11 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     public synchronized void setEnabled(boolean enabled) throws RemoteException {
         enforceUwbPrivilegedPermission();
         persistUwbToggleState(enabled);
+        // Shell command from rooted shell, we allow UWB toggle on even if APM mode is on.
+        if (Binder.getCallingUid() == Process.ROOT_UID) {
+            mUwbServiceCore.setEnabled(isUwbToggleEnabled());
+            return;
+        }
         mUwbServiceCore.setEnabled(isUwbEnabled());
     }
 
@@ -269,7 +277,6 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     public PersistableBundle addServiceProfile(@NonNull PersistableBundle parameters) {
         enforceUwbPrivilegedPermission();
         ServiceProfile serviceProfile = ServiceProfile.fromBundle(parameters);
-        //TODO Use handler to post the events
         Optional<UUID> serviceInstanceID = mUwbInjector
                 .getProfileManager()
                 .addServiceProfile(serviceProfile.getServiceID());
@@ -282,8 +289,13 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     @Override
     public int removeServiceProfile(@NonNull PersistableBundle parameters) {
         enforceUwbPrivilegedPermission();
-        // TODO(b/200678461): Implement this.
-        throw new IllegalStateException("Not implemented");
+        UuidBundleWrapper uuidBundleWrapper = UuidBundleWrapper.fromBundle(parameters);
+        if (uuidBundleWrapper.getServiceInstanceID().isPresent()) {
+            return mUwbInjector
+                    .getProfileManager()
+                    .removeServiceProfile(uuidBundleWrapper.getServiceInstanceID().get());
+        }
+        return UwbUciConstants.STATUS_CODE_FAILED;
     }
 
     @Override
@@ -377,14 +389,16 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     public void handleUserSwitch(int userId) {
-        //TODO : Fix threading model here, handle race condition
-        Log.d(TAG, "Handle user switch " + userId);
-        mUwbInjector.getUwbConfigStore().handleUserSwitch(userId);
+        mUwbServiceCore.getHandler().post(() -> {
+            Log.d(TAG, "Handle user switch " + userId);
+            mUwbInjector.getUwbConfigStore().handleUserSwitch(userId);
+        });
     }
 
     public void handleUserUnlock(int userId) {
-        //TODO : Fix threading model here, handle race condition
-        Log.d(TAG, "Handle user unlock " + userId);
-        mUwbInjector.getUwbConfigStore().handleUserUnlock(userId);
+        mUwbServiceCore.getHandler().post(() -> {
+            Log.d(TAG, "Handle user unlock " + userId);
+            mUwbInjector.getUwbConfigStore().handleUserUnlock(userId);
+        });
     }
 }
