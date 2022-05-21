@@ -23,6 +23,7 @@ import static android.uwb.UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_TOGGLE_STATE;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
@@ -42,6 +43,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
 import android.os.PersistableBundle;
+import android.os.Process;
 import android.platform.test.annotations.Presubmit;
 import android.provider.Settings;
 import android.test.suitebuilder.annotation.SmallTest;
@@ -57,6 +59,7 @@ import androidx.test.runner.AndroidJUnit4;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
 
+import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.multichip.ChipInfoParams;
 
 import org.junit.Before;
@@ -212,15 +215,19 @@ public class UwbServiceImplTest {
         verify(mUwbServiceCore).startRanging(sessionHandle, parameters);
     }
 
-
     @Test
     public void testReconfigureRanging() throws Exception {
         final SessionHandle sessionHandle = new SessionHandle(5);
-        final PersistableBundle parameters = new PersistableBundle();
-
-        mUwbServiceImpl.reconfigureRanging(sessionHandle, parameters);
-
-        verify(mUwbServiceCore).reconfigureRanging(sessionHandle, parameters);
+        final FiraRangingReconfigureParams parameters =
+                new FiraRangingReconfigureParams.Builder()
+                        .setBlockStrideLength(6)
+                        .setRangeDataNtfConfig(RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY)
+                        .setRangeDataProximityFar(6)
+                        .setRangeDataProximityNear(4)
+                        .build();
+        mUwbServiceImpl.reconfigureRanging(sessionHandle, parameters.toBundle());
+        verify(mUwbServiceCore).reconfigureRanging(eq(sessionHandle),
+                argThat((x) -> x.getInt("update_block_stride_length") == 6));
     }
 
     @Test
@@ -302,6 +309,7 @@ public class UwbServiceImplTest {
         verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, true);
         verify(mUwbServiceCore).setEnabled(false);
 
+        when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(false);
         mUwbServiceImpl.setEnabled(false);
         verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, false);
         verify(mUwbServiceCore, times(2)).setEnabled(false);
@@ -335,6 +343,21 @@ public class UwbServiceImplTest {
         mApmModeBroadcastReceiver.getValue().onReceive(
                 mContext, new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED));
         verify(mUwbServiceCore, times(2)).setEnabled(true);
+    }
+
+    @Test
+    public void testToggleFromRootedShellWhenApmModeOn() throws Exception {
+        BinderUtil.setUid(Process.ROOT_UID);
+        when(mUwbInjector.getSettingsInt(Settings.Global.AIRPLANE_MODE_ON, 0)).thenReturn(1);
+
+        mUwbServiceImpl.setEnabled(true);
+        verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, true);
+        verify(mUwbServiceCore).setEnabled(true);
+
+        when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(false);
+        mUwbServiceImpl.setEnabled(false);
+        verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, false);
+        verify(mUwbServiceCore).setEnabled(false);
     }
 
     @Test
@@ -397,10 +420,8 @@ public class UwbServiceImplTest {
         final SessionHandle sessionHandle = new SessionHandle(5);
         final PersistableBundle parameters = new PersistableBundle();
 
-        try {
-            mUwbServiceImpl.addControlee(sessionHandle, parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        mUwbServiceImpl.addControlee(sessionHandle, parameters);
+        verify(mUwbServiceCore).addControlee(sessionHandle, parameters);
     }
 
     @Test
@@ -408,10 +429,8 @@ public class UwbServiceImplTest {
         final SessionHandle sessionHandle = new SessionHandle(5);
         final PersistableBundle parameters = new PersistableBundle();
 
-        try {
-            mUwbServiceImpl.removeControlee(sessionHandle, parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        mUwbServiceImpl.removeControlee(sessionHandle, parameters);
+        verify(mUwbServiceCore).removeControlee(sessionHandle, parameters);
     }
 
     @Test
@@ -466,21 +485,15 @@ public class UwbServiceImplTest {
     @Test
     public void testRegisterVendorExtensionCallback() throws Exception {
         final IUwbVendorUciCallback cb = mock(IUwbVendorUciCallback.class);
-
-        try {
-            mUwbServiceImpl.registerVendorExtensionCallback(cb);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        mUwbServiceImpl.registerVendorExtensionCallback(cb);
+        verify(mUwbServiceCore).registerVendorExtensionCallback(cb);
     }
 
     @Test
     public void testUnregisterVendorExtensionCallback() throws Exception {
         final IUwbVendorUciCallback cb = mock(IUwbVendorUciCallback.class);
-
-        try {
-            mUwbServiceImpl.unregisterVendorExtensionCallback(cb);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        mUwbServiceImpl.unregisterVendorExtensionCallback(cb);
+        verify(mUwbServiceCore).unregisterVendorExtensionCallback(cb);
     }
 
     @Test
@@ -541,10 +554,7 @@ public class UwbServiceImplTest {
     public void testSendVendorUciMessage() throws Exception {
         final int gid = 0;
         final int oid = 0;
-
-        try {
-            mUwbServiceImpl.sendVendorUciMessage(gid, oid, null);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        mUwbServiceImpl.sendVendorUciMessage(gid, oid, null);
+        verify(mUwbServiceCore).sendVendorUciMessage(gid, oid, null);
     }
 }
