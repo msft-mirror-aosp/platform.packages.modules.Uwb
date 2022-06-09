@@ -78,7 +78,6 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
 
     private static final int TASK_ENABLE = 1;
     private static final int TASK_DISABLE = 2;
-    private static final int TASK_DEINIT_ALL_SESSIONS = 3;
 
     private static final int WATCHDOG_MS = 10000;
     private static final int SEND_VENDOR_CMD_TIMEOUT_MS = 10000;
@@ -95,10 +94,10 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     private final UwbMetrics mUwbMetrics;
     private final UwbCountryCode mUwbCountryCode;
     private final UwbInjector mUwbInjector;
-    private GenericSpecificationParams mSpecificationParams;
     private /* @UwbManager.AdapterStateCallback.State */ int mState;
     private @StateChangeReason int mLastStateChangedReason;
     private  IUwbVendorUciCallback mCallBack = null;
+    private final Handler mHandler;
 
     public UwbServiceCore(Context uwbApplicationContext, NativeUwbManager nativeUwbManager,
             UwbMetrics uwbMetrics, UwbCountryCode uwbCountryCode,
@@ -125,6 +124,11 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         updateState(AdapterStateCallback.STATE_DISABLED, StateChangeReason.SYSTEM_BOOT);
 
         mEnableDisableTask = new EnableDisableTask(serviceLooper);
+        mHandler = new Handler(serviceLooper);
+    }
+
+    public Handler getHandler() {
+        return mHandler;
     }
 
     private void updateState(int state, int reason) {
@@ -174,7 +178,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
 
     @Override
     public void onDeviceStatusNotificationReceived(int deviceState) {
-        // If error state is received, toggle UWB off to reset stack state.
+        // If error status is received, toggle UWB off to reset stack state.
         // TODO(b/227488208): Should we try to restart (like wifi) instead?
         if ((byte) deviceState == UwbUciConstants.DEVICE_STATE_ERROR) {
             Log.e(TAG, "Error device status received. Disabling...");
@@ -220,15 +224,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     }
 
     @Override
-    public void onCountryCodeChanged(@Nullable String countryCode) {
-        // If there are ongoing sessions, then we should use this trigger to close all of them
-        // and send notifications to apps.
-        Log.v(TAG, "Closing ongoing sessions on country code change");
-        mEnableDisableTask.execute(TASK_DEINIT_ALL_SESSIONS);
-        // Clear the cached capabilities on country code changes.
-        Log.v(TAG, "Clearing cached specification params on country code change");
-        mSpecificationParams = null;
-    }
+    public void onCountryCodeChanged(@Nullable String countryCode) { }
 
     public void registerAdapterStateCallbacks(IUwbAdapterStateCallbacks adapterStateCallbacks)
             throws RemoteException {
@@ -255,23 +251,16 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         mCallBack = null;
     }
 
-    private void updateSpecificationInfo() {
+    public PersistableBundle getSpecificationInfo() {
+        // TODO(b/211445008): Consolidate to a single uwb thread.
         Pair<Integer, GenericSpecificationParams> specificationParams =
                 mConfigurationManager.getCapsInfo(
                         GenericParams.PROTOCOL_NAME, GenericSpecificationParams.class);
         if (specificationParams.first != UwbUciConstants.STATUS_CODE_OK)  {
             Log.e(TAG, "Failed to retrieve specification params");
-            return;
+            return new PersistableBundle();
         }
-        mSpecificationParams = specificationParams.second;
-    }
-
-    public PersistableBundle getSpecificationInfo() {
-        if (mSpecificationParams == null) {
-            updateSpecificationInfo();
-        }
-        if (mSpecificationParams == null) return new PersistableBundle();
-        return mSpecificationParams.toBundle();
+        return specificationParams.second.toBundle();
     }
 
     public long getTimestampResolutionNanos() {
@@ -490,11 +479,6 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                     mSessionManager.deinitAllSession();
                     disableInternal();
                     break;
-
-                case TASK_DEINIT_ALL_SESSIONS:
-                    mSessionManager.deinitAllSession();
-                    break;
-
                 default:
                     Log.d(TAG, "EnableDisableTask : Undefined Task");
                     break;
