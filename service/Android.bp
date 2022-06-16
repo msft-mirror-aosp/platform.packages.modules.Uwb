@@ -59,6 +59,7 @@ java_library {
         "ServiceUwbResources",
         "framework-statsd.stubs.module_lib",
         "framework-wifi.stubs.module_lib",
+        "framework-bluetooth.stubs.module_lib",
     ],
 
     static_libs: [
@@ -69,10 +70,11 @@ java_library {
         "com.uwb.support.generic",
         "com.uwb.support.multichip",
         "com.uwb.support.profile",
+        "guava",
         "modules-utils-shell-command-handler",
         "modules-utils-handlerexecutor",
         "modules-utils-preconditions",
-        "guava",
+        "uwb-config-proto",
     ],
 
     apex_available: [
