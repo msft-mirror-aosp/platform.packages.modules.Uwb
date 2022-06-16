@@ -23,12 +23,14 @@ import static android.uwb.UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_TOGGLE_STATE;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.uwb.support.fira.FiraParams.PACS_PROFILE_SERVICE_ID;
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -56,11 +58,15 @@ import android.uwb.UwbAddress;
 
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
+import com.android.server.uwb.pm.ProfileManager;
 
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.multichip.ChipInfoParams;
+import com.google.uwb.support.profile.ServiceProfile;
+import com.google.uwb.support.profile.UuidBundleWrapper;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -71,6 +77,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Tests for {@link UwbServiceImpl}.
@@ -93,6 +101,7 @@ public class UwbServiceImplTest {
     @Mock private UwbSettingsStore mUwbSettingsStore;
     @Mock private NativeUwbManager mNativeUwbManager;
     @Mock private UwbMultichipData mUwbMultichipData;
+    @Mock private ProfileManager mProfileManager;
     @Captor private ArgumentCaptor<IUwbRangingCallbacks> mRangingCbCaptor;
     @Captor private ArgumentCaptor<IUwbRangingCallbacks> mRangingCbCaptor2;
     @Captor private ArgumentCaptor<IBinder.DeathRecipient> mClientDeathCaptor;
@@ -434,13 +443,27 @@ public class UwbServiceImplTest {
     }
 
     @Test
-    public void testAddServiceProfile() throws Exception {
-        final PersistableBundle parameters = new PersistableBundle();
+    public void testAddServiceProfile() {
+        UUID serviceInstanceID = new UUID(100, 50);
 
-        try {
-            mUwbServiceImpl.addServiceProfile(parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        when(mUwbInjector.getProfileManager()).thenReturn(mProfileManager);
+        when(mProfileManager.addServiceProfile(anyInt()))
+                .thenReturn(Optional.of(serviceInstanceID));
+
+        PersistableBundle bundle = new ServiceProfile.Builder()
+                .setServiceID(PACS_PROFILE_SERVICE_ID)
+                .build()
+                .toBundle();
+
+        assertEquals(ServiceProfile.fromBundle(bundle).getServiceID(),
+                PACS_PROFILE_SERVICE_ID);
+
+        PersistableBundle statusBundle = mUwbServiceImpl.addServiceProfile(bundle);
+
+        verify(mProfileManager).addServiceProfile(1);
+
+        assertEquals(UuidBundleWrapper.fromBundle(statusBundle).getServiceInstanceID().get(),
+                serviceInstanceID);
     }
 
     @Test
@@ -508,12 +531,19 @@ public class UwbServiceImplTest {
 
     @Test
     public void testRemoveServiceProfile() throws Exception {
-        final PersistableBundle parameters = new PersistableBundle();
+        UUID serviceInstanceID = new UUID(100, 50);
 
-        try {
-            mUwbServiceImpl.removeServiceProfile(parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        when(mUwbInjector.getProfileManager()).thenReturn(mProfileManager);
+        when(mProfileManager.removeServiceProfile(any()))
+                .thenReturn(UwbUciConstants.STATUS_CODE_OK);
+
+        UuidBundleWrapper uuidBundleWrapper = new UuidBundleWrapper.Builder()
+                .setServiceInstanceID(Optional.of(serviceInstanceID))
+                .build();
+        int status = mUwbServiceImpl.removeServiceProfile(uuidBundleWrapper.toBundle());
+
+        verify(mProfileManager).removeServiceProfile(any());
+        assertEquals(status, UwbUciConstants.STATUS_CODE_OK);
     }
 
     @Test
