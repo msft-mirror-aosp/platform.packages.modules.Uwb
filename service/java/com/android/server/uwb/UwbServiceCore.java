@@ -39,9 +39,9 @@ import android.uwb.SessionHandle;
 import android.uwb.StateChangeReason;
 import android.uwb.UwbManager.AdapterStateCallback;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.data.UwbVendorUciResponse;
 import com.android.server.uwb.jni.INativeUwbManager;
@@ -76,8 +76,12 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         INativeUwbManager.VendorNotification, UwbCountryCode.CountryCodeChangedListener {
     private static final String TAG = "UwbServiceCore";
 
-    private static final int TASK_ENABLE = 1;
-    private static final int TASK_DISABLE = 2;
+    @VisibleForTesting
+    public static final int TASK_ENABLE = 1;
+    @VisibleForTesting
+    public static final int TASK_DISABLE = 2;
+    @VisibleForTesting
+    public static final int TASK_RESTART = 3;
 
     private static final int WATCHDOG_MS = 10000;
     private static final int SEND_VENDOR_CMD_TIMEOUT_MS = 10000;
@@ -181,10 +185,10 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         // If error status is received, toggle UWB off to reset stack state.
         // TODO(b/227488208): Should we try to restart (like wifi) instead?
         if ((byte) deviceState == UwbUciConstants.DEVICE_STATE_ERROR) {
-            Log.e(TAG, "Error device status received. Disabling...");
+            Log.e(TAG, "Error device status received. Restarting...");
             mUwbMetrics.incrementDeviceStatusErrorCount();
-            takBugReportAfterDeviceError("UWB is disabled due to device status error");
-            setEnabled(false);
+            takBugReportAfterDeviceError("Restarting UWB due to vendor error");
+            mEnableDisableTask.execute(TASK_RESTART);
             return;
         }
         handleDeviceStatusNotification(deviceState);
@@ -267,30 +271,6 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         return mNativeUwbManager.getTimestampResolutionNanos();
     }
 
-    /**
-     * Check the attribution source chain to ensure that there are no 3p apps which are not in fg
-     * which can receive the ranging results.
-     * @return true if there is some non-system app which is in not in fg, false otherwise.
-     */
-    private boolean hasAnyNonSystemAppNotInFgInAttributionSource(
-            @NonNull AttributionSource attributionSource) {
-        // Iterate attribution source chain to ensure that there is no non-fg 3p app in the
-        // request.
-        while (attributionSource != null) {
-            int uid = attributionSource.getUid();
-            String packageName = attributionSource.getPackageName();
-            if (!mUwbInjector.isSystemApp(uid, packageName)) {
-                if (!mUwbInjector.isForegroundAppOrService(uid, packageName)) {
-                    Log.e(TAG, "Found a non fg app/service in the attribution source of request: "
-                            + attributionSource);
-                    return true;
-                }
-            }
-            attributionSource = attributionSource.getNext();
-        }
-        return false;
-    }
-
     public void openRanging(
             AttributionSource attributionSource,
             SessionHandle sessionHandle,
@@ -298,12 +278,6 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             PersistableBundle params) throws RemoteException {
         if (!isUwbEnabled()) {
             throw new IllegalStateException("Uwb is not enabled");
-        }
-        if (hasAnyNonSystemAppNotInFgInAttributionSource(attributionSource)) {
-            Log.e(TAG, "openRanging - System policy disallows");
-            rangingCallbacks.onRangingOpenFailed(sessionHandle,
-                    RangingChangeReason.SYSTEM_POLICY, new PersistableBundle());
-            return;
         }
         int sessionId = 0;
         if (FiraParams.isCorrectProtocol(params)) {
@@ -479,6 +453,13 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                     mSessionManager.deinitAllSession();
                     disableInternal();
                     break;
+
+                case TASK_RESTART:
+                    mSessionManager.deinitAllSession();
+                    disableInternal();
+                    enableInternal();
+                    break;
+
                 default:
                     Log.d(TAG, "EnableDisableTask : Undefined Task");
                     break;
