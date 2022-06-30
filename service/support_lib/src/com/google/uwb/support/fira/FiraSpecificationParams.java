@@ -19,6 +19,7 @@ package com.google.uwb.support.fira;
 import static java.util.Objects.requireNonNull;
 
 import android.os.PersistableBundle;
+import android.uwb.UwbManager;
 
 import com.google.uwb.support.base.FlagEnum;
 
@@ -27,6 +28,11 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
 
+/**
+ * Defines parameters for FIRA capability.
+ *
+ * <p>This is returned as a bundle from the service API {@link UwbManager#getSpecificationInfo}.
+ */
 public class FiraSpecificationParams extends FiraParams {
     private static final int BUNDLE_VERSION_1 = 1;
     private static final int BUNDLE_VERSION_CURRENT = BUNDLE_VERSION_1;
@@ -48,6 +54,8 @@ public class FiraSpecificationParams extends FiraParams {
 
     private final boolean mHasInitiationTimeSupport;
 
+    private final int mMinRangingInterval;
+
     private final EnumSet<MultiNodeCapabilityFlag> mMultiNodeCapabilities;
 
     private final EnumSet<PrfCapabilityFlag> mPrfCapabilities;
@@ -64,6 +72,8 @@ public class FiraSpecificationParams extends FiraParams {
 
     private final EnumSet<HprfParameterSetCapabilityFlag> mHprfParameterSetCapabilities;
 
+    private final EnumSet<RangeDataNtfConfigCapabilityFlag> mRangeDataNtfConfigCapabilities;
+
     private static final String KEY_MIN_PHY_VERSION = "min_phy_version";
     private static final String KEY_MAX_PHY_VERSION = "max_phy_version";
     private static final String KEY_MIN_MAC_VERSION = "min_mac_version";
@@ -75,6 +85,7 @@ public class FiraSpecificationParams extends FiraParams {
     private static final String KEY_BLOCK_STRIDING_SUPPORT = "block_striding";
     private static final String KEY_NON_DEFERRED_MODE_SUPPORT = "non_deferred_mode";
     private static final String KEY_INITIATION_TIME_SUPPORT = "initiation_time";
+    private static final String KEY_MIN_RANGING_INTERVAL = "min_ranging_interval";
     private static final String KEY_MULTI_NODE_CAPABILITIES = "multi_node_capabilities";
     private static final String KEY_PRF_CAPABILITIES = "prf_capabilities";
     private static final String KEY_RANGING_ROUND_CAPABILITIES = "ranging_round_capabilities";
@@ -85,6 +96,8 @@ public class FiraSpecificationParams extends FiraParams {
             "bprf_parameter_set_capabilities";
     private static final String KEY_HPRF_PARAMETER_SET_CAPABILITIES =
             "hprf_parameter_set_capabilities";
+    private static final String KEY_RANGE_DATA_NTF_CONFIG_CAPABILITIES =
+            "range_data_ntf_config_capabilities";
 
     private FiraSpecificationParams(
             FiraProtocolVersion minPhyVersionSupported,
@@ -97,6 +110,7 @@ public class FiraSpecificationParams extends FiraParams {
             boolean hasBlockStridingSupport,
             boolean hasNonDeferredModeSupport,
             boolean hasInitiationTimeSupport,
+            int minRangingInterval,
             EnumSet<MultiNodeCapabilityFlag> multiNodeCapabilities,
             EnumSet<PrfCapabilityFlag> prfCapabilities,
             EnumSet<RangingRoundCapabilityFlag> rangingRoundCapabilities,
@@ -104,7 +118,8 @@ public class FiraSpecificationParams extends FiraParams {
             EnumSet<StsCapabilityFlag> stsCapabilities,
             EnumSet<PsduDataRateCapabilityFlag> psduDataRateCapabilities,
             EnumSet<BprfParameterSetCapabilityFlag> bprfParameterSetCapabilities,
-            EnumSet<HprfParameterSetCapabilityFlag> hprfParameterSetCapabilities) {
+            EnumSet<HprfParameterSetCapabilityFlag> hprfParameterSetCapabilities,
+            EnumSet<RangeDataNtfConfigCapabilityFlag> rangeDataNtfConfigCapabilities) {
         mMinPhyVersionSupported = minPhyVersionSupported;
         mMaxPhyVersionSupported = maxPhyVersionSupported;
         mMinMacVersionSupported = minMacVersionSupported;
@@ -115,6 +130,7 @@ public class FiraSpecificationParams extends FiraParams {
         mHasBlockStridingSupport = hasBlockStridingSupport;
         mHasNonDeferredModeSupport = hasNonDeferredModeSupport;
         mHasInitiationTimeSupport = hasInitiationTimeSupport;
+        mMinRangingInterval = minRangingInterval;
         mMultiNodeCapabilities = multiNodeCapabilities;
         mPrfCapabilities = prfCapabilities;
         mRangingRoundCapabilities = rangingRoundCapabilities;
@@ -123,6 +139,7 @@ public class FiraSpecificationParams extends FiraParams {
         mPsduDataRateCapabilities = psduDataRateCapabilities;
         mBprfParameterSetCapabilities = bprfParameterSetCapabilities;
         mHprfParameterSetCapabilities = hprfParameterSetCapabilities;
+        mRangeDataNtfConfigCapabilities = rangeDataNtfConfigCapabilities;
     }
 
     @Override
@@ -170,6 +187,10 @@ public class FiraSpecificationParams extends FiraParams {
         return mHasInitiationTimeSupport;
     }
 
+    public int getMinRangingInterval() {
+        return mMinRangingInterval;
+    }
+
     public EnumSet<MultiNodeCapabilityFlag> getMultiNodeCapabilities() {
         return mMultiNodeCapabilities;
     }
@@ -202,6 +223,10 @@ public class FiraSpecificationParams extends FiraParams {
         return mHprfParameterSetCapabilities;
     }
 
+    public EnumSet<RangeDataNtfConfigCapabilityFlag> getRangeDataNtfConfigCapabilities() {
+        return mRangeDataNtfConfigCapabilities;
+    }
+
     private static int[] toIntArray(List<Integer> data) {
         int[] res = new int[data.size()];
         for (int i = 0; i < data.size(); i++) {
@@ -223,6 +248,7 @@ public class FiraSpecificationParams extends FiraParams {
         bundle.putBoolean(KEY_BLOCK_STRIDING_SUPPORT, mHasBlockStridingSupport);
         bundle.putBoolean(KEY_NON_DEFERRED_MODE_SUPPORT, mHasNonDeferredModeSupport);
         bundle.putBoolean(KEY_INITIATION_TIME_SUPPORT, mHasInitiationTimeSupport);
+        bundle.putInt(KEY_MIN_RANGING_INTERVAL, mMinRangingInterval);
         bundle.putInt(KEY_MULTI_NODE_CAPABILITIES, FlagEnum.toInt(mMultiNodeCapabilities));
         bundle.putInt(KEY_PRF_CAPABILITIES, FlagEnum.toInt(mPrfCapabilities));
         bundle.putInt(KEY_RANGING_ROUND_CAPABILITIES, FlagEnum.toInt(mRangingRoundCapabilities));
@@ -233,7 +259,8 @@ public class FiraSpecificationParams extends FiraParams {
                 FlagEnum.toInt(mBprfParameterSetCapabilities));
         bundle.putLong(KEY_HPRF_PARAMETER_SET_CAPABILITIES,
                 FlagEnum.toLong(mHprfParameterSetCapabilities));
-
+        bundle.putInt(KEY_RANGE_DATA_NTF_CONFIG_CAPABILITIES,
+                FlagEnum.toInt(mRangeDataNtfConfigCapabilities));
         return bundle;
     }
 
@@ -263,7 +290,7 @@ public class FiraSpecificationParams extends FiraParams {
         FiraSpecificationParams.Builder builder = new FiraSpecificationParams.Builder();
         List<Integer> supportedChannels =
                 toIntList(requireNonNull(bundle.getIntArray(KEY_SUPPORTED_CHANNELS)));
-        return builder.setMinPhyVersionSupported(
+        builder.setMinPhyVersionSupported(
                         FiraProtocolVersion.fromString(bundle.getString(KEY_MIN_PHY_VERSION)))
                 .setMaxPhyVersionSupported(
                         FiraProtocolVersion.fromString(bundle.getString(KEY_MAX_PHY_VERSION)))
@@ -282,6 +309,7 @@ public class FiraSpecificationParams extends FiraParams {
                 .hasBlockStridingSupport(bundle.getBoolean(KEY_BLOCK_STRIDING_SUPPORT))
                 .hasNonDeferredModeSupport(bundle.getBoolean(KEY_NON_DEFERRED_MODE_SUPPORT))
                 .hasInitiationTimeSupport(bundle.getBoolean(KEY_INITIATION_TIME_SUPPORT))
+                .setMinRangingIntervalSupported(bundle.getInt(KEY_MIN_RANGING_INTERVAL, -1))
                 .setMultiNodeCapabilities(
                         FlagEnum.toEnumSet(
                                 bundle.getInt(KEY_MULTI_NODE_CAPABILITIES),
@@ -311,8 +339,15 @@ public class FiraSpecificationParams extends FiraParams {
                 .setHprfParameterSetCapabilities(
                         FlagEnum.longToEnumSet(
                                 bundle.getLong(KEY_HPRF_PARAMETER_SET_CAPABILITIES),
-                                HprfParameterSetCapabilityFlag.values()))
-                .build();
+                                HprfParameterSetCapabilityFlag.values()));
+        // Newer params need to be backward compatible with existing devices.
+        if (bundle.containsKey(KEY_RANGE_DATA_NTF_CONFIG_CAPABILITIES)) {
+            builder.setRangeDataNtfConfigCapabilities(
+                    FlagEnum.toEnumSet(
+                            bundle.getInt(KEY_RANGE_DATA_NTF_CONFIG_CAPABILITIES),
+                            RangeDataNtfConfigCapabilityFlag.values()));
+        }
+        return builder.build();
     }
 
     /** Builder */
@@ -334,11 +369,19 @@ public class FiraSpecificationParams extends FiraParams {
                         DeviceRoleCapabilityFlag.HAS_CONTROLLER_INITIATOR_SUPPORT,
                         DeviceRoleCapabilityFlag.HAS_CONTROLEE_RESPONDER_SUPPORT);
 
+        // Enable/Disable ntf config is mandatory.
+        private final EnumSet<RangeDataNtfConfigCapabilityFlag> mRangeDataNtfConfigCapabilities =
+                EnumSet.of(
+                        RangeDataNtfConfigCapabilityFlag.HAS_RANGE_DATA_NTF_CONFIG_DISABLE,
+                        RangeDataNtfConfigCapabilityFlag.HAS_RANGE_DATA_NTF_CONFIG_ENABLE);
+
         private boolean mHasBlockStridingSupport = false;
 
         private boolean mHasNonDeferredModeSupport = false;
 
         private boolean mHasInitiationTimeSupport = false;
+
+        private int mMinRangingInterval = -1;
 
         // Unicast support is mandatory
         private final EnumSet<MultiNodeCapabilityFlag> mMultiNodeCapabilities =
@@ -427,6 +470,16 @@ public class FiraSpecificationParams extends FiraParams {
             return this;
         }
 
+        /**
+         * Set minimum supported ranging interval
+         * @param value : minimum ranging interval supported
+         * @return FiraSpecificationParams builder
+         */
+        public FiraSpecificationParams.Builder setMinRangingIntervalSupported(int value) {
+            mMinRangingInterval = value;
+            return this;
+        }
+
         public FiraSpecificationParams.Builder setMultiNodeCapabilities(
                 Collection<MultiNodeCapabilityFlag> multiNodeCapabilities) {
             mMultiNodeCapabilities.addAll(multiNodeCapabilities);
@@ -475,6 +528,12 @@ public class FiraSpecificationParams extends FiraParams {
             return this;
         }
 
+        public FiraSpecificationParams.Builder setRangeDataNtfConfigCapabilities(
+                Collection<RangeDataNtfConfigCapabilityFlag> rangeDataNtfConfigCapabilities) {
+            mRangeDataNtfConfigCapabilities.addAll(rangeDataNtfConfigCapabilities);
+            return this;
+        }
+
         public FiraSpecificationParams build() {
             if (mSupportedChannels == null || mSupportedChannels.size() == 0) {
                 throw new IllegalStateException("Supported channels are not set");
@@ -491,6 +550,7 @@ public class FiraSpecificationParams extends FiraParams {
                     mHasBlockStridingSupport,
                     mHasNonDeferredModeSupport,
                     mHasInitiationTimeSupport,
+                    mMinRangingInterval,
                     mMultiNodeCapabilities,
                     mPrfCapabilities,
                     mRangingRoundCapabilities,
@@ -498,7 +558,8 @@ public class FiraSpecificationParams extends FiraParams {
                     mStsCapabilities,
                     mPsduDataRateCapabilities,
                     mBprfParameterSetCapabilities,
-                    mHprfParameterSetCapabilities);
+                    mHprfParameterSetCapabilities,
+                    mRangeDataNtfConfigCapabilities);
         }
     }
 }

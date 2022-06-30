@@ -52,6 +52,7 @@ import com.android.server.uwb.util.UwbUtil;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraParams.BprfParameterSetCapabilityFlag;
 import com.google.uwb.support.fira.FiraParams.HprfParameterSetCapabilityFlag;
+import com.google.uwb.support.fira.FiraParams.RangeDataNtfConfigCapabilityFlag;
 import com.google.uwb.support.fira.FiraProtocolVersion;
 import com.google.uwb.support.fira.FiraSpecificationParams;
 
@@ -68,8 +69,8 @@ import java.util.List;
 @SmallTest
 @Presubmit
 public class FiraDecoderTest {
-    private static final byte[] TEST_FIRA_SPECIFICATION_TLV_DATA =
-            UwbUtil.getByteArray("000401010102"
+    public static final String TEST_FIRA_SPECIFICATION_TLV_STRING =
+            "000401010102"
                     + "010401050103"
                     + "020103"
                     + "03011F"
@@ -87,11 +88,15 @@ public class FiraDecoderTest {
                     + "0F050000000003"
                     + "10010F"
                     + "110101"
-                    + "E30101");
-    private static final int TEST_FIRA_SPECIFICATION_TLV_NUM_PARAMS = 19;
+                    + "E30101"
+                    + "E40401010101"
+                    + "E50400000003";
+    private static final byte[] TEST_FIRA_SPECIFICATION_TLV_DATA =
+            UwbUtil.getByteArray(TEST_FIRA_SPECIFICATION_TLV_STRING);
+    public static final int TEST_FIRA_SPECIFICATION_TLV_NUM_PARAMS = 21;
     private final FiraDecoder mFiraDecoder = new FiraDecoder();
 
-    private void verifyFiraSpecification(FiraSpecificationParams firaSpecificationParams) {
+    public static void verifyFiraSpecification(FiraSpecificationParams firaSpecificationParams) {
         assertThat(firaSpecificationParams).isNotNull();
 
         assertThat(firaSpecificationParams.getMinPhyVersionSupported()).isEqualTo(
@@ -140,6 +145,10 @@ public class FiraDecoderTest {
         assertThat(firaSpecificationParams.getHprfParameterSetCapabilities()).isEqualTo(
                 EnumSet.of(HprfParameterSetCapabilityFlag.HAS_SET_1_SUPPORT,
                         HprfParameterSetCapabilityFlag.HAS_SET_2_SUPPORT));
+
+        assertThat(firaSpecificationParams.getRangeDataNtfConfigCapabilities()).isEqualTo(
+                EnumSet.of(RangeDataNtfConfigCapabilityFlag.HAS_RANGE_DATA_NTF_CONFIG_DISABLE,
+                        RangeDataNtfConfigCapabilityFlag.HAS_RANGE_DATA_NTF_CONFIG_ENABLE));
     }
 
     @Test

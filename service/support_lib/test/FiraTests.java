@@ -51,6 +51,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
 import com.google.uwb.support.base.Params;
+import com.google.uwb.support.fira.FiraControleeParams;
 import com.google.uwb.support.fira.FiraMulticastListUpdateStatusCode;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
@@ -104,6 +105,10 @@ public class FiraTests {
         int sfdId = SFD_ID_VALUE_3;
         int stsSegmentCount = STS_SEGMENT_COUNT_VALUE_2;
         int stsLength = STS_LENGTH_128_SYMBOLS;
+        byte[] sessionKey = new byte[] {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
+        byte[] subsessionKey = new byte[] {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
         int psduDataRate = PSDU_DATA_RATE_7M80;
         int bprfPhrDataRate = BPRF_PHR_DATA_RATE_6M81;
         int fcsType = MAC_FCS_TYPE_CRC_32;
@@ -156,6 +161,8 @@ public class FiraTests {
                         .setSfdId(sfdId)
                         .setStsSegmentCount(stsSegmentCount)
                         .setStsLength(stsLength)
+                        .setSessionKey(sessionKey)
+                        .setSubsessionKey(subsessionKey)
                         .setPsduDataRate(psduDataRate)
                         .setBprfPhrDataRate(bprfPhrDataRate)
                         .setFcsType(fcsType)
@@ -213,6 +220,8 @@ public class FiraTests {
         assertEquals(params.getSfdId(), sfdId);
         assertEquals(params.getStsSegmentCount(), stsSegmentCount);
         assertEquals(params.getStsLength(), stsLength);
+        assertArrayEquals(params.getSessionKey(), sessionKey);
+        assertArrayEquals(params.getSubsessionKey(), subsessionKey);
         assertEquals(params.getPsduDataRate(), psduDataRate);
         assertEquals(params.getBprfPhrDataRate(), bprfPhrDataRate);
         assertEquals(params.getFcsType(), fcsType);
@@ -268,6 +277,8 @@ public class FiraTests {
         assertEquals(fromBundle.getSfdId(), sfdId);
         assertEquals(fromBundle.getStsSegmentCount(), stsSegmentCount);
         assertEquals(fromBundle.getStsLength(), stsLength);
+        assertArrayEquals(fromBundle.getSessionKey(), sessionKey);
+        assertArrayEquals(fromBundle.getSubsessionKey(), subsessionKey);
         assertEquals(fromBundle.getPsduDataRate(), psduDataRate);
         assertEquals(fromBundle.getBprfPhrDataRate(), bprfPhrDataRate);
         assertEquals(fromBundle.getFcsType(), fcsType);
@@ -345,6 +356,28 @@ public class FiraTests {
         assertEquals((int) fromBundle.getRangeDataProximityNear(), rangeDataProximityNear);
         assertEquals((int) fromBundle.getRangeDataProximityFar(), rangeDataProximityFar);
 
+        verifyProtocolPresent(params);
+        verifyBundlesEqual(params, fromBundle);
+    }
+
+    @Test
+    public void testControleeParams() {
+        UwbAddress uwbAddress1 = UwbAddress.fromBytes(new byte[] {1, 2});
+        UwbAddress uwbAddress2 = UwbAddress.fromBytes(new byte[] {4, 5});
+        UwbAddress[] addressList = new UwbAddress[] {uwbAddress1, uwbAddress2};
+        int[] subSessionIdList = new int[] {3, 4};
+        FiraControleeParams params =
+                new FiraControleeParams.Builder()
+                        .setAddressList(addressList)
+                        .setSubSessionIdList(subSessionIdList)
+                        .build();
+
+        assertArrayEquals(params.getAddressList(), addressList);
+        assertArrayEquals(params.getSubSessionIdList(), subSessionIdList);
+        FiraControleeParams fromBundle =
+                FiraControleeParams.fromBundle(params.toBundle());
+        assertArrayEquals(fromBundle.getAddressList(), addressList);
+        assertArrayEquals(fromBundle.getSubSessionIdList(), subSessionIdList);
         verifyProtocolPresent(params);
         verifyBundlesEqual(params, fromBundle);
     }
@@ -433,6 +466,8 @@ public class FiraTests {
                 EnumSet.allOf(FiraParams.BprfParameterSetCapabilityFlag.class);
         EnumSet<FiraParams.HprfParameterSetCapabilityFlag> hprfCapabilities =
                 EnumSet.allOf(FiraParams.HprfParameterSetCapabilityFlag.class);
+        EnumSet<FiraParams.RangeDataNtfConfigCapabilityFlag> rangeDataNtfConfigCapabilities =
+                EnumSet.allOf(FiraParams.RangeDataNtfConfigCapabilityFlag.class);
 
         FiraSpecificationParams params =
                 new FiraSpecificationParams.Builder()
@@ -454,6 +489,7 @@ public class FiraTests {
                         .setPsduDataRateCapabilities(psduDataRateCapabilities)
                         .setBprfParameterSetCapabilities(bprfCapabilities)
                         .setHprfParameterSetCapabilities(hprfCapabilities)
+                        .setRangeDataNtfConfigCapabilities(rangeDataNtfConfigCapabilities)
                         .build();
         assertEquals(minPhyVersionSupported, params.getMinPhyVersionSupported());
         assertEquals(maxPhyVersionSupported, params.getMaxPhyVersionSupported());
@@ -473,6 +509,7 @@ public class FiraTests {
         assertEquals(psduDataRateCapabilities, params.getPsduDataRateCapabilities());
         assertEquals(bprfCapabilities, params.getBprfParameterSetCapabilities());
         assertEquals(hprfCapabilities, params.getHprfParameterSetCapabilities());
+        assertEquals(rangeDataNtfConfigCapabilities, params.getRangeDataNtfConfigCapabilities());
 
         FiraSpecificationParams fromBundle = FiraSpecificationParams.fromBundle(params.toBundle());
         assertEquals(minPhyVersionSupported, fromBundle.getMinPhyVersionSupported());
@@ -493,7 +530,8 @@ public class FiraTests {
         assertEquals(psduDataRateCapabilities, fromBundle.getPsduDataRateCapabilities());
         assertEquals(bprfCapabilities, fromBundle.getBprfParameterSetCapabilities());
         assertEquals(hprfCapabilities, fromBundle.getHprfParameterSetCapabilities());
-
+        assertEquals(rangeDataNtfConfigCapabilities,
+                fromBundle.getRangeDataNtfConfigCapabilities());
         verifyProtocolPresent(params);
         verifyBundlesEqual(params, fromBundle);
     }

@@ -61,7 +61,7 @@ public final class UwbManager {
     private static final String TAG = "UwbManager";
 
     private final Context mContext;
-    private final IUwbAdapter2 mUwbAdapter;
+    private final IUwbAdapter mUwbAdapter;
     private final AdapterStateListener mAdapterStateListener;
     private final RangingManager mRangingManager;
     private final UwbVendorUciCallbackListener mUwbVendorUciCallbackListener;
@@ -317,10 +317,10 @@ public final class UwbManager {
      * Use <code>Context.getSystemService(UwbManager.class)</code> to get an instance.
      *
      * @param ctx Context of the client.
-     * @param adapter an instance of an {@link android.uwb.IUwbAdapter2}
+     * @param adapter an instance of an {@link android.uwb.IUwbAdapter}
      * @hide
      */
-    public UwbManager(@NonNull Context ctx, @NonNull IUwbAdapter2 adapter) {
+    public UwbManager(@NonNull Context ctx, @NonNull IUwbAdapter adapter) {
         mContext = ctx;
         mUwbAdapter = adapter;
         mAdapterStateListener = new AdapterStateListener(adapter);
@@ -479,6 +479,9 @@ public final class UwbManager {
      *     negotiation.
      *   - Secure element interactions needed for dynamic STS based session establishment.
      *   - Setup the UWB session based on the parameters negotiated via OOB.
+     *   - Note: The OOB flow requires additional BLE Permissions
+     *     {permission.BLUETOOTH_ADVERTISE/permission.BLUETOOTH_SCAN
+     *      and permission.BLUETOOTH_CONNECT}.
      *
      * <p>If a session cannot be opened, then
      * {@link RangingSession.Callback#onClosed(int, PersistableBundle)} will be invoked with the

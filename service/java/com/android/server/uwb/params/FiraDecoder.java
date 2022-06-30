@@ -16,6 +16,8 @@
 
 package com.android.server.uwb.params;
 
+import android.util.Log;
+
 import static com.android.server.uwb.config.CapabilityParam.AOA_AZIMUTH_180;
 import static com.android.server.uwb.config.CapabilityParam.AOA_AZIMUTH_90;
 import static com.android.server.uwb.config.CapabilityParam.AOA_ELEVATION;
@@ -39,6 +41,11 @@ import static com.android.server.uwb.config.CapabilityParam.DYNAMIC_STS_RESPONDE
 import static com.android.server.uwb.config.CapabilityParam.INITIATOR;
 import static com.android.server.uwb.config.CapabilityParam.MANY_TO_MANY;
 import static com.android.server.uwb.config.CapabilityParam.ONE_TO_MANY;
+import static com.android.server.uwb.config.CapabilityParam.PROVISIONED_STS;
+import static com.android.server.uwb.config.CapabilityParam.PROVISIONED_STS_RESPONDER_SPECIFIC_SUBSESSION_KEY;
+import static com.android.server.uwb.config.CapabilityParam.RANGE_DATA_NTF_CONFIG_DISABLE;
+import static com.android.server.uwb.config.CapabilityParam.RANGE_DATA_NTF_CONFIG_ENABLE;
+import static com.android.server.uwb.config.CapabilityParam.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
 import static com.android.server.uwb.config.CapabilityParam.RESPONDER;
 import static com.android.server.uwb.config.CapabilityParam.SP0;
 import static com.android.server.uwb.config.CapabilityParam.SP1;
@@ -57,7 +64,9 @@ import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_EXTENDED_M
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_FIRA_MAC_VERSION_RANGE;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_FIRA_PHY_VERSION_RANGE;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_HPRF_PARAMETER_SETS;
+import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_MIN_RANGING_INTERVAL_MS;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_MULTI_NODE_MODES;
+import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_RANGE_DATA_NTF_CONFIG;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_RANGING_METHOD;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_RFRAME_CONFIG;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_STS_CONFIG;
@@ -86,6 +95,8 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 public class FiraDecoder extends TlvDecoder {
+    private static final String TAG = "FiraDecoder";
+
     @Override
     public <T extends Params> T getParams(TlvDecoderBuffer tlvs, Class<T> paramType) {
         if (FiraSpecificationParams.class.equals(paramType)) {
@@ -98,8 +109,7 @@ public class FiraDecoder extends TlvDecoder {
         return (flags & mask) != 0;
     }
 
-    // TODO(b/208678993): Plumb the output of GetCapsInfo to getSpecificationInfo API using this.
-    public FiraSpecificationParams getFiraSpecificationParamsFromTlvBuffer(TlvDecoderBuffer tlvs) {
+    private FiraSpecificationParams getFiraSpecificationParamsFromTlvBuffer(TlvDecoderBuffer tlvs) {
         FiraSpecificationParams.Builder builder = new FiraSpecificationParams.Builder();
         byte[] phyVersions = tlvs.getByteArray(SUPPORTED_FIRA_PHY_VERSION_RANGE);
         builder.setMinPhyVersionSupported(FiraProtocolVersion.fromBytes(phyVersions, 0));
@@ -107,6 +117,12 @@ public class FiraDecoder extends TlvDecoder {
         byte[] macVersions = tlvs.getByteArray(SUPPORTED_FIRA_MAC_VERSION_RANGE);
         builder.setMinMacVersionSupported(FiraProtocolVersion.fromBytes(macVersions, 0));
         builder.setMaxMacVersionSupported(FiraProtocolVersion.fromBytes(macVersions, 2));
+        try {
+            int minRangingInterval = tlvs.getInt(SUPPORTED_MIN_RANGING_INTERVAL_MS);
+            builder.setMinRangingIntervalSupported(minRangingInterval);
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "SUPPORTED_MIN_RANGING_INTERVAL_MS not found.");
+        }
 
         byte deviceRolesUci = tlvs.getByte(SUPPORTED_DEVICE_ROLES);
         EnumSet<DeviceRoleCapabilityFlag> deviceRoles =
@@ -151,6 +167,13 @@ public class FiraDecoder extends TlvDecoder {
         if (isBitSet(stsConfigUci, DYNAMIC_STS_RESPONDER_SPECIFIC_SUBSESSION_KEY)) {
             stsCapabilityFlag.add(
                     StsCapabilityFlag.HAS_DYNAMIC_STS_INDIVIDUAL_CONTROLEE_KEY_SUPPORT);
+        }
+        if (isBitSet(stsConfigUci, PROVISIONED_STS)) {
+            stsCapabilityFlag.add(StsCapabilityFlag.HAS_PROVISIONED_STS_SUPPORT);
+        }
+        if (isBitSet(stsConfigUci, PROVISIONED_STS_RESPONDER_SPECIFIC_SUBSESSION_KEY)) {
+            stsCapabilityFlag.add(
+                    StsCapabilityFlag.HAS_PROVISIONED_STS_INDIVIDUAL_CONTROLEE_KEY_SUPPORT);
         }
         builder.setStsCapabilities(stsCapabilityFlag);
 
@@ -284,6 +307,30 @@ public class FiraDecoder extends TlvDecoder {
             aoaFlag.add(FiraParams.AoaCapabilityFlag.HAS_INTERLEAVING_SUPPORT);
         }
         builder.setAoaCapabilities(aoaFlag);
+
+        try {
+            int rangeDataNtfConfigUci = tlvs.getByte(SUPPORTED_RANGE_DATA_NTF_CONFIG);
+            EnumSet<FiraParams.RangeDataNtfConfigCapabilityFlag> rangeDataNtfConfigCapabilityFlag =
+                    EnumSet.noneOf(FiraParams.RangeDataNtfConfigCapabilityFlag.class);
+            if (isBitSet(rangeDataNtfConfigUci, RANGE_DATA_NTF_CONFIG_ENABLE)) {
+                rangeDataNtfConfigCapabilityFlag.add(
+                        FiraParams.RangeDataNtfConfigCapabilityFlag
+                                .HAS_RANGE_DATA_NTF_CONFIG_ENABLE);
+            }
+            if (isBitSet(rangeDataNtfConfigUci, RANGE_DATA_NTF_CONFIG_DISABLE)) {
+                rangeDataNtfConfigCapabilityFlag.add(
+                        FiraParams.RangeDataNtfConfigCapabilityFlag
+                                .HAS_RANGE_DATA_NTF_CONFIG_DISABLE);
+            }
+            if (isBitSet(rangeDataNtfConfigUci,
+                    RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG)) {
+                rangeDataNtfConfigCapabilityFlag.add(
+                        FiraParams.RangeDataNtfConfigCapabilityFlag
+                                .HAS_RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY);
+            }
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "SUPPORTED_RANGE_DATA_NTF_CONFIG not found.");
+        }
 
         // TODO(b/209053358): This is not present in the FiraSpecificationParams.
         byte extendedMacUci = tlvs.getByte(SUPPORTED_EXTENDED_MAC_ADDRESS);

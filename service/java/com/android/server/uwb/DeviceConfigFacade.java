@@ -24,11 +24,15 @@ import android.provider.DeviceConfig;
  */
 public class DeviceConfigFacade {
     public static final int DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS = 5_000;
+    public static final int DEFAULT_BUG_REPORT_MIN_INTERVAL_MS = 24 * 3_600_000;
+    private static final String TAG = "DeviceConfigFacadeUwb";
 
     private final UwbInjector mUwbInjector;
 
     // Cached values of fields updated via updateDeviceConfigFlags()
     private int mRangingResultLogIntervalMs;
+    private boolean mDeviceErrorBugreportEnabled;
+    private int mBugReportMinIntervalMs;
 
     public DeviceConfigFacade(Handler handler, UwbInjector uwbInjector) {
         mUwbInjector = uwbInjector;
@@ -45,6 +49,10 @@ public class DeviceConfigFacade {
     private void updateDeviceConfigFlags() {
         mRangingResultLogIntervalMs = DeviceConfig.getInt(DeviceConfig.NAMESPACE_UWB,
                 "ranging_result_log_interval_ms", DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
+        mDeviceErrorBugreportEnabled = DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_UWB,
+                "device_error_bugreport_enabled", true);
+        mBugReportMinIntervalMs = DeviceConfig.getInt(DeviceConfig.NAMESPACE_UWB,
+                "bug_report_min_interval_ms", DEFAULT_BUG_REPORT_MIN_INTERVAL_MS);
     }
 
     /**
@@ -52,5 +60,19 @@ public class DeviceConfigFacade {
      */
     public int getRangingResultLogIntervalMs() {
         return mRangingResultLogIntervalMs;
+    }
+
+    /**
+     * Gets the feature flag for reporting device error
+     */
+    public boolean isDeviceErrorBugreportEnabled() {
+        return mDeviceErrorBugreportEnabled;
+    }
+
+    /**
+     * Gets minimum wait time between two bug report captures
+     */
+    public int getBugReportMinIntervalMs() {
+        return mBugReportMinIntervalMs;
     }
 }

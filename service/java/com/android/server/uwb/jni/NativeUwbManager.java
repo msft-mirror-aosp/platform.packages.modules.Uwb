@@ -26,7 +26,6 @@ import com.android.server.uwb.data.UwbTlvData;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.data.UwbVendorUciResponse;
 import com.android.server.uwb.info.UwbPowerStats;
-import com.android.server.uwb.info.UwbSpecificationInfo;
 
 public class NativeUwbManager {
     private static final String TAG = NativeUwbManager.class.getSimpleName();
@@ -91,6 +90,11 @@ public class NativeUwbManager {
         mSessionListener.onMulticastListUpdateNotificationReceived(multicastListUpdateData);
     }
 
+    public void onVendorUciNotificationReceived(int gid, int oid, byte[] payload) {
+        Log.d(TAG, "onVendorUciNotificationReceived: " + gid + ", " + oid + ", " + payload);
+        mVendorListener.onVendorUciNotificationReceived(gid, oid, payload);
+    }
+
     /**
      * Enable UWB hardware.
      *
@@ -109,22 +113,16 @@ public class NativeUwbManager {
      * @return : If this returns true, UWB is off
      */
     public synchronized boolean doDeinitialize() {
-        boolean res = nativeDoDeinitialize();
-        if (res) {
-            nativeDispatcherDestroy();
-            this.mDispatcherPointer = 0L;
-        }
-        return res;
+        nativeDoDeinitialize();
+        nativeDispatcherDestroy();
+        this.mDispatcherPointer = 0L;
+        return true;
     }
 
     public synchronized long getTimestampResolutionNanos() {
         return 0L;
         /* TODO: Not Implemented in native stack
         return nativeGetTimestampResolutionNanos(); */
-    }
-
-    public UwbSpecificationInfo getSpecificationInfo() {
-        return nativeGetSpecificationInfo();
     }
 
     /**
@@ -322,8 +320,6 @@ public class NativeUwbManager {
     private native boolean nativeDoDeinitialize();
 
     private native long nativeGetTimestampResolutionNanos();
-
-    private native UwbSpecificationInfo nativeGetSpecificationInfo();
 
     private native UwbPowerStats nativeGetPowerStats();
 

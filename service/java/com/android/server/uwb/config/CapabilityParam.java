@@ -43,6 +43,10 @@ public class CapabilityParam {
     public static final int SUPPORTED_EXTENDED_MAC_ADDRESS = 0x11;
     public static final int SUPPORTED_AOA_RESULT_REQ_INTERLEAVING =
             UwbVendorCapabilityTlvTypes.SUPPORTED_AOA_RESULT_REQ_ANTENNA_INTERLEAVING;
+    public static final int SUPPORTED_MIN_RANGING_INTERVAL_MS =
+            UwbVendorCapabilityTlvTypes.SUPPORTED_MIN_RANGING_INTERVAL_MS;
+    public static final int SUPPORTED_RANGE_DATA_NTF_CONFIG =
+            UwbVendorCapabilityTlvTypes.SUPPORTED_RANGE_DATA_NTF_CONFIG;
 
     // CCC specific
     public static final int CCC_SUPPORTED_VERSIONS =
@@ -74,6 +78,8 @@ public class CapabilityParam {
     public static final int STATIC_STS = 0x1;
     public static final int DYNAMIC_STS = 0x2;
     public static final int DYNAMIC_STS_RESPONDER_SPECIFIC_SUBSESSION_KEY = 0x4;
+    public static final int PROVISIONED_STS = 0x8;
+    public static final int PROVISIONED_STS_RESPONDER_SPECIFIC_SUBSESSION_KEY = 0x10;
 
     public static final int UNICAST = 0x1;
     public static final int ONE_TO_MANY = 0x2;
@@ -142,4 +148,11 @@ public class CapabilityParam {
             (int) UwbVendorCapabilityTlvValues.HOPPING_SEQUENCE_AES;
     public static final int CCC_HOPPING_SEQUENCE_DEFAULT =
             (int) UwbVendorCapabilityTlvValues.HOPPING_SEQUENCE_DEFAULT;
+
+    public static final int SUPPORTED_POWER_STATS_QUERY =
+            UwbVendorCapabilityTlvTypes.SUPPORTED_POWER_STATS_QUERY;
+
+    public static final int RANGE_DATA_NTF_CONFIG_ENABLE = 1 << 0;
+    public static final int RANGE_DATA_NTF_CONFIG_DISABLE = 1 << 1;
+    public static final int RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG = 1 << 2;
 }

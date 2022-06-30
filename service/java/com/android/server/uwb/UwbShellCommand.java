@@ -56,7 +56,7 @@ import android.os.Process;
 import android.os.RemoteException;
 import android.util.ArrayMap;
 import android.util.Pair;
-import android.uwb.IUwbRangingCallbacks2;
+import android.uwb.IUwbRangingCallbacks;
 import android.uwb.RangingReport;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
@@ -77,6 +77,7 @@ import com.google.uwb.support.ccc.CccStartRangingParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
+import com.google.uwb.support.generic.GenericSpecificationParams;
 
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
@@ -131,7 +132,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     .setSessionId(1)
                     .setChannelNumber(9)
                     .setDeviceType(RANGING_DEVICE_TYPE_CONTROLLER)
-                    .setDeviceRole(RANGING_DEVICE_ROLE_RESPONDER)
+                    .setDeviceRole(RANGING_DEVICE_ROLE_INITIATOR)
                     .setDeviceAddress(UwbAddress.fromBytes(new byte[] { 0x4, 0x6}))
                     .setDestAddressList(Arrays.asList(UwbAddress.fromBytes(new byte[] { 0x4, 0x6})))
                     .setMultiNodeMode(MULTI_NODE_MODE_UNICAST)
@@ -183,7 +184,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         }
     }
 
-    private static final class UwbRangingCallbacks extends IUwbRangingCallbacks2.Stub {
+    private static final class UwbRangingCallbacks extends IUwbRangingCallbacks.Stub {
         private final SessionInfo mSessionInfo;
         private final PrintWriter mPw;
         private final CompletableFuture mRangingOpenedFuture;
@@ -348,6 +349,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         FiraOpenSessionParams.Builder builder =
                 new FiraOpenSessionParams.Builder(DEFAULT_FIRA_OPEN_SESSION_PARAMS);
         boolean shouldBlockCall = false;
+        boolean interleavingEnabled = false;
+        boolean aoaResultReqEnabled = false;
         String option = getNextOption();
         while (option != null) {
             if (option.equals("-b")) {
@@ -430,6 +433,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                         numOfRangeMsrmts,
                         numOfAoaAzimuthMrmts,
                         numOfAoaElevationMrmts);
+                interleavingEnabled = true;
             }
             if (option.equals("-e")) {
                 String aoaType = getNextArgRequired();
@@ -446,8 +450,30 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 } else {
                     throw new IllegalArgumentException("Unknown aoa type: " + aoaType);
                 }
+                aoaResultReqEnabled = true;
+            }
+            if (option.equals("-f")) {
+                String[] resultReportConfigs = getNextArgRequired().split(",");
+                for (String resultReportConfig : resultReportConfigs) {
+                    if (resultReportConfig.equals("tof")) {
+                        builder.setHasTimeOfFlightReport(true);
+                    } else if (resultReportConfig.equals("azimuth")) {
+                        builder.setHasAngleOfArrivalAzimuthReport(true);
+                    } else if (resultReportConfig.equals("elevation")) {
+                        builder.setHasAngleOfArrivalElevationReport(true);
+                    } else if (resultReportConfig.equals("aoa-fom")) {
+                        builder.setHasAngleOfArrivalFigureOfMeritReport(true);
+                    } else {
+                        throw new IllegalArgumentException("Unknown result report config: "
+                                + resultReportConfig);
+                    }
+                }
             }
             option = getNextOption();
+        }
+        if (aoaResultReqEnabled && interleavingEnabled) {
+            throw new IllegalArgumentException(
+                    "Both interleaving (-z) and aoa result req (-e) cannot be specified");
         }
         // TODO: Add remaining params if needed.
         return Pair.create(builder.build(), shouldBlockCall);
@@ -799,16 +825,22 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 }
                 case "get-specification-info": {
                     PersistableBundle bundle = mUwbService.getSpecificationInfo(null);
-                    PersistableBundle fira_bundle = bundle.getPersistableBundle(
-                            FiraParams.PROTOCOL_NAME);
-                    PersistableBundle ccc_bundle = bundle.getPersistableBundle(
-                            CccParams.PROTOCOL_NAME);
-                    pw.println("FIRA Specification info: " + bundleToString(fira_bundle));
-                    pw.println("CCC Specification info: " + bundleToString(ccc_bundle));
+                    pw.println("Specification info: " + bundleToString(bundle));
                     return 0;
                 }
                 case "get-power-stats": {
-                    pw.println(mNativeUwbManager.getPowerStats());
+                    PersistableBundle bundle = mUwbService.getSpecificationInfo(null);
+                    GenericSpecificationParams params =
+                            GenericSpecificationParams.fromBundle(bundle);
+                    if (params == null) {
+                        pw.println("Spec info is empty");
+                        return -1;
+                    }
+                    if (params.hasPowerStatsSupport()) {
+                        pw.println(mNativeUwbManager.getPowerStats());
+                    } else {
+                        pw.println("power stats query is not supported");
+                    }
                     return 0;
                 }
                 default:
@@ -864,7 +896,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-u ds-twr|ss-twr|ds-twr-non-deferred|ss-twr-non-deferred](round-usage)"
                 + " [-z <numRangeMrmts, numAoaAzimuthMrmts, numAoaElevationMrmts>"
                 + "(interleaving-ratio)"
-                + " [-e none|enabled|azimuth-only|elevation-only](aoa type)");
+                + " [-e none|enabled|azimuth-only|elevation-only](aoa type)"
+                + " [-f <tof,azimuth,elevation,aoa-fom>(result-report-config)");
         pw.println("    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
