@@ -43,6 +43,12 @@ public class CapabilityParam {
     public static final int SUPPORTED_EXTENDED_MAC_ADDRESS = 0x11;
     public static final int SUPPORTED_AOA_RESULT_REQ_INTERLEAVING =
             UwbVendorCapabilityTlvTypes.SUPPORTED_AOA_RESULT_REQ_ANTENNA_INTERLEAVING;
+    public static final int SUPPORTED_MIN_RANGING_INTERVAL_MS =
+            UwbVendorCapabilityTlvTypes.SUPPORTED_MIN_RANGING_INTERVAL_MS;
+    public static final int SUPPORTED_RANGE_DATA_NTF_CONFIG =
+            UwbVendorCapabilityTlvTypes.SUPPORTED_RANGE_DATA_NTF_CONFIG;
+    public static final int SUPPORTED_RSSI_REPORTING =
+            UwbVendorCapabilityTlvTypes.SUPPORTED_RSSI_REPORTING;
 
     // CCC specific
     public static final int CCC_SUPPORTED_VERSIONS =
@@ -115,6 +121,9 @@ public class CapabilityParam {
     public static final int NO_AOA_RESULT_REQ_INTERLEAVING = 0x0;
     public static final int AOA_RESULT_REQ_INTERLEAVING = 0x1;
 
+    public static final int NO_RSSI_REPORTING = 0x0;
+    public static final int RSSI_REPORTING = 0x1;
+
     public static final int CCC_CHANNEL_5 = (int) UwbVendorCapabilityTlvValues.CCC_CHANNEL_5;
     public static final int CCC_CHANNEL_9 = (int) UwbVendorCapabilityTlvValues.CCC_CHANNEL_9;
 
@@ -147,4 +156,8 @@ public class CapabilityParam {
 
     public static final int SUPPORTED_POWER_STATS_QUERY =
             UwbVendorCapabilityTlvTypes.SUPPORTED_POWER_STATS_QUERY;
+
+    public static final int RANGE_DATA_NTF_CONFIG_ENABLE = 1 << 0;
+    public static final int RANGE_DATA_NTF_CONFIG_DISABLE = 1 << 1;
+    public static final int RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG = 1 << 2;
 }
