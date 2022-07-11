@@ -375,9 +375,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             if (option.equals("-r")) {
                 String role = getNextArgRequired();
                 if (role.equals("initiator")) {
-                    builder.setDeviceType(RANGING_DEVICE_ROLE_INITIATOR);
+                    builder.setDeviceRole(RANGING_DEVICE_ROLE_INITIATOR);
                 } else if (role.equals("responder")) {
-                    builder.setDeviceType(RANGING_DEVICE_ROLE_RESPONDER);
+                    builder.setDeviceRole(RANGING_DEVICE_ROLE_RESPONDER);
                 } else {
                     throw new IllegalArgumentException("Unknown device role: " + role);
                 }
@@ -451,6 +451,23 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     throw new IllegalArgumentException("Unknown aoa type: " + aoaType);
                 }
                 aoaResultReqEnabled = true;
+            }
+            if (option.equals("-f")) {
+                String[] resultReportConfigs = getNextArgRequired().split(",");
+                for (String resultReportConfig : resultReportConfigs) {
+                    if (resultReportConfig.equals("tof")) {
+                        builder.setHasTimeOfFlightReport(true);
+                    } else if (resultReportConfig.equals("azimuth")) {
+                        builder.setHasAngleOfArrivalAzimuthReport(true);
+                    } else if (resultReportConfig.equals("elevation")) {
+                        builder.setHasAngleOfArrivalElevationReport(true);
+                    } else if (resultReportConfig.equals("aoa-fom")) {
+                        builder.setHasAngleOfArrivalFigureOfMeritReport(true);
+                    } else {
+                        throw new IllegalArgumentException("Unknown result report config: "
+                                + resultReportConfig);
+                    }
+                }
             }
             option = getNextOption();
         }
@@ -879,7 +896,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-u ds-twr|ss-twr|ds-twr-non-deferred|ss-twr-non-deferred](round-usage)"
                 + " [-z <numRangeMrmts, numAoaAzimuthMrmts, numAoaElevationMrmts>"
                 + "(interleaving-ratio)"
-                + " [-e none|enabled|azimuth-only|elevation-only](aoa type)");
+                + " [-e none|enabled|azimuth-only|elevation-only](aoa type)"
+                + " [-f <tof,azimuth,elevation,aoa-fom>(result-report-config)");
         pw.println("    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
