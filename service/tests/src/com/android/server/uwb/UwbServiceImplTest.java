@@ -24,13 +24,14 @@ import static com.android.server.uwb.UwbSettingsStore.SETTINGS_TOGGLE_STATE;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.fira.FiraParams.PACS_PROFILE_SERVICE_ID;
-import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY;
+import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -172,23 +173,23 @@ public class UwbServiceImplTest {
     }
 
     @Test
-    public void testGetSpecificationInfo() throws Exception {
+    public void testGetSpecificationInfo_nullChipId() throws Exception {
         final PersistableBundle specification = new PersistableBundle();
-        when(mUwbServiceCore.getSpecificationInfo()).thenReturn(specification);
+        when(mUwbServiceCore.getSpecificationInfo(anyString())).thenReturn(specification);
         assertThat(mUwbServiceImpl.getSpecificationInfo(/* chipId= */ null))
                 .isEqualTo(specification);
 
-        verify(mUwbServiceCore).getSpecificationInfo();
+        verify(mUwbServiceCore).getSpecificationInfo(DEFAULT_CHIP_ID);
     }
 
     @Test
     public void testGetSpecificationInfo_validChipId() throws Exception {
         final PersistableBundle specification = new PersistableBundle();
-        when(mUwbServiceCore.getSpecificationInfo()).thenReturn(specification);
+        when(mUwbServiceCore.getSpecificationInfo(anyString())).thenReturn(specification);
         assertThat(mUwbServiceImpl.getSpecificationInfo(DEFAULT_CHIP_ID))
                 .isEqualTo(specification);
 
-        verify(mUwbServiceCore).getSpecificationInfo();
+        verify(mUwbServiceCore).getSpecificationInfo(DEFAULT_CHIP_ID);
     }
 
     @Test
@@ -198,7 +199,7 @@ public class UwbServiceImplTest {
     }
 
     @Test
-    public void testOpenRanging() throws Exception {
+    public void testOpenRanging_nullChipId() throws Exception {
         final SessionHandle sessionHandle = new SessionHandle(5);
         final IUwbRangingCallbacks cb = mock(IUwbRangingCallbacks.class);
         final PersistableBundle parameters = new PersistableBundle();
@@ -210,7 +211,7 @@ public class UwbServiceImplTest {
 
         verify(mUwbServiceCore).openRanging(
                 eq(ATTRIBUTION_SOURCE), eq(sessionHandle), mRangingCbCaptor.capture(),
-                eq(parameters));
+                eq(parameters), eq(DEFAULT_CHIP_ID));
         assertThat(mRangingCbCaptor.getValue()).isNotNull();
     }
 
@@ -230,7 +231,7 @@ public class UwbServiceImplTest {
         final FiraRangingReconfigureParams parameters =
                 new FiraRangingReconfigureParams.Builder()
                         .setBlockStrideLength(6)
-                        .setRangeDataNtfConfig(RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY)
+                        .setRangeDataNtfConfig(RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG)
                         .setRangeDataProximityFar(6)
                         .setRangeDataProximityNear(4)
                         .build();
@@ -585,6 +586,7 @@ public class UwbServiceImplTest {
         final int gid = 0;
         final int oid = 0;
         mUwbServiceImpl.sendVendorUciMessage(gid, oid, null);
-        verify(mUwbServiceCore).sendVendorUciMessage(gid, oid, null);
+        verify(mUwbServiceCore).sendVendorUciMessage(gid, oid, null,
+                mUwbInjector.getMultichipData().getDefaultChipId());
     }
 }
