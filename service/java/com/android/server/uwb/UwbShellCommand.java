@@ -163,6 +163,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     private static int sSessionHandleIdNext = 0;
 
     private final UwbServiceImpl mUwbService;
+    private final UwbServiceCore mUwbServiceCore;
     private final UwbCountryCode mUwbCountryCode;
     private final NativeUwbManager mNativeUwbManager;
     private final Context mContext;
@@ -172,6 +173,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         mContext = context;
         mUwbCountryCode = uwbInjector.getUwbCountryCode();
         mNativeUwbManager = uwbInjector.getNativeUwbManager();
+        mUwbServiceCore = uwbInjector.getUwbServiceCore();
     }
 
     private static String bundleToString(@Nullable PersistableBundle bundle) {
@@ -345,7 +347,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         }
     }
 
-    private Pair<FiraOpenSessionParams, Boolean> buildFiraOpenSessionParams() {
+    private Pair<FiraOpenSessionParams, Boolean> buildFiraOpenSessionParams(
+            GenericSpecificationParams specificationParams) {
         FiraOpenSessionParams.Builder builder =
                 new FiraOpenSessionParams.Builder(DEFAULT_FIRA_OPEN_SESSION_PARAMS);
         boolean shouldBlockCall = false;
@@ -375,9 +378,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             if (option.equals("-r")) {
                 String role = getNextArgRequired();
                 if (role.equals("initiator")) {
-                    builder.setDeviceType(RANGING_DEVICE_ROLE_INITIATOR);
+                    builder.setDeviceRole(RANGING_DEVICE_ROLE_INITIATOR);
                 } else if (role.equals("responder")) {
-                    builder.setDeviceType(RANGING_DEVICE_ROLE_RESPONDER);
+                    builder.setDeviceRole(RANGING_DEVICE_ROLE_RESPONDER);
                 } else {
                     throw new IllegalArgumentException("Unknown device role: " + role);
                 }
@@ -452,18 +455,42 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 }
                 aoaResultReqEnabled = true;
             }
+            if (option.equals("-f")) {
+                String[] resultReportConfigs = getNextArgRequired().split(",");
+                for (String resultReportConfig : resultReportConfigs) {
+                    if (resultReportConfig.equals("tof")) {
+                        builder.setHasTimeOfFlightReport(true);
+                    } else if (resultReportConfig.equals("azimuth")) {
+                        builder.setHasAngleOfArrivalAzimuthReport(true);
+                    } else if (resultReportConfig.equals("elevation")) {
+                        builder.setHasAngleOfArrivalElevationReport(true);
+                    } else if (resultReportConfig.equals("aoa-fom")) {
+                        builder.setHasAngleOfArrivalFigureOfMeritReport(true);
+                    } else {
+                        throw new IllegalArgumentException("Unknown result report config: "
+                                + resultReportConfig);
+                    }
+                }
+            }
             option = getNextOption();
         }
         if (aoaResultReqEnabled && interleavingEnabled) {
             throw new IllegalArgumentException(
                     "Both interleaving (-z) and aoa result req (-e) cannot be specified");
         }
+        // Enable rssi reporting if device supports it.
+        if (specificationParams.getFiraSpecificationParams().hasRssiReportingSupport()) {
+            builder.setIsRssiReportingEnabled(true);
+        }
         // TODO: Add remaining params if needed.
         return Pair.create(builder.build(), shouldBlockCall);
     }
 
     private void startFiraRangingSession(PrintWriter pw) throws Exception {
-        Pair<FiraOpenSessionParams, Boolean> firaOpenSessionParams = buildFiraOpenSessionParams();
+        GenericSpecificationParams specificationParams =
+                mUwbServiceCore.getCachedSpecificationParams(null);
+        Pair<FiraOpenSessionParams, Boolean> firaOpenSessionParams =
+                buildFiraOpenSessionParams(specificationParams);
         startRangingSession(
                 firaOpenSessionParams.first, null, firaOpenSessionParams.first.getSessionId(),
                 firaOpenSessionParams.second, pw);
@@ -879,7 +906,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-u ds-twr|ss-twr|ds-twr-non-deferred|ss-twr-non-deferred](round-usage)"
                 + " [-z <numRangeMrmts, numAoaAzimuthMrmts, numAoaElevationMrmts>"
                 + "(interleaving-ratio)"
-                + " [-e none|enabled|azimuth-only|elevation-only](aoa type)");
+                + " [-e none|enabled|azimuth-only|elevation-only](aoa type)"
+                + " [-f <tof,azimuth,elevation,aoa-fom>(result-report-config)");
         pw.println("    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
