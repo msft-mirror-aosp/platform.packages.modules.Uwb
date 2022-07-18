@@ -36,22 +36,27 @@ import com.android.server.uwb.discovery.info.DiscoveryInfo;
 
 import java.util.Optional;
 
-/**
- * Session for PACS profile controlee
- */
+/** Session for PACS profile controlee */
 public class PacsControleeSession extends RangingSessionController {
     private static final String TAG = "PacsControleeSession";
     private final PacsAdvertiseCallback mAdvertiseCallback;
 
-    public PacsControleeSession(SessionHandle sessionHandle,
+    public PacsControleeSession(
+            SessionHandle sessionHandle,
             AttributionSource attributionSource,
             Context context,
             UwbInjector uwbInjector,
             ServiceProfileInfo serviceProfileInfo,
             IUwbRangingCallbacks rangingCallbacks,
             Handler handler) {
-        super(sessionHandle, attributionSource, context, uwbInjector,
-                serviceProfileInfo, rangingCallbacks, handler);
+        super(
+                sessionHandle,
+                attributionSource,
+                context,
+                uwbInjector,
+                serviceProfileInfo,
+                rangingCallbacks,
+                handler);
         mAdvertiseCallback = new PacsAdvertiseCallback(this);
     }
 
@@ -85,20 +90,32 @@ public class PacsControleeSession extends RangingSessionController {
         return new EndSessionState();
     }
 
-    /** Advertise capabilities */
-    public void advertiseBle() {
-        DiscoveryInfo discoveryInfo = new DiscoveryInfo(
-                DiscoveryInfo.TransportType.BLE,
-                Optional.empty(), Optional.empty());
+    private DiscoveryAdvertiseService mDiscoveryAdvertiseService;
 
-        DiscoveryAdvertiseService discoveryAdvertiseService = new DiscoveryAdvertiseService(
-                mSessionInfo.mAttributionSource,
-                mSessionInfo.mContext,
-                new HandlerExecutor(mHandler),
-                discoveryInfo,
-                mAdvertiseCallback
-        );
-        discoveryAdvertiseService.startDiscovery();
+    /** Advertise capabilities */
+    public void startAdvertising() {
+        DiscoveryInfo discoveryInfo =
+                new DiscoveryInfo(
+                        DiscoveryInfo.TransportType.BLE,
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty());
+
+        mDiscoveryAdvertiseService =
+                new DiscoveryAdvertiseService(
+                        mSessionInfo.mAttributionSource,
+                        mSessionInfo.mContext,
+                        new HandlerExecutor(mHandler),
+                        discoveryInfo,
+                        mAdvertiseCallback);
+        mDiscoveryAdvertiseService.startDiscovery();
+    }
+
+    /** Stop advertising on ranging stopped or closed */
+    public void stopAdvertising() {
+        if (mDiscoveryAdvertiseService != null) {
+            mDiscoveryAdvertiseService.stopDiscovery();
+        }
     }
 
     @Override
@@ -106,13 +123,13 @@ public class PacsControleeSession extends RangingSessionController {
         return PacsProfile.getPacsControleeProfile();
     }
 
-    public static class PacsAdvertiseCallback implements
-            DiscoveryAdvertiseProvider.DiscoveryAdvertiseCallback {
+    /** Implements callback of DiscoveryAdvertiseProvider */
+    public static class PacsAdvertiseCallback
+            implements DiscoveryAdvertiseProvider.DiscoveryAdvertiseCallback {
 
         public final PacsControleeSession mPacsControleeSession;
 
-        public PacsAdvertiseCallback(
-                PacsControleeSession pacsControleeSession) {
+        public PacsAdvertiseCallback(PacsControleeSession pacsControleeSession) {
             mPacsControleeSession = pacsControleeSession;
         }
 
@@ -149,7 +166,7 @@ public class PacsControleeSession extends RangingSessionController {
                         log("Pacs controlee session initialized");
                     }
                     break;
-                case DISCOVERY_INIT:
+                case SESSION_START:
                     if (mVerboseLoggingEnabled) {
                         log("Starting OOB Discovery");
                     }
@@ -171,7 +188,8 @@ public class PacsControleeSession extends RangingSessionController {
             if (mVerboseLoggingEnabled) {
                 log("Enter DiscoveryState");
             }
-            //advertiseBle();
+            startAdvertising();
+            sendMessage(DISCOVERY_STARTED);
         }
 
         @Override
@@ -186,10 +204,22 @@ public class PacsControleeSession extends RangingSessionController {
             switch (message.what) {
                 case DISCOVERY_FAILED:
                     log("Failed to advertise");
+                    break;
+                case SESSION_START:
+                    startAdvertising();
+                    if (mVerboseLoggingEnabled) {
+                        log("Started advertising");
+                    }
+                    break;
+                case SESSION_STOP:
+                    stopAdvertising();
+                    if (mVerboseLoggingEnabled) {
+                        log("Stopped advertising");
+                    }
+                    break;
             }
             return true;
         }
-
     }
 
     public class TransportState extends State {
@@ -235,7 +265,6 @@ public class PacsControleeSession extends RangingSessionController {
             transitionTo(mRangingState);
             return true;
         }
-
     }
 
     public class RangingState extends State {
@@ -259,11 +288,32 @@ public class PacsControleeSession extends RangingSessionController {
                 case RANGING_INIT:
                     try {
                         Log.i(TAG, "Starting ranging session");
-                        startRangingSession();
+                        openRangingSession();
                     } catch (RemoteException e) {
                         Log.e(TAG, "Ranging session start failed");
                         e.printStackTrace();
                     }
+                    stopAdvertising();
+                    break;
+                case SESSION_START:
+                case RANGING_OPENED:
+                    startRanging();
+                    if (mVerboseLoggingEnabled) {
+                        log("Started ranging");
+                    }
+                    break;
+
+                case SESSION_STOP:
+                    stopRanging();
+                    if (mVerboseLoggingEnabled) {
+                        log("Stopped ranging session");
+                    }
+                    break;
+
+                case RANGING_ENDED:
+                    closeRanging();
+                    transitionTo(mEndSessionState);
+                    break;
             }
             return true;
         }
@@ -276,6 +326,7 @@ public class PacsControleeSession extends RangingSessionController {
             if (mVerboseLoggingEnabled) {
                 log("Enter EndSessionState");
             }
+            stopAdvertising();
         }
 
         @Override
