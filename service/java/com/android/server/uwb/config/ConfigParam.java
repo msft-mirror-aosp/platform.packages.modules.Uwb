@@ -22,6 +22,8 @@ import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvType
 import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.CCC_URSK_TTL;
 import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.CCC_UWB_CONFIG_ID;
 import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.CCC_UWB_TIME0;
+import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.DIAGRAMS_FRAME_REPORTS_FIELDS;
+import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.ENABLE_DIAGNOSTICS;
 import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.NB_OF_AZIMUTH_MEASUREMENTS;
 import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.NB_OF_ELEVATION_MEASUREMENTS;
 import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.NB_OF_RANGE_MEASUREMENTS;
@@ -54,6 +56,7 @@ public class ConfigParam {
     public static final int RANGE_DATA_NTF_PROXIMITY_FAR = 0x10;
     public static final int DEVICE_ROLE = 0x11;
     public static final int RFRAME_CONFIG = 0x12;
+    public static final int RSSI_REPORTING = 0x13;
     public static final int PREAMBLE_CODE_INDEX = 0x14;
     public static final int SFD_ID = 0x15;
     public static final int PSDU_DATA_RATE = 0x16;
@@ -90,6 +93,9 @@ public class ConfigParam {
     public static final int NUM_RANGE_MEASUREMENTS = NB_OF_RANGE_MEASUREMENTS;
     public static final int NUM_AOA_AZIMUTH_MEASUREMENTS = NB_OF_AZIMUTH_MEASUREMENTS;
     public static final int NUM_AOA_ELEVATION_MEASUREMENTS = NB_OF_ELEVATION_MEASUREMENTS;
+
+    public static final int ENABLE_DIAGNOSTICS_RSSI = ENABLE_DIAGNOSTICS;
+    public static final int ENABLE_DIAGRAMS_FRAME_REPORTS_FIELDS = DIAGRAMS_FRAME_REPORTS_FIELDS;
 
     public static final int VENDOR_ID_BYTE_COUNT = 2;
     public static final int STATIC_STS_IV_BYTE_COUNT = 6;
