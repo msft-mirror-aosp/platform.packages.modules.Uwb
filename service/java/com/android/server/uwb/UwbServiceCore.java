@@ -86,6 +86,8 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     private static final int WATCHDOG_MS = 10000;
     private static final int SEND_VENDOR_CMD_TIMEOUT_MS = 10000;
 
+    private boolean mIsDiagnosticsEnabled = false;
+
     private final PowerManager.WakeLock mUwbWakeLock;
     private final Context mContext;
     // TODO: Use RemoteCallbackList instead.
@@ -287,6 +289,11 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         return mNativeUwbManager.getTimestampResolutionNanos();
     }
 
+    /** Set whether diagnostics is enabled */
+    public void enableDiagnostics(boolean value) {
+        this.mIsDiagnosticsEnabled = value;
+    }
+
     public void openRanging(
             AttributionSource attributionSource,
             SessionHandle sessionHandle,
@@ -298,8 +305,17 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         }
         int sessionId = 0;
         if (FiraParams.isCorrectProtocol(params)) {
-            FiraOpenSessionParams firaOpenSessionParams = FiraOpenSessionParams.fromBundle(
-                    params);
+            FiraOpenSessionParams.Builder builder =
+                    new FiraOpenSessionParams.Builder(FiraOpenSessionParams.fromBundle(params));
+            if (getCachedSpecificationParams(chipId)
+                    .getFiraSpecificationParams().hasRssiReportingSupport()) {
+                builder.setIsRssiReportingEnabled(true);
+            }
+            if (this.mIsDiagnosticsEnabled && getCachedSpecificationParams(chipId)
+                    .getFiraSpecificationParams().hasDiagnosticsSupport()) {
+                builder.setIsDiagnosticsEnabled(true);
+            }
+            FiraOpenSessionParams firaOpenSessionParams = builder.build();
             sessionId = firaOpenSessionParams.getSessionId();
             mSessionManager.initSession(attributionSource, sessionHandle, sessionId,
                     firaOpenSessionParams.getProtocolName(),

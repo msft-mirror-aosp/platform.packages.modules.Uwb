@@ -69,6 +69,7 @@ import com.android.modules.utils.BasicShellCommandHandler;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.util.ArrayUtils;
 
+import com.google.common.io.BaseEncoding;
 import com.google.uwb.support.base.Params;
 import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.ccc.CccParams;
@@ -123,6 +124,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             "stop-ranging-session",
             "stop-all-ranging-sessions",
             "get-specification-info",
+            "enable-diagnostics-notification",
+            "disable-diagnostics-notification",
     };
 
     @VisibleForTesting
@@ -163,6 +166,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     private static int sSessionHandleIdNext = 0;
 
     private final UwbServiceImpl mUwbService;
+    private final UwbServiceCore mUwbServiceCore;
     private final UwbCountryCode mUwbCountryCode;
     private final NativeUwbManager mNativeUwbManager;
     private final Context mContext;
@@ -172,6 +176,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         mContext = context;
         mUwbCountryCode = uwbInjector.getUwbCountryCode();
         mNativeUwbManager = uwbInjector.getNativeUwbManager();
+        mUwbServiceCore = uwbInjector.getUwbServiceCore();
     }
 
     private static String bundleToString(@Nullable PersistableBundle bundle) {
@@ -345,7 +350,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         }
     }
 
-    private Pair<FiraOpenSessionParams, Boolean> buildFiraOpenSessionParams() {
+    private Pair<FiraOpenSessionParams, Boolean> buildFiraOpenSessionParams(
+            GenericSpecificationParams specificationParams) {
         FiraOpenSessionParams.Builder builder =
                 new FiraOpenSessionParams.Builder(DEFAULT_FIRA_OPEN_SESSION_PARAMS);
         boolean shouldBlockCall = false;
@@ -469,18 +475,41 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     }
                 }
             }
+            if (option.equals("-g")) {
+                String staticSTSIV = getNextArgRequired();
+                if (staticSTSIV.length() == 12) {
+                    builder.setStaticStsIV(BaseEncoding.base16().decode(staticSTSIV.toUpperCase()));
+                } else {
+                    throw new IllegalArgumentException("staticSTSIV expecting 6 bytes");
+                }
+            }
+            if (option.equals("-v")) {
+                String vendor_id = getNextArgRequired();
+                if (vendor_id.length() == 4) {
+                    builder.setVendorId(BaseEncoding.base16().decode(vendor_id.toUpperCase()));
+                } else {
+                    throw new IllegalArgumentException("vendorId expecting 2 bytes");
+                }
+            }
             option = getNextOption();
         }
         if (aoaResultReqEnabled && interleavingEnabled) {
             throw new IllegalArgumentException(
                     "Both interleaving (-z) and aoa result req (-e) cannot be specified");
         }
+        // Enable rssi reporting if device supports it.
+        if (specificationParams.getFiraSpecificationParams().hasRssiReportingSupport()) {
+            builder.setIsRssiReportingEnabled(true);
+        }
         // TODO: Add remaining params if needed.
         return Pair.create(builder.build(), shouldBlockCall);
     }
 
     private void startFiraRangingSession(PrintWriter pw) throws Exception {
-        Pair<FiraOpenSessionParams, Boolean> firaOpenSessionParams = buildFiraOpenSessionParams();
+        GenericSpecificationParams specificationParams =
+                mUwbServiceCore.getCachedSpecificationParams(null);
+        Pair<FiraOpenSessionParams, Boolean> firaOpenSessionParams =
+                buildFiraOpenSessionParams(specificationParams);
         startRangingSession(
                 firaOpenSessionParams.first, null, firaOpenSessionParams.first.getSessionId(),
                 firaOpenSessionParams.second, pw);
@@ -837,10 +866,18 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                         return -1;
                     }
                     if (params.hasPowerStatsSupport()) {
-                        pw.println(mNativeUwbManager.getPowerStats());
+                        pw.println(mNativeUwbManager.getPowerStats(mUwbService.getDefaultChipId()));
                     } else {
                         pw.println("power stats query is not supported");
                     }
+                    return 0;
+                }
+                case "enable-diagnostics-notification": {
+                    mUwbServiceCore.enableDiagnostics(true);
+                    return 0;
+                }
+                case "disable-diagnostics-notification": {
+                    mUwbServiceCore.enableDiagnostics(false);
                     return 0;
                 }
                 default:
@@ -897,7 +934,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-z <numRangeMrmts, numAoaAzimuthMrmts, numAoaElevationMrmts>"
                 + "(interleaving-ratio)"
                 + " [-e none|enabled|azimuth-only|elevation-only](aoa type)"
-                + " [-f <tof,azimuth,elevation,aoa-fom>(result-report-config)");
+                + " [-f <tof,azimuth,elevation,aoa-fom>(result-report-config)"
+                + " [-g <staticStsIV>(staticStsIV 6-bytes)"
+                + " [-v <staticStsVendorId>(staticStsVendorId 2-bytes)");
         pw.println("    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
@@ -933,6 +972,10 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("    Stops all ongoing ranging sessions");
         pw.println("  get-specification-info");
         pw.println("    Gets specification info from uwb chip");
+        pw.println("  enable-diagnostics-notification");
+        pw.println("    Enable vendor diagnostics notification");
+        pw.println("  disable-diagnostics-notification");
+        pw.println("    Disable vendor diagnostics notification");
     }
 
     private void onHelpPrivileged(PrintWriter pw) {
