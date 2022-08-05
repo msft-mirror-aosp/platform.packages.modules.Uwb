@@ -86,6 +86,8 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     private static final int WATCHDOG_MS = 10000;
     private static final int SEND_VENDOR_CMD_TIMEOUT_MS = 10000;
 
+    private boolean mIsDiagnosticsEnabled = false;
+
     private final PowerManager.WakeLock mUwbWakeLock;
     private final Context mContext;
     // TODO: Use RemoteCallbackList instead.
@@ -102,6 +104,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     private @StateChangeReason int mLastStateChangedReason;
     private  IUwbVendorUciCallback mCallBack = null;
     private final Handler mHandler;
+    private GenericSpecificationParams mCachedSpecificationParams;
 
     public UwbServiceCore(Context uwbApplicationContext, NativeUwbManager nativeUwbManager,
             UwbMetrics uwbMetrics, UwbCountryCode uwbCountryCode,
@@ -187,7 +190,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         if ((byte) deviceState == UwbUciConstants.DEVICE_STATE_ERROR) {
             Log.e(TAG, "Error device status received. Restarting...");
             mUwbMetrics.incrementDeviceStatusErrorCount();
-            takBugReportAfterDeviceError("Restarting UWB due to vendor error");
+            takBugReportAfterDeviceError("UWB Bugreport: restarting UWB due to device error");
             mEnableDisableTask.execute(TASK_RESTART);
             return;
         }
@@ -255,15 +258,30 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         mCallBack = null;
     }
 
-    public PersistableBundle getSpecificationInfo() {
+    /**
+     * Get cached specification params
+     */
+    public GenericSpecificationParams getCachedSpecificationParams(String chipId) {
+        if (mCachedSpecificationParams != null) return mCachedSpecificationParams;
+        // If nothing in cache, populate it.
+        getSpecificationInfo(chipId);
+        return mCachedSpecificationParams;
+    }
+
+    /**
+     * Get specification info
+     */
+    public PersistableBundle getSpecificationInfo(String chipId) {
         // TODO(b/211445008): Consolidate to a single uwb thread.
         Pair<Integer, GenericSpecificationParams> specificationParams =
                 mConfigurationManager.getCapsInfo(
-                        GenericParams.PROTOCOL_NAME, GenericSpecificationParams.class);
-        if (specificationParams.first != UwbUciConstants.STATUS_CODE_OK)  {
+                        GenericParams.PROTOCOL_NAME, GenericSpecificationParams.class, chipId);
+        if (specificationParams.first != UwbUciConstants.STATUS_CODE_OK
+                || specificationParams.second == null)  {
             Log.e(TAG, "Failed to retrieve specification params");
             return new PersistableBundle();
         }
+        mCachedSpecificationParams = specificationParams.second;
         return specificationParams.second.toBundle();
     }
 
@@ -271,28 +289,43 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         return mNativeUwbManager.getTimestampResolutionNanos();
     }
 
+    /** Set whether diagnostics is enabled */
+    public void enableDiagnostics(boolean value) {
+        this.mIsDiagnosticsEnabled = value;
+    }
+
     public void openRanging(
             AttributionSource attributionSource,
             SessionHandle sessionHandle,
             IUwbRangingCallbacks rangingCallbacks,
-            PersistableBundle params) throws RemoteException {
+            PersistableBundle params,
+            String chipId) throws RemoteException {
         if (!isUwbEnabled()) {
             throw new IllegalStateException("Uwb is not enabled");
         }
         int sessionId = 0;
         if (FiraParams.isCorrectProtocol(params)) {
-            FiraOpenSessionParams firaOpenSessionParams = FiraOpenSessionParams.fromBundle(
-                    params);
+            FiraOpenSessionParams.Builder builder =
+                    new FiraOpenSessionParams.Builder(FiraOpenSessionParams.fromBundle(params));
+            if (getCachedSpecificationParams(chipId)
+                    .getFiraSpecificationParams().hasRssiReportingSupport()) {
+                builder.setIsRssiReportingEnabled(true);
+            }
+            if (this.mIsDiagnosticsEnabled && getCachedSpecificationParams(chipId)
+                    .getFiraSpecificationParams().hasDiagnosticsSupport()) {
+                builder.setIsDiagnosticsEnabled(true);
+            }
+            FiraOpenSessionParams firaOpenSessionParams = builder.build();
             sessionId = firaOpenSessionParams.getSessionId();
             mSessionManager.initSession(attributionSource, sessionHandle, sessionId,
                     firaOpenSessionParams.getProtocolName(),
-                    firaOpenSessionParams, rangingCallbacks);
+                    firaOpenSessionParams, rangingCallbacks, chipId);
         } else if (CccParams.isCorrectProtocol(params)) {
             CccOpenRangingParams cccOpenRangingParams = CccOpenRangingParams.fromBundle(params);
             sessionId = cccOpenRangingParams.getSessionId();
             mSessionManager.initSession(attributionSource, sessionHandle, sessionId,
                     cccOpenRangingParams.getProtocolName(),
-                    cccOpenRangingParams, rangingCallbacks);
+                    cccOpenRangingParams, rangingCallbacks, chipId);
         } else {
             Log.e(TAG, "openRanging - Wrong parameters");
             try {
@@ -403,7 +436,12 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         }
     }
 
-    public synchronized int sendVendorUciMessage(int gid, int oid, byte[] payload) {
+    /**
+     * Send vendor UCI message
+     *
+     * @param chipId : Identifier of UWB chip for multi-HAL devices
+     */
+    public synchronized int sendVendorUciMessage(int gid, int oid, byte[] payload, String chipId) {
         if ((!isUwbEnabled())) {
             Log.e(TAG, "sendRawVendor : Uwb is not enabled");
             return UwbUciConstants.STATUS_CODE_FAILED;
@@ -413,7 +451,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         FutureTask<Byte> sendVendorCmdTask = new FutureTask<>(
                 () -> {
                     UwbVendorUciResponse response =
-                            mNativeUwbManager.sendRawVendorCmd(gid, oid, payload);
+                            mNativeUwbManager.sendRawVendorCmd(gid, oid, payload, chipId);
                     if (response.status == UwbUciConstants.STATUS_CODE_OK) {
                         sendVendorUciResponse(response.gid, response.oid, response.payload);
                     }
@@ -487,7 +525,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                     if (!mNativeUwbManager.doInitialize()) {
                         Log.e(TAG, "Error enabling UWB");
                         mUwbMetrics.incrementDeviceInitFailureCount();
-                        takBugReportAfterDeviceError("Error enabling UWB");
+                        takBugReportAfterDeviceError("UWB Bugreport: error enabling UWB");
                         updateState(AdapterStateCallback.STATE_DISABLED,
                                 StateChangeReason.SYSTEM_POLICY);
                     } else {
