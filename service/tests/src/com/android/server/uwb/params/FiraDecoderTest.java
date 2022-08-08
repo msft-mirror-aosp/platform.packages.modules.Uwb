@@ -85,16 +85,17 @@ public class FiraDecoderTest {
                     + "0C010B"
                     + "0D0103"
                     + "0E0101"
-                    + "0F050000000003"
+                    + "0F050300000000"
                     + "10010F"
                     + "110101"
                     + "E30101"
                     + "E40401010101"
-                    + "E50400000003"
-                    + "E601FF";
+                    + "E50403000000"
+                    + "E601FF"
+                    + "E70101";
     private static final byte[] TEST_FIRA_SPECIFICATION_TLV_DATA =
             UwbUtil.getByteArray(TEST_FIRA_SPECIFICATION_TLV_STRING);
-    public static final int TEST_FIRA_SPECIFICATION_TLV_NUM_PARAMS = 22;
+    public static final int TEST_FIRA_SPECIFICATION_TLV_NUM_PARAMS = 23;
     private final FiraDecoder mFiraDecoder = new FiraDecoder();
 
     public static void verifyFiraSpecification(FiraSpecificationParams firaSpecificationParams) {
@@ -126,6 +127,8 @@ public class FiraDecoderTest {
         assertThat(firaSpecificationParams.hasBlockStridingSupport()).isEqualTo(true);
 
         assertThat(firaSpecificationParams.hasRssiReportingSupport()).isTrue();
+
+        assertThat(firaSpecificationParams.hasDiagnosticsSupport()).isTrue();
 
         assertThat(firaSpecificationParams.getSupportedChannels()).isEqualTo(List.of(5, 9));
 
