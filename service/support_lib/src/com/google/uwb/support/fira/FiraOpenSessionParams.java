@@ -27,6 +27,7 @@ import android.os.PersistableBundle;
 import android.uwb.UwbAddress;
 import android.uwb.UwbManager;
 
+import androidx.annotation.FloatRange;
 import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -103,12 +104,19 @@ public class FiraOpenSessionParams extends FiraParams {
     // 6-byte long array
     @Nullable private final byte[] mStaticStsIV;
 
+    private final boolean mIsRssiReportingEnabled;
+    private final boolean mIsDiagnosticsEnabled;
+    private final int mDiagramsFrameReportsFieldsFlags;
     private final boolean mIsKeyRotationEnabled;
     private final int mKeyRotationRate;
     @AoaResultRequestMode private final int mAoaResultRequest;
     @RangeDataNtfConfig private final int mRangeDataNtfConfig;
     private final int mRangeDataNtfProximityNear;
     private final int mRangeDataNtfProximityFar;
+    private double mRangeDataNtfAoaAzimuthLower;
+    private double mRangeDataNtfAoaAzimuthUpper;
+    private double mRangeDataNtfAoaElevationLower;
+    private double mRangeDataNtfAoaElevationUpper;
     private final boolean mHasTimeOfFlightReport;
     private final boolean mHasAngleOfArrivalAzimuthReport;
     private final boolean mHasAngleOfArrivalElevationReport;
@@ -158,12 +166,24 @@ public class FiraOpenSessionParams extends FiraParams {
     private static final String KEY_SUB_SESSION_ID = "sub_session_id";
     private static final String KEY_VENDOR_ID = "vendor_id";
     private static final String KEY_STATIC_STS_IV = "static_sts_iv";
+    private static final String KEY_IS_RSSI_REPORTING_ENABLED = "is_rssi_reporting_enabled";
+    private static final String KEY_IS_DIAGNOSTICS_ENABLED = "is_diagnostics_enabled";
+    private static final String KEY_DIAGRAMS_FRAME_REPORTS_FIELDS_FLAGS =
+            "diagrams_frame_reports_fields_flags";
     private static final String KEY_IS_KEY_ROTATION_ENABLED = "is_key_rotation_enabled";
     private static final String KEY_KEY_ROTATION_RATE = "key_rotation_rate";
     private static final String KEY_AOA_RESULT_REQUEST = "aoa_result_request";
     private static final String KEY_RANGE_DATA_NTF_CONFIG = "range_data_ntf_config";
     private static final String KEY_RANGE_DATA_NTF_PROXIMITY_NEAR = "range_data_ntf_proximity_near";
     private static final String KEY_RANGE_DATA_NTF_PROXIMITY_FAR = "range_data_ntf_proximity_far";
+    private static final String KEY_RANGE_DATA_NTF_AOA_AZIMUTH_LOWER =
+            "range_data_ntf_aoa_azimuth_lower";
+    private static final String KEY_RANGE_DATA_NTF_AOA_AZIMUTH_UPPER =
+            "range_data_ntf_aoa_azimuth_upper";
+    private static final String KEY_RANGE_DATA_NTF_AOA_ELEVATION_LOWER =
+            "range_data_ntf_aoa_elevation_lower";
+    private static final String KEY_RANGE_DATA_NTF_AOA_ELEVATION_UPPER =
+            "range_data_ntf_aoa_elevation_upper";
     private static final String KEY_HAS_TIME_OF_FLIGHT_REPORT = "has_time_of_flight_report";
     private static final String KEY_HAS_ANGLE_OF_ARRIVAL_AZIMUTH_REPORT =
             "has_angle_of_arrival_azimuth_report";
@@ -220,12 +240,19 @@ public class FiraOpenSessionParams extends FiraParams {
             int subSessionId,
             @Nullable byte[] vendorId,
             @Nullable byte[] staticStsIV,
+            boolean isRssiReportingEnabled,
+            boolean isDiagnosticsEnabled,
+            int diagramsFrameReportsFieldsFlags,
             boolean isKeyRotationEnabled,
             int keyRotationRate,
             @AoaResultRequestMode int aoaResultRequest,
             @RangeDataNtfConfig int rangeDataNtfConfig,
             int rangeDataNtfProximityNear,
             int rangeDataNtfProximityFar,
+            double rangeDataNtfAoaAzimuthLower,
+            double rangeDataNtfAoaAzimuthUpper,
+            double rangeDataNtfAoaElevationLower,
+            double rangeDataNtfAoaElevationUpper,
             boolean hasTimeOfFlightReport,
             boolean hasAngleOfArrivalAzimuthReport,
             boolean hasAngleOfArrivalElevationReport,
@@ -272,12 +299,19 @@ public class FiraOpenSessionParams extends FiraParams {
         mSubSessionId = subSessionId;
         mVendorId = vendorId;
         mStaticStsIV = staticStsIV;
+        mIsRssiReportingEnabled = isRssiReportingEnabled;
+        mIsDiagnosticsEnabled = isDiagnosticsEnabled;
+        mDiagramsFrameReportsFieldsFlags = diagramsFrameReportsFieldsFlags;
         mIsKeyRotationEnabled = isKeyRotationEnabled;
         mKeyRotationRate = keyRotationRate;
         mAoaResultRequest = aoaResultRequest;
         mRangeDataNtfConfig = rangeDataNtfConfig;
         mRangeDataNtfProximityNear = rangeDataNtfProximityNear;
         mRangeDataNtfProximityFar = rangeDataNtfProximityFar;
+        mRangeDataNtfAoaAzimuthLower = rangeDataNtfAoaAzimuthLower;
+        mRangeDataNtfAoaAzimuthUpper = rangeDataNtfAoaAzimuthUpper;
+        mRangeDataNtfAoaElevationLower = rangeDataNtfAoaElevationLower;
+        mRangeDataNtfAoaElevationUpper = rangeDataNtfAoaElevationUpper;
         mHasTimeOfFlightReport = hasTimeOfFlightReport;
         mHasAngleOfArrivalAzimuthReport = hasAngleOfArrivalAzimuthReport;
         mHasAngleOfArrivalElevationReport = hasAngleOfArrivalElevationReport;
@@ -464,6 +498,18 @@ public class FiraOpenSessionParams extends FiraParams {
         return mStaticStsIV;
     }
 
+    public boolean isRssiReportingEnabled() {
+        return mIsRssiReportingEnabled;
+    }
+
+    public boolean isDiagnosticsEnabled() {
+        return mIsDiagnosticsEnabled;
+    }
+
+    public int getDiagramsFrameReportsFieldsFlags() {
+        return mDiagramsFrameReportsFieldsFlags;
+    }
+
     public boolean isKeyRotationEnabled() {
         return mIsKeyRotationEnabled;
     }
@@ -488,6 +534,22 @@ public class FiraOpenSessionParams extends FiraParams {
 
     public int getRangeDataNtfProximityFar() {
         return mRangeDataNtfProximityFar;
+    }
+
+    public double getRangeDataNtfAoaAzimuthLower() {
+        return mRangeDataNtfAoaAzimuthLower;
+    }
+
+    public double getRangeDataNtfAoaAzimuthUpper() {
+        return mRangeDataNtfAoaAzimuthUpper;
+    }
+
+    public double getRangeDataNtfAoaElevationLower() {
+        return mRangeDataNtfAoaElevationLower;
+    }
+
+    public double getRangeDataNtfAoaElevationUpper() {
+        return mRangeDataNtfAoaElevationUpper;
     }
 
     public boolean hasTimeOfFlightReport() {
@@ -604,12 +666,19 @@ public class FiraOpenSessionParams extends FiraParams {
         }
         bundle.putIntArray(KEY_VENDOR_ID, byteArrayToIntArray(mVendorId));
         bundle.putIntArray(KEY_STATIC_STS_IV, byteArrayToIntArray(mStaticStsIV));
+        bundle.putBoolean(KEY_IS_RSSI_REPORTING_ENABLED, mIsRssiReportingEnabled);
+        bundle.putBoolean(KEY_IS_DIAGNOSTICS_ENABLED, mIsDiagnosticsEnabled);
+        bundle.putInt(KEY_DIAGRAMS_FRAME_REPORTS_FIELDS_FLAGS, mDiagramsFrameReportsFieldsFlags);
         bundle.putBoolean(KEY_IS_KEY_ROTATION_ENABLED, mIsKeyRotationEnabled);
         bundle.putInt(KEY_KEY_ROTATION_RATE, mKeyRotationRate);
         bundle.putInt(KEY_AOA_RESULT_REQUEST, mAoaResultRequest);
         bundle.putInt(KEY_RANGE_DATA_NTF_CONFIG, mRangeDataNtfConfig);
         bundle.putInt(KEY_RANGE_DATA_NTF_PROXIMITY_NEAR, mRangeDataNtfProximityNear);
         bundle.putInt(KEY_RANGE_DATA_NTF_PROXIMITY_FAR, mRangeDataNtfProximityFar);
+        bundle.putDouble(KEY_RANGE_DATA_NTF_AOA_AZIMUTH_LOWER, mRangeDataNtfAoaAzimuthLower);
+        bundle.putDouble(KEY_RANGE_DATA_NTF_AOA_AZIMUTH_UPPER, mRangeDataNtfAoaAzimuthUpper);
+        bundle.putDouble(KEY_RANGE_DATA_NTF_AOA_ELEVATION_LOWER, mRangeDataNtfAoaElevationLower);
+        bundle.putDouble(KEY_RANGE_DATA_NTF_AOA_ELEVATION_UPPER, mRangeDataNtfAoaElevationUpper);
         bundle.putBoolean(KEY_HAS_TIME_OF_FLIGHT_REPORT, mHasTimeOfFlightReport);
         bundle.putBoolean(KEY_HAS_ANGLE_OF_ARRIVAL_AZIMUTH_REPORT, mHasAngleOfArrivalAzimuthReport);
         bundle.putBoolean(
@@ -696,12 +765,24 @@ public class FiraOpenSessionParams extends FiraParams {
                 .setSubSessionId(bundle.getInt(KEY_SUB_SESSION_ID))
                 .setVendorId(intArrayToByteArray(bundle.getIntArray(KEY_VENDOR_ID)))
                 .setStaticStsIV(intArrayToByteArray(bundle.getIntArray(KEY_STATIC_STS_IV)))
+                .setIsRssiReportingEnabled(bundle.getBoolean(KEY_IS_RSSI_REPORTING_ENABLED))
+                .setIsDiagnosticsEnabled(bundle.getBoolean(KEY_IS_DIAGNOSTICS_ENABLED, false))
+                .setDiagramsFrameReportsFieldsFlags(
+                        bundle.getInt(KEY_DIAGRAMS_FRAME_REPORTS_FIELDS_FLAGS, 0))
                 .setIsKeyRotationEnabled(bundle.getBoolean(KEY_IS_KEY_ROTATION_ENABLED))
                 .setKeyRotationRate(bundle.getInt(KEY_KEY_ROTATION_RATE))
                 .setAoaResultRequest(bundle.getInt(KEY_AOA_RESULT_REQUEST))
                 .setRangeDataNtfConfig(bundle.getInt(KEY_RANGE_DATA_NTF_CONFIG))
                 .setRangeDataNtfProximityNear(bundle.getInt(KEY_RANGE_DATA_NTF_PROXIMITY_NEAR))
                 .setRangeDataNtfProximityFar(bundle.getInt(KEY_RANGE_DATA_NTF_PROXIMITY_FAR))
+                .setRangeDataNtfAoaAzimuthLower(
+                        bundle.getDouble(KEY_RANGE_DATA_NTF_AOA_AZIMUTH_LOWER))
+                .setRangeDataNtfAoaAzimuthUpper(
+                        bundle.getDouble(KEY_RANGE_DATA_NTF_AOA_AZIMUTH_UPPER))
+                .setRangeDataNtfAoaElevationLower(
+                        bundle.getDouble(KEY_RANGE_DATA_NTF_AOA_ELEVATION_LOWER))
+                .setRangeDataNtfAoaElevationUpper(
+                        bundle.getDouble(KEY_RANGE_DATA_NTF_AOA_ELEVATION_UPPER))
                 .setHasTimeOfFlightReport(bundle.getBoolean(KEY_HAS_TIME_OF_FLIGHT_REPORT))
                 .setHasAngleOfArrivalAzimuthReport(
                         bundle.getBoolean(KEY_HAS_ANGLE_OF_ARRIVAL_AZIMUTH_REPORT))
@@ -833,6 +914,15 @@ public class FiraOpenSessionParams extends FiraParams {
         /** STATIC STS only. For Key generation. 48-bit long */
         @Nullable private byte[] mStaticStsIV = null;
 
+        /** UCI spec default: RSSI reporting disabled */
+        private boolean mIsRssiReportingEnabled = false;
+
+        /** Diagnostics is Disabled by default */
+        private boolean mIsDiagnosticsEnabled = false;
+
+        /** All fields are set to 0 by default */
+        private int mDiagramsFrameReportsFieldsFlags = 0;
+
         /** UCI spec default: no key rotation */
         private boolean mIsKeyRotationEnabled = false;
 
@@ -847,10 +937,22 @@ public class FiraOpenSessionParams extends FiraParams {
         @RangeDataNtfConfig private int mRangeDataNtfConfig = RANGE_DATA_NTF_CONFIG_ENABLE;
 
         /** UCI spec default: 0 (No low-bound filtering) */
-        private int mRangeDataNtfProximityNear = 0;
+        private int mRangeDataNtfProximityNear = RANGE_DATA_NTF_PROXIMITY_NEAR_DEFAULT;
 
         /** UCI spec default: 20000 cm (or 200 meters) */
-        private int mRangeDataNtfProximityFar = 20000;
+        private int mRangeDataNtfProximityFar = RANGE_DATA_NTF_PROXIMITY_FAR_DEFAULT;
+
+        /** UCI spec default: -180 (No low-bound filtering) */
+        private double mRangeDataNtfAoaAzimuthLower = RANGE_DATA_NTF_AOA_AZIMUTH_LOWER_DEFAULT;
+
+        /** UCI spec default: +180 (No upper-bound filtering) */
+        private double mRangeDataNtfAoaAzimuthUpper = RANGE_DATA_NTF_AOA_AZIMUTH_UPPER_DEFAULT;
+
+        /** UCI spec default: -180 (No low-bound filtering) */
+        private double mRangeDataNtfAoaElevationLower = RANGE_DATA_NTF_AOA_ELEVATION_LOWER_DEFAULT;
+
+        /** UCI spec default: +180 (No upper-bound filtering) */
+        private double mRangeDataNtfAoaElevationUpper = RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT;
 
         /** UCI spec default: RESULT_REPORT_CONFIG bit 0 is 1 */
         private boolean mHasTimeOfFlightReport = true;
@@ -913,17 +1015,83 @@ public class FiraOpenSessionParams extends FiraParams {
             if (builder.mSubSessionId.isSet()) mSubSessionId.set(builder.mSubSessionId.get());
             mVendorId = builder.mVendorId;
             mStaticStsIV = builder.mStaticStsIV;
+            mIsRssiReportingEnabled = builder.mIsRssiReportingEnabled;
+            mIsDiagnosticsEnabled = builder.mIsDiagnosticsEnabled;
+            mDiagramsFrameReportsFieldsFlags = builder.mDiagramsFrameReportsFieldsFlags;
             mIsKeyRotationEnabled = builder.mIsKeyRotationEnabled;
             mKeyRotationRate = builder.mKeyRotationRate;
             mAoaResultRequest = builder.mAoaResultRequest;
             mRangeDataNtfConfig = builder.mRangeDataNtfConfig;
             mRangeDataNtfProximityNear = builder.mRangeDataNtfProximityNear;
             mRangeDataNtfProximityFar = builder.mRangeDataNtfProximityFar;
+            mRangeDataNtfAoaAzimuthLower = builder.mRangeDataNtfAoaAzimuthLower;
+            mRangeDataNtfAoaAzimuthUpper = builder.mRangeDataNtfAoaAzimuthUpper;
+            mRangeDataNtfAoaElevationLower = builder.mRangeDataNtfAoaElevationLower;
+            mRangeDataNtfAoaElevationUpper = builder.mRangeDataNtfAoaElevationUpper;
             mHasTimeOfFlightReport = builder.mHasTimeOfFlightReport;
             mHasAngleOfArrivalAzimuthReport = builder.mHasAngleOfArrivalAzimuthReport;
             mHasAngleOfArrivalElevationReport = builder.mHasAngleOfArrivalElevationReport;
             mHasAngleOfArrivalFigureOfMeritReport = builder.mHasAngleOfArrivalFigureOfMeritReport;
             mAoaType = builder.mAoaType;
+        }
+
+        public Builder(@NonNull FiraOpenSessionParams params) {
+            mProtocolVersion.set(params.mProtocolVersion);
+            mSessionId.set(params.mSessionId);
+            mDeviceType.set(params.mDeviceType);
+            mDeviceRole.set(params.mDeviceRole);
+            mRangingRoundUsage = params.mRangingRoundUsage;
+            mMultiNodeMode.set(params.mMultiNodeMode);
+            mDeviceAddress = params.mDeviceAddress;
+            mDestAddressList = params.mDestAddressList;
+            mInitiationTimeMs = params.mInitiationTimeMs;
+            mSlotDurationRstu = params.mSlotDurationRstu;
+            mSlotsPerRangingRound = params.mSlotsPerRangingRound;
+            mRangingIntervalMs = params.mRangingIntervalMs;
+            mBlockStrideLength = params.mBlockStrideLength;
+            mHoppingMode = params.mHoppingMode;
+            mMaxRangingRoundRetries = params.mMaxRangingRoundRetries;
+            mSessionPriority = params.mSessionPriority;
+            mMacAddressMode = params.mMacAddressMode;
+            mHasResultReportPhase = params.mHasResultReportPhase;
+            mMeasurementReportType = params.mMeasurementReportType;
+            mInBandTerminationAttemptCount = params.mInBandTerminationAttemptCount;
+            mChannelNumber = params.mChannelNumber;
+            mPreambleCodeIndex = params.mPreambleCodeIndex;
+            mRframeConfig = params.mRframeConfig;
+            mPrfMode = params.mPrfMode;
+            mPreambleDuration = params.mPreambleDuration;
+            mSfdId = params.mSfdId;
+            mStsSegmentCount = params.mStsSegmentCount;
+            mStsLength = params.mStsLength;
+            mSessionKey = params.mSessionKey;
+            mSubsessionKey = params.mSubSessionKey;
+            mPsduDataRate = params.mPsduDataRate;
+            mBprfPhrDataRate = params.mBprfPhrDataRate;
+            mFcsType = params.mFcsType;
+            mIsTxAdaptivePayloadPowerEnabled = params.mIsTxAdaptivePayloadPowerEnabled;
+            mStsConfig = params.mStsConfig;
+            mSubSessionId.set(params.mSubSessionId);
+            mVendorId = params.mVendorId;
+            mStaticStsIV = params.mStaticStsIV;
+            mIsRssiReportingEnabled = params.mIsRssiReportingEnabled;
+            mIsDiagnosticsEnabled = params.mIsDiagnosticsEnabled;
+            mDiagramsFrameReportsFieldsFlags = params.mDiagramsFrameReportsFieldsFlags;
+            mIsKeyRotationEnabled = params.mIsKeyRotationEnabled;
+            mKeyRotationRate = params.mKeyRotationRate;
+            mAoaResultRequest = params.mAoaResultRequest;
+            mRangeDataNtfConfig = params.mRangeDataNtfConfig;
+            mRangeDataNtfProximityNear = params.mRangeDataNtfProximityNear;
+            mRangeDataNtfProximityFar = params.mRangeDataNtfProximityFar;
+            mRangeDataNtfAoaAzimuthLower = params.mRangeDataNtfAoaAzimuthLower;
+            mRangeDataNtfAoaAzimuthUpper = params.mRangeDataNtfAoaAzimuthUpper;
+            mRangeDataNtfAoaElevationLower = params.mRangeDataNtfAoaElevationLower;
+            mRangeDataNtfAoaElevationUpper = params.mRangeDataNtfAoaElevationUpper;
+            mHasTimeOfFlightReport = params.mHasTimeOfFlightReport;
+            mHasAngleOfArrivalAzimuthReport = params.mHasAngleOfArrivalAzimuthReport;
+            mHasAngleOfArrivalElevationReport = params.mHasAngleOfArrivalElevationReport;
+            mHasAngleOfArrivalFigureOfMeritReport = params.mHasAngleOfArrivalFigureOfMeritReport;
+            mAoaType = params.mAoaType;
         }
 
         public FiraOpenSessionParams.Builder setProtocolVersion(FiraProtocolVersion version) {
@@ -1127,6 +1295,31 @@ public class FiraOpenSessionParams extends FiraParams {
             return this;
         }
 
+        /** Set whether rssi reporting is enabled */
+        public FiraOpenSessionParams.Builder
+                setIsRssiReportingEnabled(boolean isRssiReportingEnabled) {
+            mIsRssiReportingEnabled = isRssiReportingEnabled;
+            return this;
+        }
+
+        /** Set whether diagnostics is enabled */
+        public FiraOpenSessionParams.Builder setIsDiagnosticsEnabled(boolean isDiagnosticsEnabled) {
+            mIsDiagnosticsEnabled = isDiagnosticsEnabled;
+            return this;
+        }
+
+        /** Set the activated field
+         *  b0: Activate RSSIs field
+         *  b1: Activate AoAs field
+         *  b2: Activate CIRs field
+         *  b3 - b7: RFU
+         */
+        public FiraOpenSessionParams.Builder
+                setDiagramsFrameReportsFieldsFlags(int diagramsFrameReportsFieldsFlags) {
+            mDiagramsFrameReportsFieldsFlags = diagramsFrameReportsFieldsFlags;
+            return this;
+        }
+
         public FiraOpenSessionParams.Builder setIsKeyRotationEnabled(boolean isKeyRotationEnabled) {
             mIsKeyRotationEnabled = isKeyRotationEnabled;
             return this;
@@ -1150,14 +1343,50 @@ public class FiraOpenSessionParams extends FiraParams {
         }
 
         public FiraOpenSessionParams.Builder setRangeDataNtfProximityNear(
-                int rangeDataNtfProximityNear) {
+                @IntRange(from = RANGE_DATA_NTF_PROXIMITY_NEAR_DEFAULT,
+                        to = RANGE_DATA_NTF_PROXIMITY_FAR_DEFAULT)
+                        int rangeDataNtfProximityNear) {
             mRangeDataNtfProximityNear = rangeDataNtfProximityNear;
             return this;
         }
 
         public FiraOpenSessionParams.Builder setRangeDataNtfProximityFar(
-                int rangeDataNtfProximityFar) {
+                @IntRange(from = RANGE_DATA_NTF_PROXIMITY_NEAR_DEFAULT,
+                        to = RANGE_DATA_NTF_PROXIMITY_FAR_DEFAULT)
+                        int rangeDataNtfProximityFar) {
             mRangeDataNtfProximityFar = rangeDataNtfProximityFar;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setRangeDataNtfAoaAzimuthLower(
+                @FloatRange(from = RANGE_DATA_NTF_AOA_AZIMUTH_LOWER_DEFAULT,
+                        to = RANGE_DATA_NTF_AOA_AZIMUTH_UPPER_DEFAULT)
+                        double rangeDataNtfAoaAzimuthLower) {
+            mRangeDataNtfAoaAzimuthLower = rangeDataNtfAoaAzimuthLower;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setRangeDataNtfAoaAzimuthUpper(
+                @FloatRange(from = RANGE_DATA_NTF_AOA_AZIMUTH_LOWER_DEFAULT,
+                        to = RANGE_DATA_NTF_AOA_AZIMUTH_UPPER_DEFAULT)
+                        double rangeDataNtfAoaAzimuthUpper) {
+            mRangeDataNtfAoaAzimuthUpper = rangeDataNtfAoaAzimuthUpper;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setRangeDataNtfAoaElevationLower(
+                @FloatRange(from = RANGE_DATA_NTF_AOA_ELEVATION_LOWER_DEFAULT,
+                        to = RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT)
+                        double rangeDataNtfAoaElevationLower) {
+            mRangeDataNtfAoaElevationLower = rangeDataNtfAoaElevationLower;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setRangeDataNtfAoaElevationUpper(
+                @FloatRange(from = RANGE_DATA_NTF_AOA_ELEVATION_LOWER_DEFAULT,
+                        to = RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT)
+                        double rangeDataNtfAoaElevationUpper) {
+            mRangeDataNtfAoaElevationUpper = rangeDataNtfAoaElevationUpper;
             return this;
         }
 
@@ -1272,10 +1501,69 @@ public class FiraOpenSessionParams extends FiraParams {
             }
         }
 
+        private void checkRangeDataNtfConfig() {
+            if (mRangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_DISABLE) {
+                checkArgument(mRangeDataNtfProximityNear
+                        == RANGE_DATA_NTF_PROXIMITY_NEAR_DEFAULT);
+                checkArgument(mRangeDataNtfProximityFar
+                        == RANGE_DATA_NTF_PROXIMITY_FAR_DEFAULT);
+                checkArgument(mRangeDataNtfAoaAzimuthLower
+                        == RANGE_DATA_NTF_AOA_AZIMUTH_LOWER_DEFAULT);
+                checkArgument(mRangeDataNtfAoaAzimuthUpper
+                        == RANGE_DATA_NTF_AOA_AZIMUTH_UPPER_DEFAULT);
+                checkArgument(mRangeDataNtfAoaElevationLower
+                        == RANGE_DATA_NTF_AOA_ELEVATION_LOWER_DEFAULT);
+                checkArgument(mRangeDataNtfAoaElevationUpper
+                        == RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT);
+            } else if (mRangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG
+                    || mRangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_EDGE_TRIG) {
+                checkArgument(
+                        mRangeDataNtfProximityNear != RANGE_DATA_NTF_PROXIMITY_NEAR_DEFAULT
+                        || mRangeDataNtfProximityFar != RANGE_DATA_NTF_PROXIMITY_FAR_DEFAULT);
+                checkArgument(mRangeDataNtfAoaAzimuthLower
+                        == RANGE_DATA_NTF_AOA_AZIMUTH_LOWER_DEFAULT);
+                checkArgument(mRangeDataNtfAoaAzimuthUpper
+                        == RANGE_DATA_NTF_AOA_AZIMUTH_UPPER_DEFAULT);
+                checkArgument(mRangeDataNtfAoaElevationLower
+                        == RANGE_DATA_NTF_AOA_ELEVATION_LOWER_DEFAULT);
+                checkArgument(mRangeDataNtfAoaElevationUpper
+                        == RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT);
+            } else if (mRangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_AOA_LEVEL_TRIG
+                    || mRangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_AOA_EDGE_TRIG) {
+                checkArgument(mRangeDataNtfProximityNear
+                        == RANGE_DATA_NTF_PROXIMITY_NEAR_DEFAULT);
+                checkArgument(mRangeDataNtfProximityFar
+                        == RANGE_DATA_NTF_PROXIMITY_FAR_DEFAULT);
+                checkArgument(mRangeDataNtfAoaAzimuthLower
+                            != RANGE_DATA_NTF_AOA_AZIMUTH_LOWER_DEFAULT
+                        || mRangeDataNtfAoaAzimuthUpper
+                            != RANGE_DATA_NTF_AOA_AZIMUTH_UPPER_DEFAULT
+                        || mRangeDataNtfAoaElevationLower
+                            != RANGE_DATA_NTF_AOA_ELEVATION_LOWER_DEFAULT
+                        || mRangeDataNtfAoaElevationUpper
+                            != RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT);
+            } else if (mRangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_LEVEL_TRIG
+                    || mRangeDataNtfConfig
+                    == RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_EDGE_TRIG) {
+                checkArgument(
+                        mRangeDataNtfProximityNear != RANGE_DATA_NTF_PROXIMITY_NEAR_DEFAULT
+                        || mRangeDataNtfProximityFar != RANGE_DATA_NTF_PROXIMITY_FAR_DEFAULT
+                        || mRangeDataNtfAoaAzimuthLower
+                            != RANGE_DATA_NTF_AOA_AZIMUTH_LOWER_DEFAULT
+                        || mRangeDataNtfAoaAzimuthUpper
+                            != RANGE_DATA_NTF_AOA_AZIMUTH_UPPER_DEFAULT
+                        || mRangeDataNtfAoaElevationLower
+                            != RANGE_DATA_NTF_AOA_ELEVATION_LOWER_DEFAULT
+                        || mRangeDataNtfAoaElevationUpper
+                            != RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT);
+            }
+        }
+
         public FiraOpenSessionParams build() {
             checkAddress();
             checkStsConfig();
             checkInterleavingRatio();
+            checkRangeDataNtfConfig();
             return new FiraOpenSessionParams(
                     mProtocolVersion.get(),
                     mSessionId.get(),
@@ -1315,12 +1603,19 @@ public class FiraOpenSessionParams extends FiraParams {
                     mSubSessionId.get(),
                     mVendorId,
                     mStaticStsIV,
+                    mIsRssiReportingEnabled,
+                    mIsDiagnosticsEnabled,
+                    mDiagramsFrameReportsFieldsFlags,
                     mIsKeyRotationEnabled,
                     mKeyRotationRate,
                     mAoaResultRequest,
                     mRangeDataNtfConfig,
                     mRangeDataNtfProximityNear,
                     mRangeDataNtfProximityFar,
+                    mRangeDataNtfAoaAzimuthLower,
+                    mRangeDataNtfAoaAzimuthUpper,
+                    mRangeDataNtfAoaElevationLower,
+                    mRangeDataNtfAoaElevationUpper,
                     mHasTimeOfFlightReport,
                     mHasAngleOfArrivalAzimuthReport,
                     mHasAngleOfArrivalElevationReport,

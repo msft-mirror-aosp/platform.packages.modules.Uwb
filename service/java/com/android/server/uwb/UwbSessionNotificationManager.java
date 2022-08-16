@@ -131,13 +131,12 @@ public class UwbSessionNotificationManager {
         }
     }
 
-    public void onRangingStoppedWithUciReasonCode(UwbSession uwbSession, int reasonCode)  {
+    private void onRangingStoppedInternal(UwbSession uwbSession, int reason,
+            PersistableBundle params)  {
         SessionHandle sessionHandle = uwbSession.getSessionHandle();
         IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
         try {
-            uwbRangingCallbacks.onRangingStopped(sessionHandle,
-                    UwbSessionNotificationHelper.convertUciReasonCodeToApiReasonCode(reasonCode),
-                    new PersistableBundle());
+            uwbRangingCallbacks.onRangingStopped(sessionHandle, reason, params);
             Log.i(TAG, "IUwbRangingCallbacks - onRangingStopped");
         } catch (Exception e) {
             Log.e(TAG, "IUwbRangingCallbacks - onRangingStopped : Failed");
@@ -145,20 +144,23 @@ public class UwbSessionNotificationManager {
         }
     }
 
+    public void onRangingStoppedWithUciReasonCode(UwbSession uwbSession, int reasonCode)  {
+        onRangingStoppedInternal(uwbSession,
+                UwbSessionNotificationHelper.convertUciReasonCodeToApiReasonCode(reasonCode),
+                new PersistableBundle());
+    }
+
+    public void onRangingStoppedWithApiReasonCode(
+            UwbSession uwbSession, @RangingChangeReason int reasonCode) {
+        onRangingStoppedInternal(uwbSession, reasonCode, new PersistableBundle());
+    }
+
     public void onRangingStopped(UwbSession uwbSession, int status)  {
-        SessionHandle sessionHandle = uwbSession.getSessionHandle();
-        IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
-        try {
-            uwbRangingCallbacks.onRangingStopped(sessionHandle,
-                    UwbSessionNotificationHelper.convertUciStatusToApiReasonCode(
-                            status),
-                    UwbSessionNotificationHelper.convertUciStatusToParam(
-                            uwbSession.getProtocolName(), status));
-            Log.i(TAG, "IUwbRangingCallbacks - onRangingStopped");
-        } catch (Exception e) {
-            Log.e(TAG, "IUwbRangingCallbacks - onRangingStopped : Failed");
-            e.printStackTrace();
-        }
+        onRangingStoppedInternal(uwbSession,
+                UwbSessionNotificationHelper.convertUciStatusToApiReasonCode(
+                        status),
+                UwbSessionNotificationHelper.convertUciStatusToParam(
+                        uwbSession.getProtocolName(), status));
     }
 
     public void onRangingStopFailed(UwbSession uwbSession, int status) {
@@ -352,6 +354,7 @@ public class UwbSessionNotificationManager {
             AngleOfArrivalMeasurement angleOfArrivalMeasurement = null;
             AngleOfArrivalMeasurement destinationAngleOfArrivalMeasurement = null;
             int los = uwbTwoWayMeasurement[i].mNLoS;
+            int rssi = uwbTwoWayMeasurement[i].getRssi();
 
             if (rangingStatus == FiraParams.STATUS_CODE_OK) {
                 // Distance measurement is mandatory
@@ -402,15 +405,18 @@ public class UwbSessionNotificationManager {
                             .build();
                 }
             }
-            rangingMeasurements.add(new RangingMeasurement.Builder()
+            RangingMeasurement.Builder rangingMeasurementBuilder = new RangingMeasurement.Builder()
                     .setRemoteDeviceAddress(macAddress)
                     .setStatus(rangingStatus)
                     .setElapsedRealtimeNanos(elapsedRealtimeNanos)
                     .setDistanceMeasurement(distanceMeasurement)
                     .setAngleOfArrivalMeasurement(angleOfArrivalMeasurement)
                     .setDestinationAngleOfArrivalMeasurement(destinationAngleOfArrivalMeasurement)
-                    .setLineOfSight(los)
-                    .build());
+                    .setLineOfSight(los);
+            if (rssi < 0) {
+                rangingMeasurementBuilder.setRssiDbm(rssi);
+            }
+            rangingMeasurements.add(rangingMeasurementBuilder.build());
         }
         if (rangingMeasurements.size() == 1) {
             return new RangingReport.Builder().addMeasurement(rangingMeasurements.get(0)).build();
