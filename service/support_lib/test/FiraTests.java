@@ -28,7 +28,8 @@ import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_MANY_TO_MAN
 import static com.google.uwb.support.fira.FiraParams.PREAMBLE_DURATION_T32_SYMBOLS;
 import static com.google.uwb.support.fira.FiraParams.PRF_MODE_HPRF;
 import static com.google.uwb.support.fira.FiraParams.PSDU_DATA_RATE_7M80;
-import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY;
+import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_EDGE_TRIG;
+import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_LEVEL_TRIG;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_INITIATOR;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLEE;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE;
@@ -120,9 +121,13 @@ public class FiraTests {
         boolean isKeyRotationEnabled = true;
         int keyRotationRate = 15;
         int aoaResultRequest = AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_INTERLEAVED;
-        int rangeDataNtfConfig = RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY;
+        int rangeDataNtfConfig = RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_LEVEL_TRIG;
         int rangeDataNtfProximityNear = 50;
         int rangeDataNtfProximityFar = 200;
+        double rangeDataNtfAoaAzimuthLower = -0.5;
+        double rangeDataNtfAoaAzimuthUpper = +1.5;
+        double rangeDataNtfAoaElevationLower = -1.5;
+        double rangeDataNtfAoaElevationUpper = +2.5;
         boolean hasTimeOfFlightReport = true;
         boolean hasAngleOfArrivalAzimuthReport = true;
         boolean hasAngleOfArrivalElevationReport = true;
@@ -177,6 +182,10 @@ public class FiraTests {
                         .setRangeDataNtfConfig(rangeDataNtfConfig)
                         .setRangeDataNtfProximityNear(rangeDataNtfProximityNear)
                         .setRangeDataNtfProximityFar(rangeDataNtfProximityFar)
+                        .setRangeDataNtfAoaAzimuthLower(rangeDataNtfAoaAzimuthLower)
+                        .setRangeDataNtfAoaAzimuthUpper(rangeDataNtfAoaAzimuthUpper)
+                        .setRangeDataNtfAoaElevationLower(rangeDataNtfAoaElevationLower)
+                        .setRangeDataNtfAoaElevationUpper(rangeDataNtfAoaElevationUpper)
                         .setHasTimeOfFlightReport(hasTimeOfFlightReport)
                         .setHasAngleOfArrivalAzimuthReport(hasAngleOfArrivalAzimuthReport)
                         .setHasAngleOfArrivalElevationReport(hasAngleOfArrivalElevationReport)
@@ -236,6 +245,12 @@ public class FiraTests {
         assertEquals(params.getRangeDataNtfConfig(), rangeDataNtfConfig);
         assertEquals(params.getRangeDataNtfProximityNear(), rangeDataNtfProximityNear);
         assertEquals(params.getRangeDataNtfProximityFar(), rangeDataNtfProximityFar);
+        assertEquals(params.getRangeDataNtfAoaAzimuthLower(), rangeDataNtfAoaAzimuthLower, 0.0d);
+        assertEquals(params.getRangeDataNtfAoaAzimuthUpper(), rangeDataNtfAoaAzimuthUpper, 0.0d);
+        assertEquals(params.getRangeDataNtfAoaElevationLower(), rangeDataNtfAoaElevationLower,
+                0.0d);
+        assertEquals(params.getRangeDataNtfAoaElevationUpper(), rangeDataNtfAoaElevationUpper,
+                0.0d);
         assertEquals(params.hasTimeOfFlightReport(), hasTimeOfFlightReport);
         assertEquals(params.hasAngleOfArrivalAzimuthReport(), hasAngleOfArrivalAzimuthReport);
         assertEquals(params.hasAngleOfArrivalElevationReport(), hasAngleOfArrivalElevationReport);
@@ -291,8 +306,16 @@ public class FiraTests {
         assertEquals(fromBundle.getKeyRotationRate(), keyRotationRate);
         assertEquals(fromBundle.getAoaResultRequest(), aoaResultRequest);
         assertEquals(fromBundle.getRangeDataNtfConfig(), rangeDataNtfConfig);
-        assertEquals(fromBundle.getRangeDataNtfProximityNear(), rangeDataNtfProximityNear);
-        assertEquals(fromBundle.getRangeDataNtfProximityFar(), rangeDataNtfProximityFar);
+        assertEquals(fromBundle.getRangeDataNtfProximityNear(), rangeDataNtfProximityNear, 0.0d);
+        assertEquals(fromBundle.getRangeDataNtfProximityFar(), rangeDataNtfProximityFar, 0.0d);
+        assertEquals(fromBundle.getRangeDataNtfAoaAzimuthLower(), rangeDataNtfAoaAzimuthLower,
+                0.0d);
+        assertEquals(fromBundle.getRangeDataNtfAoaAzimuthUpper(), rangeDataNtfAoaAzimuthUpper,
+                0.0d);
+        assertEquals(fromBundle.getRangeDataNtfAoaElevationLower(), rangeDataNtfAoaElevationLower,
+                0.0d);
+        assertEquals(fromBundle.getRangeDataNtfAoaElevationUpper(), rangeDataNtfAoaElevationUpper,
+                0.0d);
         assertEquals(fromBundle.hasTimeOfFlightReport(), hasTimeOfFlightReport);
         assertEquals(fromBundle.hasAngleOfArrivalAzimuthReport(), hasAngleOfArrivalAzimuthReport);
         assertEquals(
@@ -316,9 +339,13 @@ public class FiraTests {
         UwbAddress uwbAddress2 = UwbAddress.fromBytes(new byte[] {4, 5});
         UwbAddress[] addressList = new UwbAddress[] {uwbAddress1, uwbAddress2};
         int blockStrideLength = 5;
-        int rangeDataNtfConfig = RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY;
+        int rangeDataNtfConfig = RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_EDGE_TRIG;
         int rangeDataProximityNear = 100;
         int rangeDataProximityFar = 500;
+        double rangeDataAoaAzimuthLower = -0.5;
+        double rangeDataAoaAzimuthUpper = +1.5;
+        double rangeDataAoaElevationLower = -1.5;
+        double rangeDataAoaElevationUpper = +2.5;
 
         int[] subSessionIdList = new int[] {3, 4};
         FiraRangingReconfigureParams params =
@@ -345,16 +372,37 @@ public class FiraTests {
                         .setRangeDataNtfConfig(rangeDataNtfConfig)
                         .setRangeDataProximityNear(rangeDataProximityNear)
                         .setRangeDataProximityFar(rangeDataProximityFar)
+                        .setRangeDataAoaAzimuthLower(rangeDataAoaAzimuthLower)
+                        .setRangeDataAoaAzimuthUpper(rangeDataAoaAzimuthUpper)
+                        .setRangeDataAoaElevationLower(rangeDataAoaElevationLower)
+                        .setRangeDataAoaElevationUpper(rangeDataAoaElevationUpper)
                         .build();
         assertEquals((int) params.getBlockStrideLength(), blockStrideLength);
         assertEquals((int) params.getRangeDataNtfConfig(), rangeDataNtfConfig);
         assertEquals((int) params.getRangeDataProximityNear(), rangeDataProximityNear);
         assertEquals((int) params.getRangeDataProximityFar(), rangeDataProximityFar);
+        assertEquals((double) params.getRangeDataAoaAzimuthLower(), rangeDataAoaAzimuthLower,
+                0.0d);
+        assertEquals((double) params.getRangeDataAoaAzimuthUpper(), rangeDataAoaAzimuthUpper,
+                0.0d);
+        assertEquals((double) params.getRangeDataAoaElevationLower(), rangeDataAoaElevationLower,
+                0.0d);
+        assertEquals((double) params.getRangeDataAoaElevationUpper(), rangeDataAoaElevationUpper,
+                0.0d);
+
         fromBundle = FiraRangingReconfigureParams.fromBundle(params.toBundle());
         assertEquals((int) fromBundle.getBlockStrideLength(), blockStrideLength);
         assertEquals((int) fromBundle.getRangeDataNtfConfig(), rangeDataNtfConfig);
         assertEquals((int) fromBundle.getRangeDataProximityNear(), rangeDataProximityNear);
         assertEquals((int) fromBundle.getRangeDataProximityFar(), rangeDataProximityFar);
+        assertEquals((double) fromBundle.getRangeDataAoaAzimuthLower(), rangeDataAoaAzimuthLower,
+                0.0d);
+        assertEquals((double) fromBundle.getRangeDataAoaAzimuthUpper(), rangeDataAoaAzimuthUpper,
+                0.0d);
+        assertEquals((double) fromBundle.getRangeDataAoaElevationLower(),
+                rangeDataAoaElevationLower, 0.0d);
+        assertEquals((double) fromBundle.getRangeDataAoaElevationUpper(),
+                rangeDataAoaElevationUpper, 0.0d);
 
         verifyProtocolPresent(params);
         verifyBundlesEqual(params, fromBundle);
@@ -450,6 +498,8 @@ public class FiraTests {
         boolean hasBlockStridingSupport = true;
         boolean hasNonDeferredModeSupport = true;
         boolean hasInitiationTimeSupport = true;
+        boolean hasRssiReportingSupport = true;
+        boolean hasDiagnosticsSupport = true;
         EnumSet<FiraParams.MultiNodeCapabilityFlag> multiNodeCapabilities =
                 EnumSet.allOf(FiraParams.MultiNodeCapabilityFlag.class);
         EnumSet<FiraParams.PrfCapabilityFlag> prfCapabilities =
@@ -466,6 +516,8 @@ public class FiraTests {
                 EnumSet.allOf(FiraParams.BprfParameterSetCapabilityFlag.class);
         EnumSet<FiraParams.HprfParameterSetCapabilityFlag> hprfCapabilities =
                 EnumSet.allOf(FiraParams.HprfParameterSetCapabilityFlag.class);
+        EnumSet<FiraParams.RangeDataNtfConfigCapabilityFlag> rangeDataNtfConfigCapabilities =
+                EnumSet.allOf(FiraParams.RangeDataNtfConfigCapabilityFlag.class);
 
         FiraSpecificationParams params =
                 new FiraSpecificationParams.Builder()
@@ -479,6 +531,8 @@ public class FiraTests {
                         .hasBlockStridingSupport(hasBlockStridingSupport)
                         .hasNonDeferredModeSupport(hasNonDeferredModeSupport)
                         .hasInitiationTimeSupport(hasInitiationTimeSupport)
+                        .hasRssiReportingSupport(hasRssiReportingSupport)
+                        .hasDiagnosticsSupport(hasDiagnosticsSupport)
                         .setMultiNodeCapabilities(multiNodeCapabilities)
                         .setPrfCapabilities(prfCapabilities)
                         .setRangingRoundCapabilities(rangingRoundCapabilities)
@@ -487,6 +541,7 @@ public class FiraTests {
                         .setPsduDataRateCapabilities(psduDataRateCapabilities)
                         .setBprfParameterSetCapabilities(bprfCapabilities)
                         .setHprfParameterSetCapabilities(hprfCapabilities)
+                        .setRangeDataNtfConfigCapabilities(rangeDataNtfConfigCapabilities)
                         .build();
         assertEquals(minPhyVersionSupported, params.getMinPhyVersionSupported());
         assertEquals(maxPhyVersionSupported, params.getMaxPhyVersionSupported());
@@ -498,6 +553,8 @@ public class FiraTests {
         assertEquals(hasBlockStridingSupport, params.hasBlockStridingSupport());
         assertEquals(hasNonDeferredModeSupport, params.hasNonDeferredModeSupport());
         assertEquals(hasInitiationTimeSupport, params.hasInitiationTimeSupport());
+        assertEquals(hasRssiReportingSupport, params.hasRssiReportingSupport());
+        assertEquals(hasDiagnosticsSupport, params.hasDiagnosticsSupport());
         assertEquals(multiNodeCapabilities, params.getMultiNodeCapabilities());
         assertEquals(prfCapabilities, params.getPrfCapabilities());
         assertEquals(rangingRoundCapabilities, params.getRangingRoundCapabilities());
@@ -506,6 +563,7 @@ public class FiraTests {
         assertEquals(psduDataRateCapabilities, params.getPsduDataRateCapabilities());
         assertEquals(bprfCapabilities, params.getBprfParameterSetCapabilities());
         assertEquals(hprfCapabilities, params.getHprfParameterSetCapabilities());
+        assertEquals(rangeDataNtfConfigCapabilities, params.getRangeDataNtfConfigCapabilities());
 
         FiraSpecificationParams fromBundle = FiraSpecificationParams.fromBundle(params.toBundle());
         assertEquals(minPhyVersionSupported, fromBundle.getMinPhyVersionSupported());
@@ -526,6 +584,8 @@ public class FiraTests {
         assertEquals(psduDataRateCapabilities, fromBundle.getPsduDataRateCapabilities());
         assertEquals(bprfCapabilities, fromBundle.getBprfParameterSetCapabilities());
         assertEquals(hprfCapabilities, fromBundle.getHprfParameterSetCapabilities());
+        assertEquals(rangeDataNtfConfigCapabilities,
+                fromBundle.getRangeDataNtfConfigCapabilities());
         verifyProtocolPresent(params);
         verifyBundlesEqual(params, fromBundle);
     }
