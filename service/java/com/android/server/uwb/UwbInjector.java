@@ -101,12 +101,12 @@ public class UwbInjector {
                 context, new Handler(mLooper),
                 new AtomicFile(new File(getDeviceProtectedDataDir(),
                         UwbSettingsStore.FILE_NAME)), this);
-        mNativeUwbManager = new NativeUwbManager(this);
+        mUwbMultichipData = new UwbMultichipData(mContext);
+        mNativeUwbManager = new NativeUwbManager(this, mUwbMultichipData);
         mUwbCountryCode =
                 new UwbCountryCode(mContext, mNativeUwbManager, new Handler(mLooper), this);
         mUwbMetrics = new UwbMetrics(this);
         mDeviceConfigFacade = new DeviceConfigFacade(new Handler(mLooper), this);
-        mUwbMultichipData = new UwbMultichipData(mContext);
         UwbConfigurationManager uwbConfigurationManager =
                 new UwbConfigurationManager(mNativeUwbManager);
         UwbSessionNotificationManager uwbSessionNotificationManager =
@@ -114,7 +114,9 @@ public class UwbInjector {
         UwbSessionManager uwbSessionManager =
                 new UwbSessionManager(uwbConfigurationManager, mNativeUwbManager, mUwbMetrics,
                         uwbSessionNotificationManager, this,
-                        mContext.getSystemService(AlarmManager.class), mLooper);
+                        mContext.getSystemService(AlarmManager.class),
+                        mContext.getSystemService(ActivityManager.class),
+                        mLooper);
         mUwbService = new UwbServiceCore(mContext, mNativeUwbManager, mUwbMetrics,
                 mUwbCountryCode, uwbSessionManager, uwbConfigurationManager, this, mLooper);
         mSystemBuildProperties = new SystemBuildProperties();
@@ -350,10 +352,14 @@ public class UwbInjector {
     }
 
     /** Helper method to check if the app is from foreground app/service. */
+    public static boolean isForegroundAppOrServiceImportance(int importance) {
+        return importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE;
+    }
+
+    /** Helper method to check if the app is from foreground app/service. */
     public boolean isForegroundAppOrService(int uid, @NonNull String packageName) {
         try {
-            return getPackageImportance(uid, packageName)
-                    <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE;
+            return isForegroundAppOrServiceImportance(getPackageImportance(uid, packageName));
         } catch (SecurityException e) {
             Log.e(TAG, "Failed to retrieve the app importance", e);
             return false;
