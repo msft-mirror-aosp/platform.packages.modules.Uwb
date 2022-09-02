@@ -32,6 +32,7 @@ import com.android.server.uwb.data.ServiceProfileData.ServiceProfileInfo;
 import com.android.server.uwb.data.UwbConfig;
 
 import com.google.uwb.support.fira.FiraOpenSessionParams;
+import com.google.uwb.support.generic.GenericSpecificationParams;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,6 +48,7 @@ public abstract class RangingSessionController extends StateMachine {
     public SessionInfo mSessionInfo;
     public Handler mHandler;
     public UwbInjector mUwbInjector;
+    private GenericSpecificationParams mSpecificationParams;
     protected boolean mVerboseLoggingEnabled = false;
 
     protected State mIdleState = null;
@@ -87,11 +89,12 @@ public abstract class RangingSessionController extends StateMachine {
             UwbInjector uwbInjector,
             ServiceProfileInfo serviceProfileInfo,
             IUwbRangingCallbacks rangingCallbacks,
-            Handler handler) {
+            Handler handler,
+            String chipId) {
         super("RangingSessionController", handler);
 
         mSessionInfo = new SessionInfo(attributionSource, sessionHandle,
-                serviceProfileInfo, context, rangingCallbacks);
+                serviceProfileInfo, context, rangingCallbacks, chipId);
 
         mIdleState = getIdleState();
         mDiscoveryState = getDiscoveryState();
@@ -187,6 +190,15 @@ public abstract class RangingSessionController extends StateMachine {
         mUwbInjector.getUwbServiceCore().closeRanging(mSessionInfo.mSessionHandle);
     }
 
+    protected GenericSpecificationParams getSpecificationInfo() {
+        if (mSpecificationParams == null) {
+            mSpecificationParams =
+                    mUwbInjector.getUwbServiceCore().getCachedSpecificationParams(
+                            mSessionInfo.mChipId);
+        }
+        return mSpecificationParams;
+    }
+
     /**
      * Holds all session related information
      */
@@ -201,11 +213,14 @@ public abstract class RangingSessionController extends StateMachine {
         private UwbAddress mDeviceAddress;
         public final List<UwbAddress> mDestAddressList;
         public Optional<Integer> subSessionId;
+        public final String mChipId;
+        public SessionData mSessionData;
 
         public SessionInfo(AttributionSource attributionSource, SessionHandle sessionHandle,
                 ServiceProfileInfo serviceProfileInfo,
                 Context context,
-                IUwbRangingCallbacks rangingCallbacks) {
+                IUwbRangingCallbacks rangingCallbacks,
+                String chipId) {
             mAttributionSource = attributionSource;
             mSessionHandle = sessionHandle;
             service_instance_id = serviceProfileInfo.serviceInstanceID;
@@ -214,6 +229,7 @@ public abstract class RangingSessionController extends StateMachine {
             mRangingCallbacks = rangingCallbacks;
             mDestAddressList = new ArrayList<>();
             subSessionId = Optional.empty();
+            mChipId = chipId;
         }
 
         public int getSessionId() {
