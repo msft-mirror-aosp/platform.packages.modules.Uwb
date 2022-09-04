@@ -281,7 +281,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             SessionHandle sessionHandle, int sessionId, String protocolName, Params params,
             IUwbRangingCallbacks rangingCallbacks, String chipId)
             throws RemoteException {
-        Log.i(TAG, "initSession() : Enter - sessionId : " + sessionId);
+        Log.i(TAG, "initSession() - sessionId: " + sessionId
+                + ", sessionHandle: " + sessionHandle);
         UwbSession uwbSession =  createUwbSession(attributionSource, sessionHandle, sessionId,
                 protocolName, params, rangingCallbacks, chipId);
         // Check the attribution source chain to ensure that there are no 3p apps which are not in
@@ -364,7 +365,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         }
 
         int sessionId = getSessionId(sessionHandle);
-        Log.i(TAG, "sessionDeInit() - Session ID : " + sessionId);
+        Log.i(TAG, "deinitSession() - sessionId: " + sessionId
+                + ", sessionHandle: " + sessionHandle);
         UwbSession uwbSession = getUwbSession(sessionId);
         mEventTask.execute(SESSION_CLOSE, uwbSession);
         return;
@@ -377,7 +379,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         }
 
         int sessionId = getSessionId(sessionHandle);
-        Log.i(TAG, "startRanging() - Session ID : " + sessionId);
+        Log.i(TAG, "startRanging() - sessionId: " + sessionId
+                + ", sessionHandle: " + sessionHandle);
 
         UwbSession uwbSession = getUwbSession(sessionId);
 
@@ -404,19 +407,21 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         }
     }
 
-    public synchronized void stopRanging(SessionHandle sessionHandle) {
+    private synchronized void stopRangingInternal(SessionHandle sessionHandle,
+            boolean triggeredBySystemPolicy) {
         if (!isExistedSession(sessionHandle)) {
             Log.i(TAG, "Not initialized session ID");
             return;
         }
 
         int sessionId = getSessionId(sessionHandle);
-        Log.i(TAG, "stopRanging() - Session ID : " + sessionId);
+        Log.i(TAG, "stopRanging() - sessionId: " + sessionId
+                + ", sessionHandle: " + sessionHandle);
 
         UwbSession uwbSession = getUwbSession(sessionId);
         int currentSessionState = getCurrentSessionState(sessionId);
         if (currentSessionState == UwbUciConstants.UWB_SESSION_STATE_ACTIVE) {
-            mEventTask.execute(SESSION_STOP_RANGING, uwbSession);
+            mEventTask.execute(SESSION_STOP_RANGING, uwbSession, triggeredBySystemPolicy ? 1 : 0);
         } else if (currentSessionState == UwbUciConstants.UWB_SESSION_STATE_IDLE) {
             Log.i(TAG, "session is already idle state");
             mSessionNotificationManager.onRangingStopped(uwbSession,
@@ -427,6 +432,10 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                     UwbUciConstants.STATUS_CODE_REJECTED);
             Log.i(TAG, "Not active session ID");
         }
+    }
+
+    public synchronized void stopRanging(SessionHandle sessionHandle) {
+        stopRangingInternal(sessionHandle, false /* triggeredBySystemPolicy */);
     }
 
     public UwbSession getUwbSession(int sessionId) {
@@ -526,7 +535,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         return mSessionTable.keySet();
     }
 
-    public int reconfigure(SessionHandle sessionHandle, @Nullable Params params) {
+    private synchronized int reconfigureInternal(SessionHandle sessionHandle,
+            @Nullable Params params, boolean triggeredByFgStateChange) {
         int status = UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST;
         if (!isExistedSession(sessionHandle)) {
             Log.i(TAG, "Not initialized session ID");
@@ -543,9 +553,13 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                     + rangingReconfigureParams);
             uwbSession.updateFiraParamsOnReconfigure(rangingReconfigureParams);
         }
-        Pair<SessionHandle, Params> info = new Pair<>(sessionHandle, params);
-        mEventTask.execute(SESSION_RECONFIG_RANGING, info);
+        mEventTask.execute(SESSION_RECONFIG_RANGING,
+                new ReconfigureEventParams(uwbSession, params, triggeredByFgStateChange));
         return 0;
+    }
+
+    public synchronized int reconfigure(SessionHandle sessionHandle, @Nullable Params params) {
+        return reconfigureInternal(sessionHandle, params, false /* triggeredByFgStateChange */);
     }
 
     void removeSession(UwbSession uwbSession) {
@@ -592,6 +606,20 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             }
         }
     }
+
+    private static class ReconfigureEventParams {
+        public final UwbSession uwbSession;
+        public final Params params;
+        public final boolean triggeredByFgStateChange;
+
+        ReconfigureEventParams(UwbSession uwbSession, Params params,
+                boolean triggeredByFgStateChange) {
+            this.uwbSession = uwbSession;
+            this.params = params;
+            this.triggeredByFgStateChange = triggeredByFgStateChange;
+        }
+    }
+
     private class EventTask extends Handler {
 
         EventTask(Looper looper) {
@@ -616,14 +644,15 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
 
                 case SESSION_STOP_RANGING: {
                     UwbSession uwbSession = (UwbSession) msg.obj;
-                    stopRanging(uwbSession);
+                    boolean triggeredBySystemPolicy = msg.arg1 == 1;
+                    stopRanging(uwbSession, triggeredBySystemPolicy);
                     break;
                 }
 
                 case SESSION_RECONFIG_RANGING: {
                     Log.d(TAG, "SESSION_RECONFIG_RANGING");
-                    Pair<SessionHandle, Params> info = (Pair<SessionHandle, Params>) msg.obj;
-                    reconfigure(info.first, info.second);
+                    ReconfigureEventParams params = (ReconfigureEventParams) msg.obj;
+                    reconfigure(params.uwbSession, params.params, params.triggeredByFgStateChange);
                     break;
                 }
 
@@ -650,6 +679,14 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             Message msg = mEventTask.obtainMessage();
             msg.what = task;
             msg.obj = obj;
+            this.sendMessage(msg);
+        }
+
+        public void execute(int task, Object obj, int arg1) {
+            Message msg = mEventTask.obtainMessage();
+            msg.what = task;
+            msg.obj = obj;
+            msg.arg1 = arg1;
             this.sendMessage(msg);
         }
 
@@ -792,7 +829,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             mUwbMetrics.longRangingStartEvent(uwbSession, status);
         }
 
-        private void stopRanging(UwbSession uwbSession) {
+        private void stopRanging(UwbSession uwbSession, boolean triggeredBySystemPolicy) {
             // TODO(b/211445008): Consolidate to a single uwb thread.
             ExecutorService executor = Executors.newSingleThreadExecutor();
             FutureTask<Integer> stopRangingTask = new FutureTask<>(
@@ -808,7 +845,11 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                             uwbSession.getWaitObj().blockingWait();
                             if (uwbSession.getSessionState()
                                     == UwbUciConstants.UWB_SESSION_STATE_IDLE) {
-                                mSessionNotificationManager.onRangingStopped(uwbSession, status);
+                                int apiReasonCode = triggeredBySystemPolicy
+                                        ? RangingChangeReason.SYSTEM_POLICY
+                                        : RangingChangeReason.LOCAL_API;
+                                mSessionNotificationManager.onRangingStoppedWithApiReasonCode(
+                                        uwbSession, apiReasonCode);
                             } else {
                                 status = UwbUciConstants.STATUS_CODE_FAILED;
                                 mSessionNotificationManager.onRangingStopFailed(uwbSession,
@@ -841,8 +882,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             uwbSession.stopRangingResultErrorStreakTimerIfSet();
         }
 
-        private void reconfigure(SessionHandle sessionHandle, @Nullable Params param) {
-            UwbSession uwbSession = getUwbSession(getSessionId(sessionHandle));
+        private void reconfigure(UwbSession uwbSession, @Nullable Params param,
+                boolean triggeredByFgStateChange) {
             if (!(param instanceof FiraRangingReconfigureParams)) {
                 Log.e(TAG, "Invalid reconfigure params: " + param);
                 mSessionNotificationManager.onRangingReconfigureFailed(
@@ -941,7 +982,9 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                             if (status != UwbUciConstants.STATUS_CODE_OK) {
                                 return status;
                             }
-                            mSessionNotificationManager.onRangingReconfigured(uwbSession);
+                            if (!triggeredByFgStateChange) {
+                                mSessionNotificationManager.onRangingReconfigured(uwbSession);
+                            }
                             return status;
                         }
                     });
@@ -962,7 +1005,9 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             }
             if (status != UwbUciConstants.STATUS_CODE_OK) {
                 Log.i(TAG, "Failed to Reconfigure : " + status);
-                mSessionNotificationManager.onRangingReconfigureFailed(uwbSession, status);
+                if (!triggeredByFgStateChange) {
+                    mSessionNotificationManager.onRangingReconfigureFailed(uwbSession, status);
+                }
             }
         }
 
@@ -1118,6 +1163,22 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                 newParamsBuilder.setRangeDataNtfProximityFar(
                         reconfigureParams.getRangeDataProximityFar());
             }
+            if (reconfigureParams.getRangeDataAoaAzimuthLower() != null) {
+                newParamsBuilder.setRangeDataNtfAoaAzimuthLower(
+                        reconfigureParams.getRangeDataAoaAzimuthLower());
+            }
+            if (reconfigureParams.getRangeDataAoaAzimuthUpper() != null) {
+                newParamsBuilder.setRangeDataNtfAoaAzimuthUpper(
+                        reconfigureParams.getRangeDataAoaAzimuthUpper());
+            }
+            if (reconfigureParams.getRangeDataAoaElevationLower() != null) {
+                newParamsBuilder.setRangeDataNtfAoaElevationLower(
+                        reconfigureParams.getRangeDataAoaElevationLower());
+            }
+            if (reconfigureParams.getRangeDataAoaElevationUpper() != null) {
+                newParamsBuilder.setRangeDataNtfAoaElevationUpper(
+                        reconfigureParams.getRangeDataAoaElevationUpper());
+            }
             this.mParams = newParamsBuilder.build();
         }
 
@@ -1186,7 +1247,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                 mRangingResultErrorStreakTimerListener = () -> {
                     Log.w(TAG, "Continuous errors or no ranging results detected for 30 seconds."
                             + " Stopping session");
-                    stopRanging(mSessionHandle);
+                    stopRangingInternal(mSessionHandle, true /* triggeredBySystemPolicy */);
                 };
                 mAlarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP,
                         mUwbInjector.getElapsedSinceBootMillis()
@@ -1217,7 +1278,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                             // use to retrieve the latest configured ntf control.
                             ? mOrigRangeDataNtfConfig : FiraParams.RANGE_DATA_NTF_CONFIG_DISABLE)
                     .build();
-            reconfigure(mSessionHandle, reconfigureParams);
+            reconfigureInternal(
+                    mSessionHandle, reconfigureParams, true /* triggeredByFgStateChange */);
         }
 
         @Override

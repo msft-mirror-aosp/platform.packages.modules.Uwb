@@ -36,6 +36,7 @@ import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTIO
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_ONE_TO_MANY;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_UNICAST;
+import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_INITIATOR;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_RESPONDER;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLEE;
@@ -107,6 +108,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     @VisibleForTesting
     public static String SHELL_PACKAGE_NAME = "com.android.shell";
     private static final long RANGE_CTL_TIMEOUT_MILLIS = 10_000;
+    private static final int RSSI_FLAG = 1;
+    private static final int AOA_FLAG = 1 << 1;
+    private static final int CIR_FLAG = 1 << 2;
 
     // These don't require root access.
     // However, these do perform permission checks in the corresponding UwbService methods.
@@ -124,6 +128,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             "stop-ranging-session",
             "stop-all-ranging-sessions",
             "get-specification-info",
+            "enable-diagnostics-notification",
+            "disable-diagnostics-notification",
     };
 
     @VisibleForTesting
@@ -330,10 +336,10 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         public final CompletableFuture<Boolean> rangingReconfiguredFuture =
                 new CompletableFuture<>();
 
-        SessionInfo(int sessionId, int sSessionHandleIdNext, @NonNull Params openRangingParams,
+        SessionInfo(int sessionId, SessionHandle sessionHandle, @NonNull Params openRangingParams,
                 @NonNull PrintWriter pw) {
             this.sessionId = sessionId;
-            sessionHandle = new SessionHandle(sSessionHandleIdNext);
+            this.sessionHandle = sessionHandle;
             this.openRangingParams = openRangingParams;
             uwbRangingCbs = new UwbRangingCallbacks(this, pw, rangingOpenedFuture,
                     rangingStartedFuture, rangingStoppedFuture, rangingClosedFuture,
@@ -421,6 +427,20 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     throw new IllegalArgumentException("Unknown round usage: " + usage);
                 }
             }
+            if (option.equals("-x")) {
+                String[] rangeDataNtfProximityString = getNextArgRequired().split(",");
+                if (rangeDataNtfProximityString.length != 2) {
+                    throw new IllegalArgumentException("Unexpected range data ntf proximity range:"
+                            + Arrays.toString(rangeDataNtfProximityString)
+                            + " expected to be <proximity-near-cm, proximity-far-cm>");
+                }
+                int rangeDataNtfProximityNearCm = Integer.parseInt(rangeDataNtfProximityString[0]);
+                int rangeDataNtfProximityFarCm = Integer.parseInt(rangeDataNtfProximityString[1]);
+                // Enable range data ntf while inside proximity range
+                builder.setRangeDataNtfConfig(RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG);
+                builder.setRangeDataNtfProximityNear(rangeDataNtfProximityNearCm);
+                builder.setRangeDataNtfProximityFar(rangeDataNtfProximityFarCm);
+            }
             if (option.equals("-z")) {
                 String[] interleaveRatioString = getNextArgRequired().split(",");
                 if (interleaveRatioString.length != 3) {
@@ -505,7 +525,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
 
     private void startFiraRangingSession(PrintWriter pw) throws Exception {
         GenericSpecificationParams specificationParams =
-                mUwbServiceCore.getCachedSpecificationParams(null);
+                mUwbServiceCore.getCachedSpecificationParams(mUwbService.getDefaultChipId());
         Pair<FiraOpenSessionParams, Boolean> firaOpenSessionParams =
                 buildFiraOpenSessionParams(specificationParams);
         startRangingSession(
@@ -607,12 +627,15 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     + " already ongoing. Stop that session before you start a new session");
             return;
         }
+        AttributionSource attributionSource = new AttributionSource.Builder(Process.SHELL_UID)
+                .setPackageName(SHELL_PACKAGE_NAME)
+                .build();
+        SessionHandle sessionHandle =
+                new SessionHandle(sSessionHandleIdNext, attributionSource, Process.myPid());
         SessionInfo sessionInfo =
-                new SessionInfo(sessionId, sSessionHandleIdNext++, openRangingSessionParams, pw);
+                new SessionInfo(sessionId, sessionHandle, openRangingSessionParams, pw);
         mUwbService.openRanging(
-                new AttributionSource.Builder(Process.SHELL_UID)
-                        .setPackageName(SHELL_PACKAGE_NAME)
-                        .build(),
+                attributionSource,
                 sessionInfo.sessionHandle,
                 sessionInfo.uwbRangingCbs,
                 openRangingSessionParams.toBundle(),
@@ -870,6 +893,28 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     }
                     return 0;
                 }
+                case "enable-diagnostics-notification": {
+                    int diagramFrameReportsFlags = 0;
+                    String option = getNextOption();
+                    while (option != null) {
+                        if (option.equals("-r")) {
+                            diagramFrameReportsFlags |= RSSI_FLAG;
+                        }
+                        if (option.equals("-a")) {
+                            diagramFrameReportsFlags |= AOA_FLAG;
+                        }
+                        if (option.equals("-c")) {
+                            diagramFrameReportsFlags |= CIR_FLAG;
+                        }
+                        option = getNextOption();
+                    }
+                    mUwbServiceCore.enableDiagnostics(true, diagramFrameReportsFlags);
+                    return 0;
+                }
+                case "disable-diagnostics-notification": {
+                    mUwbServiceCore.enableDiagnostics(false, 0);
+                    return 0;
+                }
                 default:
                     return handleDefaultCommands(cmd);
             }
@@ -921,6 +966,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-a <deviceAddress>](device-address)"
                 + " [-d <destAddress-1, destAddress-2,...>](dest-addresses)"
                 + " [-u ds-twr|ss-twr|ds-twr-non-deferred|ss-twr-non-deferred](round-usage)"
+                + " [-x <proximity-near-cm, proximity-far-cm>](range-data-ntf-proximity)"
                 + " [-z <numRangeMrmts, numAoaAzimuthMrmts, numAoaElevationMrmts>"
                 + "(interleaving-ratio)"
                 + " [-e none|enabled|azimuth-only|elevation-only](aoa type)"
@@ -962,6 +1008,13 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("    Stops all ongoing ranging sessions");
         pw.println("  get-specification-info");
         pw.println("    Gets specification info from uwb chip");
+        pw.println("  enable-diagnostics-notification"
+                + " [-r](enable rssi)"
+                + " [-a](enable aoa)"
+                + " [-c](enable cir)");
+        pw.println("    Enable vendor diagnostics notification");
+        pw.println("  disable-diagnostics-notification");
+        pw.println("    Disable vendor diagnostics notification");
     }
 
     private void onHelpPrivileged(PrintWriter pw) {
