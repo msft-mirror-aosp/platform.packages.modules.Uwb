@@ -16,6 +16,14 @@
 
 package com.android.server.uwb.pm;
 
+import static com.android.server.uwb.data.UwbConfig.CONTROLEE_AND_RESPONDER;
+import static com.android.server.uwb.data.UwbConfig.OOB_TYPE_BLE;
+import static com.android.server.uwb.data.UwbConfig.PERIPHERAL;
+
+import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_ONE_TO_MANY;
+import static com.google.uwb.support.fira.FiraParams.RFRAME_CONFIG_SP3;
+import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_DYNAMIC;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.bluetooth.le.AdvertisingSetParameters;
@@ -34,16 +42,19 @@ import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.data.ServiceProfileData.ServiceProfileInfo;
 import com.android.server.uwb.data.UwbConfig;
 import com.android.server.uwb.discovery.DiscoveryAdvertiseProvider;
-import com.android.server.uwb.discovery.DiscoveryAdvertiseService;
+import com.android.server.uwb.discovery.DiscoveryProvider;
+import com.android.server.uwb.discovery.DiscoveryProviderFactory;
+import com.android.server.uwb.discovery.TransportProviderFactory;
 import com.android.server.uwb.discovery.TransportServerProvider;
-import com.android.server.uwb.discovery.TransportServerService;
 import com.android.server.uwb.discovery.ble.DiscoveryAdvertisement;
 import com.android.server.uwb.discovery.info.AdvertiseInfo;
 import com.android.server.uwb.discovery.info.DiscoveryInfo;
 import com.android.server.uwb.secure.SecureFactory;
 import com.android.server.uwb.secure.SecureSession;
-import com.android.server.uwb.transport.Transport;
 import com.android.server.uwb.util.ObjectIdentifier;
+
+import com.google.uwb.support.fira.FiraSpecificationParams;
+import com.google.uwb.support.generic.GenericSpecificationParams;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -56,7 +67,6 @@ public class PacsControleeSession extends RangingSessionController {
     // TODO populate before calling secureSessionInit()
     private PacsControleeSessionInfo mControleeSessionInfo;
     private final PacsControleeSessionCallback mControleeSessionCallback;
-    private final Transport mControleeTransport;
     private final TransportServerProvider.TransportServerCallback mServerCallback;
 
     public PacsControleeSession(
@@ -80,8 +90,6 @@ public class PacsControleeSession extends RangingSessionController {
         mAdvertiseCallback = new PacsAdvertiseCallback(this);
         mControleeSessionInfo = new PacsControleeSessionInfo(this);
         mControleeSessionCallback = new PacsControleeSessionCallback(this);
-        // TODO: Modify based on OOB transport implementation
-        mControleeTransport = null;
         mServerCallback = null;
     }
 
@@ -115,20 +123,18 @@ public class PacsControleeSession extends RangingSessionController {
         return new EndSessionState();
     }
 
-    private DiscoveryAdvertiseService mDiscoveryAdvertiseService;
+    private DiscoveryProvider mDiscoveryProvider;
     private DiscoveryInfo mDiscoveryInfo;
-    private TransportServerService mTransportServerService;
+    private TransportServerProvider mTransportServerProvider;
     private SecureSession mSecureSession;
     private DiscoveryAdvertisement mDiscoveryAdvertisement;
     private AdvertisingSetParameters mAdvertisingSetParameters;
 
-    public void setDiscoveryAdvertisement(
-            DiscoveryAdvertisement discoveryAdvertisement) {
+    public void setDiscoveryAdvertisement(DiscoveryAdvertisement discoveryAdvertisement) {
         mDiscoveryAdvertisement = discoveryAdvertisement;
     }
 
-    public void setAdvertisingSetParameters(
-            AdvertisingSetParameters advertisingSetParameters) {
+    public void setAdvertisingSetParameters(AdvertisingSetParameters advertisingSetParameters) {
         mAdvertisingSetParameters = advertisingSetParameters;
     }
 
@@ -137,63 +143,103 @@ public class PacsControleeSession extends RangingSessionController {
         AdvertiseInfo advertiseInfo =
                 new AdvertiseInfo(mAdvertisingSetParameters, mDiscoveryAdvertisement);
 
-        mDiscoveryInfo = new DiscoveryInfo(
-                DiscoveryInfo.TransportType.BLE,
-                Optional.empty(),
-                Optional.of(advertiseInfo),
-                Optional.empty());
+        mDiscoveryInfo =
+                new DiscoveryInfo(
+                        DiscoveryInfo.TransportType.BLE,
+                        Optional.empty(),
+                        Optional.of(advertiseInfo),
+                        Optional.empty());
 
-        mDiscoveryAdvertiseService =
-                new DiscoveryAdvertiseService(
+        mDiscoveryProvider =
+                DiscoveryProviderFactory.createAdvertiser(
                         mSessionInfo.mAttributionSource,
                         mSessionInfo.mContext,
                         new HandlerExecutor(mHandler),
                         mDiscoveryInfo,
                         mAdvertiseCallback);
-        mDiscoveryAdvertiseService.startDiscovery();
-        //sendMessage(TRANSPORT_INIT);
+        mDiscoveryProvider.start();
+        // sendMessage(TRANSPORT_INIT);
     }
 
     /** Stop advertising on ranging stopped or closed */
     public void stopAdvertising() {
-        if (mDiscoveryAdvertiseService != null) {
-            mDiscoveryAdvertiseService.stopDiscovery();
+        if (mDiscoveryProvider != null) {
+            mDiscoveryProvider.stop();
         }
     }
 
     /** Initialize Transport server */
     public void transportServerInit() {
-        mTransportServerService = new TransportServerService(
-                mSessionInfo.mAttributionSource,
-                mSessionInfo.mContext,
-                mDiscoveryInfo,
-                mServerCallback
-        );
+        mTransportServerProvider =
+                TransportProviderFactory.createServer(
+                        mSessionInfo.mAttributionSource,
+                        mSessionInfo.mContext,
+                        // TODO: Transport server supports auto assigning secid.
+                        /*secid placeholder*/ 2,
+                        mDiscoveryInfo,
+                        mServerCallback);
         sendMessage(TRANSPORT_STARTED);
     }
 
     /** Start Transport server */
     public void transportServerStart() {
-        mTransportServerService.start();
+        mTransportServerProvider.start();
     }
 
     /** Stop Transport server */
     public void transportServerStop() {
-        mTransportServerService.stop();
+        mTransportServerProvider.stop();
     }
 
     /** Initialize controlee responder session */
     public void secureSessionInit() {
-        mSecureSession = SecureFactory.makeResponderSecureSession(mSessionInfo.mContext,
-                mHandler.getLooper(),
-                mControleeSessionCallback,
-                mControleeSessionInfo,
-                mControleeTransport);
+        mSecureSession =
+                SecureFactory.makeResponderSecureSession(
+                        mSessionInfo.mContext,
+                        mHandler.getLooper(),
+                        mControleeSessionCallback,
+                        mControleeSessionInfo,
+                        mTransportServerProvider);
     }
 
     @Override
     public UwbConfig getUwbConfig() {
-        return PacsProfile.getPacsControleeProfile();
+        // PACS controlee config
+        UwbConfig.Builder builder = new UwbConfig.Builder()
+                .setUwbRole(CONTROLEE_AND_RESPONDER)
+                .setStsConfig(STS_CONFIG_DYNAMIC)
+                .setMultiNodeMode(MULTI_NODE_MODE_ONE_TO_MANY)
+                .setRframeConfig(RFRAME_CONFIG_SP3)
+                .setTofReport(true)
+                .setOobType(OOB_TYPE_BLE)
+                .setOobBleRole(PERIPHERAL);
+        // Config received in sessionData
+        if (mSessionInfo.mSessionData != null) {
+            mSessionInfo.setSessionId(mSessionInfo.mSessionData.mSessionId);
+            mSessionInfo.mSessionData.mSubSessionId.ifPresent(
+                    integer -> mSessionInfo.setSubSessionId(integer));
+
+            if (mSessionInfo.mSessionData.mConfigurationParams.isPresent()) {
+                ConfigurationParams configurationParams =
+                        mSessionInfo.mSessionData.mConfigurationParams.get();
+                configurationParams.mScheduledMode.ifPresent(builder::setScheduledMode);
+                configurationParams.mBlockStriding.ifPresent(builder::setBlockStriding);
+                configurationParams.mChannel.ifPresent(builder::setUwbChannel);
+                configurationParams.mSp0PhyParameterSet.ifPresent(builder::setSp0PhyParameterSet);
+                configurationParams.mSp1PhyParameterSet.ifPresent(builder::setSp1PhyParameterSet);
+                configurationParams.mSp3PhyParameterSet.ifPresent(builder::setSp3PhyParameterSet);
+                configurationParams.mPreambleCodeIndex.ifPresent(builder::setUwbPreambleCodeIndex);
+                configurationParams.mSlotsPerRangingRound.ifPresent(
+                        builder::setSlotsPerRangingRound);
+                configurationParams.mMaxContentionPhaseLength.ifPresent(
+                        builder::setMaxContentionPhaseLength);
+                configurationParams.mSlotDuration.ifPresent(builder::setSlotDurationRstu);
+                configurationParams.mRangingIntervalMs.ifPresent(builder::setRangingIntervalMs);
+                configurationParams.mKeyRotationRate.ifPresent(builder::setKeyRotationRate);
+                configurationParams.mMacFcsType.ifPresent(builder::setKMacFcsType);
+            }
+        }
+        return builder.build();
     }
 
     /** Implements callback of DiscoveryAdvertiseProvider */
@@ -213,24 +259,48 @@ public class PacsControleeSession extends RangingSessionController {
         }
     }
 
-    public static class PacsControleeSessionInfo implements
-            RunningProfileSessionInfo {
+    /** Pacs profile controlee implementation of RunningProfileSessionInfo. */
+    public static class PacsControleeSessionInfo implements RunningProfileSessionInfo {
         public final PacsControleeSession mPacsControleeSession;
-        private ControlleeInfo mControlleeInfo;
 
-        public PacsControleeSessionInfo(
-                PacsControleeSession pacsControleeSession) {
+        public PacsControleeSessionInfo(PacsControleeSession pacsControleeSession) {
             mPacsControleeSession = pacsControleeSession;
-        }
-
-        public void setControlleeInfo(ControlleeInfo controlleeInfo) {
-            mControlleeInfo = controlleeInfo;
         }
 
         @NonNull
         @Override
         public ControlleeInfo getControlleeInfo() {
-            return mControlleeInfo;
+            GenericSpecificationParams genericSpecificationParams =
+                    mPacsControleeSession.getSpecificationInfo();
+            if (genericSpecificationParams == null
+                    || genericSpecificationParams.getFiraSpecificationParams() == null) {
+                Log.e(TAG, "Specification params not populated, sending default values");
+                return new ControlleeInfo.Builder()
+                        .setUwbCapability(new UwbCapability.Builder()
+                                .build())
+                        .build();
+            }
+            FiraSpecificationParams firaSpecificationParams =
+                    genericSpecificationParams.getFiraSpecificationParams();
+            UwbCapability uwbCapability = new UwbCapability.Builder()
+                    .setMinPhyVersionSupported(firaSpecificationParams.getMinPhyVersionSupported())
+                    .setMaxPhyVersionSupported(firaSpecificationParams.getMaxPhyVersionSupported())
+                    .setMinMacVersionSupported(firaSpecificationParams.getMinMacVersionSupported())
+                    .setMaxMacVersionSupported(firaSpecificationParams.getMaxMacVersionSupported())
+                    .setDeviceRoles(firaSpecificationParams.getDeviceRoleCapabilities())
+                    .setRangingMethod(firaSpecificationParams.getRangingRoundCapabilities())
+                    .setStsConfig(firaSpecificationParams.getStsCapabilities())
+                    .setMultiNodeMode(firaSpecificationParams.getMultiNodeCapabilities())
+                    .setBlockStriding(firaSpecificationParams.hasBlockStridingSupport())
+                    .setUwbInitiationTime(firaSpecificationParams.hasInitiationTimeSupport())
+                    .setChannels(firaSpecificationParams.getSupportedChannels())
+                    .setRFrameConfig(firaSpecificationParams.getRframeCapabilities())
+                    .setCcConstraintLength(firaSpecificationParams.getPsduDataRateCapabilities())
+                    .setBprfParameterSet(firaSpecificationParams.getBprfParameterSetCapabilities())
+                    .setHprfParameterSet(firaSpecificationParams.getHprfParameterSetCapabilities())
+                    .setAoaSupport(firaSpecificationParams.getAoaCapabilities())
+                    .build();
+            return new ControlleeInfo.Builder().setUwbCapability(uwbCapability).build();
         }
 
         @NonNull
@@ -243,10 +313,12 @@ public class PacsControleeSession extends RangingSessionController {
         @NonNull
         @Override
         public ObjectIdentifier getOidOfProvisionedAdf() {
-            byte[] bytes = ByteBuffer.allocate(4).putInt(mPacsControleeSession
-                    .mSessionInfo
-                    .mServiceProfileInfo
-                    .getServiceAdfID()).array();
+            byte[] bytes =
+                    ByteBuffer.allocate(4)
+                            .putInt(
+                                    mPacsControleeSession.mSessionInfo.mServiceProfileInfo
+                                            .getServiceAdfID())
+                            .array();
             return ObjectIdentifier.fromBytes(bytes);
         }
 
@@ -279,27 +351,29 @@ public class PacsControleeSession extends RangingSessionController {
         }
     }
 
-    public static class PacsControleeSessionCallback implements
-            SecureSession.Callback {
+    /** Pacs profile controlee implementation of SecureSession.Callback. */
+    public static class PacsControleeSessionCallback implements SecureSession.Callback {
         public final PacsControleeSession mPacsControleeSession;
 
-        public PacsControleeSessionCallback(
-                PacsControleeSession pacsControleeSession) {
+        public PacsControleeSessionCallback(PacsControleeSession pacsControleeSession) {
             mPacsControleeSession = pacsControleeSession;
         }
 
         @Override
-        public void onSessionDataReady(int updatedSessionId, @Nullable byte[] sessionData,
-                boolean isSessionTerminated) {
+        public void onSessionDataReady(
+                int updatedSessionId, @Nullable byte[] sessionData, boolean isSessionTerminated) {
+            mPacsControleeSession.mSessionInfo.mSessionData = SessionData.fromBytes(sessionData);
             mPacsControleeSession.sendMessage(RANGING_INIT);
         }
 
         @Override
         public void onSessionAborted() {
+            Log.w(TAG, "Secure Session aborted");
         }
 
         @Override
         public void onSessionTerminated() {
+            Log.w(TAG, "Secure Session terminated");
         }
     }
 
@@ -412,6 +486,9 @@ public class PacsControleeSession extends RangingSessionController {
                     transportServerStart();
                     break;
                 case SESSION_STOP:
+                    stopAdvertising();
+                    transportServerStop();
+                    break;
                 case TRANSPORT_COMPLETED:
                     stopAdvertising();
                     transportServerStop();
