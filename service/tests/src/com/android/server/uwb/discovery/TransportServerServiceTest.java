@@ -52,8 +52,7 @@ import java.util.Optional;
 public class TransportServerServiceTest {
 
     private static final DiscoveryInfo DISCOVERY_INFO =
-            new DiscoveryInfo(
-                    TransportType.BLE, Optional.empty(), Optional.empty(), Optional.empty());
+            new DiscoveryInfo(TransportType.BLE, Optional.empty(), Optional.empty());
 
     @Mock AttributionSource mMockAttributionSource;
     @Mock Context mMockContext;

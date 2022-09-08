@@ -24,7 +24,6 @@ import androidx.annotation.WorkerThread;
 import com.android.server.uwb.discovery.TransportServerProvider.TransportServerCallback;
 import com.android.server.uwb.discovery.ble.GattTransportServerProvider;
 import com.android.server.uwb.discovery.info.DiscoveryInfo;
-import com.android.server.uwb.discovery.info.FiraConnectorMessage;
 
 /** This service manages the TransportServerProvider. */
 @WorkerThread
@@ -78,16 +77,5 @@ public class TransportServerService {
             return false;
         }
         return mTransportServerProvider.stop();
-    }
-
-    /**
-     * Send a FiRa connector message to the remote device through the transport server.
-     *
-     * @param secid destination SECID on remote device.
-     * @param message message to be send.
-     * @return indicates if succeefully started.
-     */
-    public boolean sendMessage(int secid, FiraConnectorMessage message) {
-        return mTransportServerProvider.sendMessage(secid, message);
     }
 }

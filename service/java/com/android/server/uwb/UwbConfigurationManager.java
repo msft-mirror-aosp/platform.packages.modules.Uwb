@@ -38,10 +38,7 @@ public class UwbConfigurationManager {
         mNativeUwbManager = nativeUwbManager;
     }
 
-    /**
-     * Set app configurations.
-     */
-    public int setAppConfigurations(int sessionId, Params params, String chipId) {
+    public int setAppConfigurations(int sessionId, Params params) {
         int status = UwbUciConstants.STATUS_CODE_FAILED;
         TlvBuffer tlvBuffer = null;
 
@@ -58,9 +55,9 @@ public class UwbConfigurationManager {
             byte[] tlvByteArray = tlvBuffer.getByteArray();
             UwbConfigStatusData appConfig = mNativeUwbManager.setAppConfigurations(sessionId,
                     tlvBuffer.getNoOfParams(),
-                    tlvByteArray.length, tlvByteArray, chipId);
+                    tlvByteArray.length, tlvByteArray);
+            Log.i(TAG, "setAppConfigurations respData: " + appConfig.toString());
             if (appConfig != null) {
-                Log.i(TAG, "setAppConfigurations respData: " + appConfig);
                 status = appConfig.getStatus();
             } else {
                 Log.e(TAG, "appConfigList is null or size of appConfigList is zero");
@@ -77,11 +74,11 @@ public class UwbConfigurationManager {
      * Retrieve app configurations from UWBS.
      */
     public <T extends Params> Pair<Integer, T> getAppConfigurations(int sessionId,
-            String protocolName, byte[] appConfigIds, Class<T> paramType, String chipId) {
+            String protocolName, byte[] appConfigIds, Class<T> paramType) {
 
         Log.d(TAG, "getAppConfigurations for protocol: " + protocolName);
         UwbTlvData getAppConfig = mNativeUwbManager.getAppConfigurations(sessionId,
-                    appConfigIds.length, appConfigIds.length, appConfigIds, chipId);
+                    appConfigIds.length, appConfigIds.length, appConfigIds);
         Log.i(TAG, "getAppConfigurations respData: "
                 + getAppConfig != null ? getAppConfig.toString() : "null");
         return decodeTLV(protocolName, getAppConfig, paramType);
@@ -91,10 +88,10 @@ public class UwbConfigurationManager {
      * Retrieve capability information from UWBS.
      */
     public <T extends Params> Pair<Integer, T> getCapsInfo(String protocolName,
-            Class<T> paramType, String chipId) {
+            Class<T> paramType) {
 
         Log.d(TAG, "getCapsInfo for protocol: " + protocolName);
-        UwbTlvData capsInfo = mNativeUwbManager.getCapsInfo(chipId);
+        UwbTlvData capsInfo = mNativeUwbManager.getCapsInfo();
         Log.i(TAG, "getCapsInfo respData: " + capsInfo != null ? capsInfo.toString() : "null");
         return decodeTLV(protocolName, capsInfo, paramType);
     }

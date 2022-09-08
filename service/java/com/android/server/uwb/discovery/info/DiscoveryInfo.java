@@ -17,18 +17,18 @@ package com.android.server.uwb.discovery.info;
 
 import java.util.Optional;
 
-/** Holds information about the discovery request. */
+/**
+ * Holds information about the discovery request.
+ */
 public class DiscoveryInfo {
 
     public DiscoveryInfo(
             TransportType transportType,
             Optional<ScanInfo> scanInfo,
-            Optional<AdvertiseInfo> advertiseInfo,
-            Optional<TransportClientInfo> transportClientInfo) {
+            Optional<AdvertiseInfo> advertiseInfo) {
         this.transportType = transportType;
         this.scanInfo = scanInfo;
         this.advertiseInfo = advertiseInfo;
-        this.transportClientInfo = transportClientInfo;
     }
 
     /** A definition of discovery transport type. */
@@ -41,6 +41,4 @@ public class DiscoveryInfo {
     public final Optional<ScanInfo> scanInfo;
 
     public final Optional<AdvertiseInfo> advertiseInfo;
-
-    public final Optional<TransportClientInfo> transportClientInfo;
 }

@@ -51,7 +51,9 @@ import java.util.ArrayList;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 
-/** Unit test for {@link DiscoveryScanService} */
+/**
+ * Unit test for {@link DiscoveryScanService}
+ */
 @RunWith(AndroidJUnit4.class)
 @SmallTest
 public class DiscoveryScanServiceTest {
@@ -64,7 +66,6 @@ public class DiscoveryScanServiceTest {
                             new ScanInfo(
                                     new ArrayList<ScanFilter>(),
                                     new ScanSettings.Builder().build())),
-                    Optional.empty(),
                     Optional.empty());
 
     @Mock AttributionSource mMockAttributionSource;

@@ -352,7 +352,6 @@ public class UwbSessionNotificationManager {
             AngleOfArrivalMeasurement angleOfArrivalMeasurement = null;
             AngleOfArrivalMeasurement destinationAngleOfArrivalMeasurement = null;
             int los = uwbTwoWayMeasurement[i].mNLoS;
-            int rssi = uwbTwoWayMeasurement[i].getRssi();
 
             if (rangingStatus == FiraParams.STATUS_CODE_OK) {
                 // Distance measurement is mandatory
@@ -403,18 +402,15 @@ public class UwbSessionNotificationManager {
                             .build();
                 }
             }
-            RangingMeasurement.Builder rangingMeasurementBuilder = new RangingMeasurement.Builder()
+            rangingMeasurements.add(new RangingMeasurement.Builder()
                     .setRemoteDeviceAddress(macAddress)
                     .setStatus(rangingStatus)
                     .setElapsedRealtimeNanos(elapsedRealtimeNanos)
                     .setDistanceMeasurement(distanceMeasurement)
                     .setAngleOfArrivalMeasurement(angleOfArrivalMeasurement)
                     .setDestinationAngleOfArrivalMeasurement(destinationAngleOfArrivalMeasurement)
-                    .setLineOfSight(los);
-            if (rssi < 0) {
-                rangingMeasurementBuilder.setRssiDbm(rssi);
-            }
-            rangingMeasurements.add(rangingMeasurementBuilder.build());
+                    .setLineOfSight(los)
+                    .build());
         }
         if (rangingMeasurements.size() == 1) {
             return new RangingReport.Builder().addMeasurement(rangingMeasurements.get(0)).build();

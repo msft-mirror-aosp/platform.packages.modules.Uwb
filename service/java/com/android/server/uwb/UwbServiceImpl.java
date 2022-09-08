@@ -138,17 +138,15 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     @Override
     public long getTimestampResolutionNanos(String chipId) throws RemoteException {
         enforceUwbPrivilegedPermission();
-        validateChipId(chipId);
-        // TODO(/b/237601383): Determine whether getTimestampResolutionNanos should take a chipId
-        // parameter
+        checkValidChipId(chipId);
         return mUwbServiceCore.getTimestampResolutionNanos();
     }
 
     @Override
     public PersistableBundle getSpecificationInfo(String chipId) throws RemoteException {
         enforceUwbPrivilegedPermission();
-        chipId = validateChipId(chipId);
-        return mUwbServiceCore.getSpecificationInfo(chipId);
+        checkValidChipId(chipId);
+        return mUwbServiceCore.getSpecificationInfo();
     }
 
     @Override
@@ -157,14 +155,10 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             IUwbRangingCallbacks rangingCallbacks,
             PersistableBundle parameters,
             String chipId) throws RemoteException {
+
         enforceUwbPrivilegedPermission();
-        chipId = validateChipId(chipId);
         mUwbInjector.enforceUwbRangingPermissionForPreflight(attributionSource);
-        mUwbServiceCore.openRanging(attributionSource,
-                sessionHandle,
-                rangingCallbacks,
-                parameters,
-                chipId);
+        mUwbServiceCore.openRanging(attributionSource, sessionHandle, rangingCallbacks, parameters);
     }
 
     @Override
@@ -197,8 +191,7 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     public synchronized int sendVendorUciMessage(int gid, int oid, byte[] payload)
             throws RemoteException {
         enforceUwbPrivilegedPermission();
-        // TODO(b/237533396): Add a sendVendorUciMessage that takes a chipId parameter
-        return mUwbServiceCore.sendVendorUciMessage(gid, oid, payload, getDefaultChipId());
+        return mUwbServiceCore.sendVendorUciMessage(gid, oid, payload);
     }
 
     @Override
@@ -389,16 +382,10 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         }
     }
 
-    private String validateChipId(String chipId) {
-        if (chipId == null || chipId.isEmpty()) {
-            return getDefaultChipId();
-        }
-
-        if (!getChipIds().contains(chipId)) {
+    private void checkValidChipId(String chipId) {
+        if (chipId != null && !getChipIds().contains(chipId)) {
             throw new IllegalArgumentException("invalid chipId: " + chipId);
         }
-
-        return chipId;
     }
 
     public void handleUserSwitch(int userId) {

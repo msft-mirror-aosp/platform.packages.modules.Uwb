@@ -68,10 +68,6 @@ public final class UwbUtil {
         return (float) ((angleInDegrees) * Math.PI / 180.0);
     }
 
-    public static float radianTodegree(double angleInRadians) {
-        return (float) ((angleInRadians) * 180 / Math.PI);
-    }
-
     /**
      * Fixed point Q format to float conversion. In Q format  Fixed point integer,
      * integer and fractional bits are specified together.
@@ -103,7 +99,7 @@ public final class UwbUtil {
      * Get Two's complement of a number for signed conversion
      *
      * @param nInput Integer
-     * @param nBits  number of bits an number
+     * @param nBits  number of bits in number
      * @return two complement of given number value
      */
     public static int twos_compliment(int nInput, int nBits) {

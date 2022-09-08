@@ -31,12 +31,11 @@ public class UwbTwoWayMeasurement {
     public float mAoaDestElevation;
     public int mAoaDestElevationFom;
     public int mSlotIndex;
-    public int mRssi;
 
     public UwbTwoWayMeasurement(byte[] macAddress, int status, int nLoS, int distance,
             int aoaAzimuth, int aoaAzimuthFom, int aoaElevation,
             int aoaElevationFom, int aoaDestAzimuth, int aoaDestAzimuthFom,
-            int aoaDestElevation, int aoaDestElevationFom, int slotIndex, int rssi) {
+            int aoaDestElevation, int aoaDestElevationFom, int slotIndex) {
 
         this.mMacAddress = macAddress;
         this.mStatus = status;
@@ -51,7 +50,6 @@ public class UwbTwoWayMeasurement {
         this.mAoaDestElevation = toFloatFromQFormat(aoaDestElevation);
         this.mAoaDestElevationFom = aoaDestElevationFom;
         this.mSlotIndex = slotIndex;
-        this.mRssi = rssi;
     }
 
     public byte[] getMacAddress() {
@@ -105,9 +103,6 @@ public class UwbTwoWayMeasurement {
     public int getSlotIndex() {
         return mSlotIndex;
     }
-    public int getRssi() {
-        return mRssi;
-    }
 
     private float toFloatFromQFormat(int value) {
         return UwbUtil.convertQFormatToFloat(UwbUtil.twos_compliment(value, 16),
@@ -129,7 +124,6 @@ public class UwbTwoWayMeasurement {
                 + ", AoaDestElevation = " + mAoaDestElevation
                 + ", AoaDestElevationFom = " + mAoaDestElevationFom
                 + ", SlotIndex = 0x" + UwbUtil.toHexString(mSlotIndex)
-                + ", RSSI = " + mRssi
                 + '}';
     }
 }
