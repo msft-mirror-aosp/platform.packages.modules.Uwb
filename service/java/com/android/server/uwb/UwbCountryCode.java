@@ -35,6 +35,7 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
+import com.android.internal.annotations.Keep;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.HandlerExecutor;
 import com.android.server.uwb.data.UwbUciConstants;
@@ -119,6 +120,7 @@ public class UwbCountryCode {
         mUwbInjector = uwbInjector;
     }
 
+    @Keep
     private class WifiCountryCodeCallback implements ActiveCountryCodeChangedCallback {
         public void onActiveCountryCodeChanged(@NonNull String countryCode) {
             setWifiCountryCode(countryCode);
@@ -293,7 +295,8 @@ public class UwbCountryCode {
      */
     public static boolean isValid(String countryCode) {
         return countryCode != null && countryCode.length() == 2
-                && countryCode.chars().allMatch(Character::isLetterOrDigit);
+                && countryCode.chars().allMatch(Character::isLetterOrDigit)
+                && !countryCode.equals(DEFAULT_COUNTRY_CODE);
     }
 
     /**
