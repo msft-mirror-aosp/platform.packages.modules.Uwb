@@ -19,15 +19,15 @@ package com.android.server.uwb.discovery;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
-import android.bluetooth.le.AdvertisingSetCallback;
 import android.bluetooth.le.AdvertisingSetParameters;
 import android.bluetooth.le.BluetoothLeAdvertiser;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanSettings;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.uwb.UwbTestUtils;
@@ -36,10 +36,12 @@ import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.server.uwb.discovery.DiscoveryAdvertiseProvider.DiscoveryAdvertiseCallback;
+import com.android.server.uwb.discovery.DiscoveryScanProvider.DiscoveryScanCallback;
 import com.android.server.uwb.discovery.ble.DiscoveryAdvertisement;
 import com.android.server.uwb.discovery.info.AdvertiseInfo;
 import com.android.server.uwb.discovery.info.DiscoveryInfo;
 import com.android.server.uwb.discovery.info.DiscoveryInfo.TransportType;
+import com.android.server.uwb.discovery.info.ScanInfo;
 import com.android.server.uwb.discovery.info.SecureComponentInfo;
 import com.android.server.uwb.discovery.info.UwbIndicationData;
 import com.android.server.uwb.discovery.info.VendorSpecificData;
@@ -50,15 +52,14 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 
-/**
- * Unit test for {@link DiscoveryAdvertiseService}
- */
+/** Unit test for {@link DiscoveryProviderFactory} */
 @RunWith(AndroidJUnit4.class)
 @SmallTest
-public class DiscoveryAdvertiseServiceTest {
+public class DiscoveryProviderFactoryTest {
 
     private static final Executor EXECUTOR = UwbTestUtils.getExecutor();
     private static final DiscoveryAdvertisement ADVERTISEMENT =
@@ -82,20 +83,23 @@ public class DiscoveryAdvertiseServiceTest {
     private static final DiscoveryInfo DISCOVERY_INFO =
             new DiscoveryInfo(
                     TransportType.BLE,
-                    Optional.empty(),
+                    Optional.of(
+                            new ScanInfo(
+                                    new ArrayList<ScanFilter>(),
+                                    new ScanSettings.Builder().build())),
                     Optional.of(
                             new AdvertiseInfo(
-                                    new AdvertisingSetParameters.Builder().build(),
-                                    ADVERTISEMENT)));
+                                    new AdvertisingSetParameters.Builder().build(), ADVERTISEMENT)),
+                    Optional.empty());
 
     @Mock AttributionSource mMockAttributionSource;
     @Mock Context mMockContext;
     @Mock BluetoothManager mMockBluetoothManager;
     @Mock BluetoothAdapter mMockBluetoothAdapter;
     @Mock BluetoothLeAdvertiser mMockBluetoothLeAdvertiser;
+    @Mock BluetoothLeScanner mMockBluetoothLeScanner;
     @Mock DiscoveryAdvertiseCallback mMockDiscoveryAdvertiseCallback;
-
-    private DiscoveryAdvertiseService mDiscoveryAdvertiseService;
+    @Mock DiscoveryScanCallback mMockDiscoveryScanCallback;
 
     @Before
     public void setUp() throws Exception {
@@ -103,47 +107,37 @@ public class DiscoveryAdvertiseServiceTest {
         when(mMockContext.getSystemService(BluetoothManager.class))
                 .thenReturn(mMockBluetoothManager);
         when(mMockContext.createContext(any())).thenReturn(mMockContext);
+        when(mMockBluetoothManager.getAdapter()).thenReturn(mMockBluetoothAdapter);
+        when(mMockBluetoothAdapter.getBluetoothLeAdvertiser())
+                .thenReturn(mMockBluetoothLeAdvertiser);
+        when(mMockBluetoothAdapter.getBluetoothLeScanner()).thenReturn(mMockBluetoothLeScanner);
+    }
 
-        mDiscoveryAdvertiseService =
-                new DiscoveryAdvertiseService(
+    @Test
+    public void testScanStart() {
+        DiscoveryProvider provider =
+                DiscoveryProviderFactory.createScanner(
+                        mMockAttributionSource,
+                        mMockContext,
+                        EXECUTOR,
+                        DISCOVERY_INFO,
+                        mMockDiscoveryScanCallback);
+
+        assertThat(provider).isNotNull();
+        assertThat(provider.start()).isTrue();
+    }
+
+    @Test
+    public void testAdvertiseStart() {
+        DiscoveryProvider provider =
+                DiscoveryProviderFactory.createAdvertiser(
                         mMockAttributionSource,
                         mMockContext,
                         EXECUTOR,
                         DISCOVERY_INFO,
                         mMockDiscoveryAdvertiseCallback);
-    }
 
-    @Test
-    public void testStartDiscovery_successAndRejectRestart() {
-        when(mMockBluetoothManager.getAdapter()).thenReturn(mMockBluetoothAdapter);
-        when(mMockBluetoothAdapter.getBluetoothLeAdvertiser())
-                .thenReturn(mMockBluetoothLeAdvertiser);
-
-        assertThat(mDiscoveryAdvertiseService.startDiscovery()).isTrue();
-        verify(mMockBluetoothLeAdvertiser, times(1))
-                .startAdvertisingSet(
-                        any(), any(), any(), any(), any(), any(AdvertisingSetCallback.class));
-        assertThat(mDiscoveryAdvertiseService.startDiscovery()).isFalse();
-        verify(mMockBluetoothLeAdvertiser, times(1))
-                .startAdvertisingSet(
-                        any(), any(), any(), any(), any(), any(AdvertisingSetCallback.class));
-    }
-
-    @Test
-    public void testStopDiscovery_successAndRejectRestop() {
-        when(mMockBluetoothManager.getAdapter()).thenReturn(mMockBluetoothAdapter);
-        when(mMockBluetoothAdapter.getBluetoothLeAdvertiser())
-                .thenReturn(mMockBluetoothLeAdvertiser);
-
-        assertThat(mDiscoveryAdvertiseService.startDiscovery()).isTrue();
-        verify(mMockBluetoothLeAdvertiser, times(1))
-                .startAdvertisingSet(
-                        any(), any(), any(), any(), any(), any(AdvertisingSetCallback.class));
-        assertThat(mDiscoveryAdvertiseService.stopDiscovery()).isTrue();
-        verify(mMockBluetoothLeAdvertiser, times(1))
-                .stopAdvertisingSet(any(AdvertisingSetCallback.class));
-        assertThat(mDiscoveryAdvertiseService.stopDiscovery()).isFalse();
-        verify(mMockBluetoothLeAdvertiser, times(1))
-                .stopAdvertisingSet(any(AdvertisingSetCallback.class));
+        assertThat(provider).isNotNull();
+        assertThat(provider.start()).isTrue();
     }
 }

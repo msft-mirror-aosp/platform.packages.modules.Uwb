@@ -31,6 +31,8 @@ import android.util.Log;
 
 import androidx.annotation.WorkerThread;
 
+import com.android.server.uwb.discovery.TransportProvider.MessagePacket;
+import com.android.server.uwb.discovery.TransportProvider.TerminationReason;
 import com.android.server.uwb.discovery.TransportServerProvider;
 import com.android.server.uwb.discovery.TransportServerProvider.TransportServerCallback;
 import com.android.server.uwb.discovery.info.FiraConnectorCapabilities;
@@ -43,7 +45,7 @@ import java.util.ArrayDeque;
 import java.util.Arrays;
 
 /**
- * Class for UWB transport server provider using Bluetooth GATT.
+ * Class for FiRa CP UWB transport server provider using Bluetooth GATT.
  *
  * <p>The GATT server simply waits for the discovery from client side. It shall also wait for at
  * least one valid update of FiRa Connector Capabilities characteristic value from the client side.
@@ -78,18 +80,6 @@ public class GattTransportServerProvider extends TransportServerProvider {
      * incomplete to be constructed as FiRa Connector Message.
      */
     private ArrayDeque<FiraConnectorDataPacket> mIncompleteInDataPacketQueue;
-
-    /* Wraps Fira Connector Message byte array and the associated SECID.
-     */
-    private static class MessagePacket {
-        public final int secid;
-        public ByteBuffer messageBytes;
-
-        MessagePacket(int secid, ByteBuffer messageBytes) {
-            this.secid = secid;
-            this.messageBytes = messageBytes;
-        }
-    }
 
     /* Queue of Fira Connector Message wrapped as MessagePacket to be sent via the
      * mOutControlPointCharacteristic.
@@ -253,7 +243,9 @@ public class GattTransportServerProvider extends TransportServerProvider {
     public GattTransportServerProvider(
             AttributionSource attributionSource,
             Context context,
+            int secid,
             TransportServerCallback transportServerCallback) {
+        super(secid);
         Context attributedContext =
                 context.createContext(
                         new ContextParams.Builder()
@@ -272,6 +264,9 @@ public class GattTransportServerProvider extends TransportServerProvider {
 
     @Override
     public boolean start() {
+        if (!super.start()) {
+            return false;
+        }
         if (mBluetoothGattServer == null) {
             Log.w(TAG, "start failed due to mBluetoothGattServer is null.");
             return false;
@@ -284,8 +279,7 @@ public class GattTransportServerProvider extends TransportServerProvider {
 
     @Override
     public boolean stop() {
-        if (mBluetoothGattServer == null) {
-            Log.w(TAG, "stop failed due to mBluetoothGattServer is null.");
+        if (!super.stop()) {
             return false;
         }
         boolean succeed = mBluetoothGattServer.removeService(mFiraCPService);
@@ -416,7 +410,7 @@ public class GattTransportServerProvider extends TransportServerProvider {
             return false;
         }
 
-        mTransportServerCallback.onMessage(latestDataPacket.secid, message);
+        super.onMessageReceived(latestDataPacket.secid, message);
         return true;
     }
 
@@ -450,9 +444,7 @@ public class GattTransportServerProvider extends TransportServerProvider {
     }
 
     /**
-     * Start processing of the FiRa Connector Data Packets and the FiRa Connector Messages through
-     * the In/Out control point characterstic when all conditions are meet to start the FiRa GATT
-     * server.
+     * Check if processing has started.
      *
      * @return indicate if server has started processing.
      */
@@ -490,5 +482,12 @@ public class GattTransportServerProvider extends TransportServerProvider {
                         BluetoothGattCharacteristic.PROPERTY_WRITE,
                         BluetoothGattCharacteristic.PERMISSION_WRITE);
         mFiraCPService.addCharacteristic(mCapabilitiesCharacteristic);
+    }
+
+    @Override
+    protected void terminateOnError(TerminationReason reason) {
+        Log.e(TAG, "GattTransportServerProvider terminated with reason:" + reason);
+        stop();
+        mTransportServerCallback.onTerminated(reason);
     }
 }

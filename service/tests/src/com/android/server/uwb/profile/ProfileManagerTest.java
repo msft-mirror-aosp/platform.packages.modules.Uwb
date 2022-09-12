@@ -18,11 +18,17 @@ package com.android.server.uwb.profile;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.mockito.Mockito.when;
 
+import android.content.AttributionSource;
 import android.content.Context;
 import android.os.Handler;
+import android.os.Looper;
 import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
+import android.uwb.IUwbRangingCallbacks;
+import android.uwb.SessionHandle;
 
 import androidx.test.runner.AndroidJUnit4;
 
@@ -30,6 +36,7 @@ import com.android.server.uwb.UwbConfigStore;
 import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.data.ServiceProfileData.ServiceProfileInfo;
 import com.android.server.uwb.pm.ProfileManager;
+import com.android.server.uwb.pm.RangingSessionController;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -50,12 +57,19 @@ public class ProfileManagerTest {
     @Mock private Handler mHandler;
     @Mock private UwbConfigStore mUwbConfigStore;
     @Mock private UwbInjector mUwbInjector;
+    @Mock private SessionHandle mSessionHandle;
+    @Mock private AttributionSource mAttributionSource;
+    @Mock private IUwbRangingCallbacks mIUwbRangingCallbacks;
+    @Mock private Looper mLooper;
+    private static final String TEST_CHIP_ID = "testChipId";
+
     private com.android.server.uwb.pm.ProfileManager mProfileManager;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
+        when(mHandler.getLooper()).thenReturn(mLooper);
         mProfileManager = new ProfileManager(mContext, mHandler, mUwbConfigStore, mUwbInjector);
 
     }
@@ -104,4 +118,70 @@ public class ProfileManagerTest {
         assertEquals(1, mProfileManager.mServiceProfileMap.size());
     }
 
+    @Test
+    public void testActivateProfile() {
+        Optional<UUID> uuid1 = mProfileManager.addServiceProfile(1);
+        assertEquals(1, mProfileManager.mAppServiceProfileMap.size());
+
+        assertEquals(mProfileManager.mRangingSessionTable.size(), 0);
+
+        mProfileManager.activateProfile(mAttributionSource, mSessionHandle, uuid1.get(),
+                mIUwbRangingCallbacks, TEST_CHIP_ID);
+
+        assertEquals(mProfileManager.mRangingSessionTable.size(), 1);
+    }
+
+    @Test
+    public void testStartRanging() {
+        Optional<UUID> uuid1 = mProfileManager.addServiceProfile(1);
+        assertEquals(1, mProfileManager.mAppServiceProfileMap.size());
+
+        assertEquals(mProfileManager.mRangingSessionTable.size(), 0);
+
+        mProfileManager.activateProfile(mAttributionSource, mSessionHandle, uuid1.get(),
+                mIUwbRangingCallbacks, TEST_CHIP_ID);
+
+        mProfileManager.startRanging(mSessionHandle);
+
+        assertNotNull(mProfileManager.mRangingSessionTable.get(mSessionHandle));
+        assertEquals(mProfileManager.mRangingSessionTable.size(), 1);
+
+    }
+
+    @Test
+    public void testStopRanging() {
+        Optional<UUID> uuid1 = mProfileManager.addServiceProfile(1);
+        assertEquals(1, mProfileManager.mAppServiceProfileMap.size());
+
+        assertEquals(mProfileManager.mRangingSessionTable.size(), 0);
+
+        mProfileManager.activateProfile(mAttributionSource, mSessionHandle, uuid1.get(),
+                mIUwbRangingCallbacks, TEST_CHIP_ID);
+
+        mProfileManager.startRanging(mSessionHandle);
+        mProfileManager.stopRanging(mSessionHandle);
+
+        RangingSessionController rangingSessionController =
+                mProfileManager.mRangingSessionTable.get(mSessionHandle);
+
+        assertEquals(rangingSessionController.mSessionInfo.mSessionHandle, mSessionHandle);
+        assertEquals(mProfileManager.mRangingSessionTable.size(), 1);
+    }
+
+    @Test
+    public void testCloseRanging() {
+        Optional<UUID> uuid1 = mProfileManager.addServiceProfile(1);
+        assertEquals(1, mProfileManager.mAppServiceProfileMap.size());
+
+        assertEquals(mProfileManager.mRangingSessionTable.size(), 0);
+
+        mProfileManager.activateProfile(mAttributionSource, mSessionHandle, uuid1.get(),
+                mIUwbRangingCallbacks, TEST_CHIP_ID);
+
+        assertEquals(mProfileManager.mRangingSessionTable.size(), 1);
+
+        mProfileManager.closeRanging(mSessionHandle);
+
+        assertEquals(mProfileManager.mRangingSessionTable.size(), 0);
+    }
 }
