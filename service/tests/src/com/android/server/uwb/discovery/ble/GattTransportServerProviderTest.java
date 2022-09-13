@@ -19,6 +19,7 @@ package com.android.server.uwb.discovery.ble;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -37,6 +38,7 @@ import android.bluetooth.BluetoothGattServer;
 import android.bluetooth.BluetoothGattServerCallback;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothUuid;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.uwb.UwbTestUtils;
@@ -44,7 +46,12 @@ import android.uwb.UwbTestUtils;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.server.uwb.discovery.Transport.DataReceiver;
+import com.android.server.uwb.discovery.TransportProvider;
+import com.android.server.uwb.discovery.TransportProvider.TerminationReason;
 import com.android.server.uwb.discovery.TransportServerProvider.TransportServerCallback;
+import com.android.server.uwb.discovery.info.AdminErrorMessage;
+import com.android.server.uwb.discovery.info.AdminErrorMessage.ErrorType;
 import com.android.server.uwb.discovery.info.FiraConnectorCapabilities;
 import com.android.server.uwb.discovery.info.FiraConnectorDataPacket;
 import com.android.server.uwb.discovery.info.FiraConnectorMessage;
@@ -62,6 +69,7 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 
 /** Unit test for {@link GattTransportServerProvider} */
@@ -70,11 +78,11 @@ import java.util.concurrent.Executor;
 public class GattTransportServerProviderTest {
 
     private static final Executor EXECUTOR = UwbTestUtils.getExecutor();
-    private static final int SECID = 10;
+    private static final int SECID = 2;
     private static final byte[] MESSAGE_PAYLOAD1 = new byte[] {(byte) 0xF4, 0x00, 0x40};
     private static final FiraConnectorMessage MESSAGE =
             new FiraConnectorMessage(
-                    MessageType.EVENT, InstructionCode.DATA_EXCHANGE, MESSAGE_PAYLOAD1);
+                    MessageType.COMMAND, InstructionCode.DATA_EXCHANGE, MESSAGE_PAYLOAD1);
     private static final FiraConnectorDataPacket DATA_PACKET =
             new FiraConnectorDataPacket(/*lastChainingPacket=*/ true, SECID, MESSAGE.toBytes());
     private static final int OPTIMIZED_DATA_PACKET_SIZE = 21;
@@ -109,6 +117,8 @@ public class GattTransportServerProviderTest {
     private static final BluetoothGattDescriptor CCCD_DESCRIPTOR =
             new BluetoothGattDescriptor(
                     UuidConstants.CCCD_UUID.getUuid(), BluetoothGattDescriptor.PERMISSION_READ);
+    private static final UUID UNKNOWN_UUID =
+            BluetoothUuid.parseUuidFrom(new byte[] {0x00, 0x01}).getUuid();
 
     @Mock AttributionSource mMockAttributionSource;
     @Mock Context mMockContext;
@@ -117,6 +127,7 @@ public class GattTransportServerProviderTest {
     @Mock BluetoothGattServer mMockBluetoothGattServer;
     @Mock TransportServerCallback mMockTransportServerCallback;
     @Mock BluetoothDevice mMockBluetoothDevice;
+    @Mock DataReceiver mMockDataReceiver;
 
     private GattTransportServerProvider mGattTransportServerProvider;
     private BluetoothGattServerCallback mBluetoothGattServerCallback;
@@ -135,7 +146,9 @@ public class GattTransportServerProviderTest {
 
         mGattTransportServerProvider =
                 new GattTransportServerProvider(
-                        mMockAttributionSource, mMockContext, mMockTransportServerCallback);
+                        mMockAttributionSource, mMockContext, SECID, mMockTransportServerCallback);
+
+        mGattTransportServerProvider.registerDataReceiver(mMockDataReceiver);
 
         ArgumentCaptor<BluetoothGattServerCallback> captor =
                 ArgumentCaptor.forClass(BluetoothGattServerCallback.class);
@@ -145,13 +158,37 @@ public class GattTransportServerProviderTest {
     }
 
     @Test
-    public void testStartAndStop() {
+    public void testStart_failed() {
+        when(mMockBluetoothGattServer.addService(any())).thenReturn(false);
+        assertThat(mGattTransportServerProvider.start()).isFalse();
+        verify(mMockBluetoothGattServer, times(1)).addService(any());
+    }
+
+    @Test
+    public void testStart_successAndRejectRestart() {
         assertThat(mGattTransportServerProvider.start()).isTrue();
         verify(mMockBluetoothGattServer, times(1)).addService(any());
-        assertThat(mGattTransportServerProvider.isStarted()).isTrue();
+        assertThat(mGattTransportServerProvider.start()).isFalse();
+        verify(mMockBluetoothGattServer, times(1)).addService(any());
+    }
+
+    @Test
+    public void testStop_failed() {
+        when(mMockBluetoothGattServer.removeService(any())).thenReturn(false);
+        assertThat(mGattTransportServerProvider.start()).isTrue();
+        verify(mMockBluetoothGattServer, times(1)).addService(any());
+        assertThat(mGattTransportServerProvider.stop()).isFalse();
+        verify(mMockBluetoothGattServer, times(1)).removeService(any());
+    }
+
+    @Test
+    public void testStop_successAndRejectRestop() {
+        assertThat(mGattTransportServerProvider.start()).isTrue();
+        verify(mMockBluetoothGattServer, times(1)).addService(any());
         assertThat(mGattTransportServerProvider.stop()).isTrue();
         verify(mMockBluetoothGattServer, times(1)).removeService(any());
-        assertThat(mGattTransportServerProvider.isStarted()).isFalse();
+        assertThat(mGattTransportServerProvider.stop()).isFalse();
+        verify(mMockBluetoothGattServer, times(1)).removeService(any());
     }
 
     @Test
@@ -246,7 +283,7 @@ public class GattTransportServerProviderTest {
         byte[] bytes = new byte[270];
         Arrays.fill(bytes, (byte) 1);
         FiraConnectorMessage message =
-                new FiraConnectorMessage(MessageType.EVENT, InstructionCode.DATA_EXCHANGE, bytes);
+                new FiraConnectorMessage(MessageType.COMMAND, InstructionCode.DATA_EXCHANGE, bytes);
 
         startProcessing();
 
@@ -266,6 +303,21 @@ public class GattTransportServerProviderTest {
         assertThat(mGattTransportServerProvider.sendMessage(SECID, MESSAGE)).isFalse();
     }
 
+    @Test
+    public void testCharactersticRead_unknownUuid() {
+        mBluetoothGattServerCallback.onCharacteristicReadRequest(
+                mMockBluetoothDevice,
+                /*requestId=*/ 4,
+                /*offset=*/ 0,
+                new BluetoothGattCharacteristic(
+                        UNKNOWN_UUID,
+                        BluetoothGattCharacteristic.PROPERTY_READ,
+                        BluetoothGattCharacteristic.PERMISSION_READ));
+
+        verifyZeroInteractions(mMockBluetoothGattServer);
+        verifyZeroInteractions(mMockTransportServerCallback);
+    }
+
     private void setupOutCharactersticRead() {
         Answer notifyOutCharacteristicChangedResponse =
                 new Answer() {
@@ -283,6 +335,23 @@ public class GattTransportServerProviderTest {
         doAnswer(notifyOutCharacteristicChangedResponse)
                 .when(mMockBluetoothGattServer)
                 .notifyCharacteristicChanged(eq(mMockBluetoothDevice), any(), eq(false));
+    }
+
+    @Test
+    public void testSendMessageAndOutCharactersticRead_failedProcessingNotStarted() {
+        mBluetoothGattServerCallback.onCharacteristicReadRequest(
+                mMockBluetoothDevice, /*requestId=*/ 4, /*offset=*/ 0, OUT_CHARACTERSTIC);
+
+        assertThat(mGattTransportServerProvider.sendMessage(SECID, MESSAGE)).isFalse();
+        verify(mMockBluetoothGattServer, times(1))
+                .sendResponse(
+                        eq(mMockBluetoothDevice),
+                        eq(/*requestId=*/ 4),
+                        eq(BluetoothGatt.GATT_SUCCESS),
+                        eq(/*offset=*/ 0),
+                        any());
+        verify(mMockBluetoothGattServer, never())
+                .notifyCharacteristicChanged(any(), any(), anyBoolean());
     }
 
     @Test
@@ -306,7 +375,7 @@ public class GattTransportServerProviderTest {
         Arrays.fill(messagePayload, (byte) 2);
         FiraConnectorMessage message =
                 new FiraConnectorMessage(
-                        MessageType.EVENT, InstructionCode.DATA_EXCHANGE, messagePayload);
+                        MessageType.COMMAND, InstructionCode.DATA_EXCHANGE, messagePayload);
         byte[] messageBytes = message.toBytes();
         int payloadSize = OPTIMIZED_DATA_PACKET_SIZE - 1;
         FiraConnectorDataPacket dataPacket1 =
@@ -360,6 +429,23 @@ public class GattTransportServerProviderTest {
     }
 
     @Test
+    public void testCharactersticWrite_unknownUuid() {
+        mBluetoothGattServerCallback.onCharacteristicWriteRequest(
+                mMockBluetoothDevice,
+                /*requestId=*/ 4,
+                new BluetoothGattCharacteristic(
+                        UNKNOWN_UUID,
+                        BluetoothGattCharacteristic.PROPERTY_WRITE,
+                        BluetoothGattCharacteristic.PERMISSION_WRITE),
+                /*preparedWrite=*/ false,
+                /*responseNeeded=*/ true,
+                /*offset=*/ 0,
+                DATA_PACKET.toBytes());
+        verifyZeroInteractions(mMockBluetoothGattServer);
+        verifyZeroInteractions(mMockTransportServerCallback);
+    }
+
+    @Test
     public void testInCharactersticWrite_failedProcessingNotStarted() {
         mBluetoothGattServerCallback.onCharacteristicWriteRequest(
                 mMockBluetoothDevice,
@@ -399,7 +485,7 @@ public class GattTransportServerProviderTest {
                         BluetoothGatt.GATT_FAILURE,
                         /*offset=*/ 0,
                         /*value=*/ null);
-        verify(mMockTransportServerCallback, never()).onMessage(anyInt(), any());
+        verify(mMockDataReceiver, never()).onDataReceived(any());
     }
 
     @Test
@@ -416,7 +502,7 @@ public class GattTransportServerProviderTest {
 
         verify(mMockBluetoothGattServer, never())
                 .sendResponse(any(BluetoothDevice.class), anyInt(), anyInt(), anyInt(), any());
-        verify(mMockTransportServerCallback, never()).onMessage(anyInt(), any());
+        verify(mMockDataReceiver, never()).onDataReceived(any());
 
         mBluetoothGattServerCallback.onCharacteristicWriteRequest(
                 mMockBluetoothDevice,
@@ -429,10 +515,9 @@ public class GattTransportServerProviderTest {
 
         verify(mMockBluetoothGattServer, never())
                 .sendResponse(any(BluetoothDevice.class), anyInt(), anyInt(), anyInt(), any());
-        ArgumentCaptor<FiraConnectorMessage> captor =
-                ArgumentCaptor.forClass(FiraConnectorMessage.class);
-        verify(mMockTransportServerCallback, times(1)).onMessage(eq(SECID), captor.capture());
-        assertThat(captor.getValue().toString()).isEqualTo(MESSAGE.toString());
+        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
+        verify(mMockDataReceiver, times(1)).onDataReceived(captor.capture());
+        assertThat(captor.getValue()).isEqualTo(MESSAGE.payload);
     }
 
     @Test
@@ -514,9 +599,139 @@ public class GattTransportServerProviderTest {
                         BluetoothGatt.GATT_SUCCESS,
                         /*offset=*/ 0,
                         dataPacket3.toBytes());
-        ArgumentCaptor<FiraConnectorMessage> captor =
-                ArgumentCaptor.forClass(FiraConnectorMessage.class);
-        verify(mMockTransportServerCallback, times(1)).onMessage(eq(SECID), captor.capture());
-        assertThat(captor.getValue().toString()).isEqualTo(message.toString());
+        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
+        verify(mMockDataReceiver, times(1)).onDataReceived(captor.capture());
+        assertThat(captor.getValue()).isEqualTo(message.payload);
+    }
+
+    @Test
+    public void testInCharactersticWrite_secidMismatch() {
+        byte[] messageBytes = MESSAGE.toBytes();
+        byte[] dataPacketBytes =
+                new FiraConnectorDataPacket(
+                                /*lastChainingPacket=*/ true, /*secid*/ 10, messageBytes)
+                        .toBytes();
+
+        startProcessing();
+        mBluetoothGattServerCallback.onCharacteristicWriteRequest(
+                mMockBluetoothDevice,
+                /*requestId=*/ 5,
+                IN_CHARACTERSTIC,
+                /*preparedWrite=*/ false,
+                /*responseNeeded=*/ true,
+                /*offset=*/ 0,
+                dataPacketBytes);
+
+        verify(mMockBluetoothGattServer, times(1))
+                .sendResponse(
+                        mMockBluetoothDevice,
+                        /*requestId=*/ 5,
+                        BluetoothGatt.GATT_SUCCESS,
+                        /*offset=*/ 0,
+                        dataPacketBytes);
+        verify(mMockDataReceiver, never()).onDataReceived(any());
+
+        ArgumentCaptor<BluetoothGattCharacteristic> captor =
+                ArgumentCaptor.forClass(BluetoothGattCharacteristic.class);
+        verify(mMockBluetoothGattServer, times(1))
+                .notifyCharacteristicChanged(
+                        eq(mMockBluetoothDevice), captor.capture(), eq(/*confirm=*/ false));
+        assertThat(captor.getValue().getValue())
+                .isEqualTo(
+                        new FiraConnectorDataPacket(
+                                        /*lastChainingPacket=*/ true,
+                                        TransportProvider.ADMIN_SECID,
+                                        new AdminErrorMessage(ErrorType.SECID_INVALID).toBytes())
+                                .toBytes());
+    }
+
+    @Test
+    public void testInCharactersticWrite_adminErrorMessage() {
+        byte[] dataPacketBytes =
+                new FiraConnectorDataPacket(
+                                /*lastChainingPacket=*/ true,
+                                TransportProvider.ADMIN_SECID,
+                                new AdminErrorMessage(ErrorType.SECID_INVALID).toBytes())
+                        .toBytes();
+
+        startProcessing();
+        mBluetoothGattServerCallback.onCharacteristicWriteRequest(
+                mMockBluetoothDevice,
+                /*requestId=*/ 5,
+                IN_CHARACTERSTIC,
+                /*preparedWrite=*/ false,
+                /*responseNeeded=*/ true,
+                /*offset=*/ 0,
+                dataPacketBytes);
+
+        verify(mMockBluetoothGattServer, times(1))
+                .sendResponse(
+                        mMockBluetoothDevice,
+                        /*requestId=*/ 5,
+                        BluetoothGatt.GATT_SUCCESS,
+                        /*offset=*/ 0,
+                        dataPacketBytes);
+        verify(mMockDataReceiver, never()).onDataReceived(any());
+        verify(mMockTransportServerCallback, times(1))
+                .onTerminated(TerminationReason.REMOTE_DEVICE_SECID_ERROR);
+        assertThat(mGattTransportServerProvider.isStarted()).isFalse();
+    }
+
+    @Test
+    public void testDescriptorWriteRequest_unknownUuid() {
+
+        mBluetoothGattServerCallback.onDescriptorWriteRequest(
+                mMockBluetoothDevice,
+                /*requestId=*/ 1,
+                new BluetoothGattDescriptor(UNKNOWN_UUID, BluetoothGattDescriptor.PERMISSION_READ),
+                /*preparedWrite=*/ false,
+                /*responseNeeded=*/ true,
+                /*offset=*/ 0,
+                BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+
+        verify(mMockBluetoothGattServer, times(1))
+                .sendResponse(
+                        mMockBluetoothDevice,
+                        /*requestId=*/ 1,
+                        BluetoothGatt.GATT_FAILURE,
+                        /*offset=*/ 0,
+                        /*value=*/ null);
+    }
+
+    @Test
+    public void testDescriptorWriteRequest_disableNotification() {
+        startProcessing();
+
+        verify(mMockTransportServerCallback, times(1)).onProcessingStarted();
+
+        mBluetoothGattServerCallback.onDescriptorWriteRequest(
+                mMockBluetoothDevice,
+                /*requestId=*/ 2,
+                CCCD_DESCRIPTOR,
+                /*preparedWrite=*/ false,
+                /*responseNeeded=*/ true,
+                /*offset=*/ 0,
+                BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE);
+
+        verify(mMockBluetoothGattServer, times(1))
+                .sendResponse(
+                        mMockBluetoothDevice,
+                        /*requestId=*/ 2,
+                        BluetoothGatt.GATT_SUCCESS,
+                        /*offset=*/ 0,
+                        BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE);
+        verify(mMockTransportServerCallback, times(1)).onProcessingStopped();
+    }
+
+    @Test
+    public void testConnectionStateChange_disconnected() {
+        startProcessing();
+
+        verify(mMockTransportServerCallback, times(1)).onProcessingStarted();
+
+        mBluetoothGattServerCallback.onConnectionStateChange(
+                mMockBluetoothDevice, /*status=*/ 1, BluetoothProfile.STATE_DISCONNECTED);
+
+        verify(mMockTransportServerCallback, times(1)).onProcessingStopped();
     }
 }
