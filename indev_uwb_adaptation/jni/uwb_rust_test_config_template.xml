@@ -15,17 +15,12 @@
 -->
 <configuration description="Configuration for {MODULE} Rust tests">
    <target_preparer class="com.android.tradefed.targetprep.RootTargetPreparer"/>
-   <target_preparer class="com.android.compatibility.common.tradefed.targetprep.FilePusher">
+   <target_preparer class="com.android.tradefed.targetprep.PushFilePreparer">
        <option name="cleanup" value="true" />
        <option name="push" value="{MODULE}->/data/local/tmp/{MODULE}" />
-       <option name="append-bitness" value="true" />
    </target_preparer>
    <test class="com.android.tradefed.testtype.rust.RustBinaryTest" >
        <option name="test-device-path" value="/data/local/tmp" />
        <option name="module-name" value="{MODULE}" />
    </test>
-   <object type="module_controller"
-           class="com.android.tradefed.testtype.suite.module.MainlineTestModuleController">
-       <option name="mainline-module-package-name" value="com.google.android.uwb" />
-   </object>
 </configuration>
