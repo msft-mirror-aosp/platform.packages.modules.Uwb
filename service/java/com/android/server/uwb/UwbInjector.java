@@ -49,6 +49,12 @@ import com.android.server.uwb.pm.ProfileManager;
 
 import java.io.File;
 import java.util.Locale;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * To be used for dependency injection (especially helps mocking static dependencies).
@@ -101,12 +107,12 @@ public class UwbInjector {
                 context, new Handler(mLooper),
                 new AtomicFile(new File(getDeviceProtectedDataDir(),
                         UwbSettingsStore.FILE_NAME)), this);
-        mNativeUwbManager = new NativeUwbManager(this);
+        mUwbMultichipData = new UwbMultichipData(mContext);
+        mNativeUwbManager = new NativeUwbManager(this, mUwbMultichipData);
         mUwbCountryCode =
                 new UwbCountryCode(mContext, mNativeUwbManager, new Handler(mLooper), this);
         mUwbMetrics = new UwbMetrics(this);
         mDeviceConfigFacade = new DeviceConfigFacade(new Handler(mLooper), this);
-        mUwbMultichipData = new UwbMultichipData(mContext);
         UwbConfigurationManager uwbConfigurationManager =
                 new UwbConfigurationManager(mNativeUwbManager);
         UwbSessionNotificationManager uwbSessionNotificationManager =
@@ -114,11 +120,17 @@ public class UwbInjector {
         UwbSessionManager uwbSessionManager =
                 new UwbSessionManager(uwbConfigurationManager, mNativeUwbManager, mUwbMetrics,
                         uwbSessionNotificationManager, this,
-                        mContext.getSystemService(AlarmManager.class), mLooper);
+                        mContext.getSystemService(AlarmManager.class),
+                        mContext.getSystemService(ActivityManager.class),
+                        mLooper);
         mUwbService = new UwbServiceCore(mContext, mNativeUwbManager, mUwbMetrics,
                 mUwbCountryCode, uwbSessionManager, uwbConfigurationManager, this, mLooper);
         mSystemBuildProperties = new SystemBuildProperties();
         mUwbDiagnostics = new UwbDiagnostics(mContext, this, mSystemBuildProperties);
+    }
+
+    public Looper getUwbServiceLooper() {
+        return mLooper;
     }
 
     public UserManager getUserManager() {
@@ -350,13 +362,30 @@ public class UwbInjector {
     }
 
     /** Helper method to check if the app is from foreground app/service. */
+    public static boolean isForegroundAppOrServiceImportance(int importance) {
+        return importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE;
+    }
+
+    /** Helper method to check if the app is from foreground app/service. */
     public boolean isForegroundAppOrService(int uid, @NonNull String packageName) {
         try {
-            return getPackageImportance(uid, packageName)
-                    <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE;
+            return isForegroundAppOrServiceImportance(getPackageImportance(uid, packageName));
         } catch (SecurityException e) {
             Log.e(TAG, "Failed to retrieve the app importance", e);
             return false;
+        }
+    }
+
+    /* Helps to mock the executor for tests */
+    public int runTaskOnSingleThreadExecutor(FutureTask<Integer> task, int timeoutMs)
+            throws InterruptedException, TimeoutException, ExecutionException {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(task);
+        try {
+            return task.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            executor.shutdownNow();
+            throw e;
         }
     }
 }
