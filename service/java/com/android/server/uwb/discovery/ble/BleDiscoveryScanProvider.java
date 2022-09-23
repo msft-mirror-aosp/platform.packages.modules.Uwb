@@ -40,9 +40,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
 
-/**
- * Class for UWB discovery scan provider using BLE.
- */
+/** Class for UWB discovery scan provider using BLE. */
 @WorkerThread
 public class BleDiscoveryScanProvider extends DiscoveryScanProvider {
     private static final String TAG = "BleDiscoveryScanProvider";
@@ -88,7 +86,10 @@ public class BleDiscoveryScanProvider extends DiscoveryScanProvider {
     }
 
     @Override
-    public boolean startScan() {
+    public boolean start() {
+        if (!super.start()) {
+            return false;
+        }
         BluetoothLeScanner scanner = getBleScanner();
         if (scanner == null) {
             Log.w(TAG, "startScan failed due to BluetoothLeScanner is null.");
@@ -107,7 +108,10 @@ public class BleDiscoveryScanProvider extends DiscoveryScanProvider {
     }
 
     @Override
-    public boolean stopScan() {
+    public boolean stop() {
+        if (!super.stop()) {
+            return false;
+        }
         BluetoothLeScanner scanner = getBleScanner();
         if (scanner == null) {
             Log.w(TAG, "stopScan failed due to BluetoothLeScanner is null.");
@@ -140,7 +144,7 @@ public class BleDiscoveryScanProvider extends DiscoveryScanProvider {
             return;
         }
 
-        byte[] serviceData = record.getServiceData(DiscoveryAdvertisement.FIRA_CP_PARCEL_UUID);
+        byte[] serviceData = record.getServiceData(UuidConstants.FIRA_CP_PARCEL_UUID);
         if (serviceData == null) {
             Log.w(TAG, "Ignoring scan result. Empty ServiceData");
             return;
@@ -183,9 +187,7 @@ public class BleDiscoveryScanProvider extends DiscoveryScanProvider {
         }
         // Add scan filter for FiRa Connector Primary Service UUID.
         scanFilterList.add(
-                new ScanFilter.Builder()
-                        .setServiceUuid(DiscoveryAdvertisement.FIRA_CP_PARCEL_UUID)
-                        .build());
+                new ScanFilter.Builder().setServiceUuid(UuidConstants.FIRA_CP_PARCEL_UUID).build());
 
         return scanFilterList;
     }

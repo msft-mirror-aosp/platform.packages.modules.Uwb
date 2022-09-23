@@ -37,9 +37,7 @@ import com.android.server.uwb.discovery.info.VendorSpecificData;
 
 import java.util.concurrent.Executor;
 
-/**
- * Class for UWB discovery advertise provider using BLE.
- */
+/** Class for UWB discovery advertise provider using BLE. */
 @WorkerThread
 public class BleDiscoveryAdvertiseProvider extends DiscoveryAdvertiseProvider {
     private static final String TAG = "BleDiscoveryAdvertiseProvider";
@@ -63,11 +61,6 @@ public class BleDiscoveryAdvertiseProvider extends DiscoveryAdvertiseProvider {
                                     + status);
                     mExecutor.execute(() -> processAdvertiseFailed(status));
                 }
-
-                @Override
-                public void onAdvertisingSetStopped(AdvertisingSet advertisingSet) {
-                    Log.i(TAG, "onAdvertisingSetStopped():");
-                }
             };
 
     public BleDiscoveryAdvertiseProvider(
@@ -89,7 +82,10 @@ public class BleDiscoveryAdvertiseProvider extends DiscoveryAdvertiseProvider {
     }
 
     @Override
-    public boolean startAdvertise() {
+    public boolean start() {
+        if (!super.start()) {
+            return false;
+        }
         BluetoothLeAdvertiser advertiser = getBleAdvertiser();
         if (advertiser == null) {
             Log.w(TAG, "startAdvertise failed due to BluetoothLeAdvertiser is null.");
@@ -114,7 +110,10 @@ public class BleDiscoveryAdvertiseProvider extends DiscoveryAdvertiseProvider {
     }
 
     @Override
-    public boolean stopAdvertise() {
+    public boolean stop() {
+        if (!super.stop()) {
+            return false;
+        }
         BluetoothLeAdvertiser advertiser = getBleAdvertiser();
         if (advertiser == null) {
             Log.w(TAG, "stopAdvertise failed due to BluetoothLeAdvertiser is null.");
@@ -170,7 +169,7 @@ public class BleDiscoveryAdvertiseProvider extends DiscoveryAdvertiseProvider {
         return new AdvertiseData.Builder()
                 .setIncludeDeviceName(false)
                 .setIncludeTxPowerLevel(false)
-                .addServiceUuid(DiscoveryAdvertisement.FIRA_CP_PARCEL_UUID)
+                .addServiceUuid(UuidConstants.FIRA_CP_PARCEL_UUID)
                 .build();
     }
 
@@ -179,9 +178,9 @@ public class BleDiscoveryAdvertiseProvider extends DiscoveryAdvertiseProvider {
                 new AdvertiseData.Builder()
                         .setIncludeDeviceName(false)
                         .setIncludeTxPowerLevel(false)
-                        .addServiceUuid(DiscoveryAdvertisement.FIRA_CP_PARCEL_UUID)
+                        .addServiceUuid(UuidConstants.FIRA_CP_PARCEL_UUID)
                         .addServiceData(
-                                DiscoveryAdvertisement.FIRA_CP_PARCEL_UUID,
+                                UuidConstants.FIRA_CP_PARCEL_UUID,
                                 DiscoveryAdvertisement.toBytes(
                                         mAdvertiseInfo.discoveryAdvertisement,
                                         /*includeVendorSpecificData=*/ false));
