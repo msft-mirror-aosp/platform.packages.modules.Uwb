@@ -32,6 +32,7 @@ import android.os.RemoteException;
 import android.util.Log;
 import android.util.Pair;
 import android.uwb.IUwbAdapterStateCallbacks;
+import android.uwb.IUwbOemExtensionCallback;
 import android.uwb.IUwbRangingCallbacks;
 import android.uwb.IUwbVendorUciCallback;
 import android.uwb.RangingChangeReason;
@@ -112,6 +113,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             mChipIdToStateMap;
     private @StateChangeReason int mLastStateChangedReason;
     private  IUwbVendorUciCallback mCallBack = null;
+    private IUwbOemExtensionCallback mOemExtensionCallback = null;
     private final Handler mHandler;
     private GenericSpecificationParams mCachedSpecificationParams;
 
@@ -148,6 +150,14 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
 
     public Handler getHandler() {
         return mHandler;
+    }
+
+    public boolean isOemExtensionCbRegistered() {
+        return mOemExtensionCallback != null;
+    }
+
+    public IUwbOemExtensionCallback getOemExtensionCallback() {
+        return mOemExtensionCallback;
     }
 
     private void updateState(int state, int reason, String chipId) {
@@ -204,6 +214,16 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             Log.e(TAG, "onDeviceStatusNotificationReceived with invalid chipId " + chipId
                     + ". Ignoring...");
             return;
+        }
+
+        // TODO: Add support library
+        PersistableBundle bundle = new PersistableBundle();
+        if (mOemExtensionCallback != null) {
+            try {
+                mOemExtensionCallback.onDeviceStatusNotificationReceived(bundle);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Failed to send status notification to oem", e);
+            }
         }
 
         if ((byte) deviceState == UwbUciConstants.DEVICE_STATE_ERROR) {
@@ -297,6 +317,19 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         mCallBack = null;
     }
 
+    public void registerOemExtensionCallback(IUwbOemExtensionCallback callback) {
+        if (isOemExtensionCbRegistered()) {
+            Log.w(TAG, "Oem extension callback being re-registered");
+        }
+        Log.e(TAG, "Register Oem Extension callback");
+        mOemExtensionCallback = callback;
+    }
+
+    public void unregisterOemExtensionCallback(IUwbOemExtensionCallback callback) {
+        Log.e(TAG, "Unregister Oem Extension callback");
+        mOemExtensionCallback = null;
+    }
+
     /**
      * Get cached specification params
      */
@@ -311,6 +344,9 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
      * Get specification info
      */
     public PersistableBundle getSpecificationInfo(String chipId) {
+        if (!isUwbEnabled()) {
+            throw new IllegalStateException("Uwb is not enabled");
+        }
         // TODO(b/211445008): Consolidate to a single uwb thread.
         Pair<Integer, GenericSpecificationParams> specificationParams =
                 mConfigurationManager.getCapsInfo(
@@ -557,22 +593,22 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             int type = msg.what;
             switch (type) {
                 case TASK_ENABLE:
-                    enableInternal();
+                    handleEnable();
                     break;
 
                 case TASK_DISABLE:
                     mSessionManager.deinitAllSession();
-                    disableInternal();
+                    handleDisable();
                     break;
 
                 case TASK_RESTART:
                     mSessionManager.deinitAllSession();
-                    disableInternal();
-                    enableInternal();
+                    handleDisable();
+                    handleEnable();
                     break;
 
                 case TASK_NOTIFY_ADAPTER_STATE:
-                    notifyAdapterStateInternal();
+                    handleNotifyAdapterState();
                     break;
 
                 default:
@@ -593,13 +629,13 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             this.sendMessageDelayed(msg, delayMillis);
         }
 
-        private void enableInternal() {
+        private void handleEnable() {
             if (isUwbEnabled()) {
                 Log.i(TAG, "UWB service is already enabled");
                 return;
             }
             try {
-                WatchDogThread watchDog = new WatchDogThread("enableInternal", WATCHDOG_MS);
+                WatchDogThread watchDog = new WatchDogThread("handleEnable", WATCHDOG_MS);
                 watchDog.start();
 
                 Log.i(TAG, "Initialization start ...");
@@ -643,13 +679,13 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             }
         }
 
-        private void disableInternal() {
+        private void handleDisable() {
             if (!isUwbEnabled()) {
                 Log.i(TAG, "UWB service is already disabled");
                 return;
             }
 
-            WatchDogThread watchDog = new WatchDogThread("disableInternal", WATCHDOG_MS);
+            WatchDogThread watchDog = new WatchDogThread("handleDisable", WATCHDOG_MS);
             watchDog.start();
 
             try {
@@ -671,7 +707,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             }
         }
 
-        private void notifyAdapterStateInternal() {
+        private void handleNotifyAdapterState() {
             try {
                 for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
                     Log.d(TAG, "enabling chip " + chipId);

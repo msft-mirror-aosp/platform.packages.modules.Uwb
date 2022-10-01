@@ -34,6 +34,7 @@ import static com.google.uwb.support.fira.FiraParams.AOA_RESULT_REQUEST_MODE_REQ
 import static com.google.uwb.support.fira.FiraParams.HOPPING_MODE_DISABLE;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
+import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_MANY_TO_MANY;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_ONE_TO_MANY;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_UNICAST;
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
@@ -52,6 +53,8 @@ import android.annotation.NonNull;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.os.Binder;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.RemoteException;
@@ -130,6 +133,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             "get-specification-info",
             "enable-diagnostics-notification",
             "disable-diagnostics-notification",
+            "take-bugreport",
     };
 
     @VisibleForTesting
@@ -173,6 +177,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     private final UwbServiceCore mUwbServiceCore;
     private final UwbCountryCode mUwbCountryCode;
     private final NativeUwbManager mNativeUwbManager;
+    private final UwbDiagnostics mUwbDiagnostics;
+    private final DeviceConfigFacade mDeviceConfig;
+    private final Looper mLooper;
     private final Context mContext;
 
     UwbShellCommand(UwbInjector uwbInjector, UwbServiceImpl uwbService, Context context) {
@@ -181,6 +188,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         mUwbCountryCode = uwbInjector.getUwbCountryCode();
         mNativeUwbManager = uwbInjector.getNativeUwbManager();
         mUwbServiceCore = uwbInjector.getUwbServiceCore();
+        mUwbDiagnostics = uwbInjector.getUwbDiagnostics();
+        mDeviceConfig = uwbInjector.getDeviceConfigFacade();
+        mLooper = uwbInjector.getUwbServiceLooper();
     }
 
     private static String bundleToString(@Nullable PersistableBundle bundle) {
@@ -413,6 +423,18 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                         ? MULTI_NODE_MODE_ONE_TO_MANY
                         : MULTI_NODE_MODE_UNICAST);
             }
+            if (option.equals("-m")) {
+                String mode = getNextArgRequired();
+                if (mode.equals("unicast")) {
+                    builder.setMultiNodeMode(MULTI_NODE_MODE_UNICAST);
+                } else if (mode.equals("one-to-many")) {
+                    builder.setMultiNodeMode(MULTI_NODE_MODE_ONE_TO_MANY);
+                } else if (mode.equals("many-to-many")) {
+                    builder.setMultiNodeMode(MULTI_NODE_MODE_MANY_TO_MANY);
+                } else {
+                    throw new IllegalArgumentException("Unknown multi-node mode: " + mode);
+                }
+            }
             if (option.equals("-u")) {
                 String usage = getNextArgRequired();
                 if (usage.equals("ds-twr")) {
@@ -426,6 +448,12 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 } else {
                     throw new IllegalArgumentException("Unknown round usage: " + usage);
                 }
+            }
+            if (option.equals("-l")) {
+                builder.setRangingIntervalMs(Integer.parseInt(getNextArgRequired()));
+            }
+            if (option.equals("-s")) {
+                builder.setSlotsPerRangingRound(Integer.parseInt(getNextArgRequired()));
             }
             if (option.equals("-x")) {
                 String[] rangeDataNtfProximityString = getNextArgRequired().split(",");
@@ -915,6 +943,14 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     mUwbServiceCore.enableDiagnostics(false, 0);
                     return 0;
                 }
+                case "take-bugreport": {
+                    new Handler(mLooper).post(() -> {
+                        if (mDeviceConfig.isDeviceErrorBugreportEnabled()) {
+                            mUwbDiagnostics.takeBugReport("Uwb bugreport test");
+                        }
+                    });
+                    return 0;
+                }
                 default:
                     return handleDefaultCommands(cmd);
             }
@@ -965,7 +1001,10 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-r initiator|responder](device-role)"
                 + " [-a <deviceAddress>](device-address)"
                 + " [-d <destAddress-1, destAddress-2,...>](dest-addresses)"
+                + " [-m <unicast|one-to-many|many-to-many>](multi-node mode)"
                 + " [-u ds-twr|ss-twr|ds-twr-non-deferred|ss-twr-non-deferred](round-usage)"
+                + " [-l <ranging-interval-ms>](ranging-interval-ms)"
+                + " [-s <slots-per-ranging-round>](slots-per-ranging-round)"
                 + " [-x <proximity-near-cm, proximity-far-cm>](range-data-ntf-proximity)"
                 + " [-z <numRangeMrmts, numAoaAzimuthMrmts, numAoaElevationMrmts>"
                 + "(interleaving-ratio)"
@@ -1015,6 +1054,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("    Enable vendor diagnostics notification");
         pw.println("  disable-diagnostics-notification");
         pw.println("    Disable vendor diagnostics notification");
+        pw.println("  take-bugreport");
+        pw.println("    take bugreport through betterBug or alternatively bugreport manager");
     }
 
     private void onHelpPrivileged(PrintWriter pw) {

@@ -54,6 +54,7 @@ rust_test {
                 "liblog",
                 "libutils",
             ],
+            test_config_template: "uwb_host_rust_test_config_template.xml",
         },
     },
     // Support multilib variants (using different suffix per sub-architecture), which is needed on
@@ -65,7 +66,7 @@ rust_test {
             suffix: "32",
         },
         lib64: {
-            suffix: "",
+            suffix: "64",
         },
     },
     auto_gen_config: true,
