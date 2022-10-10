@@ -35,6 +35,7 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 
+import com.android.internal.annotations.Keep;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.HandlerExecutor;
 import com.android.server.uwb.data.UwbUciConstants;
@@ -45,6 +46,7 @@ import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -119,6 +121,7 @@ public class UwbCountryCode {
         mUwbInjector = uwbInjector;
     }
 
+    @Keep
     private class WifiCountryCodeCallback implements ActiveCountryCodeChangedCallback {
         public void onActiveCountryCodeChanged(@NonNull String countryCode) {
             setWifiCountryCode(countryCode);
@@ -157,7 +160,10 @@ public class UwbCountryCode {
         }
         Log.d(TAG, "Default country code from system property is "
                 + mUwbInjector.getOemDefaultCountryCode());
-        Set<Integer> slotIdxs = mSubscriptionManager.getActiveSubscriptionInfoList()
+        List<SubscriptionInfo> subscriptionInfoList =
+                mSubscriptionManager.getActiveSubscriptionInfoList();
+        if (subscriptionInfoList == null) return; // No sim
+        Set<Integer> slotIdxs = subscriptionInfoList
                 .stream()
                 .map(SubscriptionInfo::getSimSlotIndex)
                 .collect(Collectors.toSet());
@@ -293,7 +299,8 @@ public class UwbCountryCode {
      */
     public static boolean isValid(String countryCode) {
         return countryCode != null && countryCode.length() == 2
-                && countryCode.chars().allMatch(Character::isLetterOrDigit);
+                && countryCode.chars().allMatch(Character::isLetterOrDigit)
+                && !countryCode.equals(DEFAULT_COUNTRY_CODE);
     }
 
     /**
