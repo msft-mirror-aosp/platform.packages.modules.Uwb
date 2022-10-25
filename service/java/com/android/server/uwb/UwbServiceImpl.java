@@ -34,11 +34,13 @@ import android.util.Log;
 import android.uwb.IUwbAdapter;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbAdfProvisionStateCallbacks;
+import android.uwb.IUwbOemExtensionCallback;
 import android.uwb.IUwbRangingCallbacks;
 import android.uwb.IUwbVendorUciCallback;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.uwb.data.UwbUciConstants;
 
 import com.google.uwb.support.generic.GenericSpecificationParams;
@@ -155,6 +157,30 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             throws RemoteException {
         enforceUwbPrivilegedPermission();
         mUwbServiceCore.unregisterAdapterStateCallbacks(adapterStateCallbacks);
+    }
+
+    // TODO: Add @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE) after ag/19901449
+    @Override
+    public void registerOemExtensionCallback(IUwbOemExtensionCallback callbacks)
+            throws RemoteException {
+        if (!SdkLevel.isAtLeastU()) {
+            throw new UnsupportedOperationException();
+        }
+        Log.i(TAG, "Register Oem Extension callback");
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.registerOemExtensionCallback(callbacks);
+    }
+
+    // TODO: Add @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE) after ag/19901449
+    @Override
+    public void unregisterOemExtensionCallback(IUwbOemExtensionCallback callbacks)
+            throws RemoteException {
+        if (!SdkLevel.isAtLeastU()) {
+            throw new UnsupportedOperationException();
+        }
+        Log.i(TAG, "Unregister Oem Extension callback");
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.unregisterOemExtensionCallback(callbacks);
     }
 
     @Override
