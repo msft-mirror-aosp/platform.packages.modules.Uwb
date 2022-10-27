@@ -27,7 +27,6 @@ import static androidx.core.uwb.backend.impl.internal.Utils.UWB_SYSTEM_CALLBACK_
 
 import static java.util.Objects.requireNonNull;
 
-import android.annotation.Nullable;
 import android.annotation.WorkerThread;
 import android.os.PersistableBundle;
 import android.util.Log;
@@ -36,12 +35,13 @@ import android.uwb.RangingReport;
 import android.uwb.RangingSession;
 import android.uwb.UwbManager;
 
+import androidx.annotation.Nullable;
+
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /** Implements start/stop ranging operations. */
 public abstract class RangingDevice {
@@ -51,8 +51,7 @@ public abstract class RangingDevice {
 
     protected final UwbManager mUwbManager;
 
-    private final OpAsyncCallbackRunner<Boolean> mOpAsyncCallbackRunner =
-            new OpAsyncCallbackRunner<>();
+    private final OpAsyncCallbackRunner<Boolean> mOpAsyncCallbackRunner;
 
     @Nullable private UwbAddress mLocalAddress;
 
@@ -78,9 +77,19 @@ public abstract class RangingDevice {
 
     private boolean mRangingReportedAllowed = false;
 
-    RangingDevice(UwbManager manager, Executor executor) {
+    @Nullable private String mChipId = null;
+
+    RangingDevice(UwbManager manager, Executor executor,
+            OpAsyncCallbackRunner opAsyncCallbackRunner) {
         mUwbManager = manager;
         this.mSystemCallbackExecutor = executor;
+        mOpAsyncCallbackRunner = opAsyncCallbackRunner;
+        mOpAsyncCallbackRunner.setOperationTimeoutMillis(RANGING_START_TIMEOUT_MILLIS);
+    }
+
+    /** Sets the chip ID. By default, the default chip is used. */
+    public void setChipId(String chipId) {
+        mChipId = chipId;
     }
 
     public Boolean isForTesting() {
@@ -281,7 +290,8 @@ public abstract class RangingDevice {
      * RangingSessionCallback#REASON_FAILED_TO_START}
      */
     @Utils.UwbStatusCodes
-    public synchronized int startRanging(RangingSessionCallback callback) {
+    public synchronized int startRanging(
+            RangingSessionCallback callback, ExecutorService backendCallbackExecutor) {
         if (isAlive()) {
             return RANGING_ALREADY_STARTED;
         }
@@ -297,14 +307,23 @@ public abstract class RangingDevice {
                     TAG,
                     String.format("UWB parameter: %s, value: %s", key, parameters.getString(key)));
         }
-        mBackendCallbackExecutor = Executors.newSingleThreadExecutor();
+        mBackendCallbackExecutor = backendCallbackExecutor;
         boolean success =
                 mOpAsyncCallbackRunner.execOperation(
-                        () ->
+                        () -> {
+                            if (mChipId != null) {
                                 mUwbManager.openRangingSession(
                                         parameters,
                                         mSystemCallbackExecutor,
-                                        convertCallback(callback)),
+                                        convertCallback(callback),
+                                        mChipId);
+                            } else {
+                                mUwbManager.openRangingSession(
+                                        parameters,
+                                        mSystemCallbackExecutor,
+                                        convertCallback(callback));
+                            }
+                        },
                         "Open session");
 
         if (!success) {

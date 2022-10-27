@@ -20,6 +20,7 @@ import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TY
 import static com.android.server.uwb.util.UwbUtil.convertFloatToQFormat;
 import static com.android.server.uwb.util.UwbUtil.degreeToRadian;
 
+import android.os.PersistableBundle;
 import android.util.Pair;
 import android.uwb.AngleMeasurement;
 import android.uwb.AngleOfArrivalMeasurement;
@@ -70,7 +71,7 @@ public class UwbTestUtils {
                 TEST_AOA_DEST_ELEVATION_FOM, TEST_SLOT_IDX, TEST_RSSI);
         return new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
                 TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, TEST_RANGING_MEASURES_TYPE,
-                TEST_MAC_ADDRESS_MODE, noOfRangingMeasures, uwbTwoWayMeasurements);
+                TEST_MAC_ADDRESS_MODE, noOfRangingMeasures, uwbTwoWayMeasurements, new byte[0]);
     }
 
     // Helper method to generate a UwbRangingData instance and corresponding RangingMeasurement
@@ -79,6 +80,7 @@ public class UwbTestUtils {
             boolean isDestAoaAzimuthEnabled, boolean isDestAoaElevationEnabled,
             long elapsedRealtimeNanos) {
         UwbRangingData uwbRangingData = generateRangingData(TEST_STATUS);
+        PersistableBundle rangingReportMetadata = new PersistableBundle();
 
         AngleOfArrivalMeasurement aoaMeasurement = null;
         AngleOfArrivalMeasurement aoaDestMeasurement = null;
@@ -120,6 +122,7 @@ public class UwbTestUtils {
                     .setAltitude(aoaDestElevation)
                     .build();
         }
+        PersistableBundle rangingMeasurementMetadata = new PersistableBundle();
         RangingMeasurement rangingMeasurement = new RangingMeasurement.Builder()
                 .setRemoteDeviceAddress(UwbAddress.fromBytes(
                         TlvUtil.getReverseBytes(TEST_MAC_ADDRESS)))
@@ -135,9 +138,11 @@ public class UwbTestUtils {
                 .setDestinationAngleOfArrivalMeasurement(aoaDestMeasurement)
                 .setLineOfSight(TEST_LOS)
                 .setRssiDbm(-TEST_RSSI / 2)
+                .setRangingMeasurementMetadata(rangingMeasurementMetadata)
                 .build();
         RangingReport rangingReport = new RangingReport.Builder()
                 .addMeasurement(rangingMeasurement)
+                .addRangingReportMetadata(rangingReportMetadata)
                 .build();
         return Pair.create(uwbRangingData, rangingReport);
     }
