@@ -34,6 +34,7 @@ import static com.google.uwb.support.fira.FiraParams.AOA_RESULT_REQUEST_MODE_REQ
 import static com.google.uwb.support.fira.FiraParams.HOPPING_MODE_DISABLE;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
+import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_MANY_TO_MANY;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_ONE_TO_MANY;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_UNICAST;
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
@@ -52,6 +53,8 @@ import android.annotation.NonNull;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.os.Binder;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.RemoteException;
@@ -118,6 +121,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             "help",
             "status",
             "get-country-code",
+            "get-log-mode",
             "enable-uwb",
             "disable-uwb",
             "start-fira-ranging-session",
@@ -130,6 +134,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             "get-specification-info",
             "enable-diagnostics-notification",
             "disable-diagnostics-notification",
+            "take-bugreport",
     };
 
     @VisibleForTesting
@@ -144,8 +149,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     .setDestAddressList(Arrays.asList(UwbAddress.fromBytes(new byte[] { 0x4, 0x6})))
                     .setMultiNodeMode(MULTI_NODE_MODE_UNICAST)
                     .setRangingRoundUsage(RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE)
-                    .setVendorId(new byte[]{0x5, 0x78})
-                    .setStaticStsIV(new byte[]{0x1a, 0x55, 0x77, 0x47, 0x7e, 0x7d});
+                    .setVendorId(new byte[]{0x7, 0x8})
+                    .setStaticStsIV(new byte[]{0x1, 0x2, 0x3, 0x4, 0x5, 0x6});
 
     @VisibleForTesting
     public static final CccOpenRangingParams.Builder DEFAULT_CCC_OPEN_RANGING_PARAMS =
@@ -172,15 +177,23 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     private final UwbServiceImpl mUwbService;
     private final UwbServiceCore mUwbServiceCore;
     private final UwbCountryCode mUwbCountryCode;
+    private final UciLogModeStore mUciLogModeStore;
     private final NativeUwbManager mNativeUwbManager;
+    private final UwbDiagnostics mUwbDiagnostics;
+    private final DeviceConfigFacade mDeviceConfig;
+    private final Looper mLooper;
     private final Context mContext;
 
     UwbShellCommand(UwbInjector uwbInjector, UwbServiceImpl uwbService, Context context) {
         mUwbService = uwbService;
         mContext = context;
         mUwbCountryCode = uwbInjector.getUwbCountryCode();
+        mUciLogModeStore = uwbInjector.getUciLogModeStore();
         mNativeUwbManager = uwbInjector.getNativeUwbManager();
         mUwbServiceCore = uwbInjector.getUwbServiceCore();
+        mUwbDiagnostics = uwbInjector.getUwbDiagnostics();
+        mDeviceConfig = uwbInjector.getDeviceConfigFacade();
+        mLooper = uwbInjector.getUwbServiceLooper();
     }
 
     private static String bundleToString(@Nullable PersistableBundle bundle) {
@@ -413,6 +426,18 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                         ? MULTI_NODE_MODE_ONE_TO_MANY
                         : MULTI_NODE_MODE_UNICAST);
             }
+            if (option.equals("-m")) {
+                String mode = getNextArgRequired();
+                if (mode.equals("unicast")) {
+                    builder.setMultiNodeMode(MULTI_NODE_MODE_UNICAST);
+                } else if (mode.equals("one-to-many")) {
+                    builder.setMultiNodeMode(MULTI_NODE_MODE_ONE_TO_MANY);
+                } else if (mode.equals("many-to-many")) {
+                    builder.setMultiNodeMode(MULTI_NODE_MODE_MANY_TO_MANY);
+                } else {
+                    throw new IllegalArgumentException("Unknown multi-node mode: " + mode);
+                }
+            }
             if (option.equals("-u")) {
                 String usage = getNextArgRequired();
                 if (usage.equals("ds-twr")) {
@@ -426,6 +451,12 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 } else {
                     throw new IllegalArgumentException("Unknown round usage: " + usage);
                 }
+            }
+            if (option.equals("-l")) {
+                builder.setRangingIntervalMs(Integer.parseInt(getNextArgRequired()));
+            }
+            if (option.equals("-s")) {
+                builder.setSlotsPerRangingRound(Integer.parseInt(getNextArgRequired()));
             }
             if (option.equals("-x")) {
                 String[] rangeDataNtfProximityString = getNextArgRequired().split(",");
@@ -502,12 +533,16 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 }
             }
             if (option.equals("-v")) {
-                String vendor_id = getNextArgRequired();
-                if (vendor_id.length() == 4) {
-                    builder.setVendorId(BaseEncoding.base16().decode(vendor_id.toUpperCase()));
+                String vendorId = getNextArgRequired();
+                if (vendorId.length() == 4) {
+                    builder.setVendorId(BaseEncoding.base16().decode(vendorId.toUpperCase()));
                 } else {
                     throw new IllegalArgumentException("vendorId expecting 2 bytes");
                 }
+            }
+            if (option.equals("-h")) {
+                int slotDurationRstu = Integer.parseInt(getNextArgRequired());
+                builder.setSlotDurationRstu(slotDurationRstu);
             }
             option = getNextOption();
         }
@@ -823,6 +858,20 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 case "get-country-code":
                     pw.println("Uwb Country Code = " + mUwbCountryCode.getCountryCode());
                     return 0;
+                case "set-log-mode": {
+                    String logMode = getNextArgRequired();
+                    if (!UciLogModeStore.isValid(logMode)) {
+                        pw.println("Invalid argument: Log mode must be one of the following:"
+                                + " Disabled, Filtered, or Unfiltered. But got log mode " + logMode
+                                + " instead");
+                        return -1;
+                    }
+                    mUciLogModeStore.storeMode(logMode);
+                    return 0;
+                }
+                case "get-log-mode":
+                    pw.println("UWB Log Mode = " + mUciLogModeStore.getMode());
+                    return 0;
                 case "status":
                     printStatus(pw);
                     return 0;
@@ -915,6 +964,14 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     mUwbServiceCore.enableDiagnostics(false, 0);
                     return 0;
                 }
+                case "take-bugreport": {
+                    new Handler(mLooper).post(() -> {
+                        if (mDeviceConfig.isDeviceErrorBugreportEnabled()) {
+                            mUwbDiagnostics.takeBugReport("Uwb bugreport test");
+                        }
+                    });
+                    return 0;
+                }
                 default:
                     return handleDefaultCommands(cmd);
             }
@@ -953,6 +1010,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("    Gets status of UWB stack");
         pw.println("  get-country-code");
         pw.println("    Gets country code as a two-letter string");
+        pw.println("  get-log-mode");
+        pw.println("    Get the log mode for UCI packet capturing");
         pw.println("  enable-uwb");
         pw.println("    Toggle UWB on");
         pw.println("  disable-uwb");
@@ -965,14 +1024,18 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-r initiator|responder](device-role)"
                 + " [-a <deviceAddress>](device-address)"
                 + " [-d <destAddress-1, destAddress-2,...>](dest-addresses)"
+                + " [-m <unicast|one-to-many|many-to-many>](multi-node mode)"
                 + " [-u ds-twr|ss-twr|ds-twr-non-deferred|ss-twr-non-deferred](round-usage)"
+                + " [-l <ranging-interval-ms>](ranging-interval-ms)"
+                + " [-s <slots-per-ranging-round>](slots-per-ranging-round)"
                 + " [-x <proximity-near-cm, proximity-far-cm>](range-data-ntf-proximity)"
                 + " [-z <numRangeMrmts, numAoaAzimuthMrmts, numAoaElevationMrmts>"
                 + "(interleaving-ratio)"
                 + " [-e none|enabled|azimuth-only|elevation-only](aoa type)"
                 + " [-f <tof,azimuth,elevation,aoa-fom>(result-report-config)"
                 + " [-g <staticStsIV>(staticStsIV 6-bytes)"
-                + " [-v <staticStsVendorId>(staticStsVendorId 2-bytes)");
+                + " [-v <staticStsVendorId>(staticStsVendorId 2-bytes)"
+                + " [-h <slot-duration-rstu>(slot-duration-rstu, default=2400)");
         pw.println("    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
@@ -1015,6 +1078,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("    Enable vendor diagnostics notification");
         pw.println("  disable-diagnostics-notification");
         pw.println("    Disable vendor diagnostics notification");
+        pw.println("  take-bugreport");
+        pw.println("    take bugreport through betterBug or alternatively bugreport manager");
     }
 
     private void onHelpPrivileged(PrintWriter pw) {
@@ -1022,6 +1087,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("    Sets country code to <two-letter code> or left for normal value");
         pw.println("  get-power-stats");
         pw.println("    Get power stats");
+        pw.println("  set-log-mode disabled|filtered|unfiltered");
+        pw.println("    Sets the log mode for UCI packet capturing");
     }
 
     @Override

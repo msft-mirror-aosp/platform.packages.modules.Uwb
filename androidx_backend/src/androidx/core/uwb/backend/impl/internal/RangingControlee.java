@@ -19,8 +19,9 @@ package androidx.core.uwb.backend.impl.internal;
 import static java.util.Objects.requireNonNull;
 
 import android.os.Build.VERSION_CODES;
-import android.support.annotation.RequiresApi;
 import android.uwb.UwbManager;
+
+import androidx.annotation.RequiresApi;
 
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
@@ -31,8 +32,9 @@ import java.util.concurrent.Executor;
 @RequiresApi(api = VERSION_CODES.S)
 public class RangingControlee extends RangingDevice {
 
-    RangingControlee(UwbManager manager, Executor executor) {
-        super(manager, executor);
+    RangingControlee(UwbManager manager, Executor executor,
+            OpAsyncCallbackRunner opAsyncCallbackRunner) {
+        super(manager, executor, opAsyncCallbackRunner);
     }
 
     @Override

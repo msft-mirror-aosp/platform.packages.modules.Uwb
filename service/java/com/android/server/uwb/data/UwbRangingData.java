@@ -26,10 +26,13 @@ public class UwbRangingData {
     public int mMacAddressMode;
     public int mNoOfRangingMeasures;
     public UwbTwoWayMeasurement[] mRangingTwoWayMeasures;
+    public byte[] mRawNtfData;
+    public UwbOwrAoaMeasurement mRangingOwrAoaMeasure;
 
     public UwbRangingData(long seqCounter, long sessionId, int rcrIndication,
             long currRangingInterval, int rangingMeasuresType, int macAddressMode,
-            int noOfRangingMeasures, UwbTwoWayMeasurement[] rangingTwoWayMeasures) {
+            int noOfRangingMeasures, UwbTwoWayMeasurement[] rangingTwoWayMeasures,
+            byte[] rawNtfData) {
         this.mSeqCounter = seqCounter;
         this.mSessionId = sessionId;
         this.mRcrIndication = rcrIndication;
@@ -38,6 +41,20 @@ public class UwbRangingData {
         this.mMacAddressMode = macAddressMode;
         this.mNoOfRangingMeasures = noOfRangingMeasures;
         this.mRangingTwoWayMeasures = rangingTwoWayMeasures;
+        this.mRawNtfData = rawNtfData;
+    }
+
+    public UwbRangingData(long seqCounter, long sessionId, int rcrIndication,
+            long currRangingInterval, int rangingMeasuresType, int macAddressMode,
+            int noOfRangingMeasures, UwbOwrAoaMeasurement rangingOwrAoaMeasure) {
+        this.mSeqCounter = seqCounter;
+        this.mSessionId = sessionId;
+        this.mRcrIndication = rcrIndication;
+        this.mCurrRangingInterval = currRangingInterval;
+        this.mRangingMeasuresType = rangingMeasuresType;
+        this.mMacAddressMode = macAddressMode;
+        this.mNoOfRangingMeasures = noOfRangingMeasures;
+        this.mRangingOwrAoaMeasure = rangingOwrAoaMeasure;
     }
 
     public long getSequenceCounter() {
@@ -72,6 +89,14 @@ public class UwbRangingData {
         return mRangingTwoWayMeasures;
     }
 
+    public byte[] getRawNtfData() {
+        return mRawNtfData;
+    }
+
+    public UwbOwrAoaMeasurement getRangingOwrAoaMeasure() {
+        return mRangingOwrAoaMeasure;
+    }
+
     public String toString() {
         if (mRangingMeasuresType == UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY) {
             return "UwbRangingData { "
@@ -83,6 +108,18 @@ public class UwbRangingData {
                     + ", MacAddressMode = " + mMacAddressMode
                     + ", NoOfRangingMeasures = " + mNoOfRangingMeasures
                     + ", RangingTwoWayMeasures = " + Arrays.toString(mRangingTwoWayMeasures)
+                    + ", RawNotificationData = " + Arrays.toString(mRawNtfData)
+                    + '}';
+        } else if (mRangingMeasuresType == UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA) {
+            return "UwbRangingData { "
+                    + " SeqCounter = " + mSeqCounter
+                    + ", SessionId = " + mSessionId
+                    + ", RcrIndication = " + mRcrIndication
+                    + ", CurrRangingInterval = " + mCurrRangingInterval
+                    + ", RangingMeasuresType = " + mRangingMeasuresType
+                    + ", MacAddressMode = " + mMacAddressMode
+                    + ", NoOfRangingMeasures = " + mNoOfRangingMeasures
+                    + ", RangingOwrAoaMeasure = " + mRangingOwrAoaMeasure.toString()
                     + '}';
         } else {
             // TODO(jh0.jang) : ONE WAY RANGING(TDOA)?
