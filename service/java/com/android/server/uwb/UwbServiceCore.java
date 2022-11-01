@@ -32,11 +32,13 @@ import android.os.RemoteException;
 import android.util.Log;
 import android.util.Pair;
 import android.uwb.IUwbAdapterStateCallbacks;
+import android.uwb.IUwbOemExtensionCallback;
 import android.uwb.IUwbRangingCallbacks;
 import android.uwb.IUwbVendorUciCallback;
 import android.uwb.RangingChangeReason;
 import android.uwb.SessionHandle;
 import android.uwb.StateChangeReason;
+import android.uwb.UwbAddress;
 import android.uwb.UwbManager.AdapterStateCallback;
 
 import androidx.annotation.Nullable;
@@ -58,6 +60,7 @@ import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.generic.GenericParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
+import com.google.uwb.support.oemextension.DeviceStatus;
 import com.google.uwb.support.profile.UuidBundleWrapper;
 
 import java.io.FileDescriptor;
@@ -112,6 +115,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             mChipIdToStateMap;
     private @StateChangeReason int mLastStateChangedReason;
     private  IUwbVendorUciCallback mCallBack = null;
+    private IUwbOemExtensionCallback mOemExtensionCallback = null;
     private final Handler mHandler;
     private GenericSpecificationParams mCachedSpecificationParams;
 
@@ -138,9 +142,14 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         mUwbInjector = uwbInjector;
 
         mChipIdToStateMap = new HashMap<>();
-        for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
-            updateState(AdapterStateCallback.STATE_DISABLED, StateChangeReason.SYSTEM_BOOT, chipId);
-        }
+        mUwbInjector.getMultichipData().setOnInitializedListener(
+                () -> {
+                    for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
+                        updateState(AdapterStateCallback.STATE_DISABLED,
+                                StateChangeReason.SYSTEM_BOOT,
+                                chipId);
+                    }
+                });
 
         mEnableDisableTask = new EnableDisableTask(serviceLooper);
         mHandler = new Handler(serviceLooper);
@@ -148,6 +157,14 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
 
     public Handler getHandler() {
         return mHandler;
+    }
+
+    public boolean isOemExtensionCbRegistered() {
+        return mOemExtensionCallback != null;
+    }
+
+    public IUwbOemExtensionCallback getOemExtensionCallback() {
+        return mOemExtensionCallback;
     }
 
     private void updateState(int state, int reason, String chipId) {
@@ -204,6 +221,19 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             Log.e(TAG, "onDeviceStatusNotificationReceived with invalid chipId " + chipId
                     + ". Ignoring...");
             return;
+        }
+
+        if (mOemExtensionCallback != null) {
+            PersistableBundle deviceStateBundle = new DeviceStatus.Builder()
+                    .setDeviceState(deviceState)
+                    .setChipId(chipId)
+                    .build()
+                    .toBundle();
+            try {
+                mOemExtensionCallback.onDeviceStatusNotificationReceived(deviceStateBundle);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Failed to send status notification to oem", e);
+            }
         }
 
         if ((byte) deviceState == UwbUciConstants.DEVICE_STATE_ERROR) {
@@ -297,6 +327,19 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         mCallBack = null;
     }
 
+    public void registerOemExtensionCallback(IUwbOemExtensionCallback callback) {
+        if (isOemExtensionCbRegistered()) {
+            Log.w(TAG, "Oem extension callback being re-registered");
+        }
+        Log.e(TAG, "Register Oem Extension callback");
+        mOemExtensionCallback = callback;
+    }
+
+    public void unregisterOemExtensionCallback(IUwbOemExtensionCallback callback) {
+        Log.e(TAG, "Unregister Oem Extension callback");
+        mOemExtensionCallback = null;
+    }
+
     /**
      * Get cached specification params
      */
@@ -311,6 +354,9 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
      * Get specification info
      */
     public PersistableBundle getSpecificationInfo(String chipId) {
+        if (!isUwbEnabled()) {
+            throw new IllegalStateException("Uwb is not enabled");
+        }
         // TODO(b/211445008): Consolidate to a single uwb thread.
         Pair<Integer, GenericSpecificationParams> specificationParams =
                 mConfigurationManager.getCapsInfo(
@@ -470,8 +516,22 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         mSessionManager.reconfigure(sessionHandle, reconfigureRangingParams);
     }
 
+    /** Send the payload data to a remote device in the UWB session */
+    public void sendData(SessionHandle sessionHandle, UwbAddress remoteDeviceAddress,
+            PersistableBundle params, byte[] data) throws RemoteException {
+        if (!isUwbEnabled()) {
+            throw new IllegalStateException("Uwb is not enabled");
+        }
+
+        mSessionManager.sendData(sessionHandle, remoteDeviceAddress, params, data);
+    }
+
     public /* @UwbManager.AdapterStateCallback.State */ int getAdapterState() {
         synchronized (UwbServiceCore.this) {
+            if (mChipIdToStateMap.isEmpty()) {
+                return AdapterStateCallback.STATE_DISABLED;
+            }
+
             boolean isActive = false;
             for (int state : mChipIdToStateMap.values()) {
                 if (state == AdapterStateCallback.STATE_DISABLED) {
