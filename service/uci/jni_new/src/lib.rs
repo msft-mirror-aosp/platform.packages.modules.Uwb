@@ -18,4 +18,11 @@
 //! UciManager. In conjunction with libuci_hal_android and libuwb_core, this provides a replacement
 //! for libuwb_uci_jni_rust.
 
+mod dispatcher;
+mod error;
+mod helper;
+mod jclass_name;
+mod notification_manager_android;
+mod unique_jvm;
+
 pub mod uci_jni_android_new;

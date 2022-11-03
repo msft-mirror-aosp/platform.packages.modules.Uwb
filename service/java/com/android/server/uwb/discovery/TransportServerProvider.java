@@ -26,14 +26,7 @@ public abstract class TransportServerProvider extends TransportProvider {
 
     /** Callback for listening to transport server events. */
     @WorkerThread
-    public interface TransportServerCallback {
-
-        /** Called when the server started processing. */
-        void onProcessingStarted();
-
-        /** Called when the server stopped processing. */
-        void onProcessingStopped();
-
+    public interface TransportServerCallback extends TransportCallback {
         /**
          * Called when the server receive new capabilites from the remote device.
          *

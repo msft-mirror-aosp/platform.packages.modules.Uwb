@@ -91,6 +91,16 @@ public class DataTypeConversionUtil {
     }
 
     /**
+     * Convert the byte array to int16 using big endian.
+     */
+    public static short byteArrayToI16(byte[] bytes) {
+        if (bytes.length != 2) {
+            throw new NumberFormatException("Expected length 2 but was " + bytes.length);
+        }
+        return ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).getShort();
+    }
+
+    /**
      * Convert the byte array to int using big endian.
      */
     public static int byteArrayToI32(byte[] bytes) {
@@ -105,7 +115,7 @@ public class DataTypeConversionUtil {
      */
     public static int arbitraryByteArrayToI32(byte[] bytes) {
         if (bytes.length > 4 || bytes.length < 1) {
-            throw new NumberFormatException("Expected length less than 4 but was " + bytes.length);
+            throw new NumberFormatException("Expected length less than 5 but was " + bytes.length);
         }
         ByteBuffer byteBuffer = ByteBuffer.allocate(Integer.BYTES);
         byteBuffer.position(Integer.BYTES - bytes.length);
