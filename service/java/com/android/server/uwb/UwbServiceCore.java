@@ -38,6 +38,7 @@ import android.uwb.IUwbVendorUciCallback;
 import android.uwb.RangingChangeReason;
 import android.uwb.SessionHandle;
 import android.uwb.StateChangeReason;
+import android.uwb.UwbAddress;
 import android.uwb.UwbManager.AdapterStateCallback;
 
 import androidx.annotation.Nullable;
@@ -141,9 +142,14 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         mUwbInjector = uwbInjector;
 
         mChipIdToStateMap = new HashMap<>();
-        for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
-            updateState(AdapterStateCallback.STATE_DISABLED, StateChangeReason.SYSTEM_BOOT, chipId);
-        }
+        mUwbInjector.getMultichipData().setOnInitializedListener(
+                () -> {
+                    for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
+                        updateState(AdapterStateCallback.STATE_DISABLED,
+                                StateChangeReason.SYSTEM_BOOT,
+                                chipId);
+                    }
+                });
 
         mEnableDisableTask = new EnableDisableTask(serviceLooper);
         mHandler = new Handler(serviceLooper);
@@ -510,8 +516,22 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         mSessionManager.reconfigure(sessionHandle, reconfigureRangingParams);
     }
 
+    /** Send the payload data to a remote device in the UWB session */
+    public void sendData(SessionHandle sessionHandle, UwbAddress remoteDeviceAddress,
+            PersistableBundle params, byte[] data) throws RemoteException {
+        if (!isUwbEnabled()) {
+            throw new IllegalStateException("Uwb is not enabled");
+        }
+
+        mSessionManager.sendData(sessionHandle, remoteDeviceAddress, params, data);
+    }
+
     public /* @UwbManager.AdapterStateCallback.State */ int getAdapterState() {
         synchronized (UwbServiceCore.this) {
+            if (mChipIdToStateMap.isEmpty()) {
+                return AdapterStateCallback.STATE_DISABLED;
+            }
+
             boolean isActive = false;
             for (int state : mChipIdToStateMap.values()) {
                 if (state == AdapterStateCallback.STATE_DISABLED) {
