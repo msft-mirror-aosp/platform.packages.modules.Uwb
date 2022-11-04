@@ -67,13 +67,15 @@ public class UwbServiceImpl {
     /** Gets a Ranging Controller session with given context. */
     public RangingController getController(Context context) {
         UwbManager uwbManagerWithContext = context.getSystemService(UwbManager.class);
-        return new RangingController(uwbManagerWithContext, mSerialExecutor);
+        return new RangingController(uwbManagerWithContext, mSerialExecutor,
+                new OpAsyncCallbackRunner());
     }
 
     /** Gets a Ranging Controlee session with given context. */
     public RangingControlee getControlee(Context context) {
         UwbManager uwbManagerWithContext = context.getSystemService(UwbManager.class);
-        return new RangingControlee(uwbManagerWithContext, mSerialExecutor);
+        return new RangingControlee(uwbManagerWithContext, mSerialExecutor,
+                new OpAsyncCallbackRunner());
     }
 
     /** Returns multi-chip information. */
@@ -118,18 +120,19 @@ public class UwbServiceImpl {
         int minRangingInterval = specificationParams.getMinRangingInterval();
         EnumSet<FiraParams.AoaCapabilityFlag> aoaCapabilityFlags =
                 specificationParams.getAoaCapabilities();
+        List<Integer> supportedChannels = specificationParams.getSupportedChannels();
         if (minRangingInterval <= 0) {
-            return new RangingCapabilities(
-                    true,
-                    aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_AZIMUTH_SUPPORT),
-                    aoaCapabilityFlags.contains(
-                            FiraParams.AoaCapabilityFlag.HAS_ELEVATION_SUPPORT));
-        } else {
-            return new RangingCapabilities(
-                    true,
-                    aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_AZIMUTH_SUPPORT),
-                    aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_ELEVATION_SUPPORT),
-                    minRangingInterval);
+            minRangingInterval = RangingCapabilities.FIRA_DEFAULT_RANGING_INTERVAL_MS;
         }
+        if (supportedChannels == null || supportedChannels.isEmpty()) {
+            supportedChannels =
+                    new ArrayList<Integer>(RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CHANNEL);
+        }
+        return new RangingCapabilities(
+                true,
+                aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_AZIMUTH_SUPPORT),
+                aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_ELEVATION_SUPPORT),
+                minRangingInterval,
+                supportedChannels);
     }
 }
