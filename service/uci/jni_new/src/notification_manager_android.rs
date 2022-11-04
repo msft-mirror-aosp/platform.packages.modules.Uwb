@@ -288,6 +288,10 @@ impl NotificationManagerAndroid {
         &mut self,
         range_data: SessionRangeData,
     ) -> UwbCoreResult<()> {
+        let raw_notification_jbytearray = self
+            .env
+            .byte_array_from_slice(&range_data.raw_ranging_data)
+            .map_err(|_| UwbCoreError::Unknown)?;
         let measurement_jclass = NotificationManagerAndroid::find_local_class(
             &mut self.jclass_map,
             &self.class_loader_obj,
@@ -410,7 +414,7 @@ impl NotificationManagerAndroid {
             &self.env,
             UWB_RANGING_DATA_CLASS,
         )?;
-        let method_sig = "(JJIJIII[L".to_owned() + UWB_TWO_WAY_MEASUREMENT_CLASS + ";)V";
+        let method_sig = "(JJIJIII[L".to_owned() + UWB_TWO_WAY_MEASUREMENT_CLASS + ";[B)V";
         let range_data_jobject = self
             .env
             .new_object(
@@ -419,12 +423,13 @@ impl NotificationManagerAndroid {
                 &[
                     JValue::Long(range_data.sequence_number as i64),
                     JValue::Long(range_data.session_id as i64),
-                    JValue::Int(0x0), // TODO: rcr_indicator u8 missing in core library(b/241336806)
+                    JValue::Int(range_data.rcr_indicator as i32),
                     JValue::Long(range_data.current_ranging_interval_ms as i64),
                     JValue::Int(range_data.ranging_measurement_type as i32),
                     JValue::Int(mac_indicator as i32),
                     JValue::Int(measurement_count),
                     JValue::Object(JObject::from(measurements_jobjectarray)),
+                    JValue::Object(JObject::from(raw_notification_jbytearray)),
                 ],
             )
             .map_err(|e| {

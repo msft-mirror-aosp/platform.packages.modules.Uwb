@@ -21,8 +21,12 @@ use std::sync::Arc;
 
 use jni::objects::GlobalRef;
 use jni::JavaVM;
+use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 use uci_hal_android::uci_hal_android::UciHalAndroid;
-use uwb_core::error::Result as UwbCoreResult;
+use uwb_core::error::{Error as UwbCoreError, Result as UwbCoreResult};
+use uwb_core::uci::pcapng_uci_logger_factory::PcapngUciLoggerFactoryBuilder;
+use uwb_core::uci::uci_logger::UciLoggerMode;
+use uwb_core::uci::uci_logger_factory::UciLoggerFactory;
 use uwb_core::uci::uci_manager_sync::UciManagerSync;
 
 /// Dispatcher is managed by Java side. Construction and Destruction are provoked by JNI function
@@ -30,6 +34,7 @@ use uwb_core::uci::uci_manager_sync::UciManagerSync;
 /// Destruction does NOT wait until the spawned threads are closed.
 pub(crate) struct Dispatcher {
     pub manager_map: HashMap<String, UciManagerSync>,
+    _runtime: Runtime,
 }
 impl Dispatcher {
     /// Constructs Dispatcher.
@@ -39,9 +44,21 @@ impl Dispatcher {
         callback_obj: GlobalRef,
         chip_ids: &[T],
     ) -> UwbCoreResult<Dispatcher> {
+        let runtime = RuntimeBuilder::new_multi_thread()
+            .thread_name("UwbService")
+            .enable_all()
+            .build()
+            .map_err(|_| UwbCoreError::Unknown)?;
         let mut manager_map = HashMap::<String, UciManagerSync>::new();
-
+        let mut log_file_factory = PcapngUciLoggerFactoryBuilder::new()
+            .log_path("/data/misc/apexdata/com.android.uwb/log".into())
+            .filename_prefix("uwb_uci".to_owned())
+            .runtime_handle(runtime.handle().to_owned())
+            .build()
+            .ok_or(UwbCoreError::Unknown)?;
         for chip_id in chip_ids {
+            let logger =
+                log_file_factory.build_logger(chip_id.as_ref()).ok_or(UwbCoreError::Unknown)?;
             let manager = UciManagerSync::new(
                 UciHalAndroid::new(chip_id.as_ref()),
                 NotificationManagerAndroidBuilder {
@@ -50,10 +67,20 @@ impl Dispatcher {
                     class_loader_obj: class_loader_obj.clone(),
                     callback_obj: callback_obj.clone(),
                 },
+                logger,
+                runtime.handle().to_owned(),
             )?;
             manager_map.insert(chip_id.as_ref().to_string(), manager);
         }
-        Ok(Self { manager_map })
+        Ok(Self { manager_map, _runtime: runtime })
+    }
+
+    /// Sets log mode for all chips.
+    pub fn set_logger_mode(&mut self, logger_mode: UciLoggerMode) -> UwbCoreResult<()> {
+        for (_, manager) in self.manager_map.iter_mut() {
+            manager.set_logger_mode(logger_mode.clone())?;
+        }
+        Ok(())
     }
 
     /// Constructs dispatcher, and return a pointer owning it.
