@@ -22,10 +22,11 @@ use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject};
 use jni::JNIEnv;
 use log::{debug, error};
 use num_traits::FromPrimitive;
+use tokio::runtime::Runtime;
 
 use uci_hal_android::uci_hal_android::UciHalAndroid;
 use uwb_core::params::{AppConfigParams, CountryCode};
-use uwb_core::service::{UwbService, UwbServiceBuilder};
+use uwb_core::service::{default_runtime, UwbService, UwbServiceBuilder};
 use uwb_core::uci::pcapng_uci_logger_factory::PcapngUciLoggerFactoryBuilder;
 use uwb_uci_packets::{SessionType, UpdateMulticastListAction};
 
@@ -89,9 +90,17 @@ pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeUw
             return *JObject::null() as jlong;
         }
     };
+    let runtime = match default_runtime() {
+        Some(r) => r,
+        None => {
+            error!("Couldn't build tokio Runtime.");
+            return *JObject::null() as jlong;
+        }
+    };
     let uci_logger_factory = match PcapngUciLoggerFactoryBuilder::new()
-        .log_path("/data/misc/apexdata/com.android.uwb/log")
-        .filename_prefix("uwb_uci")
+        .log_path("/data/misc/apexdata/com.android.uwb/log".into())
+        .filename_prefix("uwb_uci".to_owned())
+        .runtime_handle(runtime.handle().to_owned())
         .build()
     {
         Some(m) => m,
@@ -101,12 +110,14 @@ pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeUw
         }
     };
     if let Some(uwb_service) = UwbServiceBuilder::new()
+        .runtime_handle(runtime.handle().to_owned())
         .callback_builder(UwbServiceCallbackBuilderImpl::new(vm, callback_obj, class_loader_obj))
         .uci_hal(UciHalAndroid::new("default"))
         .uci_logger_factory(uci_logger_factory)
         .build()
     {
-        return Box::into_raw(Box::new(uwb_service)) as jlong;
+        let service_wrapper = UwbServiceWrapper::new(uwb_service, runtime);
+        return Box::into_raw(Box::new(service_wrapper)) as jlong;
     }
 
     error!("Failed to create Uwb Service");
@@ -130,7 +141,7 @@ pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeUw
     };
 
     unsafe {
-        Box::from_raw(uwb_service_ptr as *mut UwbService);
+        drop(Box::from_raw(uwb_service_ptr as *mut UwbServiceWrapper));
     }
     debug!("Uwb Service successfully destroyed.");
 }
@@ -414,7 +425,7 @@ fn get_power_stats(ctx: JniContext) -> Result<jobject> {
     Ok(ps_jni.jni_context.obj.into_inner())
 }
 
-fn get_uwb_service(ctx: JniContext) -> Result<&mut UwbService> {
+fn get_uwb_service(ctx: JniContext) -> Result<&mut UwbServiceWrapper> {
     let uwb_service_ptr = ctx.long_getter("getUwbServicePtr")?;
     if uwb_service_ptr == 0i64 {
         return Err(Error::Jni(jni::errors::Error::NullPtr("Uwb Service is not initialized")));
@@ -423,7 +434,7 @@ fn get_uwb_service(ctx: JniContext) -> Result<&mut UwbService> {
     // and it must point to a valid Uwb Service object.
     // This can be ensured because the Uwb Service is created in an earlier stage and
     // won't be deleted before calling doDeinitialize.
-    unsafe { Ok(&mut *(uwb_service_ptr as *mut UwbService)) }
+    unsafe { Ok(&mut *(uwb_service_ptr as *mut UwbServiceWrapper)) }
 }
 
 fn boolean_result_helper<T>(result: Result<T>, function_name: &str) -> jboolean {
@@ -462,4 +473,39 @@ fn get_class_loader_obj(env: &JNIEnv) -> Result<GlobalRef> {
     )?;
     let class_loader_jobject = class_loader.l()?;
     Ok(env.new_global_ref(class_loader_jobject)?)
+}
+
+/// The wrapper of UwbService that is used to keep the outlived tokio runtime.
+///
+/// This wrapper implements Deref and DerefMut for UwbService target, so we could get the reference
+/// of inner UwbService easily.
+struct UwbServiceWrapper {
+    /// The wrapped UwbService.
+    service: UwbService,
+
+    /// The working runtime, which should outlives the UwbService.
+    ///
+    /// Because the fields of a struct are dropped in declaration order, this field is guaranteed
+    /// to be dropped after UwbService.
+    _runtime: Runtime,
+}
+
+impl UwbServiceWrapper {
+    pub fn new(service: UwbService, runtime: Runtime) -> Self {
+        Self { service, _runtime: runtime }
+    }
+}
+
+impl std::ops::Deref for UwbServiceWrapper {
+    type Target = UwbService;
+
+    fn deref(&self) -> &Self::Target {
+        &self.service
+    }
+}
+
+impl std::ops::DerefMut for UwbServiceWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.service
+    }
 }
