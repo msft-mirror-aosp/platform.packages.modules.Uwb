@@ -87,6 +87,8 @@ public class UwbUciConstants {
             FiraParams.RANGING_ROUND_USAGE_SS_TWR_NON_DEFERRED_MODE;
     public static final int ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE =
             FiraParams.RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE;
+    public static final int ROUND_USAGE_OWR_AOA_MEASUREMENT =
+            FiraParams.RANGING_ROUND_USAGE_OWR_AOA_MEASUREMENT;
 
     public static final int MULTI_NODE_MODE_UNICAST = FiraParams.MULTI_NODE_MODE_UNICAST;
     public static final int MULTI_NODE_MODE_ONE_TO_MANY = FiraParams.MULTI_NODE_MODE_ONE_TO_MANY;
@@ -113,16 +115,27 @@ public class UwbUciConstants {
     public static final int RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY =
             FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
 
+    /**
+     * Table 54: APP Configuration Parameter IDs
+     */
     public static final int RANGING_DEVICE_ROLE_RESPONDER =
             FiraParams.RANGING_DEVICE_ROLE_RESPONDER;
     public static final int RANGING_DEVICE_ROLE_INITIATOR =
             FiraParams.RANGING_DEVICE_ROLE_INITIATOR;
+    public static final int RANGING_DEVICE_ROLE_ADVERTISER =
+            FiraParams.RANGING_DEVICE_ROLE_ADVERTISER;
+    public static final int RANGING_DEVICE_ROLE_OBSERVER =
+            FiraParams.RANGING_DEVICE_ROLE_OBSERVER;
 
     /**
-     * Table 22: Ranging Data Notification
+     * Table 37: Ranging Data Notification
      */
     public static final byte RANGING_MEASUREMENT_TYPE_TWO_WAY = 0X01;
+    public static final byte RANGING_MEASUREMENT_TYPE_DL_TDOA = 0x02;
     public static final byte RANGING_MEASUREMENT_TYPE_OWR_AOA = 0x03;
+
+    public static final byte MAC_ADDRESSING_MODE_SHORT = 0x00;
+    public static final byte MAC_ADDRESSING_MODE_EXTENDED = 0x01;
 
     /**
      * Table 32: Status Codes
@@ -181,6 +194,7 @@ public class UwbUciConstants {
     public static final int STATUS_CODE_CCC_LIFECYCLE = STATUS_ERROR_CCC_LIFECYCLE;
 
     /* UWB Device Extended Mac address length */
+    public static final int UWB_DEVICE_SHORT_MAC_ADDRESS_LEN = 2;
     public static final int UWB_DEVICE_EXT_MAC_ADDRESS_LEN = 8;
 
     /* UWB Data Session Specific Status Codes */
