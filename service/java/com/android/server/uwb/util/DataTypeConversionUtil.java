@@ -91,6 +91,16 @@ public class DataTypeConversionUtil {
     }
 
     /**
+     * Convert the byte array to int16 using big endian.
+     */
+    public static short byteArrayToI16(byte[] bytes) {
+        if (bytes.length != 2) {
+            throw new NumberFormatException("Expected length 2 but was " + bytes.length);
+        }
+        return ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).getShort();
+    }
+
+    /**
      * Convert the byte array to int using big endian.
      */
     public static int byteArrayToI32(byte[] bytes) {
@@ -125,6 +135,19 @@ public class DataTypeConversionUtil {
      */
     public static byte[] i32ToLeByteArray(int n) {
         return ByteBuffer.allocate(Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN).putInt(n).array();
+    }
+
+    /**
+     * Convert the byte array to a long. The input array could be of shorter size (eg: 2 bytes).
+     */
+    public static long byteArrayToLong(byte[] bytes) {
+        /* Create a byte array of size 8 to convert it to a long */
+        byte[] extendedArray = new byte[] {0, 0, 0, 0, 0, 0, 0, 0};
+        for (int i = 0; i < bytes.length; i++) {
+            extendedArray[i] = bytes[i];
+        }
+
+        return ByteBuffer.wrap(extendedArray).getLong();
     }
 
     private DataTypeConversionUtil() {}
