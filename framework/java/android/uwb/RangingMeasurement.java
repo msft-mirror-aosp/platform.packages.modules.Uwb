@@ -252,7 +252,7 @@ public final class RangingMeasurement implements Parcelable {
 
     /**
      * Gets ranging measurement metadata passed by vendor
-     *
+     * @hide
      * @return vendor data for ranging measurement
      */
     @NonNull
@@ -489,7 +489,7 @@ public final class RangingMeasurement implements Parcelable {
 
         /**
          * Set Ranging measurement metadata
-         *
+         * @hide
          * @param rangingMeasurementMetadata vendor data per ranging measurement
          *
          * @throws IllegalStateException if rangingMeasurementMetadata is null
