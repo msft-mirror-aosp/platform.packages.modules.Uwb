@@ -29,9 +29,6 @@ java_defaults {
         "com.android.uwb",
     ],
     visibility : [
-        //TODO(b/244347268): Remove these 2 after code move.
-        "//cts/tests/uwb",
-        "//cts/hostsidetests/multidevices/uwb/snippet",
         "//external/sl4a/Common",
         "//packages/modules/Uwb:__subpackages__",
     ]
@@ -123,4 +120,15 @@ java_library {
     static_libs: [
         "com.uwb.support.base",
     ],
+}
+
+java_library {
+    name: "com.uwb.support.dltdoa",
+    defaults: ["support-lib-uwb-common-defaults"],
+    srcs: [
+        "src/com/google/uwb/support/dltdoa/**/*.java",
+    ],
+    static_libs: [
+            "com.uwb.support.base",
+        ],
 }
