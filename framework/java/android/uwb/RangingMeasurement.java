@@ -253,7 +253,7 @@ public final class RangingMeasurement implements Parcelable {
 
     /**
      * Gets ranging measurement metadata passed by vendor
-     *
+     * @hide
      * @return vendor data for ranging measurement
      */
     @NonNull
@@ -338,8 +338,9 @@ public final class RangingMeasurement implements Parcelable {
                     builder.setLineOfSight(in.readInt());
                     builder.setMeasurementFocus(in.readInt());
                     builder.setRssiDbm(in.readInt());
-                    builder.setRangingMeasurementMetadata(
-                            in.readPersistableBundle(getClass().getClassLoader()));
+                    PersistableBundle metadata =
+                            in.readPersistableBundle(getClass().getClassLoader());
+                    if (metadata != null) builder.setRangingMeasurementMetadata(metadata);
                     return builder.build();
                 }
 
@@ -492,7 +493,7 @@ public final class RangingMeasurement implements Parcelable {
 
         /**
          * Set Ranging measurement metadata
-         *
+         * @hide
          * @param rangingMeasurementMetadata vendor data per ranging measurement
          *
          * @throws IllegalStateException if rangingMeasurementMetadata is null
