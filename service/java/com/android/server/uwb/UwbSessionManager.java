@@ -56,6 +56,7 @@ import android.uwb.UwbAddress;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.server.uwb.advertisement.UwbAdvertiseManager;
+import com.android.server.uwb.data.DtTagUpdateRangingRoundsStatus;
 import com.android.server.uwb.data.UwbMulticastListUpdateStatus;
 import com.android.server.uwb.data.UwbOwrAoaMeasurement;
 import com.android.server.uwb.data.UwbRangingData;
@@ -72,6 +73,8 @@ import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccRangingStartedParams;
 import com.google.uwb.support.ccc.CccStartRangingParams;
+import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate;
+import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdateStatus;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
@@ -89,7 +92,10 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
@@ -110,6 +116,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
     public static final int SESSION_ON_DEINIT = 6;
     @VisibleForTesting
     public static final int SESSION_SEND_DATA = 7;
+    @VisibleForTesting
+    public static final int SESSION_UPDATE_ACTIVE_RR_DT_TAG = 8;
 
     // TODO: don't expose the internal field for testing.
     @VisibleForTesting
@@ -740,6 +748,78 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         public byte[] data;
     }
 
+    private static final class RangingRoundsUpdateDtTagInfo {
+        public SessionHandle sessionHandle;
+        public PersistableBundle params;
+    }
+
+    /** DT Tag ranging round update */
+    public void rangingRoundsUpdateDtTag(SessionHandle sessionHandle,
+            PersistableBundle bundle) {
+        RangingRoundsUpdateDtTagInfo info = new RangingRoundsUpdateDtTagInfo();
+        info.sessionHandle = sessionHandle;
+        info.params = bundle;
+
+        mEventTask.execute(SESSION_UPDATE_ACTIVE_RR_DT_TAG, info);
+    }
+
+    /** Handle ranging rounds update for DT Tag */
+    public void handleRangingRoundsUpdateDtTag(RangingRoundsUpdateDtTagInfo info) {
+        SessionHandle sessionHandle = info.sessionHandle;
+        Integer sessionId = getSessionId(sessionHandle);
+        if (sessionId == null) {
+            Log.i(TAG, "UwbSessionId not found");
+            return;
+        }
+        UwbSession uwbSession = getUwbSession(sessionId);
+        if (uwbSession == null) {
+            Log.i(TAG, "UwbSession not found");
+            return;
+        }
+        DlTDoARangingRoundsUpdate dlTDoARangingRoundsUpdate = DlTDoARangingRoundsUpdate
+                .fromBundle(info.params);
+
+        if (dlTDoARangingRoundsUpdate.getSessionId() != getSessionId(sessionHandle)) {
+            throw new IllegalArgumentException("Wrong session ID");
+        }
+
+        FutureTask<DtTagUpdateRangingRoundsStatus> rangingRoundsUpdateTask = new FutureTask<>(
+                () -> {
+                    synchronized (uwbSession.getWaitObj()) {
+                        return mNativeUwbManager.sessionUpdateActiveRoundsDtTag(
+                                (int) dlTDoARangingRoundsUpdate.getSessionId(),
+                                dlTDoARangingRoundsUpdate.getNoOfActiveRangingRounds(),
+                                dlTDoARangingRoundsUpdate.getRangingRoundIndexes(),
+                                uwbSession.getChipId());
+                    }
+                }
+        );
+
+        DtTagUpdateRangingRoundsStatus status = new DtTagUpdateRangingRoundsStatus(
+                UwbUciConstants.STATUS_CODE_ERROR_ROUND_INDEX_NOT_ACTIVATED,
+                0,
+                new byte[]{});
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(rangingRoundsUpdateTask);
+        try {
+            status = rangingRoundsUpdateTask.get(IUwbAdapter
+                    .RANGING_ROUNDS_UPDATE_DT_TAG_THRESHOLD_MS, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            Log.i(TAG, "Failed to update ranging rounds for Dt tag - status : TIMEOUT");
+            executor.shutdownNow();
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        }
+        PersistableBundle params = new DlTDoARangingRoundsUpdateStatus.Builder()
+                .setStatus(status.getStatus())
+                .setNoOfActiveRangingRounds(status.getNoOfActiveRangingRounds())
+                .setRangingRoundIndexes(status.getRangingRoundIndexes())
+                .build()
+                .toBundle();
+        mSessionNotificationManager.onRangingRoundsUpdateStatus(uwbSession, params);
+    }
+
     void removeSession(UwbSession uwbSession) {
         if (uwbSession != null) {
             uwbSession.getBinder().unlinkToDeath(uwbSession, 0);
@@ -859,6 +939,13 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                     Log.d(TAG, "SESSION_SEND_DATA");
                     SendDataInfo info = (SendDataInfo) msg.obj;
                     handleSendData(info);
+                    break;
+                }
+
+                case SESSION_UPDATE_ACTIVE_RR_DT_TAG: {
+                    Log.d(TAG, "SESSION_UPDATE_ACTIVE_RR_DT_TAG");
+                    RangingRoundsUpdateDtTagInfo info = (RangingRoundsUpdateDtTagInfo) msg.obj;
+                    handleRangingRoundsUpdateDtTag(info);
                     break;
                 }
 
