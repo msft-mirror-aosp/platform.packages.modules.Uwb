@@ -30,6 +30,7 @@ import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 
 import com.android.server.uwb.UwbSessionManager.UwbSession;
+import com.android.server.uwb.data.UwbDlTDoAMeasurement;
 import com.android.server.uwb.data.UwbOwrAoaMeasurement;
 import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbTwoWayMeasurement;
@@ -40,6 +41,7 @@ import com.android.server.uwb.util.UwbUtil;
 import com.google.uwb.support.base.Params;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccRangingReconfiguredParams;
+import com.google.uwb.support.dltdoa.DlTDoAMeasurement;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.oemextension.RangingReportMetadata;
@@ -375,12 +377,29 @@ public class UwbSessionNotificationManager {
         }
     }
 
+    /** Notify the response for Ranging rounds update status for Dt Tag. */
+    public void onRangingRoundsUpdateStatus(
+            UwbSession uwbSession, PersistableBundle parameters) {
+        SessionHandle sessionHandle = uwbSession.getSessionHandle();
+        IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
+        try {
+            uwbRangingCallbacks.onRangingRoundsUpdateDtTagStatus(sessionHandle,
+                    parameters);
+            Log.i(TAG, "IUwbRangingCallbacks - onRangingRoundsUpdateDtTagStatus");
+        } catch (Exception e) {
+            Log.e(TAG, "IUwbRangingCallbacks - onRangingRoundsUpdateDtTagStatus : Failed");
+            e.printStackTrace();
+        }
+    }
+
     private static RangingReport getRangingReport(
             @NonNull UwbRangingData rangingData, String protocolName,
             Params sessionParams, long elapsedRealtimeNanos) {
         if (rangingData.getRangingMeasuresType() != UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY
                 && rangingData.getRangingMeasuresType()
-                    != UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA) {
+                    != UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA
+                && rangingData.getRangingMeasuresType()
+                    != UwbUciConstants.RANGING_MEASUREMENT_TYPE_DL_TDOA) {
             return null;
         }
         boolean isAoaAzimuthEnabled = true;
@@ -388,6 +407,7 @@ public class UwbSessionNotificationManager {
         boolean isDestAoaAzimuthEnabled = false;
         boolean isDestAoaElevationEnabled = false;
         long sessionId = 0;
+
         // For FIRA sessions, check if AOA is enabled for the session or not.
         if (protocolName.equals(FiraParams.PROTOCOL_NAME)) {
             FiraOpenSessionParams openSessionParams = (FiraOpenSessionParams) sessionParams;
@@ -423,160 +443,191 @@ public class UwbSessionNotificationManager {
             }
         }
 
-        // TODO(b/246678053): Refactor this code, try to take out the common code into a method.
+        // TODO(b/256734264): The unit tests are currently not checking for this field, as
+        //  RangingReport.equals() does not compare it.
+        PersistableBundle rangingReportMetadata = new RangingReportMetadata.Builder()
+                .setSessionId(sessionId)
+                .setRawNtfData(rangingData.getRawNtfData())
+                .build()
+                .toBundle();
+        RangingReport.Builder rangingReportBuilder = new RangingReport.Builder()
+                .addRangingReportMetadata(rangingReportMetadata);
+
         if (rangingData.getRangingMeasuresType()
                 == UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY) {
             List<RangingMeasurement> rangingMeasurements = new ArrayList<>();
             UwbTwoWayMeasurement[] uwbTwoWayMeasurement = rangingData.getRangingTwoWayMeasures();
             for (int i = 0; i < rangingData.getNoOfRangingMeasures(); ++i) {
-                UwbAddress macAddress = UwbAddress.fromBytes(TlvUtil.getReverseBytes(
-                        uwbTwoWayMeasurement[i].getMacAddress()));
-                int rangingStatus = uwbTwoWayMeasurement[i].getRangingStatus();
-                DistanceMeasurement distanceMeasurement = null;
-                AngleOfArrivalMeasurement angleOfArrivalMeasurement = null;
-                AngleOfArrivalMeasurement destinationAngleOfArrivalMeasurement = null;
-                int los = uwbTwoWayMeasurement[i].mNLoS;
-                int rssi = uwbTwoWayMeasurement[i].getRssi();
+                int rangingStatus = uwbTwoWayMeasurement[i].convertStatusCode();
 
-                if (rangingStatus == FiraParams.STATUS_CODE_OK) {
-                    // Distance measurement is mandatory
-                    distanceMeasurement = new DistanceMeasurement.Builder()
-                            .setMeters(uwbTwoWayMeasurement[i].getDistance() / (double) 100)
-                            .setErrorMeters(0)
-                            // TODO: Need to fetch distance FOM once it is added to UCI spec.
-                            .setConfidenceLevel(0)
-                            .build();
-                    // Aoa measurement is optional based on configuration.
-                    if (isAoaAzimuthEnabled || isAoaElevationEnabled) {
-                        AngleMeasurement azimuthAngleMeasurement = null;
-                        AngleMeasurement altitudeAngleMeasurement = null;
-                        if (isAoaAzimuthEnabled) {
-                            azimuthAngleMeasurement = new AngleMeasurement(
-                                    UwbUtil.degreeToRadian(uwbTwoWayMeasurement[i].getAoaAzimuth()),
-                                    0, uwbTwoWayMeasurement[i].getAoaAzimuthFom() / (double) 100);
-                        }
-                        if (isAoaElevationEnabled) {
-                            altitudeAngleMeasurement = new AngleMeasurement(
-                                    UwbUtil.degreeToRadian(
-                                            uwbTwoWayMeasurement[i].getAoaElevation()),
-                                    0, uwbTwoWayMeasurement[i].getAoaElevationFom() / (double) 100);
-                        }
-                        // AngleOfArrivalMeasurement
-                        angleOfArrivalMeasurement = new AngleOfArrivalMeasurement.Builder(
-                                azimuthAngleMeasurement)
-                                .setAltitude(altitudeAngleMeasurement)
-                                .build();
-                    }
-                    if (isDestAoaAzimuthEnabled || isDestAoaElevationEnabled) {
-                        AngleMeasurement destinationAzimuthAngleMeasurement = null;
-                        AngleMeasurement destinationAltitudeAngleMeasurement = null;
-                        if (isDestAoaAzimuthEnabled) {
-                            destinationAzimuthAngleMeasurement = new AngleMeasurement(
-                                    UwbUtil.degreeToRadian(
-                                            uwbTwoWayMeasurement[i].getAoaDestAzimuth()),
-                                    0,
-                                    uwbTwoWayMeasurement[i].getAoaDestAzimuthFom() / (double) 100);
-                        }
-                        if (isDestAoaElevationEnabled) {
-                            destinationAltitudeAngleMeasurement = new AngleMeasurement(
-                                    UwbUtil.degreeToRadian(
-                                            uwbTwoWayMeasurement[i].getAoaDestElevation()),
-                                    0,
-                                    uwbTwoWayMeasurement[i].getAoaDestElevationFom()
-                                            / (double) 100);
-                        }
-                        // Dest AngleOfArrivalMeasurement
-                        destinationAngleOfArrivalMeasurement =
-                                new AngleOfArrivalMeasurement.Builder(
-                                        destinationAzimuthAngleMeasurement)
-                                    .setAltitude(destinationAltitudeAngleMeasurement)
-                                    .build();
-                    }
-                }
-                RangingMeasurement.Builder rangingMeasurementBuilder =
-                        new RangingMeasurement.Builder()
-                            .setRemoteDeviceAddress(macAddress)
-                            .setStatus(rangingStatus)
-                            .setElapsedRealtimeNanos(elapsedRealtimeNanos)
-                            .setDistanceMeasurement(distanceMeasurement)
-                            .setAngleOfArrivalMeasurement(angleOfArrivalMeasurement)
-                            .setDestinationAngleOfArrivalMeasurement(
-                                    destinationAngleOfArrivalMeasurement)
-                            .setLineOfSight(los);
+                RangingMeasurement.Builder rangingMeasurementBuilder = buildRangingMeasurement(
+                        uwbTwoWayMeasurement[i].getMacAddress(), rangingStatus,
+                        elapsedRealtimeNanos, uwbTwoWayMeasurement[i].getNLoS());
+                int rssi = uwbTwoWayMeasurement[i].getRssi();
                 if (rssi < 0) {
                     rangingMeasurementBuilder.setRssiDbm(rssi);
                 }
+
+                if (uwbTwoWayMeasurement[i].isStatusCodeOk()) {
+                    // Distance measurement is mandatory
+                    rangingMeasurementBuilder.setDistanceMeasurement(
+                            buildDistanceMeasurement(uwbTwoWayMeasurement[i].getDistance()));
+
+                    // Aoa measurement is optional based on configuration.
+                    AngleOfArrivalMeasurement angleOfArrivalMeasurement =
+                            computeAngleOfArrivalMeasurement(
+                                    isAoaAzimuthEnabled, isAoaElevationEnabled,
+                                    uwbTwoWayMeasurement[i].getAoaAzimuth(),
+                                    uwbTwoWayMeasurement[i].getAoaAzimuthFom(),
+                                    uwbTwoWayMeasurement[i].getAoaElevation(),
+                                    uwbTwoWayMeasurement[i].getAoaElevationFom());
+                    if (angleOfArrivalMeasurement != null) {
+                        rangingMeasurementBuilder.setAngleOfArrivalMeasurement(
+                                angleOfArrivalMeasurement);
+                    }
+
+                    // Dest AngleOfArrivalMeasurement
+                    AngleOfArrivalMeasurement destinationAngleOfArrivalMeasurement =
+                            computeAngleOfArrivalMeasurement(
+                                    isDestAoaAzimuthEnabled, isDestAoaElevationEnabled,
+                                    uwbTwoWayMeasurement[i].getAoaDestAzimuth(),
+                                    uwbTwoWayMeasurement[i].getAoaDestAzimuthFom(),
+                                    uwbTwoWayMeasurement[i].getAoaDestElevation(),
+                                    uwbTwoWayMeasurement[i].getAoaDestElevationFom());
+                    if (destinationAngleOfArrivalMeasurement != null) {
+                        rangingMeasurementBuilder.setDestinationAngleOfArrivalMeasurement(
+                                destinationAngleOfArrivalMeasurement);
+                    }
+                }
+
                 // TODO: No ranging measurement metadata defined, added for future usage
                 PersistableBundle rangingMeasurementMetadata = new PersistableBundle();
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(rangingMeasurementMetadata);
+
                 rangingMeasurements.add(rangingMeasurementBuilder.build());
             }
 
-            PersistableBundle rangingReportMetadata = new RangingReportMetadata.Builder()
-                    .setSessionId(sessionId)
-                    .setRawNtfData(rangingData.getRawNtfData())
-                    .build()
-                    .toBundle();
-
-            if (rangingMeasurements.size() == 1) {
-                return new RangingReport.Builder()
-                        .addMeasurement(rangingMeasurements.get(0))
-                        .addRangingReportMetadata(rangingReportMetadata)
-                        .build();
-            } else {
-                return new RangingReport.Builder()
-                        .addMeasurements(rangingMeasurements)
-                        .addRangingReportMetadata(rangingReportMetadata)
-                        .build();
-            }
+            rangingReportBuilder.addMeasurements(rangingMeasurements);
         } else if (rangingData.getRangingMeasuresType()
                 == UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA) {
-            RangingMeasurement rangingMeasurement = null;
             UwbOwrAoaMeasurement uwbOwrAoaMeasurement = rangingData.getRangingOwrAoaMeasure();
 
-            UwbAddress macAddress = UwbAddress.fromBytes(TlvUtil.getReverseBytes(
-                    uwbOwrAoaMeasurement.getMacAddress()));
             int rangingStatus = uwbOwrAoaMeasurement.getRangingStatus();
-            AngleOfArrivalMeasurement angleOfArrivalMeasurement = null;
-            int los = uwbOwrAoaMeasurement.getNLoS();
+            RangingMeasurement.Builder rangingMeasurementBuilder = buildRangingMeasurement(
+                    uwbOwrAoaMeasurement.getMacAddress(), rangingStatus, elapsedRealtimeNanos,
+                    uwbOwrAoaMeasurement.getNLoS());
 
             if (rangingStatus == FiraParams.STATUS_CODE_OK) {
-                if (isAoaAzimuthEnabled || isAoaElevationEnabled) {
-                    AngleMeasurement azimuthAngleMeasurement = null;
-                    AngleMeasurement altitudeAngleMeasurement = null;
-                    if (isAoaAzimuthEnabled) {
-                        azimuthAngleMeasurement = new AngleMeasurement(
-                                UwbUtil.degreeToRadian(uwbOwrAoaMeasurement.getAoaAzimuth()),
-                                0, uwbOwrAoaMeasurement.getAoaAzimuthFom() / (double) 100);
-                    }
-                    if (isAoaElevationEnabled) {
-                        altitudeAngleMeasurement = new AngleMeasurement(
-                                UwbUtil.degreeToRadian(uwbOwrAoaMeasurement.getAoaElevation()),
-                                0, uwbOwrAoaMeasurement.getAoaElevationFom() / (double) 100);
-                    }
-                    // AngleOfArrivalMeasurement
-                    angleOfArrivalMeasurement = new AngleOfArrivalMeasurement.Builder(
-                            azimuthAngleMeasurement)
-                            .setAltitude(altitudeAngleMeasurement)
-                            .build();
+                // AngleOfArrivalMeasurement
+                AngleOfArrivalMeasurement angleOfArrivalMeasurement =
+                        computeAngleOfArrivalMeasurement(
+                                isAoaAzimuthEnabled, isAoaElevationEnabled,
+                                uwbOwrAoaMeasurement.getAoaAzimuth(),
+                                uwbOwrAoaMeasurement.getAoaAzimuthFom(),
+                                uwbOwrAoaMeasurement.getAoaElevation(),
+                                uwbOwrAoaMeasurement.getAoaElevationFom());
+                if (angleOfArrivalMeasurement != null) {
+                    rangingMeasurementBuilder.setAngleOfArrivalMeasurement(
+                            angleOfArrivalMeasurement);
                 }
             }
-            rangingMeasurement = new RangingMeasurement.Builder()
-                    .setRemoteDeviceAddress(macAddress)
-                    .setStatus(rangingStatus)
-                    .setElapsedRealtimeNanos(elapsedRealtimeNanos)
-                    .setAngleOfArrivalMeasurement(angleOfArrivalMeasurement)
-                    .setLineOfSight(los)
-                    .build();
 
-            // TODO(b/246678053): Add rawNtfData[] for the OWR AoA Measurements.
-            PersistableBundle rangingReportMetadata = new PersistableBundle();
-            return new RangingReport.Builder()
-                        .addMeasurement(rangingMeasurement)
-                        .addRangingReportMetadata(rangingReportMetadata)
+            rangingReportBuilder.addMeasurement(rangingMeasurementBuilder.build());
+        } else if (rangingData.getRangingMeasuresType()
+                == UwbUciConstants.RANGING_MEASUREMENT_TYPE_DL_TDOA) {
+            List<RangingMeasurement> rangingMeasurements = new ArrayList<>();
+            UwbDlTDoAMeasurement[] uwbDlTDoAMeasurements = rangingData.getUwbDlTDoAMeasurements();
+            for (int i = 0; i < rangingData.getNoOfRangingMeasures(); ++i) {
+                int rangingStatus = uwbDlTDoAMeasurements[i].getStatus();
+
+                RangingMeasurement.Builder rangingMeasurementBuilder = buildRangingMeasurement(
+                        uwbDlTDoAMeasurements[i].getMacAddress(), rangingStatus,
+                        elapsedRealtimeNanos, uwbDlTDoAMeasurements[i].getNLoS());
+                int rssi = uwbDlTDoAMeasurements[i].getRssi();
+                if (rssi < 0) {
+                    rangingMeasurementBuilder.setRssiDbm(rssi);
+                }
+                if (rangingStatus == FiraParams.STATUS_CODE_OK) {
+                    AngleOfArrivalMeasurement angleOfArrivalMeasurement =
+                            computeAngleOfArrivalMeasurement(
+                                    isAoaAzimuthEnabled, isAoaElevationEnabled,
+                                    uwbDlTDoAMeasurements[i].getAoaAzimuth(),
+                                    uwbDlTDoAMeasurements[i].getAoaAzimuthFom(),
+                                    uwbDlTDoAMeasurements[i].getAoaElevation(),
+                                    uwbDlTDoAMeasurements[i].getAoaElevationFom());
+                    if (angleOfArrivalMeasurement != null) {
+                        rangingMeasurementBuilder.setAngleOfArrivalMeasurement(
+                                angleOfArrivalMeasurement);
+                    }
+                }
+                DlTDoAMeasurement dlTDoAMeasurement = new DlTDoAMeasurement.Builder()
+                        .setMessageType(uwbDlTDoAMeasurements[i].getMessageType())
+                        .setMessageControl(uwbDlTDoAMeasurements[i].getMessageControl())
+                        .setBlockIndex(uwbDlTDoAMeasurements[i].getBlockIndex())
+                        .setNLoS(uwbDlTDoAMeasurements[i].getNLoS())
+                        .setTxTimestamp(uwbDlTDoAMeasurements[i].getTxTimestamp())
+                        .setRxTimestamp(uwbDlTDoAMeasurements[i].getRxTimestamp())
+                        .setAnchorCfo(uwbDlTDoAMeasurements[i].getAnchorCfo())
+                        .setCfo(uwbDlTDoAMeasurements[i].getCfo())
+                        .setInitiatorReplyTime(uwbDlTDoAMeasurements[i].getInitiatorReplyTime())
+                        .setResponderReplyTime(uwbDlTDoAMeasurements[i].getResponderReplyTime())
+                        .setInitiatorResponderTof(uwbDlTDoAMeasurements[i]
+                                .getInitiatorResponderTof())
+                        .setAnchorLocation(uwbDlTDoAMeasurements[i].getAnchorLocation())
+                        .setActiveRangingRounds(uwbDlTDoAMeasurements[i].getActiveRangingRounds())
                         .build();
+
+                rangingMeasurementBuilder.setRangingMeasurementMetadata(
+                        dlTDoAMeasurement.toBundle());
+
+                rangingMeasurements.add(rangingMeasurementBuilder.build());
+            }
+
+            rangingReportBuilder.addMeasurements(rangingMeasurements);
+        }
+        return rangingReportBuilder.build();
+    }
+
+    private static AngleOfArrivalMeasurement computeAngleOfArrivalMeasurement(
+            boolean isAoaAzimuthEnabled, boolean isAoaElevationEnabled, float aoaAzimuth,
+            int aoaAzimuthFom, float aoaElevation, int aoaElevationFom) {
+        // Azimuth is required field (and elevation is an optional field), to build the
+        // AngleOfArrivalMeasurement.
+        if (isAoaAzimuthEnabled) {
+            AngleMeasurement azimuthAngleMeasurement = new AngleMeasurement(
+                    UwbUtil.degreeToRadian(aoaAzimuth), 0, aoaAzimuthFom / (double) 100);
+            // AngleOfArrivalMeasurement
+            AngleOfArrivalMeasurement.Builder angleOfArrivalMeasurementBuilder =
+                    new AngleOfArrivalMeasurement.Builder(azimuthAngleMeasurement);
+
+            // Elevation is optional field, to build the AngleOfArrivalMeasurement.
+            if (isAoaElevationEnabled) {
+                AngleMeasurement altitudeAngleMeasurement = new AngleMeasurement(
+                        UwbUtil.degreeToRadian(aoaElevation), 0, aoaElevationFom / (double) 100);
+                angleOfArrivalMeasurementBuilder.setAltitude(altitudeAngleMeasurement);
+            }
+
+            return angleOfArrivalMeasurementBuilder.build();
         }
 
         return null;
+    }
+
+    private static RangingMeasurement.Builder buildRangingMeasurement(
+            byte[] macAddress, int rangingStatus, long elapsedRealtimeNanos, int los) {
+        return new RangingMeasurement.Builder()
+                .setRemoteDeviceAddress(UwbAddress.fromBytes(TlvUtil.getReverseBytes(macAddress)))
+                .setStatus(rangingStatus)
+                .setElapsedRealtimeNanos(elapsedRealtimeNanos)
+                .setLineOfSight(los);
+    }
+
+    private static DistanceMeasurement buildDistanceMeasurement(int distance) {
+        return new DistanceMeasurement.Builder()
+                .setMeters(distance / (double) 100)
+                .setErrorMeters(0)
+                // TODO: Need to fetch distance FOM once it is added to UCI spec.
+                .setConfidenceLevel(0)
+                .build();
     }
 }

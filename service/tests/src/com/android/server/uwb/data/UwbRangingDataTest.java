@@ -16,6 +16,7 @@
 
 package com.android.server.uwb.data;
 
+import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_DL_TDOA;
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA;
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY;
 import static com.android.server.uwb.util.UwbUtil.convertFloatToQFormat;
@@ -50,8 +51,11 @@ public class UwbRangingDataTest {
     private static final int TEST_MAC_ADDRESS_MODE = 1;
     private static final byte[] TEST_MAC_ADDRESS = {0x1, 0x3};
     private static final int TEST_STATUS = FiraParams.STATUS_CODE_OK;
+    private static final int TEST_MESSAGE_TYPE = 1;
+    private static final int TEST_MESSAGE_CONTROL = 1331;
     private static final int TEST_LOS = 0;
     private static final int TEST_BLOCK_INDEX = 5;
+    private static final int TEST_ROUND_INDEX = 1;
     private static final int TEST_FRAME_SEQ_NUMBER = 1;
     private static final int TEST_DISTANCE = 101;
     private static final int TEST_AOA_AZIMUTH = 67;
@@ -72,13 +76,22 @@ public class UwbRangingDataTest {
     private static final int TEST_AOA_DEST_ELEVATION_FOM = 90;
     private static final int TEST_SLOT_IDX = 10;
     private static final int TEST_RSSI = -1;
+    private static final long TEST_TIMESTAMP = 500_000L;
+    private static final int TEST_ANCHOR_CFO = 100;
+    private static final int TEST_CFO = 200;
+    private static final long TEST_INTIATOR_REPLY_TIME = 500_000L;
+    private static final long TEST_RESPONDER_REPLY_TIME = 300_000L;
+    private static final int TEST_INITIATOR_RESPONDER_TOF = 500;
+    private static final byte[] TEST_ANCHOR_LOCATION = {0x01, 0x02, 0x03, 0x04,
+            0x05, 0x06, 0x07, 0x08, 0x09, 0x10};
+    private static final byte[] TEST_ACTIVE_RANGING_ROUNDS = {0x02, 0x08};
+    private static final byte[] TEST_RAW_NTF_DATA = {0x10, 0x01};
 
     private UwbRangingData mUwbRangingData;
 
     @Test
     public void testInitializeUwbRangingData_withUwbTwoWayMeasurement() throws Exception {
         final int noOfRangingMeasures = 1;
-        final byte[] rawNtfData = {0x10, 0x01};
         final UwbTwoWayMeasurement[] uwbTwoWayMeasurements =
                 new UwbTwoWayMeasurement[noOfRangingMeasures];
         final int rangingMeasuresType = RANGING_MEASUREMENT_TYPE_TWO_WAY;
@@ -90,7 +103,8 @@ public class UwbRangingDataTest {
                 TEST_AOA_DEST_ELEVATION_FOM, TEST_SLOT_IDX, TEST_RSSI);
         mUwbRangingData = new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
                 TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, rangingMeasuresType,
-                TEST_MAC_ADDRESS_MODE, noOfRangingMeasures, uwbTwoWayMeasurements, rawNtfData);
+                TEST_MAC_ADDRESS_MODE, noOfRangingMeasures, uwbTwoWayMeasurements,
+                TEST_RAW_NTF_DATA);
 
         assertThat(mUwbRangingData.getSequenceCounter()).isEqualTo(TEST_SEQ_COUNTER);
         assertThat(mUwbRangingData.getSessionId()).isEqualTo(TEST_SESSION_ID);
@@ -99,7 +113,7 @@ public class UwbRangingDataTest {
         assertThat(mUwbRangingData.getRangingMeasuresType()).isEqualTo(rangingMeasuresType);
         assertThat(mUwbRangingData.getMacAddressMode()).isEqualTo(TEST_MAC_ADDRESS_MODE);
         assertThat(mUwbRangingData.getNoOfRangingMeasures()).isEqualTo(1);
-        assertThat(mUwbRangingData.getRawNtfData()).isEqualTo(rawNtfData);
+        assertThat(mUwbRangingData.getRawNtfData()).isEqualTo(TEST_RAW_NTF_DATA);
 
         final String testString = "UwbRangingData { "
                 + " SeqCounter = " + TEST_SEQ_COUNTER
@@ -110,7 +124,7 @@ public class UwbRangingDataTest {
                 + ", MacAddressMode = " + TEST_MAC_ADDRESS_MODE
                 + ", NoOfRangingMeasures = " + noOfRangingMeasures
                 + ", RangingTwoWayMeasures = " + Arrays.toString(uwbTwoWayMeasurements)
-                + ", RawNotificationData = " + Arrays.toString(rawNtfData)
+                + ", RawNotificationData = " + Arrays.toString(TEST_RAW_NTF_DATA)
                 + '}';
 
         assertThat(mUwbRangingData.toString()).isEqualTo(testString);
@@ -126,7 +140,8 @@ public class UwbRangingDataTest {
         final int rangingMeasuresType = RANGING_MEASUREMENT_TYPE_OWR_AOA;
         mUwbRangingData = new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
                 TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, rangingMeasuresType,
-                TEST_MAC_ADDRESS_MODE, noOfRangingMeasures, uwbOwrAoaMeasurement);
+                TEST_MAC_ADDRESS_MODE, noOfRangingMeasures, uwbOwrAoaMeasurement,
+                TEST_RAW_NTF_DATA);
 
         assertThat(mUwbRangingData.getSequenceCounter()).isEqualTo(TEST_SEQ_COUNTER);
         assertThat(mUwbRangingData.getSessionId()).isEqualTo(TEST_SESSION_ID);
@@ -135,6 +150,7 @@ public class UwbRangingDataTest {
         assertThat(mUwbRangingData.getRangingMeasuresType()).isEqualTo(rangingMeasuresType);
         assertThat(mUwbRangingData.getMacAddressMode()).isEqualTo(TEST_MAC_ADDRESS_MODE);
         assertThat(mUwbRangingData.getNoOfRangingMeasures()).isEqualTo(1);
+        assertThat(mUwbRangingData.getRawNtfData()).isEqualTo(TEST_RAW_NTF_DATA);
 
         final String testString = "UwbRangingData { "
                 + " SeqCounter = " + TEST_SEQ_COUNTER
@@ -145,6 +161,51 @@ public class UwbRangingDataTest {
                 + ", MacAddressMode = " + TEST_MAC_ADDRESS_MODE
                 + ", NoOfRangingMeasures = " + noOfRangingMeasures
                 + ", RangingOwrAoaMeasure = " + uwbOwrAoaMeasurement.toString()
+                + ", RawNotificationData = " + Arrays.toString(TEST_RAW_NTF_DATA)
+                + '}';
+
+        assertThat(mUwbRangingData.toString()).isEqualTo(testString);
+    }
+
+
+    @Test
+    public void testInitializeUwbRangingData_withUwbDlTDoAMeasurement() throws Exception {
+        final int noOfRangingMeasures = 1;
+        final UwbDlTDoAMeasurement[] uwbDlTDoAMeasurements =
+                new UwbDlTDoAMeasurement[noOfRangingMeasures];
+        uwbDlTDoAMeasurements[0] = new UwbDlTDoAMeasurement(TEST_MAC_ADDRESS, TEST_STATUS,
+                TEST_MESSAGE_TYPE, TEST_MESSAGE_CONTROL, TEST_BLOCK_INDEX, TEST_ROUND_INDEX,
+                TEST_LOS, TEST_AOA_AZIMUTH_Q97_FORMAT, TEST_AOA_AZIMUTH_FOM,
+                TEST_AOA_ELEVATION_Q97_FORMAT, TEST_AOA_ELEVATION_FOM, TEST_RSSI, TEST_TIMESTAMP,
+                TEST_TIMESTAMP, TEST_ANCHOR_CFO, TEST_CFO, TEST_INTIATOR_REPLY_TIME,
+                TEST_RESPONDER_REPLY_TIME, TEST_INITIATOR_RESPONDER_TOF, TEST_ANCHOR_LOCATION,
+                TEST_ACTIVE_RANGING_ROUNDS);
+
+        final int rangingMeasuresType = RANGING_MEASUREMENT_TYPE_DL_TDOA;
+        mUwbRangingData = new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
+                TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, rangingMeasuresType,
+                TEST_MAC_ADDRESS_MODE, noOfRangingMeasures, uwbDlTDoAMeasurements,
+                TEST_RAW_NTF_DATA);
+
+        assertThat(mUwbRangingData.getSequenceCounter()).isEqualTo(TEST_SEQ_COUNTER);
+        assertThat(mUwbRangingData.getSessionId()).isEqualTo(TEST_SESSION_ID);
+        assertThat(mUwbRangingData.getRcrIndication()).isEqualTo(TEST_RCR_INDICATION);
+        assertThat(mUwbRangingData.getCurrRangingInterval()).isEqualTo(TEST_CURR_RANGING_INTERVAL);
+        assertThat(mUwbRangingData.getRangingMeasuresType()).isEqualTo(rangingMeasuresType);
+        assertThat(mUwbRangingData.getMacAddressMode()).isEqualTo(TEST_MAC_ADDRESS_MODE);
+        assertThat(mUwbRangingData.getNoOfRangingMeasures()).isEqualTo(1);
+        assertThat(mUwbRangingData.getRawNtfData()).isEqualTo(TEST_RAW_NTF_DATA);
+
+        final String testString = "UwbRangingData { "
+                + " SeqCounter = " + TEST_SEQ_COUNTER
+                + ", SessionId = " + TEST_SESSION_ID
+                + ", RcrIndication = " + TEST_RCR_INDICATION
+                + ", CurrRangingInterval = " + TEST_CURR_RANGING_INTERVAL
+                + ", RangingMeasuresType = " + rangingMeasuresType
+                + ", MacAddressMode = " + TEST_MAC_ADDRESS_MODE
+                + ", NoOfRangingMeasures = " + noOfRangingMeasures
+                + ", RangingDlTDoAMeasure = " + Arrays.toString(uwbDlTDoAMeasurements)
+                + ", RawNotificationData = " + Arrays.toString(TEST_RAW_NTF_DATA)
                 + '}';
 
         assertThat(mUwbRangingData.toString()).isEqualTo(testString);
