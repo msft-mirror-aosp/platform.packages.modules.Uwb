@@ -606,6 +606,14 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         return status;
     }
 
+    public void rangingRoundsUpdateDtTag(SessionHandle sessionHandle,
+            PersistableBundle params) throws RemoteException {
+        if (!isUwbEnabled()) {
+            throw new IllegalStateException("Uwb is not enabled");
+        }
+        mSessionManager.rangingRoundsUpdateDtTag(sessionHandle, params);
+    }
+
     private class EnableDisableTask extends Handler {
 
         EnableDisableTask(Looper looper) {
