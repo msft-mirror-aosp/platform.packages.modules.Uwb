@@ -150,6 +150,8 @@ public abstract class FiraParams extends Params {
                 RANGING_DEVICE_ROLE_INITIATOR,
                 RANGING_DEVICE_ROLE_ADVERTISER,
                 RANGING_DEVICE_ROLE_OBSERVER,
+                RANGING_DEVICE_DT_ANCHOR,
+                RANGING_DEVICE_DT_TAG,
             })
     public @interface RangingDeviceRole {}
 
@@ -161,6 +163,10 @@ public abstract class FiraParams extends Params {
 
     public static final int RANGING_DEVICE_ROLE_OBSERVER = 6;
 
+    public static final int RANGING_DEVICE_DT_ANCHOR = 7;
+
+    public static final int RANGING_DEVICE_DT_TAG = 8;
+
     /** Ranging Round Usage */
     @IntDef(
             value = {
@@ -169,6 +175,7 @@ public abstract class FiraParams extends Params {
                 RANGING_ROUND_USAGE_SS_TWR_NON_DEFERRED_MODE,
                 RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE,
                 RANGING_ROUND_USAGE_OWR_AOA_MEASUREMENT,
+                RANGING_ROUND_USAGE_DL_TDOA,
             })
     public @interface RangingRoundUsage {}
 
@@ -183,6 +190,9 @@ public abstract class FiraParams extends Params {
 
     /** Double-sided two-way ranging, non-deferred */
     public static final int RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE = 4;
+
+    /** Downlink Time Difference of Arrival */
+    public static final int RANGING_ROUND_USAGE_DL_TDOA = 5;
 
     /** OWR for AoA measurement */
     public static final int RANGING_ROUND_USAGE_OWR_AOA_MEASUREMENT = 6;
@@ -466,6 +476,7 @@ public abstract class FiraParams extends Params {
                 STATUS_CODE_ERROR_MULTICAST_LIST_FULL,
                 STATUS_CODE_ERROR_ADDRESS_NOT_FOUND,
                 STATUS_CODE_ERROR_ADDRESS_ALREADY_PRESENT,
+                STATUS_CODE_OK_NEGATIVE_DISTANCE_REPORT,
                 STATUS_CODE_RANGING_TX_FAILED,
                 STATUS_CODE_RANGING_RX_TIMEOUT,
                 STATUS_CODE_RANGING_RX_PHY_DEC_FAILED,
@@ -474,6 +485,10 @@ public abstract class FiraParams extends Params {
                 STATUS_CODE_RANGING_RX_MAC_DEC_FAILED,
                 STATUS_CODE_RANGING_RX_MAC_IE_DEC_FAILED,
                 STATUS_CODE_RANGING_RX_MAC_IE_MISSING,
+                STATUS_CODE_ERROR_ROUND_INDEX_NOT_ACTIVATED,
+                STATUS_CODE_ERROR_NUMBER_OF_ACTIVE_RANGING_ROUNDS_EXCEEDED,
+                STATUS_CODE_ERROR_ROUND_INDEX_NOT_SET_AS_INITIATOR,
+                STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST,
             })
     public @interface StatusCode {}
 
@@ -497,6 +512,7 @@ public abstract class FiraParams extends Params {
     public static final int STATUS_CODE_ERROR_MULTICAST_LIST_FULL = 0x17;
     public static final int STATUS_CODE_ERROR_ADDRESS_NOT_FOUND = 0x18;
     public static final int STATUS_CODE_ERROR_ADDRESS_ALREADY_PRESENT = 0x19;
+    public static final int STATUS_CODE_OK_NEGATIVE_DISTANCE_REPORT = 0x1B;
     public static final int STATUS_CODE_RANGING_TX_FAILED = 0x20;
     public static final int STATUS_CODE_RANGING_RX_TIMEOUT = 0x21;
     public static final int STATUS_CODE_RANGING_RX_PHY_DEC_FAILED = 0x22;
@@ -505,6 +521,11 @@ public abstract class FiraParams extends Params {
     public static final int STATUS_CODE_RANGING_RX_MAC_DEC_FAILED = 0x25;
     public static final int STATUS_CODE_RANGING_RX_MAC_IE_DEC_FAILED = 0x26;
     public static final int STATUS_CODE_RANGING_RX_MAC_IE_MISSING = 0x27;
+    public static final int STATUS_CODE_ERROR_ROUND_INDEX_NOT_ACTIVATED = 0X28;
+    public static final int STATUS_CODE_ERROR_NUMBER_OF_ACTIVE_RANGING_ROUNDS_EXCEEDED = 0X29;
+    public static final int STATUS_CODE_ERROR_ROUND_INDEX_NOT_SET_AS_INITIATOR = 0X2A;
+    public static final int
+            STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST = 0X2B;
 
     /** State change reason codes defined in UCI table-15 */
     @IntDef(
