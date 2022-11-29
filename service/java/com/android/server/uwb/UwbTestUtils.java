@@ -16,6 +16,8 @@
 
 package com.android.server.uwb;
 
+import static com.android.server.uwb.data.UwbUciConstants.MAC_ADDRESSING_MODE_SHORT;
+import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_DL_TDOA;
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA;
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY;
 import static com.android.server.uwb.util.UwbUtil.convertFloatToQFormat;
@@ -30,31 +32,34 @@ import android.uwb.RangingMeasurement;
 import android.uwb.RangingReport;
 import android.uwb.UwbAddress;
 
+import com.android.server.uwb.data.UwbDlTDoAMeasurement;
 import com.android.server.uwb.data.UwbOwrAoaMeasurement;
 import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbTwoWayMeasurement;
 import com.android.server.uwb.params.TlvUtil;
 
+import com.google.uwb.support.dltdoa.DlTDoAMeasurement;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.oemextension.RangingReportMetadata;
 
 public class UwbTestUtils {
     public static final int TEST_SESSION_ID = 7;
     public static final int TEST_SESSION_ID_2 = 8;
-    public static final byte[] PEER_SHORT_MAC_ADDRESS = {0x1, 0x3};
-    public static final byte[] PEER_EXTENDED_MAC_ADDRESS =
-            new byte[] {0x12, 0x14, 0x16, 0x18, 0x31, 0x33, 0x35, 0x37};
-    public static final byte[] PEER_EXTENDED_MAC_ADDRESS_REVERSE_BYTES =
-            new byte[] {0x37, 0x35, 0x33, 0x31, 0x18, 0x16, 0x14, 0x12};
-    public static final byte[] PEER_EXTENDED_MAC_ADDRESS_2 =
-            new byte[] {0x2, 0x4, 0x6, 0x8, 0x1, 0x3, 0x5, 0x7};
-    public static final byte[] PEER_BAD_MAC_ADDRESS = new byte[] {0x12, 0x14, 0x16, 0x18};
+    public static final byte[] PEER_SHORT_MAC_ADDRESS = {0x35, 0x37};
     public static final byte[] PEER_EXTENDED_SHORT_MAC_ADDRESS =
-            new byte[] {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x35, 0x37};
-    public static final UwbAddress PEER_UWB_ADDRESS = UwbAddress.fromBytes(
-            PEER_EXTENDED_MAC_ADDRESS_REVERSE_BYTES);
+            {0x35, 0x37, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    public static final byte[] PEER_EXTENDED_MAC_ADDRESS =
+            {0x12, 0x14, 0x16, 0x18, 0x31, 0x33, 0x35, 0x37};
+    public static final byte[] PEER_EXTENDED_MAC_ADDRESS_2 =
+            {0x2, 0x4, 0x6, 0x8, 0x1, 0x3, 0x5, 0x7};
+    public static final byte[] PEER_BAD_MAC_ADDRESS = {0x12, 0x14, 0x16, 0x18};
+    public static final UwbAddress PEER_EXTENDED_UWB_ADDRESS = UwbAddress.fromBytes(
+            PEER_EXTENDED_MAC_ADDRESS);
+    public static final UwbAddress PEER_SHORT_UWB_ADDRESS = UwbAddress.fromBytes(
+            PEER_SHORT_MAC_ADDRESS);
     public static final PersistableBundle PERSISTABLE_BUNDLE = new PersistableBundle();
     public static final byte[] DATA_PAYLOAD = new byte[] {0x13, 0x15, 0x18};
+    public static final int RANGING_MEASUREMENT_TYPE_UNDEFINED = 0; // RFU in spec
 
     private static final byte[] TEST_RAW_NTF_DATA = {0x10, 0x01, 0x05};
     private static final long TEST_SEQ_COUNTER = 5;
@@ -76,20 +81,35 @@ public class UwbTestUtils {
     private static final int TEST_FRAME_SEQUENCE_NUMBER = 1;
     private static final int TEST_BLOCK_IDX = 100;
     private static final int TEST_SLOT_IDX = 10;
+    private static final int TEST_MESSAGE_TYPE = 1;
+    private static final int TEST_MESSAGE_CONTROL = 1331;
+    private static final int TEST_BLOCK_INDEX = 5;
+    private static final int TEST_ROUND_INDEX = 1;
+    private static final long TEST_TIMESTAMP = 500_000L;
+    private static final int TEST_ANCHOR_CFO = 100;
+    private static final int TEST_CFO = 200;
+    private static final long TEST_INTIATOR_REPLY_TIME = 500_000L;
+    private static final long TEST_RESPONDER_REPLY_TIME = 300_000L;
+    private static final int TEST_INITIATOR_RESPONDER_TOF = 500;
+    private static final byte[] TEST_ANCHOR_LOCATION = {0x01, 0x02, 0x03, 0x04,
+            0x05, 0x06, 0x07, 0x08, 0x09, 0x10};
+    private static final byte[] TEST_ACTIVE_RANGING_ROUNDS = {0x02, 0x08};
     private static final int TEST_RSSI = 150;
 
     private UwbTestUtils() {}
 
     /** Build UwbRangingData for all Ranging Measurement Type(s). */
     public static UwbRangingData generateRangingData(
-            int rangingMeasurementType, int rangingStatus) {
+            int rangingMeasurementType, int macAddressingMode, int rangingStatus) {
         switch (rangingMeasurementType) {
             case RANGING_MEASUREMENT_TYPE_TWO_WAY:
                 return generateTwoWayMeasurementRangingData(rangingStatus);
             case RANGING_MEASUREMENT_TYPE_OWR_AOA:
-                return generateOwrAoaMeasurementRangingData(rangingStatus);
+                return generateOwrAoaMeasurementRangingData(macAddressingMode, rangingStatus);
+            case RANGING_MEASUREMENT_TYPE_DL_TDOA:
+                return generateDlTDoAMeasurementRangingData(macAddressingMode, rangingStatus);
             default:
-                return null;
+                return generateDefaultRangingData();
         }
     }
 
@@ -109,30 +129,67 @@ public class UwbTestUtils {
                 TEST_RAW_NTF_DATA);
     }
 
-    private static UwbRangingData generateOwrAoaMeasurementRangingData(int rangingStatus) {
+    private static UwbRangingData generateOwrAoaMeasurementRangingData(
+            int macAddressingMode, int rangingStatus) {
         final int noOfRangingMeasures = 1;
+        byte[] macAddress = (macAddressingMode == MAC_ADDRESSING_MODE_SHORT)
+                ? PEER_SHORT_MAC_ADDRESS : PEER_EXTENDED_MAC_ADDRESS;
         final UwbOwrAoaMeasurement uwbOwrAoaMeasurement  = new UwbOwrAoaMeasurement(
-                PEER_EXTENDED_MAC_ADDRESS, rangingStatus, TEST_LOS,
+                macAddress, rangingStatus, TEST_LOS,
                 TEST_FRAME_SEQUENCE_NUMBER, TEST_BLOCK_IDX,
                 convertFloatToQFormat(TEST_AOA_AZIMUTH, 9, 7), TEST_AOA_AZIMUTH_FOM,
                 convertFloatToQFormat(TEST_AOA_ELEVATION, 9, 7), TEST_AOA_ELEVATION_FOM);
         return new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
                 TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, RANGING_MEASUREMENT_TYPE_OWR_AOA,
-                TEST_MAC_ADDRESS_MODE, noOfRangingMeasures, uwbOwrAoaMeasurement,
+                macAddressingMode, noOfRangingMeasures, uwbOwrAoaMeasurement,
+                TEST_RAW_NTF_DATA);
+    }
+
+    private static UwbRangingData generateDlTDoAMeasurementRangingData(
+            int macAddressingMode, int rangingStatus) {
+        final int noOfRangingMeasures = 1;
+        byte[] macAddress = (macAddressingMode == MAC_ADDRESSING_MODE_SHORT)
+                ? PEER_SHORT_MAC_ADDRESS : PEER_EXTENDED_MAC_ADDRESS;
+        final UwbDlTDoAMeasurement[] uwbDlTDoAMeasurements =
+                new UwbDlTDoAMeasurement[noOfRangingMeasures];
+        uwbDlTDoAMeasurements[0] = new UwbDlTDoAMeasurement(macAddress, rangingStatus,
+                TEST_MESSAGE_TYPE, TEST_MESSAGE_CONTROL, TEST_BLOCK_INDEX, TEST_ROUND_INDEX,
+                TEST_LOS, convertFloatToQFormat(TEST_AOA_AZIMUTH, 9, 7),
+                TEST_AOA_AZIMUTH_FOM, convertFloatToQFormat(TEST_AOA_ELEVATION, 9, 7),
+                TEST_AOA_ELEVATION_FOM, TEST_RSSI, TEST_TIMESTAMP, TEST_TIMESTAMP, TEST_ANCHOR_CFO,
+                TEST_CFO, TEST_INTIATOR_REPLY_TIME, TEST_RESPONDER_REPLY_TIME,
+                TEST_INITIATOR_RESPONDER_TOF, TEST_ANCHOR_LOCATION, TEST_ACTIVE_RANGING_ROUNDS);
+
+        return new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
+                TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, RANGING_MEASUREMENT_TYPE_DL_TDOA,
+                macAddressingMode, noOfRangingMeasures, uwbDlTDoAMeasurements,
+                TEST_RAW_NTF_DATA);
+    }
+
+    // Create a UwbRangingData with no measurements, for negative test cases (example: incorrect
+    // ranging measurement type).
+    private static UwbRangingData generateDefaultRangingData() {
+        final int noOfRangingMeasures = 0;
+        final UwbTwoWayMeasurement[] uwbEmptyTwoWayMeasurements =
+                new UwbTwoWayMeasurement[noOfRangingMeasures];
+        return new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
+                TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, RANGING_MEASUREMENT_TYPE_UNDEFINED,
+                TEST_MAC_ADDRESS_MODE, noOfRangingMeasures, uwbEmptyTwoWayMeasurements,
                 TEST_RAW_NTF_DATA);
     }
 
     // Helper method to generate a UwbRangingData instance and corresponding RangingMeasurement
     public static Pair<UwbRangingData, RangingReport> generateRangingDataAndRangingReport(
-            byte[] macAddress, int rangingMeasurementType,
+            byte[] macAddress, int macAddressingMode, int rangingMeasurementType,
             boolean isAoaAzimuthEnabled, boolean isAoaElevationEnabled,
             boolean isDestAoaAzimuthEnabled, boolean isDestAoaElevationEnabled,
             long elapsedRealtimeNanos) {
-        UwbRangingData uwbRangingData = generateRangingData(rangingMeasurementType, TEST_STATUS);
+        UwbRangingData uwbRangingData = generateRangingData(rangingMeasurementType,
+                macAddressingMode, TEST_STATUS);
 
-        // TODO(b/246678053): Add rawNtfData[] for both TwoWay and OWR AoA Measurements..
         PersistableBundle rangingReportMetadata = new RangingReportMetadata.Builder()
                 .setSessionId(0)
+                .setRawNtfData(new byte[] {0x10, 0x01, 0x05})
                 .build()
                 .toBundle();
 
@@ -210,6 +267,25 @@ public class UwbTestUtils {
                     .setDestinationAngleOfArrivalMeasurement(aoaDestMeasurement)
                     .setRssiDbm(-TEST_RSSI / 2)
                     .setRangingMeasurementMetadata(rangingMeasurementMetadata);
+        }
+
+        if (rangingMeasurementType == RANGING_MEASUREMENT_TYPE_DL_TDOA) {
+            DlTDoAMeasurement dlTDoAMeasurement = new DlTDoAMeasurement.Builder()
+                    .setMessageType(TEST_MESSAGE_TYPE)
+                    .setMessageControl(TEST_MESSAGE_CONTROL)
+                    .setBlockIndex(TEST_BLOCK_INDEX)
+                    .setNLoS(TEST_LOS)
+                    .setTxTimestamp(TEST_TIMESTAMP)
+                    .setRxTimestamp(TEST_TIMESTAMP)
+                    .setAnchorCfo(TEST_ANCHOR_CFO)
+                    .setCfo(TEST_CFO)
+                    .setInitiatorReplyTime(TEST_INTIATOR_REPLY_TIME)
+                    .setResponderReplyTime(TEST_RESPONDER_REPLY_TIME)
+                    .setInitiatorResponderTof(TEST_INITIATOR_RESPONDER_TOF)
+                    .setAnchorLocation(TEST_ANCHOR_LOCATION)
+                    .setActiveRangingRounds(TEST_ACTIVE_RANGING_ROUNDS)
+                    .build();
+            rangingMeasurementBuilder.setRangingMeasurementMetadata(dlTDoAMeasurement.toBundle());
         }
 
         return new RangingReport.Builder()
