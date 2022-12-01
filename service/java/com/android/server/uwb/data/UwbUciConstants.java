@@ -128,10 +128,14 @@ public class UwbUciConstants {
             FiraParams.RANGING_DEVICE_ROLE_OBSERVER;
 
     /**
-     * Table 22: Ranging Data Notification
+     * Table 37: Ranging Data Notification
      */
     public static final byte RANGING_MEASUREMENT_TYPE_TWO_WAY = 0X01;
+    public static final byte RANGING_MEASUREMENT_TYPE_DL_TDOA = 0x02;
     public static final byte RANGING_MEASUREMENT_TYPE_OWR_AOA = 0x03;
+
+    public static final byte MAC_ADDRESSING_MODE_SHORT = 0x00;
+    public static final byte MAC_ADDRESSING_MODE_EXTENDED = 0x01;
 
     /**
      * Table 32: Status Codes
@@ -168,6 +172,8 @@ public class UwbUciConstants {
             FiraParams.STATUS_CODE_ERROR_ADDRESS_NOT_FOUND;
     public static final int STATUS_CODE_ERROR_ADDRESS_ALREADY_PRESENT =
             FiraParams.STATUS_CODE_ERROR_ADDRESS_ALREADY_PRESENT;
+    public static final int STATUS_CODE_OK_NEGATIVE_DISTANCE_REPORT =
+            FiraParams.STATUS_CODE_OK_NEGATIVE_DISTANCE_REPORT;
     /* UWB Ranging Session Specific Status Codes */
     public static final int STATUS_CODE_RANGING_TX_FAILED =
             FiraParams.STATUS_CODE_RANGING_TX_FAILED;
@@ -185,11 +191,21 @@ public class UwbUciConstants {
             FiraParams.STATUS_CODE_RANGING_RX_MAC_IE_DEC_FAILED;
     public static final int STATUS_CODE_RANGING_RX_MAC_IE_MISSING =
             FiraParams.STATUS_CODE_RANGING_RX_MAC_IE_MISSING;
+    public static final int STATUS_CODE_ERROR_ROUND_INDEX_NOT_ACTIVATED =
+            FiraParams.STATUS_CODE_ERROR_ROUND_INDEX_NOT_ACTIVATED;
+    public static final int STATUS_CODE_ERROR_NUMBER_OF_ACTIVE_RANGING_ROUNDS_EXCEEDED =
+            FiraParams.STATUS_CODE_ERROR_NUMBER_OF_ACTIVE_RANGING_ROUNDS_EXCEEDED;
+    public static final int STATUS_CODE_ERROR_ROUND_INDEX_NOT_SET_AS_INITIATOR =
+            FiraParams.STATUS_CODE_ERROR_ROUND_INDEX_NOT_SET_AS_INITIATOR;
+    public static final int
+                STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST =
+            FiraParams.STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST;
 
     public static final int STATUS_CODE_CCC_SE_BUSY = STATUS_ERROR_CCC_SE_BUSY;
     public static final int STATUS_CODE_CCC_LIFECYCLE = STATUS_ERROR_CCC_LIFECYCLE;
 
     /* UWB Device Extended Mac address length */
+    public static final int UWB_DEVICE_SHORT_MAC_ADDRESS_LEN = 2;
     public static final int UWB_DEVICE_EXT_MAC_ADDRESS_LEN = 8;
 
     /* UWB Data Session Specific Status Codes */
