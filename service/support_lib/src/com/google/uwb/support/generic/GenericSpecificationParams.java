@@ -16,9 +16,10 @@
 
 package com.google.uwb.support.generic;
 
-import android.annotation.NonNull;
 import android.os.PersistableBundle;
 import android.uwb.UwbManager;
+
+import androidx.annotation.NonNull;
 
 import com.google.uwb.support.base.RequiredParam;
 import com.google.uwb.support.ccc.CccParams;
@@ -103,7 +104,7 @@ public class GenericSpecificationParams extends GenericParams {
                 .setCccSpecificationParams(
                         CccSpecificationParams.fromBundle(
                                 bundle.getPersistableBundle(KEY_CCC_SPECIFICATION_PARAMS)))
-                .hasPowerStatsSupport(bundle.getBoolean(KEY_FIRA_SPECIFICATION_PARAMS))
+                .hasPowerStatsSupport(bundle.getBoolean(KEY_POWER_STATS_QUERY_SUPPORT))
                 .build();
     }
 

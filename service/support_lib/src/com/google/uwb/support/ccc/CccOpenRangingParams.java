@@ -16,14 +16,14 @@
 
 package com.google.uwb.support.ccc;
 
-import static com.android.internal.util.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkNotNull;
 
-import android.annotation.NonNull;
 import android.os.Build.VERSION_CODES;
 import android.os.PersistableBundle;
 import android.uwb.UwbManager;
 
 import androidx.annotation.IntRange;
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
 import com.google.uwb.support.base.RequiredParam;
@@ -236,6 +236,21 @@ public class CccOpenRangingParams extends CccParams {
             mSyncCodeIndex.set(builder.mSyncCodeIndex.get());
             mHoppingConfigMode.set(builder.mHoppingConfigMode.get());
             mHoppingSequence.set(builder.mHoppingSequence.get());
+        }
+
+        public Builder(@NonNull CccOpenRangingParams params) {
+            mProtocolVersion.set(params.mProtocolVersion);
+            mUwbConfig.set(params.mUwbConfig);
+            mPulseShapeCombo.set(params.mPulseShapeCombo);
+            mSessionId.set(params.mSessionId);
+            mRanMultiplier.set(params.mRanMultiplier);
+            mChannel.set(params.mChannel);
+            mNumChapsPerSlot.set(params.mNumChapsPerSlot);
+            mNumResponderNodes.set(params.mNumResponderNodes);
+            mNumSlotsPerRound.set(params.mNumSlotsPerRound);
+            mSyncCodeIndex.set(params.mSyncCodeIndex);
+            mHoppingConfigMode.set(params.mHoppingConfigMode);
+            mHoppingSequence.set(params.mHoppingSequence);
         }
 
         public Builder setProtocolVersion(CccProtocolVersion version) {
