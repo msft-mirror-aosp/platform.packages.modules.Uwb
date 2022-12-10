@@ -40,20 +40,21 @@ public class SecureFactory {
             @NonNull Looper workLooper,
             @NonNull SecureSession.Callback secureSessionCallback,
             @NonNull RunningProfileSessionInfo runningProfileSessionInfo,
-            @NonNull Transport transport) {
+            @NonNull Transport transport,
+            boolean isController) {
         OmapiConnection omapiConnection = new OmapiConnectionImpl(context);
         SecureElementChannel secureElementChannel = new SecureElementChannel(omapiConnection);
         FiRaSecureChannel fiRaSecureChannel =
                 new InitiatorSecureChannel(
                         secureElementChannel, transport, workLooper, runningProfileSessionInfo);
-        if (runningProfileSessionInfo.isUwbController()) {
+        if (isController) {
             return new ControllerInitiatorSession(
                     workLooper,
                     fiRaSecureChannel,
                     secureSessionCallback,
                     runningProfileSessionInfo);
         } else {
-            return new ControlleeInitiatorSession(
+            return new ControleeInitiatorSession(
                     workLooper,
                     fiRaSecureChannel,
                     secureSessionCallback,
@@ -70,20 +71,21 @@ public class SecureFactory {
             @NonNull Looper workLooper,
             @NonNull SecureSession.Callback secureSessionCallback,
             @NonNull RunningProfileSessionInfo runningProfileSessionInfo,
-            @NonNull Transport transport) {
+            @NonNull Transport transport,
+            boolean isController) {
         OmapiConnection omapiConnection = new OmapiConnectionImpl(context);
         SecureElementChannel secureElementChannel = new SecureElementChannel(omapiConnection);
         FiRaSecureChannel fiRaSecureChannel =
                 new ResponderSecureChannel(
                         secureElementChannel, transport, workLooper, runningProfileSessionInfo);
-        if (runningProfileSessionInfo.isUwbController()) {
+        if (isController) {
             return new ControllerResponderSession(
                     workLooper,
                     fiRaSecureChannel,
                     secureSessionCallback,
                     runningProfileSessionInfo);
         } else {
-            return new ControlleeResponderSession(
+            return new ControleeResponderSession(
                     workLooper,
                     fiRaSecureChannel,
                     secureSessionCallback,
