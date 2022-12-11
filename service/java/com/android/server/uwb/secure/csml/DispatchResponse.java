@@ -62,7 +62,7 @@ public class DispatchResponse extends FiRaResponse {
             TRANSACTION_STATUS_WITH_ERROR,
     })
     @Retention(RetentionPolicy.SOURCE)
-    private @interface TransctionStatus {}
+    private @interface TransactionStatus {}
 
     private static final int TRANSACTION_STATUS_UNDEFINED = -1;
     private static final int TRANSACTION_STATUS_COMPLETE = 0;
@@ -76,7 +76,7 @@ public class DispatchResponse extends FiRaResponse {
             NOTIFICATION_EVENT_ID_SECURE_CHANNEL_ESTABLISHED,
             NOTIFICATION_EVENT_ID_RDS_AVAILABLE,
             NOTIFICATION_EVENT_ID_SECURE_SESSION_ABORTED,
-            NOTIFICATION_EVENT_ID_CONTROLLEE_INFO_AVAILABLE,
+            NOTIFICATION_EVENT_ID_CONTROLEE_INFO_AVAILABLE,
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface NotificationEventId {}
@@ -85,7 +85,7 @@ public class DispatchResponse extends FiRaResponse {
     public static final int NOTIFICATION_EVENT_ID_SECURE_CHANNEL_ESTABLISHED = 1;
     public static final int NOTIFICATION_EVENT_ID_RDS_AVAILABLE = 2;
     public static final int NOTIFICATION_EVENT_ID_SECURE_SESSION_ABORTED = 3;
-    public static final int NOTIFICATION_EVENT_ID_CONTROLLEE_INFO_AVAILABLE = 4;
+    public static final int NOTIFICATION_EVENT_ID_CONTROLEE_INFO_AVAILABLE = 4;
 
     /**
      * The base class of notification from the FiRa applet.
@@ -157,18 +157,18 @@ public class DispatchResponse extends FiRaResponse {
     }
 
     /**
-     * The notification of the controllee info available.
+     * The notification of the controlee info available.
      */
-    public static class ControlleeInfoAvailableNotification extends Notification {
-        public final byte[] controlleeInfo;
+    public static class ControleeInfoAvailableNotification extends Notification {
+        public final byte[] arbitraryData;
 
-        private ControlleeInfoAvailableNotification(@NonNull byte[] controlleeInfo) {
-            super(NOTIFICATION_EVENT_ID_CONTROLLEE_INFO_AVAILABLE);
-            this.controlleeInfo = controlleeInfo;
+        private ControleeInfoAvailableNotification(@NonNull byte[] arbitraryData) {
+            super(NOTIFICATION_EVENT_ID_CONTROLEE_INFO_AVAILABLE);
+            this.arbitraryData = arbitraryData;
         }
     }
 
-    @TransctionStatus
+    @TransactionStatus
     private int mTransactionStatus = TRANSACTION_STATUS_UNDEFINED;
 
     /**
@@ -209,7 +209,7 @@ public class DispatchResponse extends FiRaResponse {
             logw("no status tag is attached, required by FiRa");
             return;
         }
-        mTransactionStatus = parseTransctionStatus(statusTlvs.get(0).value);
+        mTransactionStatus = parseTransactionStatus(statusTlvs.get(0).value);
         switch (mTransactionStatus) {
             case TRANSACTION_STATUS_WITH_ERROR:
                 notifications.add(new SecureSessionAbortedNotification());
@@ -241,8 +241,8 @@ public class DispatchResponse extends FiRaResponse {
         }
     }
 
-    @TransctionStatus
-    private int parseTransctionStatus(@Nullable byte[] status) {
+    @TransactionStatus
+    private int parseTransactionStatus(@Nullable byte[] status) {
         if (status == null || status.length < 1) {
             return TRANSACTION_STATUS_UNDEFINED;
         }
@@ -324,46 +324,43 @@ public class DispatchResponse extends FiRaResponse {
                     byte[] payload = notificationDataTlvs.get(0).value;
                     if (payload == null || payload.length < 2 || payload.length < 1 + payload[0]) {
                         throw new IllegalStateException(
-                                "RDS Notificaition data - bad payload");
+                                "RDS Notification data - bad payload");
                     }
                     int sessionIdLen = payload[0];
                     byte[] sessionId = new byte[sessionIdLen];
                     System.arraycopy(payload, 1, sessionId, 0, sessionIdLen);
 
-                    byte[] arbitratryData = null;
-                    int arbitratryDataOffset = sessionIdLen + 1;
-                    if (payload.length > arbitratryDataOffset) {
-                        int arbitratryDataLen = payload[arbitratryDataOffset];
-                        if (payload.length != 2 + sessionIdLen + arbitratryDataLen) {
-                            // ignore the arbitrary data
-                            arbitratryData = null;
-                        } else {
-                            arbitratryData = new byte[arbitratryDataLen];
-                            System.arraycopy(payload, arbitratryDataOffset + 1,
-                                    arbitratryData, 0, arbitratryDataLen);
+                    byte[] arbitraryData = new byte[0];
+                    int arbitraryDataOffset = sessionIdLen + 1;
+                    if (payload.length > arbitraryDataOffset) {
+                        int arbitraryDataLen = payload[arbitraryDataOffset];
+                        if (payload.length == 2 + sessionIdLen + arbitraryDataLen) {
+                            arbitraryData = new byte[arbitraryDataLen];
+                            System.arraycopy(payload, arbitraryDataOffset + 1,
+                                    arbitraryData, 0, arbitraryDataLen);
                         }
                     }
 
                     notificationList.add(
                             new RdsAvailableNotification(
                                     DataTypeConversionUtil.arbitraryByteArrayToI32(sessionId),
-                                    arbitratryData));
+                                    arbitraryData));
                     break;
                 case (byte) 0x03:
                     // TODO: change it according to the final CSML spec, this is not defined yet.
-                    // use 0x03 and controllee info data as notification data.
+                    // use 0x03 and controlee info data as notification data.
                     notificationDataTlvs = curTlvs.get(NOTIFICATION_DATA_TAG);
-                    if (notificationDataTlvs == null || notificationDataTlvs.size() == 0) {
-                        throw new IllegalStateException("controllee info data is required.");
+                    arbitraryData = new byte[0];
+                    if (notificationDataTlvs != null && notificationDataTlvs.size() != 0) {
+                        payload = notificationDataTlvs.get(0).value;
+                        if (payload == null || payload.length == 0) {
+                            throw new IllegalStateException(
+                                    "payload of controlee info available notification is bad.");
+                        }
+                        arbitraryData = new byte[payload.length];
+                        System.arraycopy(payload, 0, arbitraryData, 0, payload.length);
                     }
-                    payload = notificationDataTlvs.get(0).value;
-                    if (payload == null || payload.length == 0) {
-                        throw new IllegalStateException(
-                                "payload of cotrollee info available is bad.");
-                    }
-                    byte[] sessionData = new byte[payload.length];
-                    System.arraycopy(payload, 0, sessionData, 0, payload.length);
-                    notificationList.add(new ControlleeInfoAvailableNotification(sessionData));
+                    notificationList.add(new ControleeInfoAvailableNotification(arbitraryData));
                     break;
                 default:
             }

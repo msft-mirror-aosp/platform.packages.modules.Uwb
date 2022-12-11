@@ -19,6 +19,11 @@ package androidx.core.uwb.backend.impl.internal;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_1;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_2;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_3;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_4;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_5;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_6;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_7;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_8;
 import static androidx.core.uwb.backend.impl.internal.Utils.STATIC_STS_SESSION_KEY_INFO_SIZE;
 import static androidx.core.uwb.backend.impl.internal.Utils.VENDOR_ID_SIZE;
 import static androidx.core.uwb.backend.impl.internal.Utils.getRangingTimingParams;
@@ -28,10 +33,16 @@ import static com.google.uwb.support.fira.FiraParams.MAC_ADDRESS_MODE_2_BYTES;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_ONE_TO_MANY;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_UNICAST;
 import static com.google.uwb.support.fira.FiraParams.PROTOCOL_VERSION_1_1;
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_DT_TAG;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_INITIATOR;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_RESPONDER;
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLEE;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLLER;
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_DT_TAG;
+import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_DL_TDOA;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
+import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_PROVISIONED;
+import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY;
 
 import android.util.ArrayMap;
 
@@ -82,6 +93,11 @@ public final class ConfigurationManager {
                     public boolean isControllerTheInitiator() {
                         return true;
                     }
+
+                    @Override
+                    public int getRangingRoundUsage() {
+                        return RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
+                    }
                 });
 
         // ID_2 properties.
@@ -112,6 +128,11 @@ public final class ConfigurationManager {
                     @Override
                     public boolean isControllerTheInitiator() {
                         return true;
+                    }
+
+                    @Override
+                    public int getRangingRoundUsage() {
+                        return RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
                     }
                 });
 
@@ -144,6 +165,190 @@ public final class ConfigurationManager {
                     public boolean isControllerTheInitiator() {
                         return true;
                     }
+
+                    @Override
+                    public int getRangingRoundUsage() {
+                        return RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
+                    }
+                });
+
+        // ID_4 properties.
+        sConfigs.put(
+                CONFIG_ID_4,
+                new UwbConfiguration() {
+
+                    @Override
+                    public int getConfigId() {
+                        return CONFIG_ID_4;
+                    }
+
+                    @Override
+                    public int getMultiNodeMode() {
+                        return MULTI_NODE_MODE_UNICAST;
+                    }
+
+                    @Override
+                    public int getStsConfig() {
+                        return STS_CONFIG_PROVISIONED;
+                    }
+
+                    @Override
+                    public int getAoaResultRequestMode() {
+                        return FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS;
+                    }
+
+                    @Override
+                    public boolean isControllerTheInitiator() {
+                        return true;
+                    }
+
+                    @Override
+                    public int getRangingRoundUsage() {
+                        return RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
+                    }
+                });
+
+        // ID_5 properties.
+        sConfigs.put(
+                CONFIG_ID_5,
+                new UwbConfiguration() {
+
+                    @Override
+                    public int getConfigId() {
+                        return CONFIG_ID_5;
+                    }
+
+                    @Override
+                    public int getMultiNodeMode() {
+                        return MULTI_NODE_MODE_ONE_TO_MANY;
+                    }
+
+                    @Override
+                    public int getStsConfig() {
+                        return STS_CONFIG_PROVISIONED;
+                    }
+
+                    @Override
+                    public int getAoaResultRequestMode() {
+                        return FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS;
+                    }
+
+                    @Override
+                    public boolean isControllerTheInitiator() {
+                        return true;
+                    }
+
+                    @Override
+                    public int getRangingRoundUsage() {
+                        return RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
+                    }
+                });
+
+        // ID_6 properties.
+        sConfigs.put(
+                CONFIG_ID_6,
+                new UwbConfiguration() {
+                    @Override
+                    public int getConfigId() {
+                        return CONFIG_ID_6;
+                    }
+
+                    @Override
+                    public int getMultiNodeMode() {
+                        return MULTI_NODE_MODE_UNICAST;
+                    }
+
+                    @Override
+                    public int getStsConfig() {
+                        return STS_CONFIG_PROVISIONED;
+                    }
+
+                    @Override
+                    public int getAoaResultRequestMode() {
+                        return FiraParams.AOA_RESULT_REQUEST_MODE_NO_AOA_REPORT;
+                    }
+
+                    @Override
+                    public boolean isControllerTheInitiator() {
+                        return true;
+                    }
+
+                    @Override
+                    public int getRangingRoundUsage() {
+                        return RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
+                    }
+                });
+
+        // ID_7 properties.
+        sConfigs.put(
+                CONFIG_ID_7,
+                new UwbConfiguration() {
+
+                    @Override
+                    public int getConfigId() {
+                        return CONFIG_ID_7;
+                    }
+
+                    @Override
+                    public int getMultiNodeMode() {
+                        return MULTI_NODE_MODE_ONE_TO_MANY;
+                    }
+
+                    @Override
+                    public int getStsConfig() {
+                        return FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY;
+                    }
+
+                    @Override
+                    public int getAoaResultRequestMode() {
+                        return FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS;
+                    }
+
+                    @Override
+                    public boolean isControllerTheInitiator() {
+                        return true;
+                    }
+
+                    @Override
+                    public int getRangingRoundUsage() {
+                        return RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
+                    }
+                });
+
+        // ID_8 properties.
+        sConfigs.put(
+                CONFIG_ID_8,
+                new UwbConfiguration() {
+
+                    @Override
+                    public int getConfigId() {
+                        return CONFIG_ID_8;
+                    }
+
+                    @Override
+                    public int getMultiNodeMode() {
+                        return MULTI_NODE_MODE_ONE_TO_MANY;
+                    }
+
+                    @Override
+                    public int getStsConfig() {
+                        return FiraParams.STS_CONFIG_STATIC;
+                    }
+
+                    @Override
+                    public int getAoaResultRequestMode() {
+                        return FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS;
+                    }
+
+                    @Override
+                    public boolean isControllerTheInitiator() {
+                        return true;
+                    }
+
+                    @Override
+                    public int getRangingRoundUsage() {
+                        return RANGING_ROUND_USAGE_DL_TDOA;
+                    }
                 });
     }
 
@@ -157,18 +362,29 @@ public final class ConfigurationManager {
         RangingTimingParams timingParams =
                 getRangingTimingParams(rangingParameters.getUwbConfigId());
         UwbConfiguration configuration = sConfigs.get(rangingParameters.getUwbConfigId());
-        int deviceRole =
-                deviceType == RANGING_DEVICE_TYPE_CONTROLLER
-                        ? (configuration.isControllerTheInitiator()
-                                ? RANGING_DEVICE_ROLE_INITIATOR
-                                : RANGING_DEVICE_ROLE_RESPONDER)
-                        : (configuration.isControllerTheInitiator()
-                                ? RANGING_DEVICE_ROLE_RESPONDER
-                                : RANGING_DEVICE_ROLE_INITIATOR);
+        int deviceRole;
+        switch (deviceType) {
+            case RANGING_DEVICE_TYPE_CONTROLLER :
+                deviceRole = configuration.isControllerTheInitiator()
+                    ? RANGING_DEVICE_ROLE_INITIATOR
+                    : RANGING_DEVICE_ROLE_RESPONDER;
+                break;
+            case RANGING_DEVICE_TYPE_CONTROLEE :
+                deviceRole = configuration.isControllerTheInitiator()
+                        ? RANGING_DEVICE_ROLE_RESPONDER
+                        : RANGING_DEVICE_ROLE_INITIATOR;
+                break;
+            case RANGING_DEVICE_TYPE_DT_TAG:
+                deviceRole = RANGING_DEVICE_DT_TAG;
+                break;
+            default: deviceRole = RANGING_DEVICE_ROLE_RESPONDER;
+                break;
+        }
+
         FiraOpenSessionParams.Builder builder =
                 new FiraOpenSessionParams.Builder()
                         .setProtocolVersion(PROTOCOL_VERSION_1_1)
-                        .setRangingRoundUsage(RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE)
+                        .setRangingRoundUsage(configuration.getRangingRoundUsage())
                         .setMultiNodeMode(configuration.getMultiNodeMode())
                         .setMacAddressMode(MAC_ADDRESS_MODE_2_BYTES)
                         .setDeviceType(deviceType)
@@ -202,6 +418,14 @@ public final class ConfigurationManager {
                             Arrays.copyOf(rangingParameters.getSessionKeyInfo(), VENDOR_ID_SIZE))
                     .setStaticStsIV(staticStsIv);
         }
+        if (configuration.getStsConfig() == STS_CONFIG_PROVISIONED) {
+            builder.setSessionKey(rangingParameters.getSessionKeyInfo());
+        }
+        if (configuration.getStsConfig() == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
+            builder.setSessionKey(rangingParameters.getSessionKeyInfo())
+                    .setSubSessionId(rangingParameters.getSubSessionId())
+                    .setSubsessionKey(rangingParameters.getSubSessionKeyInfo());
+        }
 
         if (timingParams.isHoppingEnabled()) {
             builder.setHoppingMode(HOPPING_MODE_FIRA_HOPPING_ENABLE);
@@ -214,7 +438,8 @@ public final class ConfigurationManager {
             @Utils.UwbConfigId int configId,
             @FiraParams.MulticastListUpdateAction int action,
             UwbAddress[] peerAddresses,
-            @Nullable int[] subSessionIdList) {
+            @Nullable int[] subSessionIdList,
+            @Nullable byte[] subSessionKey) {
         UwbConfiguration configuration = sConfigs.get(configId);
         FiraRangingReconfigureParams.Builder builder =
                 new FiraRangingReconfigureParams.Builder()
@@ -224,7 +449,8 @@ public final class ConfigurationManager {
                                         .toArray(new android.uwb.UwbAddress[0]));
         if (configuration.getStsConfig()
                 == FiraParams.STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY) {
-            builder.setSubSessionIdList(subSessionIdList);
+            builder.setSubSessionIdList(subSessionIdList)
+                    .setSubSessionKeyList(subSessionKey);
         }
         return builder.build();
     }

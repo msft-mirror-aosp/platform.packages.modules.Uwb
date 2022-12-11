@@ -24,7 +24,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import com.android.server.uwb.pm.ControlleeInfo;
+import com.android.server.uwb.pm.ControleeInfo;
 import com.android.server.uwb.pm.RunningProfileSessionInfo;
 import com.android.server.uwb.secure.csml.CsmlUtil;
 import com.android.server.uwb.secure.csml.DispatchResponse;
@@ -48,13 +48,14 @@ public class ControllerInitiatorSession extends InitiatorSession {
             @NonNull Callback sessionCallback,
             @NonNull RunningProfileSessionInfo runningProfileSessionInfo) {
         super(workLooper, fiRaSecureChannel, sessionCallback, runningProfileSessionInfo);
+        mIsController = true;
     }
 
     private void sendGetControleeInfoCommand() {
-        GetDoCommand putControleeInfoCommand = GetDoCommand.build(
+        GetDoCommand getControleeInfoCommand = GetDoCommand.build(
                 CsmlUtil.constructGetDoTlv(CsmlUtil.CONTROLEE_INFO_DO_TAG));
-        tunnelData(MSG_ID_GET_CONTROLLEE_INFO,
-                putControleeInfoCommand.getCommandApdu().getEncoded());
+        tunnelData(MSG_ID_GET_CONTROLEE_INFO,
+                getControleeInfoCommand.getCommandApdu().getEncoded());
     }
 
     @Override
@@ -65,7 +66,7 @@ public class ControllerInitiatorSession extends InitiatorSession {
     @Override
     protected void handleTunnelDataFailure(int msgId, @NonNull TunnelDataFailReason failReason) {
         switch (msgId) {
-            case MSG_ID_GET_CONTROLLEE_INFO:
+            case MSG_ID_GET_CONTROLEE_INFO:
                 // fall through
             case MSG_ID_PUT_SESSION_DATA:
                 // simply abort the session.
@@ -87,7 +88,7 @@ public class ControllerInitiatorSession extends InitiatorSession {
     protected boolean handleTunnelDataResponseReceived(
             int msgId, @NonNull DispatchResponse response) {
         switch (msgId) {
-            case MSG_ID_GET_CONTROLLEE_INFO:
+            case MSG_ID_GET_CONTROLEE_INFO:
                 return handleTunnelGetControleeInfoResponse(response);
             case MSG_ID_PUT_SESSION_DATA:
                 return handleTunnelPutSessionDataResponse(response);
@@ -108,12 +109,12 @@ public class ControllerInitiatorSession extends InitiatorSession {
                     || !CsmlUtil.isControleeInfoDo(outboundData.data)) {
                 throw new IllegalStateException("controlee info from the response is not valid.");
             }
-            ControlleeInfo controlleeInfo = ControlleeInfo.fromBytes(outboundData.data);
+            ControleeInfo controleeInfo = ControleeInfo.fromBytes(outboundData.data);
 
             mSessionData = CsmlUtil.generateSessionData(
-                    mRunningProfileSessionInfo.getUwbCapability(),
-                    controlleeInfo,
-                    mRunningProfileSessionInfo.getSharedPrimarySessionId(),
+                    mRunningProfileSessionInfo.uwbCapability,
+                    controleeInfo,
+                    mRunningProfileSessionInfo.sharedPrimarySessionId,
                     mUniqueSessionId.get(),
                     !mIsDefaultUniqueSessionId);
 

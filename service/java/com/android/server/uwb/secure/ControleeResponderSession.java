@@ -34,12 +34,12 @@ import com.android.server.uwb.util.DataTypeConversionUtil;
 import java.util.Optional;
 
 /**
- * The responder of dynamic STS session managed by the UWB controllee.
+ * The responder of dynamic STS session managed by the UWB controlee.
  */
-public class ControlleeResponderSession extends ResponderSession {
-    private static final String LOG_TAG = "ControlleeResponder";
+public class ControleeResponderSession extends ResponderSession {
+    private static final String LOG_TAG = "ControleeResponder";
 
-    public ControlleeResponderSession(
+    public ControleeResponderSession(
             @NonNull Looper workLooper,
             @NonNull FiRaSecureChannel fiRaSecureChannel,
             @NonNull Callback sessionCallback,
@@ -76,10 +76,9 @@ public class ControlleeResponderSession extends ResponderSession {
                 mSessionCallback.onSessionDataReady(
                         mUniqueSessionId.get(),
                         Optional.of(mSessionData),
-                        /*isTerminatedSession=*/false);
+                        /* isSessionTerminated= */ false);
             } else {
                 logd("try to read SessionData in applet.");
-                // try to get session Data
                 GetDoCommand getSessionDataCommand =
                         GetDoCommand.build(CsmlUtil.constructSessionDataGetDoTlv());
                 mFiRaSecureChannel.sendLocalFiRaCommand(getSessionDataCommand,
@@ -98,7 +97,7 @@ public class ControlleeResponderSession extends ResponderSession {
                                 mSessionCallback.onSessionDataReady(
                                         mUniqueSessionId.get(),
                                         Optional.of(mSessionData),
-                                        /*isTerminatedSession=*/ false);
+                                        /* isSessionTerminated= */ false);
                             }
 
                             @Override
