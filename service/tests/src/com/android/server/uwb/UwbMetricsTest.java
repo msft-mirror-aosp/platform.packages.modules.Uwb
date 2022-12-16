@@ -65,6 +65,7 @@ public class UwbMetricsTest {
     private static final int NLOS_DEFAULT = 1;
     private static final int VALID_RANGING_COUNT = 5;
     private static final int RSSI_DEFAULT_DBM = -75;
+    private static final boolean IS_STATUS_CODE_OK_DEFAULT = true;
     @Mock
     private UwbInjector mUwbInjector;
     @Mock
@@ -93,6 +94,7 @@ public class UwbMetricsTest {
         when(mRangingData.getRangingMeasuresType()).thenReturn(
                 (int) UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY);
         when(mTwoWayMeasurement.getRangingStatus()).thenReturn(FiraParams.STATUS_CODE_OK);
+        when(mTwoWayMeasurement.isStatusCodeOk()).thenReturn(IS_STATUS_CODE_OK_DEFAULT);
         when(mRangingData.getRangingTwoWayMeasures()).thenReturn(mTwoWayMeasurements);
 
         when(mUwbSession.getSessionId()).thenReturn(1);
@@ -154,7 +156,8 @@ public class UwbMetricsTest {
                 0, 0
         ));
 
-        mUwbMetrics.longRangingStartEvent(mUwbSession, UwbUciConstants.STATUS_CODE_FAILED);
+        mUwbMetrics.longRangingStartEvent(mUwbSession,
+                UwbUciConstants.STATUS_CODE_RANGING_TX_FAILED);
         addElapsedTimeMs(DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
         mUwbMetrics.longRangingStartEvent(mUwbSession, UwbUciConstants.STATUS_CODE_OK);
         addElapsedTimeMs(DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
@@ -165,12 +168,23 @@ public class UwbMetricsTest {
                     mRangingData);
         }
         when(mTwoWayMeasurement.getRangingStatus()).thenReturn(UwbUciConstants.STATUS_CODE_FAILED);
+        when(mTwoWayMeasurement.isStatusCodeOk()).thenReturn(!IS_STATUS_CODE_OK_DEFAULT);
         mUwbMetrics.logRangingResult(UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA,
                 mRangingData);
 
         mUwbMetrics.logRangingCloseEvent(mUwbSession, UwbUciConstants.STATUS_CODE_FAILED);
         addElapsedTimeMs(DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
         mUwbMetrics.logRangingCloseEvent(mUwbSession, UwbUciConstants.STATUS_CODE_OK);
+
+        ExtendedMockito.verify(() -> UwbStatsLog.write(UwbStatsLog.UWB_RANGING_START,
+                UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA,
+                UwbStatsLog.UWB_SESSION_INITIATED__STS__STATIC, true, true, false, true,
+                UwbStatsLog.UWB_START_RANGING__STATUS__TX_FAILED));
+
+        ExtendedMockito.verify(() -> UwbStatsLog.write(UwbStatsLog.UWB_RANGING_START,
+                UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA,
+                UwbStatsLog.UWB_SESSION_INITIATED__STS__STATIC, true, true, false, true,
+                UwbStatsLog.UWB_START_RANGING__STATUS__RANGING_SUCCESS));
 
         ExtendedMockito.verify(() -> UwbStatsLog.write(UwbStatsLog.UWB_FIRST_RANGING_RECEIVED,
                 UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA,

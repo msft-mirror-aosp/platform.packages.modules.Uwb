@@ -35,6 +35,8 @@ import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.util.Log;
 
+import androidx.annotation.RequiresApi;
+
 import com.android.internal.annotations.GuardedBy;
 
 import java.lang.annotation.Retention;
@@ -59,6 +61,8 @@ import java.util.concurrent.Executor;
 @SystemService(Context.UWB_SERVICE)
 public final class UwbManager {
     private static final String TAG = "UwbManager";
+    // TODO: Refer to Build.VERSION_CODES when it's available in every branch.
+    private static final int UPSIDE_DOWN_CAKE = 34;
 
     private final Context mContext;
     private final IUwbAdapter mUwbAdapter;
@@ -340,8 +344,9 @@ public final class UwbManager {
 
     /**
      * Interface for Oem extensions on ongoing session
+     * @hide
      */
-    // TODO: Add @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE) after ag/19901449
+    @RequiresApi(UPSIDE_DOWN_CAKE)
     public interface UwbOemExtensionCallback {
         /**
          * Invoked when session status changes
@@ -456,13 +461,14 @@ public final class UwbManager {
     }
 
     /**
+     * @hide
      * Register an {@link UwbOemExtensionCallback} to listen for UWB oem extension callbacks
      * <p>The provided callback will be invoked by the given {@link Executor}.
      *
      * @param executor an {@link Executor} to execute given callback
      * @param callback oem implementation of {@link UwbOemExtensionCallback}
      */
-    // TODO: Add @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE) after ag/19901449
+    @RequiresApi(UPSIDE_DOWN_CAKE)
     @RequiresPermission(permission.UWB_PRIVILEGED)
     public void registerUwbOemExtensionCallback(@NonNull @CallbackExecutor Executor executor,
             @NonNull UwbOemExtensionCallback callback) {
@@ -470,6 +476,7 @@ public final class UwbManager {
     }
 
     /**
+     * @hide
      * Unregister the specified {@link UwbOemExtensionCallback}
      *
      * <p>The same {@link UwbOemExtensionCallback} object used when calling
@@ -479,7 +486,7 @@ public final class UwbManager {
      *
      * @param callback oem implementation of {@link UwbOemExtensionCallback}
      */
-    // TODO: Add @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE) after ag/19901449
+    @RequiresApi(UPSIDE_DOWN_CAKE)
     @RequiresPermission(permission.UWB_PRIVILEGED)
     public void unregisterUwbOemExtensionCallback(@NonNull UwbOemExtensionCallback callback) {
         mUwbOemExtensionCallbackListener.unregister(callback);

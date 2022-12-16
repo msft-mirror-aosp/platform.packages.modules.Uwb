@@ -138,6 +138,7 @@ public class UwbMetrics {
             mRangingStatus = UwbStatsLog.UWB_START_RANGING__STATUS__RANGING_GENERAL_FAILURE;
             switch (status) {
                 case UwbUciConstants.STATUS_CODE_OK:
+                case UwbUciConstants.STATUS_CODE_OK_NEGATIVE_DISTANCE_REPORT:
                     mRangingStatus = UwbStatsLog.UWB_START_RANGING__STATUS__RANGING_SUCCESS;
                     break;
                 case UwbUciConstants.STATUS_CODE_RANGING_TX_FAILED:
@@ -279,18 +280,18 @@ public class UwbMetrics {
                 return;
             }
             session.mStartCount++;
+            session.convertRangingStatus(status);
+            UwbStatsLog.write(UwbStatsLog.UWB_RANGING_START, uwbSession.getProfileType(),
+                    session.mStsType, session.mIsInitiator,
+                    session.mIsController, session.mIsDiscoveredByFramework, session.mIsOutOfBand,
+                    session.mRangingStatus);
             if (status != UwbUciConstants.STATUS_CODE_OK) {
                 session.mStartFailureCount++;
                 session.mStartTimeSinceBootMs = 0;
                 session.mHasValidRangingSinceStart = false;
                 return;
             }
-            session.convertRangingStatus(status);
             session.mStartTimeSinceBootMs = mUwbInjector.getElapsedSinceBootMillis();
-            UwbStatsLog.write(UwbStatsLog.UWB_RANGING_START, uwbSession.getProfileType(),
-                    session.mStsType, session.mIsInitiator,
-                    session.mIsController, session.mIsDiscoveredByFramework, session.mIsOutOfBand,
-                    session.mRangingStatus);
         }
     }
 
@@ -415,8 +416,7 @@ public class UwbMetrics {
                 session.mRangingCount++;
             }
 
-            int rangingStatus = measurement.getRangingStatus();
-            if (rangingStatus != UwbUciConstants.STATUS_CODE_OK) {
+            if (!measurement.isStatusCodeOk()) {
                 return;
             }
 
