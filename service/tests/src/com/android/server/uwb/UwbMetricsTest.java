@@ -22,6 +22,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.when;
 
+import android.content.AttributionSource;
 import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
 
@@ -66,6 +67,10 @@ public class UwbMetricsTest {
     private static final int VALID_RANGING_COUNT = 5;
     private static final int RSSI_DEFAULT_DBM = -75;
     private static final boolean IS_STATUS_CODE_OK_DEFAULT = true;
+    private static final int UID = 67;
+    private static final String PACKAGE_NAME = "com.android.uwb.test";
+    private static final AttributionSource ATTRIBUTION_SOURCE =
+            new AttributionSource.Builder(UID).setPackageName(PACKAGE_NAME).build();
     @Mock
     private UwbInjector mUwbInjector;
     @Mock
@@ -102,6 +107,7 @@ public class UwbMetricsTest {
         when(mUwbSession.getProfileType()).thenReturn(
                 UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA);
         when(mUwbSession.getParams()).thenReturn(mFiraParams);
+        when(mUwbSession.getAttributionSource()).thenReturn(ATTRIBUTION_SOURCE);
         when(mFiraParams.getStsConfig()).thenReturn(FiraParams.STS_CONFIG_STATIC);
         when(mFiraParams.getDeviceRole()).thenReturn(FiraParams.RANGING_DEVICE_ROLE_INITIATOR);
         when(mFiraParams.getDeviceType()).thenReturn(FiraParams.RANGING_DEVICE_TYPE_CONTROLLER);
@@ -153,10 +159,11 @@ public class UwbMetricsTest {
                 UwbStatsLog.UWB_SESSION_INITIATED__STS__STATIC, true,
                 true, false, true,
                 CHANNEL_DEFAULT, UwbStatsLog.UWB_SESSION_INITIATED__STATUS__SUCCESS,
-                0, 0
+                0, 0, UID
         ));
 
-        mUwbMetrics.longRangingStartEvent(mUwbSession, UwbUciConstants.STATUS_CODE_FAILED);
+        mUwbMetrics.longRangingStartEvent(mUwbSession,
+                UwbUciConstants.STATUS_CODE_RANGING_TX_FAILED);
         addElapsedTimeMs(DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
         mUwbMetrics.longRangingStartEvent(mUwbSession, UwbUciConstants.STATUS_CODE_OK);
         addElapsedTimeMs(DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
@@ -174,6 +181,16 @@ public class UwbMetricsTest {
         mUwbMetrics.logRangingCloseEvent(mUwbSession, UwbUciConstants.STATUS_CODE_FAILED);
         addElapsedTimeMs(DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
         mUwbMetrics.logRangingCloseEvent(mUwbSession, UwbUciConstants.STATUS_CODE_OK);
+
+        ExtendedMockito.verify(() -> UwbStatsLog.write(UwbStatsLog.UWB_RANGING_START,
+                UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA,
+                UwbStatsLog.UWB_SESSION_INITIATED__STS__STATIC, true, true, false, true,
+                UwbStatsLog.UWB_START_RANGING__STATUS__TX_FAILED));
+
+        ExtendedMockito.verify(() -> UwbStatsLog.write(UwbStatsLog.UWB_RANGING_START,
+                UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA,
+                UwbStatsLog.UWB_SESSION_INITIATED__STS__STATIC, true, true, false, true,
+                UwbStatsLog.UWB_START_RANGING__STATUS__RANGING_SUCCESS));
 
         ExtendedMockito.verify(() -> UwbStatsLog.write(UwbStatsLog.UWB_FIRST_RANGING_RECEIVED,
                 UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA,
@@ -206,7 +223,7 @@ public class UwbMetricsTest {
                 UwbStatsLog.UWB_SESSION_INITIATED__STS__DYNAMIC, false,
                 false, false, true,
                 CHANNEL_DEFAULT, UwbStatsLog.UWB_SESSION_INITIATED__STATUS__BAD_PARAMS,
-                0, 0
+                0, 0, UID
         ));
     }
 
