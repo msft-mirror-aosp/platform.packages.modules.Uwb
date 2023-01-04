@@ -24,27 +24,53 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import com.android.server.uwb.pm.RunningProfileSessionInfo;
-import com.android.server.uwb.pm.SessionData;
 import com.android.server.uwb.secure.csml.CsmlUtil;
 import com.android.server.uwb.secure.csml.DispatchResponse;
 import com.android.server.uwb.secure.csml.GetDoCommand;
+import com.android.server.uwb.secure.csml.PutDoCommand;
+import com.android.server.uwb.secure.csml.SessionData;
+import com.android.server.uwb.secure.iso7816.TlvDatum;
 import com.android.server.uwb.secure.iso7816.TlvParser;
 import com.android.server.uwb.util.DataTypeConversionUtil;
 
 import java.util.Optional;
 
 /**
- * The responder of dynamic STS session managed by the UWB controllee.
+ * The responder of dynamic STS session managed by the UWB controlee.
  */
-public class ControlleeResponderSession extends ResponderSession {
-    private static final String LOG_TAG = "ControlleeResponder";
+public class ControleeResponderSession extends ResponderSession {
+    private static final String LOG_TAG = "ControleeResponder";
 
-    public ControlleeResponderSession(
+    public ControleeResponderSession(
             @NonNull Looper workLooper,
             @NonNull FiRaSecureChannel fiRaSecureChannel,
             @NonNull Callback sessionCallback,
             @NonNull RunningProfileSessionInfo runningProfileSessionInfo) {
         super(workLooper, fiRaSecureChannel, sessionCallback, runningProfileSessionInfo);
+    }
+
+    @Override
+    protected void handleFiRaSecureChannelEstablished() {
+        super.handleFiRaSecureChannelEstablished();
+
+        PutDoCommand putControleeInfoCommand = PutDoCommand.build(
+                CsmlUtil.constructGetOrPutDoTlv(
+                        new TlvDatum(CsmlUtil.CONTROLEE_INFO_DO_TAG,
+                                mRunningProfileSessionInfo.controleeInfo.get().toBytes())));
+        mFiRaSecureChannel.sendLocalFiRaCommand(putControleeInfoCommand,
+                new FiRaSecureChannel.ExternalRequestCallback() {
+                    @Override
+                    public void onSuccess(@NonNull byte[] responseData) {
+                        logd("controlee info is sent to applet.");
+                    }
+
+                    @Override
+                    public void onFailure() {
+                        logw("failed to send controlee info to applet.");
+                        terminateSession();
+                        mSessionCallback.onSessionAborted();
+                    }
+                });
     }
 
     @Override
@@ -76,10 +102,9 @@ public class ControlleeResponderSession extends ResponderSession {
                 mSessionCallback.onSessionDataReady(
                         mUniqueSessionId.get(),
                         Optional.of(mSessionData),
-                        /*isTerminatedSession=*/false);
+                        /* isSessionTerminated= */ false);
             } else {
                 logd("try to read SessionData in applet.");
-                // try to get session Data
                 GetDoCommand getSessionDataCommand =
                         GetDoCommand.build(CsmlUtil.constructSessionDataGetDoTlv());
                 mFiRaSecureChannel.sendLocalFiRaCommand(getSessionDataCommand,
@@ -98,7 +123,7 @@ public class ControlleeResponderSession extends ResponderSession {
                                 mSessionCallback.onSessionDataReady(
                                         mUniqueSessionId.get(),
                                         Optional.of(mSessionData),
-                                        /*isTerminatedSession=*/ false);
+                                        /* isSessionTerminated= */ false);
                             }
 
                             @Override

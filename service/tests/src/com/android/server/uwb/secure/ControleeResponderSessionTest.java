@@ -21,14 +21,19 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import android.os.test.TestLooper;
 
 import com.android.server.uwb.pm.RunningProfileSessionInfo;
+import com.android.server.uwb.secure.csml.ControleeInfo;
 import com.android.server.uwb.secure.csml.DispatchResponse;
+import com.android.server.uwb.secure.csml.FiRaCommand;
+import com.android.server.uwb.secure.csml.UwbCapability;
 import com.android.server.uwb.secure.iso7816.ResponseApdu;
 import com.android.server.uwb.util.DataTypeConversionUtil;
+import com.android.server.uwb.util.ObjectIdentifier;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -37,7 +42,9 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-public class ControlleeResponderSessionTest {
+import java.util.Optional;
+
+public class ControleeResponderSessionTest {
     @Mock
     private FiRaSecureChannel mFiRaSecureChannel;
     @Mock
@@ -48,25 +55,33 @@ public class ControlleeResponderSessionTest {
     @Captor
     private ArgumentCaptor<FiRaSecureChannel.SecureChannelCallback> mSecureChannelCallbackCaptor;
 
-    private ControlleeResponderSession mControlleeResponderSession;
+    private ControleeResponderSession mControleeResponderSession;
 
     private final TestLooper mTestLooper = new TestLooper();
 
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
+    }
 
-        mControlleeResponderSession = new ControlleeResponderSession(
+    private void doInit(RunningProfileSessionInfo runningProfileSessionInfo) {
+
+        mControleeResponderSession = new ControleeResponderSession(
                 mTestLooper.getLooper(), mFiRaSecureChannel, mSecureSessionCallback,
-                mRunningProfileSessionInfo);
+                runningProfileSessionInfo);
 
-        mControlleeResponderSession.startSession();
+        mControleeResponderSession.startSession();
 
         verify(mFiRaSecureChannel).init(mSecureChannelCallbackCaptor.capture());
     }
 
+    private void doInit() {
+        doInit(mRunningProfileSessionInfo);
+    }
+
     @Test
     public void onSetupError() {
+        doInit();
         mSecureChannelCallbackCaptor.getValue()
                 .onSetUpError(FiRaSecureChannel.SetupError.OPEN_SE_CHANNEL);
 
@@ -75,7 +90,33 @@ public class ControlleeResponderSessionTest {
     }
 
     @Test
+    public void onSessionEstablishedPutControleeInfoFail() {
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), mock(ObjectIdentifier.class))
+                        .setControleeInfo(new ControleeInfo.Builder().build())
+                        .build();
+        doInit(runningProfileSessionInfo);
+        mSecureChannelCallbackCaptor.getValue().onEstablished(Optional.empty());
+
+        ArgumentCaptor<FiRaCommand> cmdCaptor = ArgumentCaptor.forClass(FiRaCommand.class);
+        ArgumentCaptor<FiRaSecureChannel.ExternalRequestCallback> cbCaptor =
+                ArgumentCaptor.forClass(FiRaSecureChannel.ExternalRequestCallback.class);
+
+        verify(mFiRaSecureChannel).sendLocalFiRaCommand(cmdCaptor.capture(), cbCaptor.capture());
+        assertThat(cmdCaptor.getValue().getCommandApdu().getIns()).isEqualTo((byte) 0xDB);
+        assertThat(cmdCaptor.getValue().getCommandApdu().getP1()).isEqualTo((byte) 0x3F);
+        assertThat(cmdCaptor.getValue().getCommandApdu().getP2()).isEqualTo((byte) 0xFF);
+
+        cbCaptor.getValue().onFailure();
+        mTestLooper.dispatchAll();
+        verify(mFiRaSecureChannel).terminateLocally();
+        verify(mSecureSessionCallback).onSessionAborted();
+    }
+
+    @Test
     public void onTerminated() {
+        doInit();
         mSecureChannelCallbackCaptor.getValue()
                 .onTerminated(/*withError=*/ false);
 
@@ -84,7 +125,8 @@ public class ControlleeResponderSessionTest {
 
     @Test
     public void terminateSession() {
-        mControlleeResponderSession.terminateSession();
+        doInit();
+        mControleeResponderSession.terminateSession();
         mTestLooper.dispatchAll();
 
         verify(mFiRaSecureChannel).terminateLocally();
@@ -92,6 +134,7 @@ public class ControlleeResponderSessionTest {
 
     @Test
     public void abortSessionNotification() {
+        doInit();
         byte[] data = DataTypeConversionUtil.hexStringToByteArray(
                 "71038001FF"); // transaction complete with errors
         ResponseApdu responseApdu = ResponseApdu.fromDataAndStatusWord(data, 0x9000);
@@ -106,6 +149,7 @@ public class ControlleeResponderSessionTest {
 
     @Test
     public void abortSessionWithWrongDispatchResponseStatusWord() {
+        doInit();
         ResponseApdu responseApdu = ResponseApdu.fromDataAndStatusWord(new byte[0], 0x9032);
         DispatchResponse dispatchResponse = DispatchResponse.fromResponseApdu(responseApdu);
 
@@ -118,6 +162,7 @@ public class ControlleeResponderSessionTest {
 
     @Test
     public void rdsAvailableNotificationWithSessionData() {
+        doInit();
         byte[] data = DataTypeConversionUtil.hexStringToByteArray(
                 "711B80018181029000E112800100810102820A010107BF780480020101");
         ResponseApdu responseApdu = ResponseApdu.fromDataAndStatusWord(data, 0x9000);
@@ -130,6 +175,7 @@ public class ControlleeResponderSessionTest {
 
     @Test
     public void rdsAvailableNotificationWithSessionDataInApplet() {
+        doInit();
         byte[] data = DataTypeConversionUtil.hexStringToByteArray(
                 "711380018181029000E10A80010081010282020101");
         ResponseApdu responseApdu = ResponseApdu.fromDataAndStatusWord(data, 0x9000);
@@ -149,6 +195,7 @@ public class ControlleeResponderSessionTest {
 
     @Test
     public void failedToGetSessionDataFromApplet() {
+        doInit();
         byte[] data = DataTypeConversionUtil.hexStringToByteArray(
                 "711380018181029000E10A80010081010282020101");
         ResponseApdu responseApdu = ResponseApdu.fromDataAndStatusWord(data, 0x9000);
@@ -167,6 +214,7 @@ public class ControlleeResponderSessionTest {
 
     @Test
     public void outboundDataToRemote() {
+        doInit();
         byte[] data = DataTypeConversionUtil.hexStringToByteArray(
                 "710780018081029000");
         ResponseApdu responseApdu = ResponseApdu.fromDataAndStatusWord(data, 0x9000);
