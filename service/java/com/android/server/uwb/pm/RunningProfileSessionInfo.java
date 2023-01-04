@@ -18,6 +18,8 @@ package com.android.server.uwb.pm;
 
 import androidx.annotation.NonNull;
 
+import com.android.server.uwb.secure.csml.ControleeInfo;
+import com.android.server.uwb.secure.csml.UwbCapability;
 import com.android.server.uwb.util.ObjectIdentifier;
 
 import java.util.List;
@@ -26,53 +28,109 @@ import java.util.Optional;
 /**
  * Provides the session information for this profile
  */
-public interface RunningProfileSessionInfo {
+public class RunningProfileSessionInfo {
+    /** see {@link ControleeInfo} required by the controlee */
+    @NonNull
+    public final Optional<ControleeInfo> controleeInfo;
+    /** see {@link UwbCapability} */
+    @NonNull
+    public final UwbCapability uwbCapability;
+    /** The possible ADF OIDs used in the responder device, required by initiator. */
+    @NonNull
+    public final Optional<List<ObjectIdentifier>> selectableOidsOfResponder;
     /**
-     * Gets the controlleeInfo.
+     * The OID of ADF which was provisioned successfully for the current profile,
+     * required by initiator.
      */
     @NonNull
-    ControlleeInfo getControlleeInfo();
-
-    /**
-     * Gets the session data for controllee, if the device take the role of controllee, this
-     * may be empty.
-     */
+    public final ObjectIdentifier oidOfProvisionedAdf;
+    /** The UWB session ID for multicast case, required by controller */
     @NonNull
-    Optional<SessionData> getSessionDataForControllee(ControlleeInfo controlleeInfoOfPeerDevice);
-
-    /**
-     * Gets the OID of ADF which was provisioned successfully for the current profile.
-     */
+    public final Optional<Integer> sharedPrimarySessionId;
+    /** The UWB session ID for multicast case, required by controller */
     @NonNull
-    ObjectIdentifier getOidOfProvisionedAdf();
-
-    /**
-     * Gets the selectable ADF OIDs of the peer device, which is empty if the device is
-     * taking the responder role.
-     */
+    public final Optional<byte[]> sharedPrimarySessionKeyInfo;
+    /** The secure blob can be loaded into the FiRa applet. */
     @NonNull
-    List<ObjectIdentifier> getSelectableOidsOfPeerDevice();
+    public final Optional<byte[]> secureBlob;
 
-    /**
-     * Checks if the device is the controller of UWB.
-     * @return
-     */
-    boolean isUwbController();
+    private RunningProfileSessionInfo(
+            Optional<ControleeInfo> controleeInfo,
+            UwbCapability uwbCapability,
+            ObjectIdentifier oidOfProvisionedAdf,
+            Optional<List<ObjectIdentifier>> selectableOidsOfResponder,
+            Optional<Integer> sharedPrimarySessionId,
+            Optional<byte[]> sharedPrimarySessionKeyInfo,
+            Optional<byte[]> secureBlob) {
+        this.controleeInfo = controleeInfo;
+        this.uwbCapability = uwbCapability;
+        this.oidOfProvisionedAdf = oidOfProvisionedAdf;
+        this.selectableOidsOfResponder = selectableOidsOfResponder;
+        this.sharedPrimarySessionId = sharedPrimarySessionId;
+        this.sharedPrimarySessionKeyInfo = sharedPrimarySessionKeyInfo;
+        this.secureBlob = secureBlob;
+    }
 
-    /**
-     * Checks if the current UWB session is unicast session.
-     */
-    boolean isUnicast();
+    /** Builder for the {@link RunningProfileSessionInfo} */
+    public static class Builder {
+        private Optional<ControleeInfo> mControleeInfo;
+        private UwbCapability mUwbCapability;
+        private Optional<List<ObjectIdentifier>> mSelectableOidsOfResponder = Optional.empty();
+        private ObjectIdentifier mOidOfProvisionedAdf;
+        private Optional<Integer> mSharedPrimarySessionId = Optional.empty();
+        private Optional<byte[]> mSecureBlob = Optional.empty();
+        private Optional<byte[]> mSharedPrimarySessionKeyInfo = Optional.empty();
 
-    /**
-     * For multicast case, the primary sessionId should be assigned by the framework.
-     */
-    @NonNull
-    Optional<Integer> getSharedPrimarySessionId();
+        /** The constructor {@link RunningProfileSessionInfo.Builder} */
+        public Builder(@NonNull UwbCapability uwbCapability,
+                @NonNull ObjectIdentifier oidOfProvisionedAdf) {
+            this.mUwbCapability = uwbCapability;
+            this.mOidOfProvisionedAdf = oidOfProvisionedAdf;
+        }
 
-    /**
-     * The secure blob is required if the session is using the dynamic slot mechanism.
-     */
-    @NonNull
-    Optional<byte[]> getSecureBlob();
+        /** Sets the {@link ControleeInfo}. */
+        @NonNull
+        public Builder setControleeInfo(@NonNull ControleeInfo controleeInfo) {
+            this.mControleeInfo = Optional.of(controleeInfo);
+            return this;
+        }
+
+        /** Sets the possible ADF OIDs used in the responder device. */
+        @NonNull
+        public Builder setSelectableOidsOfResponder(
+                @NonNull List<ObjectIdentifier> selectableOidsOfResponder) {
+            this.mSelectableOidsOfResponder = Optional.of(selectableOidsOfResponder);
+            return this;
+        }
+
+        /** Sets the UWB session ID and session key info for multicast case. */
+        @NonNull
+        public Builder setSharedPrimarySessionIdAndSessionKeyInfo(
+                int sharedPrimarySessionId,
+                @NonNull byte[] sharedPrimarySessionKeyInfo) {
+            this.mSharedPrimarySessionId = Optional.of(sharedPrimarySessionId);
+            this.mSharedPrimarySessionKeyInfo = Optional.of(sharedPrimarySessionKeyInfo);
+            return this;
+        }
+
+        /** Sets the secure blob can be loaded into the FiRa applet. */
+        @NonNull
+        public Builder setSecureBlob(@NonNull byte[] secureBlob) {
+            mSecureBlob = Optional.of(secureBlob);
+            return this;
+        }
+
+        /** Builds the instance of {@link RunningProfileSessionInfo} */
+        @NonNull
+        public RunningProfileSessionInfo build() {
+            return new RunningProfileSessionInfo(
+                    mControleeInfo,
+                    mUwbCapability,
+                    mOidOfProvisionedAdf,
+                    mSelectableOidsOfResponder,
+                    mSharedPrimarySessionId,
+                    mSharedPrimarySessionKeyInfo,
+                    mSecureBlob);
+        }
+    }
 }

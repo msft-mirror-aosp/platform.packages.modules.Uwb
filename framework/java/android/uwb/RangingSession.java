@@ -26,6 +26,10 @@ import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.util.Log;
 
+import androidx.annotation.RequiresApi;
+
+import com.android.modules.utils.build.SdkLevel;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.concurrent.Executor;
@@ -47,6 +51,9 @@ import java.util.concurrent.Executor;
  */
 @SystemApi
 public final class RangingSession implements AutoCloseable {
+    // TODO: Refer to Build.VERSION_CODES when it's available in every branch.
+    private static final int UPSIDE_DOWN_CAKE = 34;
+
     private final String mTag = "Uwb.RangingSession[" + this + "]";
     private final SessionHandle mSessionHandle;
     private final IUwbAdapter mAdapter;
@@ -101,6 +108,7 @@ public final class RangingSession implements AutoCloseable {
                 REASON_SERVICE_CONNECTION_FAILURE,
                 REASON_SE_NOT_SUPPORTED,
                 REASON_SE_INTERACTION_FAILURE,
+                REASON_INSUFFICIENT_SLOTS_PER_RR,
         })
         @interface Reason {}
 
@@ -173,6 +181,12 @@ public final class RangingSession implements AutoCloseable {
          * SE interactions failed.
          */
         int REASON_SE_INTERACTION_FAILURE = 13;
+
+        /**
+         * Indicate insufficient slots per ranging round.
+         * @hide
+         */
+        int REASON_INSUFFICIENT_SLOTS_PER_RR = 14;
 
         /**
          * @hide
@@ -423,9 +437,8 @@ public final class RangingSession implements AutoCloseable {
          * Invoked when a response/status is received for active ranging rounds update
          *
          * @param parameters bundle of ranging rounds update status
-         * {@link com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdateStatus}
          */
-        // TODO: Add @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE) after ag/19901449
+        @RequiresApi(UPSIDE_DOWN_CAKE)
         default void onRangingRoundsUpdateDtTagStatus(@NonNull PersistableBundle parameters) {}
     }
 
@@ -745,9 +758,8 @@ public final class RangingSession implements AutoCloseable {
      * {@link RangingSession.Callback#onRangingRoundsUpdateDtTag(PersistableBundle)}
      * is invoked
      * @param params Parameters to configure active ranging rounds
-     * {@link com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate}
      */
-    // TODO: Add @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE) after ag/19901449
+    @RequiresApi(UPSIDE_DOWN_CAKE)
     @RequiresPermission(Manifest.permission.UWB_PRIVILEGED)
     public void onRangingRoundsUpdateDtTag(@NonNull PersistableBundle params) {
         if (mState != State.ACTIVE) {
@@ -1099,7 +1111,9 @@ public final class RangingSession implements AutoCloseable {
         }
 
         Log.v(mTag, "onDlTDoARangingRoundsUpdateStatus - sessionHandle: " + mSessionHandle);
-        executeCallback(() -> mCallback.onRangingRoundsUpdateDtTagStatus(params));
+        if (SdkLevel.isAtLeastU()) {
+            executeCallback(() -> mCallback.onRangingRoundsUpdateDtTagStatus(params));
+        }
     }
 
     /**
