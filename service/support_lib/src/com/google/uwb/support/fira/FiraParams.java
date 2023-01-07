@@ -136,6 +136,7 @@ public abstract class FiraParams extends Params {
             value = {
                 RANGING_DEVICE_TYPE_CONTROLEE,
                 RANGING_DEVICE_TYPE_CONTROLLER,
+                RANGING_DEVICE_TYPE_DT_TAG,
             })
     public @interface RangingDeviceType {}
 
@@ -143,13 +144,18 @@ public abstract class FiraParams extends Params {
 
     public static final int RANGING_DEVICE_TYPE_CONTROLLER = 1;
 
+    public static final int RANGING_DEVICE_TYPE_DT_TAG = 2;
+
     /** Device role defined in FiRa */
     @IntDef(
             value = {
                 RANGING_DEVICE_ROLE_RESPONDER,
                 RANGING_DEVICE_ROLE_INITIATOR,
+                RANGING_DEVICE_UT_TAG,
                 RANGING_DEVICE_ROLE_ADVERTISER,
                 RANGING_DEVICE_ROLE_OBSERVER,
+                RANGING_DEVICE_DT_ANCHOR,
+                RANGING_DEVICE_DT_TAG,
             })
     public @interface RangingDeviceRole {}
 
@@ -157,20 +163,31 @@ public abstract class FiraParams extends Params {
 
     public static final int RANGING_DEVICE_ROLE_INITIATOR = 1;
 
+    public static final int RANGING_DEVICE_UT_TAG = 4;
+
     public static final int RANGING_DEVICE_ROLE_ADVERTISER = 5;
 
     public static final int RANGING_DEVICE_ROLE_OBSERVER = 6;
 
+    public static final int RANGING_DEVICE_DT_ANCHOR = 7;
+
+    public static final int RANGING_DEVICE_DT_TAG = 8;
+
     /** Ranging Round Usage */
     @IntDef(
             value = {
+                RANGING_ROUND_USAGE_UL_TDOA,
                 RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE,
                 RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE,
                 RANGING_ROUND_USAGE_SS_TWR_NON_DEFERRED_MODE,
                 RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE,
                 RANGING_ROUND_USAGE_OWR_AOA_MEASUREMENT,
+                RANGING_ROUND_USAGE_DL_TDOA,
             })
     public @interface RangingRoundUsage {}
+
+    /** Uplink Time Difference of Arrival (OWR) */
+    public static final int RANGING_ROUND_USAGE_UL_TDOA = 0;
 
     /** Single-sided two-way ranging, deferred */
     public static final int RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE = 1;
@@ -183,6 +200,9 @@ public abstract class FiraParams extends Params {
 
     /** Double-sided two-way ranging, non-deferred */
     public static final int RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE = 4;
+
+    /** Downlink Time Difference of Arrival */
+    public static final int RANGING_ROUND_USAGE_DL_TDOA = 5;
 
     /** OWR for AoA measurement */
     public static final int RANGING_ROUND_USAGE_OWR_AOA_MEASUREMENT = 6;
@@ -202,6 +222,42 @@ public abstract class FiraParams extends Params {
 
     /** Unuported in Fira 1.1 */
     public static final int MULTI_NODE_MODE_MANY_TO_MANY = 2;
+
+    /** Scheduling Mode */
+    @IntDef(
+            value = {
+                CONTENTION_BASED_RANGING,
+                TIME_SCHEDULED_RANGING,
+            })
+    public @interface SchedulingMode {}
+
+    public static final int CONTENTION_BASED_RANGING = 0;
+
+    public static final int TIME_SCHEDULED_RANGING = 1;
+
+    /** Ranging Time Struct */
+    @IntDef(
+            value = {
+                INTERVAL_BASED_SCHEDULING,
+                BLOCK_BASED_SCHEDULING,
+            })
+    public @interface RangingTimeStruct {}
+
+    public static final int INTERVAL_BASED_SCHEDULING = 0;
+
+    public static final int BLOCK_BASED_SCHEDULING = 1;
+
+    /** Cc Constraint Length */
+    @IntDef(
+            value = {
+                CONSTRAINT_LENGTH_3,
+                CONSTRAINT_LENGTH_7,
+            })
+    public @interface CcConstraintLength {}
+
+    public static final int CONSTRAINT_LENGTH_3 = 3;
+
+    public static final int CONSTRAINT_LENGTH_7 = 7;
 
     /** Measurement Report */
     @IntDef(
@@ -370,6 +426,9 @@ public abstract class FiraParams extends Params {
             })
     public @interface HoppingMode {}
 
+      /** UCI spec default: 25 slots per ranging round. */
+    public static final int SLOTS_PER_RR = 25;
+    public static final int MIN_CAP_SIZE = 5;
     public static final int HOPPING_MODE_DISABLE = 0;
     public static final int HOPPING_MODE_FIRA_HOPPING_ENABLE = 1;
 
@@ -466,6 +525,7 @@ public abstract class FiraParams extends Params {
                 STATUS_CODE_ERROR_MULTICAST_LIST_FULL,
                 STATUS_CODE_ERROR_ADDRESS_NOT_FOUND,
                 STATUS_CODE_ERROR_ADDRESS_ALREADY_PRESENT,
+                STATUS_CODE_OK_NEGATIVE_DISTANCE_REPORT,
                 STATUS_CODE_RANGING_TX_FAILED,
                 STATUS_CODE_RANGING_RX_TIMEOUT,
                 STATUS_CODE_RANGING_RX_PHY_DEC_FAILED,
@@ -474,6 +534,10 @@ public abstract class FiraParams extends Params {
                 STATUS_CODE_RANGING_RX_MAC_DEC_FAILED,
                 STATUS_CODE_RANGING_RX_MAC_IE_DEC_FAILED,
                 STATUS_CODE_RANGING_RX_MAC_IE_MISSING,
+                STATUS_CODE_ERROR_ROUND_INDEX_NOT_ACTIVATED,
+                STATUS_CODE_ERROR_NUMBER_OF_ACTIVE_RANGING_ROUNDS_EXCEEDED,
+                STATUS_CODE_ERROR_ROUND_INDEX_NOT_SET_AS_INITIATOR,
+                STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST,
             })
     public @interface StatusCode {}
 
@@ -497,6 +561,7 @@ public abstract class FiraParams extends Params {
     public static final int STATUS_CODE_ERROR_MULTICAST_LIST_FULL = 0x17;
     public static final int STATUS_CODE_ERROR_ADDRESS_NOT_FOUND = 0x18;
     public static final int STATUS_CODE_ERROR_ADDRESS_ALREADY_PRESENT = 0x19;
+    public static final int STATUS_CODE_OK_NEGATIVE_DISTANCE_REPORT = 0x1B;
     public static final int STATUS_CODE_RANGING_TX_FAILED = 0x20;
     public static final int STATUS_CODE_RANGING_RX_TIMEOUT = 0x21;
     public static final int STATUS_CODE_RANGING_RX_PHY_DEC_FAILED = 0x22;
@@ -505,6 +570,11 @@ public abstract class FiraParams extends Params {
     public static final int STATUS_CODE_RANGING_RX_MAC_DEC_FAILED = 0x25;
     public static final int STATUS_CODE_RANGING_RX_MAC_IE_DEC_FAILED = 0x26;
     public static final int STATUS_CODE_RANGING_RX_MAC_IE_MISSING = 0x27;
+    public static final int STATUS_CODE_ERROR_ROUND_INDEX_NOT_ACTIVATED = 0X28;
+    public static final int STATUS_CODE_ERROR_NUMBER_OF_ACTIVE_RANGING_ROUNDS_EXCEEDED = 0X29;
+    public static final int STATUS_CODE_ERROR_ROUND_INDEX_NOT_SET_AS_INITIATOR = 0X2A;
+    public static final int
+            STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST = 0X2B;
 
     /** State change reason codes defined in UCI table-15 */
     @IntDef(
@@ -534,11 +604,15 @@ public abstract class FiraParams extends Params {
             value = {
                 MULTICAST_LIST_UPDATE_ACTION_ADD,
                 MULTICAST_LIST_UPDATE_ACTION_DELETE,
+                P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_16_BYTE,
+                P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_32_BYTE,
             })
     public @interface MulticastListUpdateAction {}
 
-    public static final int MULTICAST_LIST_UPDATE_ACTION_ADD = 0;
-    public static final int MULTICAST_LIST_UPDATE_ACTION_DELETE = 1;
+    public static final int MULTICAST_LIST_UPDATE_ACTION_ADD = 0x0;
+    public static final int MULTICAST_LIST_UPDATE_ACTION_DELETE = 0x1;
+    public static final int P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_16_BYTE = 0x2;
+    public static final int P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_32_BYTE = 0x3;
 
     @IntDef(
             value = {
@@ -566,6 +640,34 @@ public abstract class FiraParams extends Params {
     public static final int DEVICE_CLASS_1 = 1; // Controller & controlee
     public static final int DEVICE_CLASS_2 = 2; // Controller
     public static final int DEVICE_CLASS_3 = 3; // Controlee
+
+    /** Length of UL-TDoA Device ID */
+    @IntDef(
+            value = {
+                    UL_TDOA_DEVICE_ID_NONE,
+                    UL_TDOA_DEVICE_ID_16_BIT,
+                    UL_TDOA_DEVICE_ID_32_BIT,
+                    UL_TDOA_DEVICE_ID_64_BIT,
+            })
+    public @interface UlTdoaDeviceIdType {}
+
+    public static final int UL_TDOA_DEVICE_ID_NONE = 0;
+    public static final int UL_TDOA_DEVICE_ID_16_BIT = 1;
+    public static final int UL_TDOA_DEVICE_ID_32_BIT = 2;
+    public static final int UL_TDOA_DEVICE_ID_64_BIT = 3;
+
+    /** TX Timestamp of UL-TDoA */
+    @IntDef(
+            value = {
+                    TX_TIMESTAMP_NONE,
+                    TX_TIMESTAMP_40_BIT,
+                    TX_TIMESTAMP_64_BIT,
+            })
+    public @interface UlTdoaTxTimestampType {}
+
+    public static final int TX_TIMESTAMP_NONE = 0;
+    public static final int TX_TIMESTAMP_40_BIT = 1;
+    public static final int TX_TIMESTAMP_64_BIT = 2;
 
     public static final int RANGE_DATA_NTF_PROXIMITY_NEAR_DEFAULT = 0;
     public static final int RANGE_DATA_NTF_PROXIMITY_FAR_DEFAULT = 20000;
@@ -619,6 +721,54 @@ public abstract class FiraParams extends Params {
         private final long mValue;
 
         private MultiNodeCapabilityFlag(long value) {
+            mValue = value;
+        }
+
+        @Override
+        public long getValue() {
+            return mValue;
+        }
+    }
+
+    public enum RangingTimeStructCapabilitiesFlag implements FlagEnum {
+        HAS_INTERVAL_BASED_SCHEDULING_SUPPORT(1),
+        HAS_BLOCK_BASED_SCHEDULING_SUPPORT(1 << 1);
+
+        private final long mValue;
+
+        private RangingTimeStructCapabilitiesFlag(long value) {
+            mValue = value;
+        }
+
+        @Override
+        public long getValue() {
+            return mValue;
+        }
+    }
+
+    public enum SchedulingModeCapabilitiesFlag implements FlagEnum {
+        HAS_CONTENTION_BASED_RANGING_SUPPORT(1),
+        HAS_TIME_SCHEDULED_RANGING_SUPPORT(1 << 1);
+
+        private final long mValue;
+
+        private SchedulingModeCapabilitiesFlag(long value) {
+            mValue = value;
+        }
+
+        @Override
+        public long getValue() {
+            return mValue;
+        }
+    }
+
+    public enum CcConstraintLengthCapabilitiesFlag implements FlagEnum {
+        HAS_CONSTRAINT_LENGTH_3_SUPPORT(1),
+        HAS_CONSTRAINT_LENGTH_7_SUPPORT(1 << 1);
+
+        private final long mValue;
+
+        private CcConstraintLengthCapabilitiesFlag(long value) {
             mValue = value;
         }
 

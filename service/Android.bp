@@ -45,10 +45,8 @@ java_library {
     installable: false,
     defaults: ["service-uwb-common-defaults"],
     srcs: [ ":service-uwb-srcs" ],
-    // java_api_finder must accompany `srcs`
-    plugins: ["java_api_finder"],
     required: ["libuwb_uci_jni_rust"],
-    sdk_version: "system_server_Tiramisu",
+    sdk_version: "system_server_current",
 
     lint: {
         strict_updatability_linting: true,
@@ -71,6 +69,7 @@ java_library {
         "com.uwb.support.multichip",
         "com.uwb.support.profile",
         "com.uwb.support.oemextension",
+        "com.uwb.support.dltdoa",
         "guava",
         "modules-utils-shell-command-handler",
         "modules-utils-handlerexecutor",
@@ -78,6 +77,8 @@ java_library {
         "uwb-config-proto",
         "modules-utils-statemachine",
         "modules-utils-build",
+        "cbor-java",
+        "bouncycastle-uwb",
     ],
 
     apex_available: [
@@ -109,7 +110,7 @@ java_library {
         "framework-connectivity.stubs.module_lib",
     ],
 
-    sdk_version: "system_server_Tiramisu",
+    sdk_version: "system_server_current",
 
     jarjar_rules: ":uwb-jarjar-rules",
     optimize: {

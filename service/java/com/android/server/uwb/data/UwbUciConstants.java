@@ -57,6 +57,7 @@ public class UwbUciConstants {
     /* Below reason codes shall be reported with SESSION_STATE_IDLE state only. */
     public static final int REASON_MAX_RANGING_ROUND_RETRY_COUNT_REACHED = 0x01;
     public static final int REASON_MAX_NUMBER_OF_MEASUREMENTS_REACHED = 0x02;
+    public static final int REASON_ERROR_INVALID_UL_TDOA_RANDOM_WINDOW = 0x1D;
     public static final int REASON_ERROR_SLOT_LENGTH_NOT_SUPPORTED = 0x20;
     public static final int REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR = 0x21;
     public static final int REASON_ERROR_MAC_ADDRESS_MODE_NOT_SUPPORTED = 0x22;
@@ -94,6 +95,15 @@ public class UwbUciConstants {
     public static final int MULTI_NODE_MODE_ONE_TO_MANY = FiraParams.MULTI_NODE_MODE_ONE_TO_MANY;
     public static final int MULTI_NODE_MODE_MANY_TO_MANY = FiraParams.MULTI_NODE_MODE_MANY_TO_MANY;
 
+    public static final int INTERVAL_BASED_SCHEDULING = FiraParams.INTERVAL_BASED_SCHEDULING;
+    public static final int BLOCK_BASED_SCHEDULING = FiraParams.BLOCK_BASED_SCHEDULING;
+
+    public static final int CONTENTION_BASED_RANGING = FiraParams.CONTENTION_BASED_RANGING;
+    public static final int TIME_SCHEDULED_RANGING = FiraParams.TIME_SCHEDULED_RANGING;
+
+    public static final int CONSTRAINT_LENGTH_3 = FiraParams.CONSTRAINT_LENGTH_3;
+    public static final int CONSTRAINT_LENGTH_7 = FiraParams.CONSTRAINT_LENGTH_7;
+
     public static final int CHANNEL_5 = FiraParams.UWB_CHANNEL_5;
     public static final int CHANNEL_6 = FiraParams.UWB_CHANNEL_6;
     public static final int CHANNEL_8 = FiraParams.UWB_CHANNEL_8;
@@ -128,10 +138,14 @@ public class UwbUciConstants {
             FiraParams.RANGING_DEVICE_ROLE_OBSERVER;
 
     /**
-     * Table 22: Ranging Data Notification
+     * Table 37: Ranging Data Notification
      */
     public static final byte RANGING_MEASUREMENT_TYPE_TWO_WAY = 0X01;
+    public static final byte RANGING_MEASUREMENT_TYPE_DL_TDOA = 0x02;
     public static final byte RANGING_MEASUREMENT_TYPE_OWR_AOA = 0x03;
+
+    public static final byte MAC_ADDRESSING_MODE_SHORT = 0x00;
+    public static final byte MAC_ADDRESSING_MODE_EXTENDED = 0x01;
 
     /**
      * Table 32: Status Codes
@@ -168,6 +182,8 @@ public class UwbUciConstants {
             FiraParams.STATUS_CODE_ERROR_ADDRESS_NOT_FOUND;
     public static final int STATUS_CODE_ERROR_ADDRESS_ALREADY_PRESENT =
             FiraParams.STATUS_CODE_ERROR_ADDRESS_ALREADY_PRESENT;
+    public static final int STATUS_CODE_OK_NEGATIVE_DISTANCE_REPORT =
+            FiraParams.STATUS_CODE_OK_NEGATIVE_DISTANCE_REPORT;
     /* UWB Ranging Session Specific Status Codes */
     public static final int STATUS_CODE_RANGING_TX_FAILED =
             FiraParams.STATUS_CODE_RANGING_TX_FAILED;
@@ -185,11 +201,21 @@ public class UwbUciConstants {
             FiraParams.STATUS_CODE_RANGING_RX_MAC_IE_DEC_FAILED;
     public static final int STATUS_CODE_RANGING_RX_MAC_IE_MISSING =
             FiraParams.STATUS_CODE_RANGING_RX_MAC_IE_MISSING;
+    public static final int STATUS_CODE_ERROR_ROUND_INDEX_NOT_ACTIVATED =
+            FiraParams.STATUS_CODE_ERROR_ROUND_INDEX_NOT_ACTIVATED;
+    public static final int STATUS_CODE_ERROR_NUMBER_OF_ACTIVE_RANGING_ROUNDS_EXCEEDED =
+            FiraParams.STATUS_CODE_ERROR_NUMBER_OF_ACTIVE_RANGING_ROUNDS_EXCEEDED;
+    public static final int STATUS_CODE_ERROR_ROUND_INDEX_NOT_SET_AS_INITIATOR =
+            FiraParams.STATUS_CODE_ERROR_ROUND_INDEX_NOT_SET_AS_INITIATOR;
+    public static final int
+                STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST =
+            FiraParams.STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST;
 
     public static final int STATUS_CODE_CCC_SE_BUSY = STATUS_ERROR_CCC_SE_BUSY;
     public static final int STATUS_CODE_CCC_LIFECYCLE = STATUS_ERROR_CCC_LIFECYCLE;
 
     /* UWB Device Extended Mac address length */
+    public static final int UWB_DEVICE_SHORT_MAC_ADDRESS_LEN = 2;
     public static final int UWB_DEVICE_EXT_MAC_ADDRESS_LEN = 8;
 
     /* UWB Data Session Specific Status Codes */

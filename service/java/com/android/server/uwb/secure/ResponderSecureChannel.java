@@ -51,11 +51,11 @@ class ResponderSecureChannel extends FiRaSecureChannel {
                 try {
                     ResponseApdu responseApdu = mSecureElementChannel.openChannelWithResponse();
                     if (responseApdu.getStatusWord() == SW_NO_ERROR.toInt()) {
-                        if (mRunningProfileSessionInfo.getSecureBlob().isPresent()) {
+                        if (mRunningProfileSessionInfo.secureBlob.isPresent()) {
                             if (!swapInAdf(
-                                    mRunningProfileSessionInfo.getSecureBlob().get(),
-                                    mRunningProfileSessionInfo.getOidOfProvisionedAdf(),
-                                    mRunningProfileSessionInfo.getControlleeInfo().toBytes())) {
+                                    mRunningProfileSessionInfo.secureBlob.get(),
+                                    mRunningProfileSessionInfo.oidOfProvisionedAdf,
+                                    mRunningProfileSessionInfo.controleeInfo.get().toBytes())) {
                                 mSecureElementChannel.closeChannel();
                                 throw new IllegalStateException("Error on swapping in ADF");
                             }
@@ -67,14 +67,16 @@ class ResponderSecureChannel extends FiRaSecureChannel {
                     }
                     mWorkHandler.sendMessage(
                             mWorkHandler.obtainMessage(
-                                    CMD_SEND_OOB_DATA, responseApdu.toByteArray()));
+                                    CMD_SEND_OOB_DATA, OOB_MSG_TYPE_APDU_RESPONSE, 0,
+                                    responseApdu.toByteArray()));
                 } catch (IOException | IllegalStateException e) {
                     logw("Error on open channel: " + e);
                     mSecureChannelCallback.onSetUpError(SetupError.OPEN_SE_CHANNEL);
                     ResponseApdu responseApdu = ResponseApdu.SW_APPLET_SELECT_FAILED_APDU;
                     mWorkHandler.sendMessage(
                             mWorkHandler.obtainMessage(
-                                    CMD_SEND_OOB_DATA, responseApdu.toByteArray()));
+                                    CMD_SEND_OOB_DATA, OOB_MSG_TYPE_APDU_RESPONSE, 0,
+                                    responseApdu.toByteArray()));
                 }
                 // waiting for next request from the initiator.
                 break;
