@@ -151,6 +151,7 @@ public abstract class FiraParams extends Params {
             value = {
                 RANGING_DEVICE_ROLE_RESPONDER,
                 RANGING_DEVICE_ROLE_INITIATOR,
+                RANGING_DEVICE_UT_TAG,
                 RANGING_DEVICE_ROLE_ADVERTISER,
                 RANGING_DEVICE_ROLE_OBSERVER,
                 RANGING_DEVICE_DT_ANCHOR,
@@ -161,6 +162,8 @@ public abstract class FiraParams extends Params {
     public static final int RANGING_DEVICE_ROLE_RESPONDER = 0;
 
     public static final int RANGING_DEVICE_ROLE_INITIATOR = 1;
+
+    public static final int RANGING_DEVICE_UT_TAG = 4;
 
     public static final int RANGING_DEVICE_ROLE_ADVERTISER = 5;
 
@@ -173,6 +176,7 @@ public abstract class FiraParams extends Params {
     /** Ranging Round Usage */
     @IntDef(
             value = {
+                RANGING_ROUND_USAGE_UL_TDOA,
                 RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE,
                 RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE,
                 RANGING_ROUND_USAGE_SS_TWR_NON_DEFERRED_MODE,
@@ -181,6 +185,9 @@ public abstract class FiraParams extends Params {
                 RANGING_ROUND_USAGE_DL_TDOA,
             })
     public @interface RangingRoundUsage {}
+
+    /** Uplink Time Difference of Arrival (OWR) */
+    public static final int RANGING_ROUND_USAGE_UL_TDOA = 0;
 
     /** Single-sided two-way ranging, deferred */
     public static final int RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE = 1;
@@ -597,11 +604,15 @@ public abstract class FiraParams extends Params {
             value = {
                 MULTICAST_LIST_UPDATE_ACTION_ADD,
                 MULTICAST_LIST_UPDATE_ACTION_DELETE,
+                P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_16_BYTE,
+                P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_32_BYTE,
             })
     public @interface MulticastListUpdateAction {}
 
-    public static final int MULTICAST_LIST_UPDATE_ACTION_ADD = 0;
-    public static final int MULTICAST_LIST_UPDATE_ACTION_DELETE = 1;
+    public static final int MULTICAST_LIST_UPDATE_ACTION_ADD = 0x0;
+    public static final int MULTICAST_LIST_UPDATE_ACTION_DELETE = 0x1;
+    public static final int P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_16_BYTE = 0x2;
+    public static final int P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_32_BYTE = 0x3;
 
     @IntDef(
             value = {
@@ -629,6 +640,34 @@ public abstract class FiraParams extends Params {
     public static final int DEVICE_CLASS_1 = 1; // Controller & controlee
     public static final int DEVICE_CLASS_2 = 2; // Controller
     public static final int DEVICE_CLASS_3 = 3; // Controlee
+
+    /** Length of UL-TDoA Device ID */
+    @IntDef(
+            value = {
+                    UL_TDOA_DEVICE_ID_NONE,
+                    UL_TDOA_DEVICE_ID_16_BIT,
+                    UL_TDOA_DEVICE_ID_32_BIT,
+                    UL_TDOA_DEVICE_ID_64_BIT,
+            })
+    public @interface UlTdoaDeviceIdType {}
+
+    public static final int UL_TDOA_DEVICE_ID_NONE = 0;
+    public static final int UL_TDOA_DEVICE_ID_16_BIT = 1;
+    public static final int UL_TDOA_DEVICE_ID_32_BIT = 2;
+    public static final int UL_TDOA_DEVICE_ID_64_BIT = 3;
+
+    /** TX Timestamp of UL-TDoA */
+    @IntDef(
+            value = {
+                    TX_TIMESTAMP_NONE,
+                    TX_TIMESTAMP_40_BIT,
+                    TX_TIMESTAMP_64_BIT,
+            })
+    public @interface UlTdoaTxTimestampType {}
+
+    public static final int TX_TIMESTAMP_NONE = 0;
+    public static final int TX_TIMESTAMP_40_BIT = 1;
+    public static final int TX_TIMESTAMP_64_BIT = 2;
 
     public static final int RANGE_DATA_NTF_PROXIMITY_NEAR_DEFAULT = 0;
     public static final int RANGE_DATA_NTF_PROXIMITY_FAR_DEFAULT = 20000;
@@ -660,7 +699,14 @@ public abstract class FiraParams extends Params {
         HAS_CONTROLEE_INITIATOR_SUPPORT(1),
         HAS_CONTROLEE_RESPONDER_SUPPORT(1 << 1),
         HAS_CONTROLLER_INITIATOR_SUPPORT(1 << 2),
-        HAS_CONTROLLER_RESPONDER_SUPPORT(1 << 3);
+        HAS_CONTROLLER_RESPONDER_SUPPORT(1 << 3),
+        HAS_UT_SYNCHRONIZATION_SUPPORT(1 << 4),
+        HAS_UT_ANCHOR_SUPPORT(1 << 5),
+        HAS_UT_TAG_SUPPORT(1 << 6),
+        HAS_ADVERTISER_SUPPORT(1 << 7),
+        HAS_OBSERVER_SUPPORT(1 << 8),
+        HAS_DT_ANCHOR_SUPPORT(1 << 9),
+        HAS_DT_TAG_SUPPORT(1 << 10);
 
         private final long mValue;
 
@@ -757,7 +803,13 @@ public abstract class FiraParams extends Params {
 
     public enum RangingRoundCapabilityFlag implements FlagEnum {
         HAS_DS_TWR_SUPPORT(1),
-        HAS_SS_TWR_SUPPORT(1 << 1);
+        HAS_SS_TWR_SUPPORT(1 << 1),
+        // TODO(b/265047064) : Check if addition of non-deferred mode is needed.
+        HAS_OWR_UL_TDOA_SUPPORT(1 << 2),
+        HAS_OWR_DL_TDOA_SUPPORT(1 << 3),
+        HAS_OWR_AOA_SUPPORT(1 << 4),
+        HAS_ESS_TWR_SUPPORT(1 << 5),
+        HAS_ADS_TWR_SUPPORT(1 << 6);
 
         private final long mValue;
 
@@ -923,6 +975,32 @@ public abstract class FiraParams extends Params {
             return mValue;
         }
     }
+
+    /**
+     * Suspend Ranging Support (FiRa 2.0)
+     */
+    @IntDef(
+            value = {
+                    SUSPEND_RANGING_DISABLED,
+                    SUSPEND_RANGING_ENABLED,
+            })
+    public @interface SuspendRanging {}
+
+    public static final int SUSPEND_RANGING_DISABLED = 0;
+    public static final int SUSPEND_RANGING_ENABLED = 1;
+
+    /**
+     * Session Key length supported (FiRa 2.0)
+     */
+    @IntDef(
+            value = {
+                    KEY_LENGTH_256_BITS_NOT_SUPPORTED,
+                    KEY_LENGTH_256_BITS_SUPPORTED,
+            })
+    public @interface SessionKeyLength {}
+
+    public static final int KEY_LENGTH_256_BITS_NOT_SUPPORTED = 0;
+    public static final int KEY_LENGTH_256_BITS_SUPPORTED = 1;
 
     // Helper functions
     protected static UwbAddress longToUwbAddress(long value, int length) {

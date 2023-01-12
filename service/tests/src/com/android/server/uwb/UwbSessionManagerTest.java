@@ -82,6 +82,7 @@ import android.uwb.RangingChangeReason;
 import android.uwb.SessionHandle;
 import android.uwb.StateChangeReason;
 import android.uwb.UwbAddress;
+import android.uwb.UwbOemExtensionCallbackListener;
 
 import com.android.server.uwb.UwbSessionManager.UwbSession;
 import com.android.server.uwb.UwbSessionManager.WaitObj;
@@ -278,11 +279,18 @@ public class UwbSessionManagerTest {
     // Test scenario for receiving Application payload data followed by a RANGE_DATA_NTF with an
     // OWR Aoa Measurement (such that the ExtendedMacAddress format is used for the remote device).
     @Test
-    public void onRangeDataNotificationReceived_owrAoa_success_extendedMacAddress() {
+    public void onRangeDataNotificationReceived_owrAoa_success_extendedMacAddress()
+            throws RemoteException {
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
+        UwbOemExtensionCallbackListener mUwbOemExtensionCallbackListener =
+                mock(UwbOemExtensionCallbackListener.class);
+        when(mUwbServiceCore.isOemExtensionCbRegistered()).thenReturn(true);
+        when(mUwbServiceCore.getOemExtensionCallback())
+                .thenReturn(mUwbOemExtensionCallbackListener);
+        when(mUwbOemExtensionCallbackListener.onCheckPointedTarget(any())).thenReturn(true);
 
         // First call onDataReceived() to get the application payload data.
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
@@ -312,11 +320,18 @@ public class UwbSessionManagerTest {
     // Test scenario for receiving Application payload data followed by a RANGE_DATA_NTF with an
     // OWR Aoa Measurement (such that the ShortMacAddress format is used for the remote device).
     @Test
-    public void onRangeDataNotificationReceived_owrAoa_success_shortMacAddress() {
+    public void onRangeDataNotificationReceived_owrAoa_success_shortMacAddress()
+            throws RemoteException {
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
+        UwbOemExtensionCallbackListener mUwbOemExtensionCallbackListener =
+                mock(UwbOemExtensionCallbackListener.class);
+        when(mUwbServiceCore.isOemExtensionCbRegistered()).thenReturn(true);
+        when(mUwbServiceCore.getOemExtensionCallback())
+                .thenReturn(mUwbOemExtensionCallbackListener);
+        when(mUwbOemExtensionCallbackListener.onCheckPointedTarget(any())).thenReturn(true);
 
         // First call onDataReceived() to get the application payload data. This should always have
         // the MacAddress (in 8 Bytes), even for a Short MacAddress (MSB are zeroed out).
@@ -341,6 +356,46 @@ public class UwbSessionManagerTest {
                 .onDataReceived(eq(mockUwbSession), eq(PEER_SHORT_UWB_ADDRESS),
                         isA(PersistableBundle.class), eq(DATA_PAYLOAD));
         verify(mUwbAdvertiseManager).removeAdvertiseTarget(PEER_SHORT_MAC_ADDRESS);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
+    }
+
+    @Test
+    public void onRangeDataNotificationReceived_owrAoa_CheckPointedTarget_Failed()
+            throws RemoteException {
+        UwbSession mockUwbSession = mock(UwbSession.class);
+        when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        doReturn(mockUwbSession)
+                .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
+        UwbOemExtensionCallbackListener mUwbOemExtensionCallbackListener =
+                mock(UwbOemExtensionCallbackListener.class);
+        when(mUwbServiceCore.isOemExtensionCbRegistered()).thenReturn(true);
+        when(mUwbServiceCore.getOemExtensionCallback())
+                .thenReturn(mUwbOemExtensionCallbackListener);
+        when(mUwbOemExtensionCallbackListener.onCheckPointedTarget(any())).thenReturn(false);
+
+        // First call onDataReceived() to get the application payload data. This should always have
+        // the MacAddress (in 8 Bytes), even for a Short MacAddress (MSB are zeroed out).
+        mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_SHORT_MAC_ADDRESS,
+                SOURCE_END_POINT, DEST_END_POINT, DATA_PAYLOAD);
+
+        // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF.
+        UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
+                RANGING_MEASUREMENT_TYPE_OWR_AOA, MAC_ADDRESSING_MODE_SHORT,
+                UwbUciConstants.STATUS_CODE_OK);
+        Params firaParams = setupFiraParams(
+                RANGING_DEVICE_ROLE_OBSERVER, Optional.of(ROUND_USAGE_OWR_AOA_MEASUREMENT));
+        when(mockUwbSession.getParams()).thenReturn(firaParams);
+        when(mUwbAdvertiseManager.isPointedTarget(PEER_SHORT_MAC_ADDRESS)).thenReturn(true);
+        mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
+
+        verify(mUwbSessionNotificationManager)
+                .onRangingResult(eq(mockUwbSession), eq(uwbRangingData));
+        verify(mUwbAdvertiseManager).updateAdvertiseTarget(uwbRangingData.mRangingOwrAoaMeasure);
+        verify(mUwbSessionNotificationManager, never())
+                .onDataReceived(eq(mockUwbSession), eq(PEER_SHORT_UWB_ADDRESS),
+                        isA(PersistableBundle.class), eq(DATA_PAYLOAD));
+        verify(mUwbAdvertiseManager, never()).removeAdvertiseTarget(PEER_SHORT_MAC_ADDRESS);
         verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
     }
 
@@ -2018,11 +2073,11 @@ public class UwbSessionManagerTest {
         assertThat(status).isEqualTo(UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST);
     }
 
-    private FiraRangingReconfigureParams buildReconfigureParamsV1() {
-        return buildReconfigureParamsV1(FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD);
+    private FiraRangingReconfigureParams buildReconfigureParams() {
+        return buildReconfigureParams(FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD);
     }
 
-    private FiraRangingReconfigureParams buildReconfigureParamsV1(int action) {
+    private FiraRangingReconfigureParams buildReconfigureParams(int action) {
         FiraRangingReconfigureParams reconfigureParams =
                 new FiraRangingReconfigureParams.Builder()
                         .setAddressList(new UwbAddress[] {
@@ -2035,7 +2090,8 @@ public class UwbSessionManagerTest {
     }
 
     private FiraRangingReconfigureParams buildReconfigureParamsV2() {
-        return buildReconfigureParamsV2(FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD);
+        return buildReconfigureParamsV2(
+                FiraParams.P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_16_BYTE);
     }
 
     private FiraRangingReconfigureParams buildReconfigureParamsV2(int action) {
@@ -2045,7 +2101,8 @@ public class UwbSessionManagerTest {
                                 UwbAddress.fromBytes(new byte[] { (byte) 0x01, (byte) 0x02 }) })
                         .setAction(action)
                         .setSubSessionIdList(new int[] { 2 })
-                        .setMessageControl(8)
+                        .setSubSessionKeyList(new byte[] {0, 0, 0, 0, 1, 1, 1, 1,
+                                2, 2, 2, 2, 3, 3, 3, 3})
                         .build();
 
         return spy(reconfigureParams);
@@ -2063,13 +2120,13 @@ public class UwbSessionManagerTest {
     }
 
     @Test
-    public void execReconfigureAddControleeV1_success() throws Exception {
+    public void execReconfigureAddControlee_success() throws Exception {
         UwbSession uwbSession = prepareExistingUwbSession();
         FiraRangingReconfigureParams reconfigureParams =
-                buildReconfigureParamsV1();
+                buildReconfigureParams();
         when(mNativeUwbManager
-                .controllerMulticastListUpdateV1(anyInt(), anyInt(), anyInt(), any(), any(),
-                        anyString()))
+                .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
+                        any(), anyString()))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
@@ -2097,9 +2154,9 @@ public class UwbSessionManagerTest {
 
         short dstAddress =
                 ByteBuffer.wrap(reconfigureParams.getAddressList()[0].toBytes()).getShort(0);
-        verify(mNativeUwbManager).controllerMulticastListUpdateV1(
+        verify(mNativeUwbManager).controllerMulticastListUpdate(
                 uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
-                new short[] {dstAddress}, reconfigureParams.getSubSessionIdList(),
+                new short[] {dstAddress}, reconfigureParams.getSubSessionIdList(), null,
                 uwbSession.getChipId());
         verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession));
         verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
@@ -2109,10 +2166,10 @@ public class UwbSessionManagerTest {
     public void execReconfigureRemoveControleeV1_success() throws Exception {
         UwbSession uwbSession = prepareExistingUwbSession();
         FiraRangingReconfigureParams reconfigureParams =
-                buildReconfigureParamsV1(FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE);
+                buildReconfigureParams(FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE);
         when(mNativeUwbManager
-                .controllerMulticastListUpdateV1(anyInt(), anyInt(), anyInt(), any(), any(),
-                        anyString()))
+                .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
+                        any(), anyString()))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
@@ -2141,9 +2198,9 @@ public class UwbSessionManagerTest {
 
         short dstAddress =
                 ByteBuffer.wrap(reconfigureParams.getAddressList()[0].toBytes()).getShort(0);
-        verify(mNativeUwbManager).controllerMulticastListUpdateV1(
+        verify(mNativeUwbManager).controllerMulticastListUpdate(
                 uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
-                new short[] {dstAddress}, reconfigureParams.getSubSessionIdList(),
+                new short[] {dstAddress}, reconfigureParams.getSubSessionIdList(), null,
                 uwbSession.getChipId());
         verify(mUwbSessionNotificationManager).onControleeRemoved(eq(uwbSession));
         verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
@@ -2155,8 +2212,8 @@ public class UwbSessionManagerTest {
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParamsV2();
         when(mNativeUwbManager
-                .controllerMulticastListUpdateV2(anyInt(), anyInt(), anyInt(), any(), any(),
-                                anyInt(), any(), anyString()))
+                .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
+                                any(), anyString()))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
@@ -2184,57 +2241,11 @@ public class UwbSessionManagerTest {
 
         short dstAddress =
                 ByteBuffer.wrap(reconfigureParams.getAddressList()[0].toBytes()).getShort(0);
-        verify(mNativeUwbManager).controllerMulticastListUpdateV2(
+        verify(mNativeUwbManager).controllerMulticastListUpdate(
                 uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
                 new short[] {dstAddress}, reconfigureParams.getSubSessionIdList(),
-                reconfigureParams.getMessageControl(), reconfigureParams.getSubSessionKeyList(),
-                uwbSession.getChipId());
+                reconfigureParams.getSubSessionKeyList(), uwbSession.getChipId());
         verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession));
-        verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
-    }
-
-    @Test
-    public void execReconfigureRemoveControleeV2_success() throws Exception {
-        UwbSession uwbSession = prepareExistingUwbSession();
-        FiraRangingReconfigureParams reconfigureParams =
-                buildReconfigureParamsV2(FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE);
-        when(mNativeUwbManager
-                .controllerMulticastListUpdateV2(anyInt(), anyInt(), anyInt(), any(), any(),
-                                anyInt(), any(), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
-        UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
-                mock(UwbMulticastListUpdateStatus.class);
-        when(uwbMulticastListUpdateStatus.getNumOfControlee()).thenReturn(1);
-        when(uwbMulticastListUpdateStatus.getControleeUwbAddresses())
-                .thenReturn(new UwbAddress[] {UWB_DEST_ADDRESS});
-        when(uwbMulticastListUpdateStatus.getStatus()).thenReturn(
-                new int[] { UwbUciConstants.STATUS_CODE_OK });
-        doReturn(uwbMulticastListUpdateStatus).when(uwbSession).getMulticastListUpdateStatus();
-        when(mUwbConfigurationManager.setAppConfigurations(anyInt(), any(), anyString()))
-                .thenReturn(UwbUciConstants.STATUS_CODE_OK);
-
-        // Make sure the address exists in the first place. This should have been set up by
-        //  prepareExistingUwbSession
-        assertThat(uwbSession.getControleeList().stream()
-                .anyMatch(e -> e.getUwbAddress().equals(UWB_DEST_ADDRESS)))
-                .isTrue();
-
-        mUwbSessionManager.reconfigure(uwbSession.getSessionHandle(), reconfigureParams);
-        mTestLooper.dispatchNext();
-
-        // Make sure the address was removed.
-        assertThat(uwbSession.getControleeList().stream()
-                .anyMatch(e -> e.getUwbAddress().equals(UWB_DEST_ADDRESS)))
-                .isFalse();
-
-        short dstAddress =
-                ByteBuffer.wrap(reconfigureParams.getAddressList()[0].toBytes()).getShort(0);
-        verify(mNativeUwbManager).controllerMulticastListUpdateV2(
-                uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
-                new short[] {dstAddress}, reconfigureParams.getSubSessionIdList(),
-                reconfigureParams.getMessageControl(), reconfigureParams.getSubSessionKeyList(),
-                uwbSession.getChipId());
-        verify(mUwbSessionNotificationManager).onControleeRemoved(eq(uwbSession));
         verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
     }
 
@@ -2244,8 +2255,8 @@ public class UwbSessionManagerTest {
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParamsV2();
         when(mNativeUwbManager
-                .controllerMulticastListUpdateV2(anyInt(), anyInt(), anyInt(), any(), any(),
-                                anyInt(), any(), anyString()))
+                .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
+                                any(), anyString()))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_FAILED);
 
         mUwbSessionManager.reconfigure(uwbSession.getSessionHandle(), reconfigureParams);
@@ -2263,8 +2274,8 @@ public class UwbSessionManagerTest {
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParamsV2();
         when(mNativeUwbManager
-                .controllerMulticastListUpdateV2(anyInt(), anyInt(), anyInt(), any(), any(),
-                        anyInt(), any(), anyString()))
+                .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
+                        any(), anyString()))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
@@ -2301,8 +2312,8 @@ public class UwbSessionManagerTest {
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParamsV2();
         when(mNativeUwbManager
-                .controllerMulticastListUpdateV2(anyInt(), anyInt(), anyInt(), any(), any(),
-                                anyInt(), any(), anyString()))
+                .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
+                                any(), anyString()))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
@@ -2357,8 +2368,8 @@ public class UwbSessionManagerTest {
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParamsV2();
         when(mNativeUwbManager
-                .controllerMulticastListUpdateV2(anyInt(), anyInt(), anyInt(), any(), any(),
-                                anyInt(), any(), anyString()))
+                .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
+                                any(), anyString()))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_FAILED);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
