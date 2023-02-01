@@ -22,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -37,6 +38,8 @@ import android.os.RemoteException;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
+
+import com.android.modules.utils.build.SdkLevel;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -439,6 +442,39 @@ public class RangingSessionTest {
         RangingReport report = UwbTestUtils.getRangingReports(1);
         session.onRangingResult(report);
         verify(callback, times(0)).onReportReceived(report);
+    }
+
+    @Test
+    public void testOnRangingRoundsUpdateDtTag() throws RemoteException {
+        assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
+        SessionHandle handle = new SessionHandle(HANDLE_ID, ATTRIBUTION_SOURCE, PID);
+        RangingSession.Callback callback = mock(RangingSession.Callback.class);
+        IUwbAdapter adapter = mock(IUwbAdapter.class);
+        RangingSession session = new RangingSession(EXECUTOR, callback, adapter, handle);
+        PersistableBundle params = new PersistableBundle();
+        assertFalse(session.isOpen());
+
+        session.onRangingOpened();
+        session.onRangingStarted(params);
+        session.onRangingRoundsUpdateDtTag(params);
+
+        verify(adapter, times(1)).onRangingRoundsUpdateDtTag(handle, params);
+    }
+
+    @Test
+    public void testOnRangingRoundsUpdateDtTagStatus() {
+        assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
+        SessionHandle handle = new SessionHandle(HANDLE_ID, ATTRIBUTION_SOURCE, PID);
+        RangingSession.Callback callback = mock(RangingSession.Callback.class);
+        IUwbAdapter adapter = mock(IUwbAdapter.class);
+        RangingSession session = new RangingSession(EXECUTOR, callback, adapter, handle);
+        PersistableBundle params = new PersistableBundle();
+        assertFalse(session.isOpen());
+
+        session.onRangingOpened();
+        session.onRangingRoundsUpdateDtTagStatus(params);
+
+        verify(callback, times(1)).onRangingRoundsUpdateDtTagStatus(params);
     }
 
     private void verifyOpenState(RangingSession session, boolean expected) {

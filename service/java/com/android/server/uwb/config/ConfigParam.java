@@ -68,6 +68,7 @@ public class ConfigParam {
     public static final int RANGE_DATA_NTF_AOA_BOUND = 0x1D;
     public static final int RESPONDER_SLOT_INDEX = 0x1E;
     public static final int PRF_MODE = 0x1F;
+    public static final int CAP_SIZE_RANGE = 0x20;
     public static final int SCHEDULED_MODE = 0x22;
     public static final int KEY_ROTATION = 0x23;
     public static final int KEY_ROTATION_RATE = 0x24;
@@ -85,7 +86,11 @@ public class ConfigParam {
     public static final int SUB_SESSION_ID = 0x30;
     public static final int BPRF_PHR_DATA_RATE = 0x31;
     public static final int MAX_NUMBER_OF_MEASUREMENTS = 0x32;
+    public static final int UL_TDOA_TX_INTERVAL = 0x33;
+    public static final int UL_TDOA_RANDOM_WINDOW = 0x34;
     public static final int STS_LENGTH = 0x35;
+    public static final int UL_TDOA_DEVICE_ID = 0x37;
+    public static final int UL_TDOA_TX_TIMESTAMP = 0x38;
     public static final int SESSION_KEY = 0x45;
     public static final int SUBSESSION_KEY = 0x46;
 
