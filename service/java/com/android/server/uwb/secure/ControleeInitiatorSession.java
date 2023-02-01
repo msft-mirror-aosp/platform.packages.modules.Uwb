@@ -26,11 +26,11 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import com.android.server.uwb.pm.RunningProfileSessionInfo;
-import com.android.server.uwb.pm.SessionData;
 import com.android.server.uwb.secure.csml.CsmlUtil;
 import com.android.server.uwb.secure.csml.DispatchResponse;
 import com.android.server.uwb.secure.csml.GetDoCommand;
 import com.android.server.uwb.secure.csml.PutDoCommand;
+import com.android.server.uwb.secure.csml.SessionData;
 import com.android.server.uwb.secure.iso7816.StatusWord;
 import com.android.server.uwb.secure.iso7816.TlvDatum;
 import com.android.server.uwb.secure.iso7816.TlvParser;
@@ -57,7 +57,7 @@ public class ControleeInitiatorSession extends InitiatorSession {
         PutDoCommand putControleeInfoCommand = PutDoCommand.build(
                 CsmlUtil.constructGetOrPutDoTlv(
                         new TlvDatum(CsmlUtil.CONTROLEE_INFO_DO_TAG,
-                                mRunningProfileSessionInfo.getControleeInfo().toBytes())));
+                                mRunningProfileSessionInfo.controleeInfo.get().toBytes())));
         tunnelData(MSG_ID_PUT_CONTROLEE_INFO,
                 putControleeInfoCommand.getCommandApdu().getEncoded());
     }
