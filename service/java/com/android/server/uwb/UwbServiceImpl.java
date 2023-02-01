@@ -313,7 +313,7 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     @Override
-    public void onRangingRoundsUpdateDtTag(SessionHandle sessionHandle,
+    public void updateRangingRoundsDtTag(SessionHandle sessionHandle,
             PersistableBundle parameters) throws RemoteException {
         if (!SdkLevel.isAtLeastU()) {
             throw new UnsupportedOperationException();
@@ -460,12 +460,11 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         if (!SdkLevel.isAtLeastU()) {
             return false; // older platforms did not have a uwb user restriction.
         }
+
         final long ident = Binder.clearCallingIdentity();
         try {
             return mUwbInjector.getUserManager().getUserRestrictions().getBoolean(
-                    // Not available on tm-mainline-prod
-                    // UserManager.DISALLOW_ULTRA_WIDEBAND_RADIO);
-                    "no_ultra_wideband_radio");
+                    UserManager.DISALLOW_ULTRA_WIDEBAND_RADIO);
         } finally {
             Binder.restoreCallingIdentity(ident);
         }

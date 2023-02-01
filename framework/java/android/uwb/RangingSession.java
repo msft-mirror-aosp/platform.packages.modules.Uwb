@@ -22,6 +22,7 @@ import android.annotation.NonNull;
 import android.annotation.RequiresPermission;
 import android.annotation.SystemApi;
 import android.os.Binder;
+import android.os.Build;
 import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.util.Log;
@@ -51,9 +52,6 @@ import java.util.concurrent.Executor;
  */
 @SystemApi
 public final class RangingSession implements AutoCloseable {
-    // TODO: Refer to Build.VERSION_CODES when it's available in every branch.
-    private static final int UPSIDE_DOWN_CAKE = 34;
-
     private final String mTag = "Uwb.RangingSession[" + this + "]";
     private final SessionHandle mSessionHandle;
     private final IUwbAdapter mAdapter;
@@ -184,7 +182,6 @@ public final class RangingSession implements AutoCloseable {
 
         /**
          * Indicate insufficient slots per ranging round.
-         * @hide
          */
         int REASON_INSUFFICIENT_SLOTS_PER_RR = 14;
 
@@ -433,12 +430,11 @@ public final class RangingSession implements AutoCloseable {
         default void onServiceConnected(@NonNull PersistableBundle parameters) {}
 
         /**
-         * @hide
-         * Invoked when a response/status is received for active ranging rounds update
+         * Invoked when a response/status is received for active ranging rounds update.
          *
          * @param parameters bundle of ranging rounds update status
          */
-        @RequiresApi(UPSIDE_DOWN_CAKE)
+        @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
         default void onRangingRoundsUpdateDtTagStatus(@NonNull PersistableBundle parameters) {}
     }
 
@@ -751,24 +747,23 @@ public final class RangingSession implements AutoCloseable {
     }
 
     /**
-     * @hide
-     * Update active ranging rounds for DT Tag
+     * Update active ranging rounds for DT Tag.
      *
      * <p> On successfully sending the command,
-     * {@link RangingSession.Callback#onRangingRoundsUpdateDtTag(PersistableBundle)}
-     * is invoked
+     * {@link RangingSession.Callback#onRangingRoundsUpdateDtTagStatus(PersistableBundle)}
+     * is invoked.
      * @param params Parameters to configure active ranging rounds
      */
-    @RequiresApi(UPSIDE_DOWN_CAKE)
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @RequiresPermission(Manifest.permission.UWB_PRIVILEGED)
-    public void onRangingRoundsUpdateDtTag(@NonNull PersistableBundle params) {
+    public void updateRangingRoundsDtTag(@NonNull PersistableBundle params) {
         if (mState != State.ACTIVE) {
             throw new IllegalStateException();
         }
 
         Log.v(mTag, "onRangingRoundsUpdateDtTag - sessionHandle: " + mSessionHandle);
         try {
-            mAdapter.onRangingRoundsUpdateDtTag(mSessionHandle, params);
+            mAdapter.updateRangingRoundsDtTag(mSessionHandle, params);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
