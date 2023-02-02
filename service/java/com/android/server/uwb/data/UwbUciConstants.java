@@ -57,6 +57,7 @@ public class UwbUciConstants {
     /* Below reason codes shall be reported with SESSION_STATE_IDLE state only. */
     public static final int REASON_MAX_RANGING_ROUND_RETRY_COUNT_REACHED = 0x01;
     public static final int REASON_MAX_NUMBER_OF_MEASUREMENTS_REACHED = 0x02;
+    public static final int REASON_ERROR_INVALID_UL_TDOA_RANDOM_WINDOW = 0x1D;
     public static final int REASON_ERROR_SLOT_LENGTH_NOT_SUPPORTED = 0x20;
     public static final int REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR = 0x21;
     public static final int REASON_ERROR_MAC_ADDRESS_MODE_NOT_SUPPORTED = 0x22;
@@ -93,6 +94,15 @@ public class UwbUciConstants {
     public static final int MULTI_NODE_MODE_UNICAST = FiraParams.MULTI_NODE_MODE_UNICAST;
     public static final int MULTI_NODE_MODE_ONE_TO_MANY = FiraParams.MULTI_NODE_MODE_ONE_TO_MANY;
     public static final int MULTI_NODE_MODE_MANY_TO_MANY = FiraParams.MULTI_NODE_MODE_MANY_TO_MANY;
+
+    public static final int INTERVAL_BASED_SCHEDULING = FiraParams.INTERVAL_BASED_SCHEDULING;
+    public static final int BLOCK_BASED_SCHEDULING = FiraParams.BLOCK_BASED_SCHEDULING;
+
+    public static final int CONTENTION_BASED_RANGING = FiraParams.CONTENTION_BASED_RANGING;
+    public static final int TIME_SCHEDULED_RANGING = FiraParams.TIME_SCHEDULED_RANGING;
+
+    public static final int CONSTRAINT_LENGTH_3 = FiraParams.CONSTRAINT_LENGTH_3;
+    public static final int CONSTRAINT_LENGTH_7 = FiraParams.CONSTRAINT_LENGTH_7;
 
     public static final int CHANNEL_5 = FiraParams.UWB_CHANNEL_5;
     public static final int CHANNEL_6 = FiraParams.UWB_CHANNEL_6;
@@ -222,4 +232,10 @@ public class UwbUciConstants {
     public static final byte UWB_DESTINATION_END_POINT_UWBS = 0x00;
     public static final byte UWB_DESTINATION_END_POINT_HOST = 0x01;
     public static final byte UWB_DESTINATION_END_POINT_SECURE_ELEMENT = 0x02;
+
+    /**
+     * FiRa Major versions
+     */
+    public static final int FIRA_VERSION_MAJOR_1 = 1;
+    public static final int FIRA_VERSION_MAJOR_2 = 2;
 }
