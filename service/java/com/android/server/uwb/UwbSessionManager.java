@@ -68,6 +68,7 @@ import com.android.server.uwb.jni.INativeUwbManager;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.proto.UwbStatsLog;
 import com.android.server.uwb.util.ArrayUtils;
+import com.android.server.uwb.util.LruList;
 import com.android.server.uwb.util.UwbUtil;
 
 import com.google.uwb.support.base.Params;
@@ -81,16 +82,21 @@ import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
+import com.google.uwb.support.oemextension.AdvertisePointedTarget;
 import com.google.uwb.support.oemextension.SessionStatus;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -126,8 +132,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
     // TODO: don't expose the internal field for testing.
     @VisibleForTesting
     final ConcurrentHashMap<Integer, UwbSession> mSessionTable = new ConcurrentHashMap();
-    final ConcurrentHashMap<Long, ReceivedDataInfo> mReceivedDataMap =
-            new ConcurrentHashMap<Long, ReceivedDataInfo>();
+    // Used for storing recently closed sessions for debugging purposes.
+    final LruList<UwbSession> mDbgRecentlyClosedSessions = new LruList<>(5);
     final ConcurrentHashMap<Integer, List<UwbSession>> mNonPrivilegedUidToFiraSessionsTable =
             new ConcurrentHashMap();
     private final ActivityManager mActivityManager;
@@ -259,6 +265,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         Log.d(TAG, "onDataReceived - address: " + UwbUtil.toHexString(address)
                 + ", Data: " + UwbUtil.toHexString(data));
 
+        UwbSession uwbSession = getUwbSession((int) sessionId);
+        if (uwbSession == null) {
+            Log.e(TAG, "onDataReceived(): Received data for unknown sessionId = " + sessionId);
+            return;
+        }
+
         // Size of address in the UCI Packet for DATA_MESSAGE_RCV is always expected to be 8
         // (EXTENDED_ADDRESS_BYTE_LENGTH). It can contain the MacAddress in short format however
         // (2 LSB with MacAddress, 6 MSB zeroed out).
@@ -277,10 +289,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         info.sourceEndPoint = sourceEndPoint;
         info.destEndPoint = destEndPoint;
         info.payload = data;
-        mReceivedDataMap.put(longAddress, info);
+
+        uwbSession.addReceivedDataInfo(info);
     }
 
-    private static final class ReceivedDataInfo {
+    @VisibleForTesting
+    static final class ReceivedDataInfo {
         public long sessionId;
         public int status;
         public long sequenceNum;
@@ -594,29 +608,48 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         UwbOwrAoaMeasurement uwbOwrAoaMeasurement = rangingData.getRangingOwrAoaMeasure();
         mAdvertiseManager.updateAdvertiseTarget(uwbOwrAoaMeasurement);
 
-        byte[] macAddress = getValidMacAddressFromOwrAoaMeasurement(
+        byte[] macAddressBytes = getValidMacAddressFromOwrAoaMeasurement(
                 rangingData, uwbOwrAoaMeasurement);
-        if (macAddress == null)  {
+        if (macAddressBytes == null)  {
             Log.i(TAG, "OwR Aoa UwbSession: Invalid MacAddress for remote device");
             return;
         }
-        uwbSession.setRemoteMacAddress(macAddress);
 
-        // Get any application payload data received in this OWR AOA ranging session and notify it.
-        ReceivedDataInfo receivedDataInfo = getReceivedDataInfo(macAddress);
-        if (receivedDataInfo == null) {
-            return;
+        boolean advertisePointingResult = mAdvertiseManager.isPointedTarget(macAddressBytes);
+        if (mUwbInjector.getUwbServiceCore().isOemExtensionCbRegistered()) {
+            try {
+                PersistableBundle pointedTargetBundle = new AdvertisePointedTarget.Builder()
+                        .setMacAddress(macAddressBytes)
+                        .setAdvertisePointingResult(advertisePointingResult)
+                        .build()
+                        .toBundle();
+
+                advertisePointingResult = mUwbInjector
+                        .getUwbServiceCore()
+                        .getOemExtensionCallback()
+                        .onCheckPointedTarget(pointedTargetBundle);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
         }
 
-        UwbSession uwbSessionFromReceivedData = getUwbSession((int) receivedDataInfo.sessionId);
-        if (uwbSessionFromReceivedData != uwbSession) {
-            return;
-        }
+        if (advertisePointingResult) {
+            // Use a loop to notify all the received application data payload(s) (in sequence number
+            // order) for this OWR AOA ranging session.
+            long macAddress = macAddressByteArrayToLong(macAddressBytes);
+            UwbAddress uwbAddress = UwbAddress.fromBytes(macAddressBytes);
 
-        if (mAdvertiseManager.isPointedTarget(macAddress)) {
-            UwbAddress uwbAddress = UwbAddress.fromBytes(macAddress);
-            mSessionNotificationManager.onDataReceived(
-                    uwbSession, uwbAddress, new PersistableBundle(), receivedDataInfo.payload);
+            List<ReceivedDataInfo> receivedDataInfoList = uwbSession.getAllReceivedDataInfo(
+                    macAddress);
+            if (receivedDataInfoList.isEmpty()) {
+                Log.i(TAG, "OwR Aoa UwbSession: Application Payload data not found for"
+                        + " MacAddress = " + UwbUtil.toHexString(macAddress));
+                return;
+            }
+
+            receivedDataInfoList.stream().forEach(r ->
+                    mSessionNotificationManager.onDataReceived(
+                            uwbSession, uwbAddress, new PersistableBundle(), r.payload));
             mAdvertiseManager.removeAdvertiseTarget(macAddress);
         }
     }
@@ -631,13 +664,6 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             return (macAddress.length == UWB_DEVICE_EXT_MAC_ADDRESS_LEN) ? macAddress : null;
         }
         return null;
-    }
-
-    /** Get any received data for the given device MacAddress */
-    @VisibleForTesting
-    public ReceivedDataInfo getReceivedDataInfo(byte[] macAddress) {
-        // Convert the macAddress to a long as the address could be in short or extended format.
-        return mReceivedDataMap.get(macAddressByteArrayToLong(macAddress));
     }
 
     public boolean isExistedSession(SessionHandle sessionHandle) {
@@ -842,12 +868,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             removeFromNonPrivilegedUidToFiraSessionTableIfNecessary(uwbSession);
             removeAdvertiserData(uwbSession);
             mSessionTable.remove(uwbSession.getSessionId());
+            mDbgRecentlyClosedSessions.add(uwbSession);
         }
     }
 
     private void removeAdvertiserData(UwbSession uwbSession) {
-        byte[] remoteMacAddress = uwbSession.getRemoteMacAddress();
-        if (remoteMacAddress != null) {
+        for (long remoteMacAddress : uwbSession.getRemoteMacAddressList()) {
             mAdvertiseManager.removeAdvertiseTarget(remoteMacAddress);
         }
     }
@@ -1497,7 +1523,6 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         private final AttributionSource mAttributionSource;
         private final SessionHandle mSessionHandle;
         private final int mSessionId;
-        private byte[] mRemoteMacAddress;
         private final IUwbRangingCallbacks mIUwbRangingCallbacks;
         private final String mProtocolName;
         private final IBinder mIBinder;
@@ -1513,6 +1538,15 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         private boolean mHasNonPrivilegedFgApp = false;
         private @FiraParams.RangeDataNtfConfig Integer mOrigRangeDataNtfConfig;
         private long mRangingErrorStreakTimeoutMs = RANGING_RESULT_ERROR_NO_TIMEOUT;
+        // Use a Map<RemoteMacAddress, SortedMap<SequenceNumber, ReceivedDataInfo>> to store all
+        // the Application payload data packets received in this (active) UWB Session.
+        // - The outer key (RemoteMacAddress) is used to identify the Advertiser device that sends
+        //   the data (there can be multiple advertisers in the same UWB session).
+        // - The inner key (SequenceNumber) is used to ensure we don't store duplicate packets,
+        //   and notify them to the higher layers in-order.
+        // TODO(b/246678053): Change the type of SequenceNumber from Long to Integer everywhere.
+        private final ConcurrentHashMap<Long, SortedMap<Long, ReceivedDataInfo>>
+                mReceivedDataInfoMap;
 
         @VisibleForTesting
         public List<UwbControlee> mControleeList;
@@ -1543,6 +1577,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                 mRangingErrorStreakTimeoutMs = firaParams
                         .getRangingErrorStreakTimeoutMs();
             }
+
+            this.mReceivedDataInfoMap = new ConcurrentHashMap<>();
         }
 
         private boolean isPrivilegedApp(int uid, String packageName) {
@@ -1572,6 +1608,37 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
 
         public List<UwbControlee> getControleeList() {
             return Collections.unmodifiableList(mControleeList);
+        }
+
+        /**
+         * Store a ReceivedDataInfo for the UwbSession. If we already have stored data from the
+         * same advertiser and with the same sequence number, this is a no-op.
+         */
+        public void addReceivedDataInfo(ReceivedDataInfo receivedDataInfo) {
+            SortedMap<Long, ReceivedDataInfo> innerMap = mReceivedDataInfoMap.get(
+                    receivedDataInfo.address);
+            if (innerMap == null) {
+                innerMap = new TreeMap<>();
+                mReceivedDataInfoMap.put(receivedDataInfo.address, innerMap);
+            }
+            innerMap.putIfAbsent(receivedDataInfo.sequenceNum, receivedDataInfo);
+        }
+
+        /**
+          * Return all the ReceivedDataInfo from the given remote device, in sequence number order.
+          * This method also removes the returned packets from the Map, so the same packet will
+          * not be returned again (in a future call).
+          */
+        public List<ReceivedDataInfo> getAllReceivedDataInfo(long macAddress) {
+            SortedMap<Long, ReceivedDataInfo> innerMap = mReceivedDataInfoMap.get(macAddress);
+            if (innerMap == null) {
+                // No stored ReceivedDataInfo(s) for the address.
+                return List.of();
+            }
+
+            List<ReceivedDataInfo> receivedDataInfoList = new ArrayList<>(innerMap.values());
+            innerMap.clear();
+            return receivedDataInfoList;
         }
 
         /**
@@ -1686,12 +1753,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             this.mSessionState = state;
         }
 
-        public byte[] getRemoteMacAddress() {
-            return mRemoteMacAddress;
-        }
-
-        public void setRemoteMacAddress(byte[] remoteMacAddress) {
-            this.mRemoteMacAddress = Arrays.copyOf(remoteMacAddress, remoteMacAddress.length);
+        public Set<Long> getRemoteMacAddressList() {
+            return mReceivedDataInfoMap.keySet();
         }
 
         public void setMulticastListUpdateStatus(
@@ -1760,7 +1823,6 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                 mRangingResultErrorStreakTimerListener = null;
             }
         }
-
 
         /**
          * Starts a timer to detect if the app that started the UWB session is in the background
@@ -1847,6 +1909,17 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                 }
             }
         }
+
+        @Override
+        public String toString() {
+            return "UwbSession: { Session Id: " + getSessionId()
+                    + ", Handle: " + getSessionHandle()
+                    + ", Type: " + getProtocolName()
+                    + ", State: " + getSessionState()
+                    + ", Params: " + getParams()
+                    + ", AttributionSource: " + getAttributionSource()
+                    + " }";
+        }
     }
 
     // TODO: refactor the async operation flow.
@@ -1863,5 +1936,32 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         void blockingNotify() {
             notify();
         }
+    }
+
+    /**
+     * Dump the UWB session manager debug info
+     */
+    public synchronized void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("---- Dump of UwbSessionManager ----");
+        pw.println("Active sessions: ");
+        for (Map.Entry<Integer, UwbSession> entry : mSessionTable.entrySet()) {
+            UwbSession uwbSession = entry.getValue();
+            pw.println(uwbSession);
+        }
+        pw.println("Recently closed sessions: ");
+        for (UwbSession uwbSession: mDbgRecentlyClosedSessions.getEntries()) {
+            pw.println(uwbSession);
+        }
+        List<Integer> nonPrivilegedSessionIds =
+                mNonPrivilegedUidToFiraSessionsTable.entrySet()
+                        .stream()
+                        .map(e -> e.getValue()
+                                .stream()
+                                .map(UwbSession::getSessionId)
+                                .collect(Collectors.toList()))
+                        .flatMap(Collection::stream)
+                        .collect(Collectors.toList());
+        pw.println("Non Privileged Fira Session Ids: " + nonPrivilegedSessionIds);
+        pw.println("---- Dump of UwbSessionManager ----");
     }
 }

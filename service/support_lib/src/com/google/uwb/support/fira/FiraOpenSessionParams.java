@@ -125,8 +125,8 @@ public class FiraOpenSessionParams extends FiraParams {
     private final int mNumOfMsrmtFocusOnAoaAzimuth;
     private final int mNumOfMsrmtFocusOnAoaElevation;
     private final Long mRangingErrorStreakTimeoutMs;
-    private final long mUlTdoaTxIntervalMs;
-    private final long mUlTdoaRandomWindowMs;
+    private final int mUlTdoaTxIntervalMs;
+    private final int mUlTdoaRandomWindowMs;
     @UlTdoaDeviceIdType private final int mUlTdoaDeviceIdType;
     @Nullable private final byte[] mUlTdoaDeviceId;
     @UlTdoaTxTimestampType private final int mUlTdoaTxTimestampType;
@@ -279,8 +279,8 @@ public class FiraOpenSessionParams extends FiraParams {
             int numOfMsrmtFocusOnAoaAzimuth,
             int numOfMsrmtFocusOnAoaElevation,
             Long rangingErrorStreakTimeoutMs,
-            long ulTdoaTxIntervalMs,
-            long ulTdoaRandomWindowMs,
+            int ulTdoaTxIntervalMs,
+            int ulTdoaRandomWindowMs,
             int ulTdoaDeviceIdType,
             @Nullable byte[] ulTdoaDeviceId,
             int ulTdoaTxTimestampType) {
@@ -629,11 +629,11 @@ public class FiraOpenSessionParams extends FiraParams {
         return mRangingErrorStreakTimeoutMs;
     }
 
-    public long getUlTdoaTxIntervalMs() {
+    public int getUlTdoaTxIntervalMs() {
         return mUlTdoaTxIntervalMs;
     }
 
-    public long getUlTdoaRandomWindowMs() {
+    public int getUlTdoaRandomWindowMs() {
         return mUlTdoaRandomWindowMs;
     }
 
@@ -760,8 +760,8 @@ public class FiraOpenSessionParams extends FiraParams {
         bundle.putInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_AZIMUTH, mNumOfMsrmtFocusOnAoaAzimuth);
         bundle.putInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_ELEVATION, mNumOfMsrmtFocusOnAoaElevation);
         bundle.putLong(RANGING_ERROR_STREAK_TIMEOUT_MS, mRangingErrorStreakTimeoutMs);
-        bundle.putLong(UL_TDOA_TX_INTERVAL, mUlTdoaTxIntervalMs);
-        bundle.putLong(UL_TDOA_RANDOM_WINDOW, mUlTdoaRandomWindowMs);
+        bundle.putInt(UL_TDOA_TX_INTERVAL, mUlTdoaTxIntervalMs);
+        bundle.putInt(UL_TDOA_RANDOM_WINDOW, mUlTdoaRandomWindowMs);
         bundle.putInt(UL_TDOA_DEVICE_ID_TYPE, mUlTdoaDeviceIdType);
         bundle.putIntArray(UL_TDOA_DEVICE_ID, byteArrayToIntArray(mUlTdoaDeviceId));
         bundle.putInt(UL_TDOA_TX_TIMESTAMP_TYPE, mUlTdoaTxTimestampType);
@@ -810,8 +810,7 @@ public class FiraOpenSessionParams extends FiraParams {
                 .setDestAddressList(destAddressList)
                 // Changed from int to long. Look for int value, if long value not found to
                 // maintain backwards compatibility.
-                .setInitiationTimeMs(bundle.getLong(
-                        KEY_INITIATION_TIME_MS, bundle.getInt(KEY_INITIATION_TIME_MS)))
+                .setInitiationTimeMs(bundle.getLong(KEY_INITIATION_TIME_MS))
                 .setSlotDurationRstu(bundle.getInt(KEY_SLOT_DURATION_RSTU))
                 .setSlotsPerRangingRound(bundle.getInt(KEY_SLOTS_PER_RANGING_ROUND))
                 .setRangingIntervalMs(bundle.getInt(KEY_RANGING_INTERVAL_MS))
@@ -881,8 +880,8 @@ public class FiraOpenSessionParams extends FiraParams {
                         bundle.getInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_ELEVATION))
                 .setRangingErrorStreakTimeoutMs(bundle
                         .getLong(RANGING_ERROR_STREAK_TIMEOUT_MS, 30_000L))
-                .setUlTdoaTxIntervalMs(bundle.getLong(UL_TDOA_TX_INTERVAL))
-                .setUlTdoaRandomWindowMs(bundle.getLong(UL_TDOA_RANDOM_WINDOW))
+                .setUlTdoaTxIntervalMs(bundle.getInt(UL_TDOA_TX_INTERVAL))
+                .setUlTdoaRandomWindowMs(bundle.getInt(UL_TDOA_RANDOM_WINDOW))
                 .setUlTdoaDeviceIdType(bundle.getInt(UL_TDOA_DEVICE_ID_TYPE))
                 .setUlTdoaDeviceId(intArrayToByteArray(bundle.getIntArray(UL_TDOA_DEVICE_ID)))
                 .setUlTdoaTxTimestampType(bundle.getInt(UL_TDOA_TX_TIMESTAMP_TYPE))
@@ -1045,10 +1044,10 @@ public class FiraOpenSessionParams extends FiraParams {
         /** UCI spec default: +180 (No upper-bound filtering) */
         private double mRangeDataNtfAoaAzimuthUpper = RANGE_DATA_NTF_AOA_AZIMUTH_UPPER_DEFAULT;
 
-        /** UCI spec default: -180 (No low-bound filtering) */
+        /** UCI spec default: -90 (No low-bound filtering) */
         private double mRangeDataNtfAoaElevationLower = RANGE_DATA_NTF_AOA_ELEVATION_LOWER_DEFAULT;
 
-        /** UCI spec default: +180 (No upper-bound filtering) */
+        /** UCI spec default: +90 (No upper-bound filtering) */
         private double mRangeDataNtfAoaElevationUpper = RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT;
 
         /** UCI spec default: RESULT_REPORT_CONFIG bit 0 is 1 */
@@ -1075,10 +1074,10 @@ public class FiraOpenSessionParams extends FiraParams {
         private long mRangingErrorStreakTimeoutMs = 30_000L;
 
         /** Ul-TDoA Tx Interval in Milliseconds */
-        private long mUlTdoaTxIntervalMs = 2_000L;
+        private int mUlTdoaTxIntervalMs = 2000;
 
         /** Ul-TDoA Random Window in Milliseconds */
-        private long mUlTdoaRandomWindowMs = 0;
+        private int mUlTdoaRandomWindowMs = 0;
 
         /** Ul-TDoA Device ID type */
         @UlTdoaDeviceIdType private int mUlTdoaDeviceIdType = UL_TDOA_DEVICE_ID_NONE;
@@ -1577,13 +1576,13 @@ public class FiraOpenSessionParams extends FiraParams {
         }
 
         public FiraOpenSessionParams.Builder setUlTdoaTxIntervalMs(
-                long ulTdoaTxIntervalMs) {
+                int ulTdoaTxIntervalMs) {
             mUlTdoaTxIntervalMs = ulTdoaTxIntervalMs;
             return this;
         }
 
         public FiraOpenSessionParams.Builder setUlTdoaRandomWindowMs(
-                long ulTdoaRandomWindowMs) {
+                int ulTdoaRandomWindowMs) {
             mUlTdoaRandomWindowMs = ulTdoaRandomWindowMs;
             return this;
         }

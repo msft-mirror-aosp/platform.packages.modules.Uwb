@@ -27,9 +27,9 @@ use std::iter::zip;
 
 use jni::errors::Error as JNIError;
 use jni::objects::{GlobalRef, JObject, JString, JValue};
-use jni::signature::JavaType;
+use jni::signature::ReturnType;
 use jni::sys::{
-    jboolean, jbyte, jbyteArray, jint, jintArray, jlong, jobject, jobjectArray, jshortArray,
+    jboolean, jbyte, jbyteArray, jint, jintArray, jlong, jobject, jobjectArray, jshortArray, jvalue,
 };
 use jni::JNIEnv;
 use log::{debug, error};
@@ -330,6 +330,9 @@ fn create_set_config_response(response: SetAppConfigResponse, env: JNIEnv) -> Re
     }
     let config_status_jbytearray =
         env.byte_array_from_slice(&buf).map_err(|_| Error::ForeignFunctionInterface)?;
+
+    // Safety: config_status_jbytearray is safely instantiated above.
+    let config_status_jobject = unsafe { JObject::from_raw(config_status_jbytearray) };
     let config_status_jobject = env
         .new_object(
             uwb_config_status_class,
@@ -337,7 +340,7 @@ fn create_set_config_response(response: SetAppConfigResponse, env: JNIEnv) -> Re
             &[
                 JValue::Int(response.status as i32),
                 JValue::Int(response.config_status.len() as i32),
-                JValue::Object(JObject::from(config_status_jbytearray)),
+                JValue::Object(config_status_jobject),
             ],
         )
         .map_err(|_| Error::ForeignFunctionInterface)?;
@@ -405,18 +408,21 @@ fn create_get_config_response(tlvs: Vec<AppConfigTlv>, env: JNIEnv) -> Result<jb
     }
     let tlvs_jbytearray =
         env.byte_array_from_slice(&buf).map_err(|_| Error::ForeignFunctionInterface)?;
-    let tlvs_jobject = env
+
+    // Safety: tlvs_jbytearray is safely instantiated above.
+    let tlvs_jobject = unsafe { JObject::from_raw(tlvs_jbytearray) };
+    let tlvs_jobject_env = env
         .new_object(
             tlv_data_class,
             "(II[B)V",
             &[
                 JValue::Int(StatusCode::UciStatusOk as i32),
                 JValue::Int(tlvs_len as i32),
-                JValue::Object(JObject::from(tlvs_jbytearray)),
+                JValue::Object(tlvs_jobject),
             ],
         )
         .map_err(|_| Error::ForeignFunctionInterface)?;
-    Ok(*tlvs_jobject)
+    Ok(*tlvs_jobject_env)
 }
 
 /// Get app configurations on a single UWB device. Return null JObject if failed.
@@ -477,18 +483,21 @@ fn create_cap_response(tlvs: Vec<CapTlv>, env: JNIEnv) -> Result<jbyteArray> {
     }
     let tlvs_jbytearray =
         env.byte_array_from_slice(&buf).map_err(|_| Error::ForeignFunctionInterface)?;
-    let tlvs_jobject = env
+
+    // Safety: tlvs_jbytearray is safely instantiated above.
+    let tlvs_jobject = unsafe { JObject::from_raw(tlvs_jbytearray) };
+    let tlvs_jobject_env = env
         .new_object(
             tlv_data_class,
             "(II[B)V",
             &[
                 JValue::Int(StatusCode::UciStatusOk as i32),
                 JValue::Int(tlvs.len() as i32),
-                JValue::Object(JObject::from(tlvs_jbytearray)),
+                JValue::Object(tlvs_jobject),
             ],
         )
         .map_err(|_| Error::ForeignFunctionInterface)?;
-    Ok(*tlvs_jobject)
+    Ok(*tlvs_jobject_env)
 }
 
 /// Get capability info on a single UWB device. Return null JObject if failed.
@@ -582,8 +591,6 @@ fn native_controller_multicast_list_update(
     {
         return Err(Error::BadParameters);
     }
-    let sub_session_key_list =
-        env.convert_byte_array(sub_session_keys).map_err(|_| Error::ForeignFunctionInterface)?;
     let controlee_list = match UpdateMulticastListAction::from_u8(action as u8)
         .ok_or(Error::BadParameters)?
     {
@@ -596,27 +603,37 @@ fn native_controller_multicast_list_update(
         }
         UpdateMulticastListAction::AddControleeWithShortSubSessionKey => {
             Controlees::ShortSessionKey(
-                zip(zip(address_list, sub_session_id_list), sub_session_key_list.chunks(16))
-                    .map(|((address, id), key)| {
-                        Ok(Controlee_V2_0_16_Byte_Version {
-                            short_address: address as u16,
-                            subsession_id: id as u32,
-                            subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
-                        })
-                    })
-                    .collect::<Result<Vec<Controlee_V2_0_16_Byte_Version>>>()?,
-            )
-        }
-        UpdateMulticastListAction::AddControleeWithLongSubSessionKey => Controlees::LongSessionKey(
-            zip(zip(address_list, sub_session_id_list), sub_session_key_list.chunks(32))
+                zip(
+                    zip(address_list, sub_session_id_list),
+                    env.convert_byte_array(sub_session_keys)
+                        .map_err(|_| Error::ForeignFunctionInterface)?
+                        .chunks(16),
+                )
                 .map(|((address, id), key)| {
-                    Ok(Controlee_V2_0_32_Byte_Version {
+                    Ok(Controlee_V2_0_16_Byte_Version {
                         short_address: address as u16,
                         subsession_id: id as u32,
                         subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
                     })
                 })
-                .collect::<Result<Vec<Controlee_V2_0_32_Byte_Version>>>()?,
+                .collect::<Result<Vec<Controlee_V2_0_16_Byte_Version>>>()?,
+            )
+        }
+        UpdateMulticastListAction::AddControleeWithLongSubSessionKey => Controlees::LongSessionKey(
+            zip(
+                zip(address_list, sub_session_id_list),
+                env.convert_byte_array(sub_session_keys)
+                    .map_err(|_| Error::ForeignFunctionInterface)?
+                    .chunks(32),
+            )
+            .map(|((address, id), key)| {
+                Ok(Controlee_V2_0_32_Byte_Version {
+                    short_address: address as u16,
+                    subsession_id: id as u32,
+                    subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
+                })
+            })
+            .collect::<Result<Vec<Controlee_V2_0_32_Byte_Version>>>()?,
         ),
     };
     uci_manager.session_update_controller_multicast_list(
@@ -677,9 +694,18 @@ fn native_set_log_mode(env: JNIEnv, obj: JObject, log_mode_jstring: JString) -> 
     dispatcher.set_logger_mode(logger_mode)
 }
 
-fn create_vendor_response(msg: RawUciMessage, env: JNIEnv) -> Result<jobject> {
+// # Safety
+//
+// For this to be safe, the validity of msg should be checked before calling.
+unsafe fn create_vendor_response(msg: RawUciMessage, env: JNIEnv) -> Result<jobject> {
     let vendor_response_class =
         env.find_class(VENDOR_RESPONSE_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
+
+    // Unsafe from_raw call
+    let payload_jobject = JObject::from_raw(
+        env.byte_array_from_slice(&msg.payload).map_err(|_| Error::ForeignFunctionInterface)?,
+    );
+
     match env.new_object(
         vendor_response_class,
         "(BII[B)V",
@@ -687,10 +713,7 @@ fn create_vendor_response(msg: RawUciMessage, env: JNIEnv) -> Result<jobject> {
             JValue::Byte(StatusCode::UciStatusOk as i8),
             JValue::Int(msg.gid as i32),
             JValue::Int(msg.oid as i32),
-            JValue::Object(JObject::from(
-                env.byte_array_from_slice(&msg.payload)
-                    .map_err(|_| Error::ForeignFunctionInterface)?,
-            )),
+            JValue::Object(payload_jobject),
         ],
     ) {
         Ok(obj) => Ok(*obj),
@@ -716,7 +739,10 @@ fn create_invalid_vendor_response(env: JNIEnv) -> Result<jobject> {
     }
 }
 
-fn create_ranging_round_status(
+/// Safety:
+///
+/// response should be checked before calling to ensure safety.
+unsafe fn create_ranging_round_status(
     response: SessionUpdateActiveRoundsDtTagResponse,
     env: JNIEnv,
 ) -> Result<jobject> {
@@ -724,16 +750,19 @@ fn create_ranging_round_status(
         .find_class(DT_RANGING_ROUNDS_STATUS_CLASS)
         .map_err(|_| Error::ForeignFunctionInterface)?;
     let indexes = response.ranging_round_indexes;
+
+    // Unsafe from_raw call
+    let indexes_jobject = JObject::from_raw(
+        env.byte_array_from_slice(indexes.as_ref()).map_err(|_| Error::ForeignFunctionInterface)?,
+    );
+
     match env.new_object(
         dt_ranging_rounds_update_status_class,
         "(II[B)V",
         &[
             JValue::Int(response.status as i32),
             JValue::Int(indexes.len() as i32),
-            JValue::Object(JObject::from(
-                env.byte_array_from_slice(indexes.as_ref())
-                    .map_err(|_| Error::ForeignFunctionInterface)?,
-            )),
+            JValue::Object(indexes_jobject),
         ],
     ) {
         Ok(o) => Ok(*o),
@@ -746,6 +775,7 @@ fn create_ranging_round_status(
 pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSendRawVendorCmd(
     env: JNIEnv,
     obj: JObject,
+    mt: jint,
     gid: jint,
     oid: jint,
     payload_jarray: jbyteArray,
@@ -753,17 +783,22 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
 ) -> jobject {
     debug!("{}: enter", function_name!());
     match option_result_helper(
-        native_send_raw_vendor_cmd(env, obj, gid, oid, payload_jarray, chip_id),
+        native_send_raw_vendor_cmd(env, obj, mt, gid, oid, payload_jarray, chip_id),
         function_name!(),
     ) {
         // Note: unwrap() here is not desirable, but unavoidable given non-null object is returned
         // even for failing cases.
-        Some(msg) => create_vendor_response(msg, env)
-            .map_err(|e| {
-                error!("{} failed with {:?}", function_name!(), &e);
-                e
-            })
-            .unwrap_or_else(|_| create_invalid_vendor_response(env).unwrap()),
+
+        // Safety: create_vendor_response is unsafe, however msg is safely returned from
+        // native_send_raw_vendor_cmd.
+        Some(msg) => unsafe {
+            create_vendor_response(msg, env)
+                .map_err(|e| {
+                    error!("{} failed with {:?}", function_name!(), &e);
+                    e
+                })
+                .unwrap_or_else(|_| create_invalid_vendor_response(env).unwrap())
+        },
         None => create_invalid_vendor_response(env).unwrap(),
     }
 }
@@ -771,6 +806,7 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
 fn native_send_raw_vendor_cmd(
     env: JNIEnv,
     obj: JObject,
+    mt: jint,
     gid: jint,
     oid: jint,
     payload_jarray: jbyteArray,
@@ -779,7 +815,7 @@ fn native_send_raw_vendor_cmd(
     let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
     let payload =
         env.convert_byte_array(payload_jarray).map_err(|_| Error::ForeignFunctionInterface)?;
-    uci_manager.raw_uci_cmd(gid as u32, oid as u32, payload)
+    uci_manager.raw_uci_cmd(mt as u32, gid as u32, oid as u32, payload)
 }
 
 fn create_power_stats(power_stats: PowerStats, env: JNIEnv) -> Result<jobject> {
@@ -845,12 +881,15 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
         ),
         function_name!(),
     ) {
-        Some(rr) => create_ranging_round_status(rr, env)
-            .map_err(|e| {
-                error!("{} failed with {:?}", function_name!(), &e);
-                e
-            })
-            .unwrap_or(*JObject::null()),
+        // Safety: rr is safely returned from native_set_ranging_rounds_dt_tag
+        Some(rr) => unsafe {
+            create_ranging_round_status(rr, env)
+                .map_err(|e| {
+                    error!("{} failed with {:?}", function_name!(), &e);
+                    e
+                })
+                .unwrap_or(*JObject::null())
+        },
         None => *JObject::null(),
     }
 }
@@ -884,8 +923,8 @@ fn get_class_loader_obj(env: &JNIEnv) -> Result<GlobalRef> {
         .call_method_unchecked(
             ranging_data_class,
             get_class_loader_method,
-            JavaType::Object("java/lang/ClassLoader".into()),
-            &[JValue::Void],
+            ReturnType::Object,
+            &[jvalue::from(JValue::Void)],
         )
         .map_err(|_| Error::ForeignFunctionInterface)?;
     let class_loader_jobject = class_loader.l().map_err(|_| Error::ForeignFunctionInterface)?;
