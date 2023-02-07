@@ -47,7 +47,7 @@ public class FiraEncoder extends TlvEncoder {
         return null;
     }
 
-    private static boolean hasAoaBoundInRangeDataNfConfig(int rangeDataNtfConfig) {
+    private static boolean hasAoaBoundInRangeDataNtfConfig(int rangeDataNtfConfig) {
         return rangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_AOA_LEVEL_TRIG
                 || rangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_LEVEL_TRIG
                 || rangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_AOA_EDGE_TRIG
@@ -103,8 +103,8 @@ public class FiraEncoder extends TlvEncoder {
                 .putByte(ConfigParam.KEY_ROTATION_RATE, (byte) params.getKeyRotationRate())
                 .putByte(ConfigParam.SESSION_PRIORITY, (byte) params.getSessionPriority())
                 .putByte(ConfigParam.MAC_ADDRESS_MODE, (byte) params.getMacAddressMode())
-                .putByteArray(ConfigParam.VENDOR_ID,
-                        TlvUtil.getReverseBytes(params.getVendorId()))
+                .putByteArray(ConfigParam.VENDOR_ID, params.getVendorId() != null
+                        ? TlvUtil.getReverseBytes(params.getVendorId()) : null)
                 .putByteArray(ConfigParam.STATIC_STS_IV,
                         params.getStaticStsIV())
                 .putByte(ConfigParam.NUMBER_OF_STS_SEGMENTS, (byte) params.getStsSegmentCount())
@@ -148,23 +148,23 @@ public class FiraEncoder extends TlvEncoder {
                     .putByte(ConfigParam.NUM_AOA_ELEVATION_MEASUREMENTS,
                             (byte) params.getNumOfMsrmtFocusOnAoaElevation());
         }
-        if (hasAoaBoundInRangeDataNfConfig(params.getRangeDataNtfConfig())) {
-            tlvBufferBuilder.putByteArray(ConfigParam.RANGE_DATA_NTF_AOA_BOUND, new byte[]{
+        if (hasAoaBoundInRangeDataNtfConfig(params.getRangeDataNtfConfig())) {
+            tlvBufferBuilder.putShortArray(ConfigParam.RANGE_DATA_NTF_AOA_BOUND, new short[]{
                     // TODO (b/235355249): Verify this conversion. This is using AOA value
                     // in UwbTwoWayMeasurement to external RangingMeasurement conversion as
                     // reference.
-                    (byte) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                    (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
                             UwbUtil.radianTodegree(
-                                    params.getRangeDataNtfAoaAzimuthLower()), 9, 7), 8),
-                    (byte) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                    params.getRangeDataNtfAoaAzimuthLower()), 9, 7), 16),
+                    (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
                             UwbUtil.radianTodegree(
-                                    params.getRangeDataNtfAoaAzimuthUpper()), 9, 7), 8),
-                    (byte) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                    params.getRangeDataNtfAoaAzimuthUpper()), 9, 7), 16),
+                    (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
                             UwbUtil.radianTodegree(
-                                    params.getRangeDataNtfAoaElevationLower()), 9, 7), 8),
-                    (byte) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                    params.getRangeDataNtfAoaElevationLower()), 9, 7), 16),
+                    (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
                             UwbUtil.radianTodegree(
-                                    params.getRangeDataNtfAoaElevationLower()), 9, 7), 8),
+                                    params.getRangeDataNtfAoaElevationUpper()), 9, 7), 16),
             });
         }
         if (params.isRssiReportingEnabled()) {
@@ -180,9 +180,9 @@ public class FiraEncoder extends TlvEncoder {
             tlvBufferBuilder.putByteArray(ConfigParam.CAP_SIZE_RANGE, params.getCapSize());
         }
         if (params.getDeviceRole() == FiraParams.RANGING_DEVICE_UT_TAG) {
-            tlvBufferBuilder.putLong(ConfigParam.UL_TDOA_TX_INTERVAL,
+            tlvBufferBuilder.putInt(ConfigParam.UL_TDOA_TX_INTERVAL,
                     params.getUlTdoaTxIntervalMs());
-            tlvBufferBuilder.putLong(ConfigParam.UL_TDOA_RANDOM_WINDOW,
+            tlvBufferBuilder.putInt(ConfigParam.UL_TDOA_RANDOM_WINDOW,
                     params.getUlTdoaRandomWindowMs());
             tlvBufferBuilder.putByteArray(ConfigParam.UL_TDOA_DEVICE_ID, getUlTdoaDeviceId(
                     params.getUlTdoaDeviceIdType(), params.getUlTdoaDeviceId()));
@@ -191,7 +191,6 @@ public class FiraEncoder extends TlvEncoder {
         }
         return tlvBufferBuilder.build();
     }
-
     private byte[] getUlTdoaDeviceId(int ulTdoaDeviceIdType, byte[] ulTdoaDeviceId) {
         if (ulTdoaDeviceIdType == FiraParams.UL_TDOA_DEVICE_ID_NONE) {
             // Device ID not included
@@ -235,7 +234,7 @@ public class FiraEncoder extends TlvEncoder {
                     (short) rangeDataProximityFar.intValue());
         }
 
-        if (rangeDataNtfConfig != null && hasAoaBoundInRangeDataNfConfig(rangeDataNtfConfig)) {
+        if (rangeDataNtfConfig != null && hasAoaBoundInRangeDataNtfConfig(rangeDataNtfConfig)) {
             if ((rangeDataAoaAzimuthLower != null && rangeDataAoaAzimuthUpper != null)
                     || (rangeDataAoaElevationLower != null && rangeDataAoaElevationUpper != null)) {
                 rangeDataAoaAzimuthLower = rangeDataAoaAzimuthLower != null
@@ -250,22 +249,22 @@ public class FiraEncoder extends TlvEncoder {
                 rangeDataAoaElevationUpper = rangeDataAoaElevationUpper != null
                         ? rangeDataAoaElevationUpper
                         : FiraParams.RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT;
-                tlvBuilder.putByteArray(ConfigParam.RANGE_DATA_NTF_AOA_BOUND, new byte[]{
+                tlvBuilder.putShortArray(ConfigParam.RANGE_DATA_NTF_AOA_BOUND, new short[]{
                         // TODO (b/235355249): Verify this conversion. This is using AOA value
                         // in UwbTwoWayMeasurement to external RangingMeasurement conversion as
                         // reference.
-                        (byte) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
                                 UwbUtil.radianTodegree(
-                                        rangeDataAoaAzimuthLower.floatValue()), 9, 7), 8),
-                        (byte) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                        rangeDataAoaAzimuthLower.floatValue()), 9, 7), 16),
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
                                 UwbUtil.radianTodegree(
-                                        rangeDataAoaAzimuthUpper.floatValue()), 9, 7), 8),
-                        (byte) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                        rangeDataAoaAzimuthUpper.floatValue()), 9, 7), 16),
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
                                 UwbUtil.radianTodegree(
-                                        rangeDataAoaElevationLower.floatValue()), 9, 7), 8),
-                        (byte) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                        rangeDataAoaElevationLower.floatValue()), 9, 7), 16),
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
                                 UwbUtil.radianTodegree(
-                                        rangeDataAoaElevationUpper.floatValue()), 9, 7), 8),
+                                        rangeDataAoaElevationUpper.floatValue()), 9, 7), 16),
                 });
             }
         }

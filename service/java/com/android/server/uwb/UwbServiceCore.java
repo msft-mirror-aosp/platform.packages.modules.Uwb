@@ -25,13 +25,12 @@ import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTIO
 
 import android.content.AttributionSource;
 import android.content.Context;
-import android.os.Binder;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PersistableBundle;
 import android.os.PowerManager;
+import android.os.RemoteCallbackList;
 import android.os.RemoteException;
 import android.util.Log;
 import android.util.Pair;
@@ -71,7 +70,6 @@ import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -95,7 +93,8 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     @VisibleForTesting
     public static final int TASK_NOTIFY_ADAPTER_STATE = 4;
 
-    private static final int WATCHDOG_MS = 10000;
+    @VisibleForTesting
+    public static final int WATCHDOG_MS = 10000;
     private static final int SEND_VENDOR_CMD_TIMEOUT_MS = 10000;
     @VisibleForTesting
     public static final int TASK_NOTIFY_ADAPTER_STATE_MESSAGE_DELAY_MS = 15000;
@@ -105,8 +104,8 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
 
     private final PowerManager.WakeLock mUwbWakeLock;
     private final Context mContext;
-    // TODO: Use RemoteCallbackList instead.
-    private final ConcurrentHashMap<Integer, AdapterInfo> mAdapterMap = new ConcurrentHashMap<>();
+    private final RemoteCallbackList<IUwbAdapterStateCallbacks>
+            mAdapterStateCallbacksList = new RemoteCallbackList<>();
     private final EnableDisableTask mEnableDisableTask;
 
     private final UwbSessionManager mSessionManager;
@@ -269,13 +268,19 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         // TODO(b/244443764): Consider checking on the current adapter state and returning if it's
         // the same, to avoid sending extra onAdapterStateChanged() notifications. Currently this
         // will happen when UWB is toggled on and a valid country code is already set.
-        for (AdapterInfo adapter : mAdapterMap.values()) {
+        if (mAdapterStateCallbacksList.getRegisteredCallbackCount() == 0) {
+            return;
+        }
+        final int count = mAdapterStateCallbacksList.beginBroadcast();
+        for (int i = 0; i < count; i++) {
             try {
-                adapter.getAdapterStateCallbacks().onAdapterStateChanged(adapterState, reason);
+                mAdapterStateCallbacksList.getBroadcastItem(i)
+                       .onAdapterStateChanged(adapterState, reason);
             } catch (RemoteException e) {
                 Log.e(TAG, "onAdapterStateChanged is failed");
             }
         }
+        mAdapterStateCallbacksList.finishBroadcast();
     }
 
     int getAdapterStateFromDeviceState(int deviceState) {
@@ -326,17 +331,12 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
 
     public void registerAdapterStateCallbacks(IUwbAdapterStateCallbacks adapterStateCallbacks)
             throws RemoteException {
-        AdapterInfo adapter = new AdapterInfo(Binder.getCallingPid(), adapterStateCallbacks);
-        mAdapterMap.put(Binder.getCallingPid(), adapter);
-        adapter.getBinder().linkToDeath(adapter, 0);
+        mAdapterStateCallbacksList.register(adapterStateCallbacks);
         adapterStateCallbacks.onAdapterStateChanged(getAdapterState(), mLastStateChangedReason);
     }
 
     public void unregisterAdapterStateCallbacks(IUwbAdapterStateCallbacks callbacks) {
-        int pid = Binder.getCallingPid();
-        AdapterInfo adapter = mAdapterMap.get(pid);
-        adapter.getBinder().unlinkToDeath(adapter, 0);
-        mAdapterMap.remove(pid);
+        mAdapterStateCallbacksList.unregister(callbacks);
     }
 
     public void registerVendorExtensionCallback(IUwbVendorUciCallback callbacks) {
@@ -412,6 +412,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             throw new IllegalStateException("Uwb is not enabled");
         }
         int sessionId = 0;
+        int sessionType = 0;
 
         if (UuidBundleWrapper.isUuidBundle(params)) {
             UuidBundleWrapper uuidBundleWrapper = UuidBundleWrapper.fromBundle(params);
@@ -436,14 +437,16 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             }
             FiraOpenSessionParams firaOpenSessionParams = builder.build();
             sessionId = firaOpenSessionParams.getSessionId();
+            sessionType = firaOpenSessionParams.getSessionType();
             mSessionManager.initSession(attributionSource, sessionHandle, sessionId,
-                    firaOpenSessionParams.getProtocolName(),
+                    (byte) sessionType, firaOpenSessionParams.getProtocolName(),
                     firaOpenSessionParams, rangingCallbacks, chipId);
         } else if (CccParams.isCorrectProtocol(params)) {
             CccOpenRangingParams cccOpenRangingParams = CccOpenRangingParams.fromBundle(params);
             sessionId = cccOpenRangingParams.getSessionId();
+            sessionType = cccOpenRangingParams.getSessionType();
             mSessionManager.initSession(attributionSource, sessionHandle, sessionId,
-                    cccOpenRangingParams.getProtocolName(),
+                    (byte) sessionType, cccOpenRangingParams.getProtocolName(),
                     cccOpenRangingParams, rangingCallbacks, chipId);
         } else {
             Log.e(TAG, "openRanging - Wrong parameters");
@@ -752,7 +755,9 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                                 countryCode);
                     }
                 } finally {
-                    mUwbWakeLock.release();
+                    if (mUwbWakeLock.isHeld()) {
+                        mUwbWakeLock.release();
+                    }
                     watchDog.cancel();
                 }
             } catch (Exception e) {
@@ -786,7 +791,9 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                         getAdapterStateFromDeviceState(UwbUciConstants.DEVICE_STATE_OFF),
                         getReasonFromDeviceState(UwbUciConstants.DEVICE_STATE_OFF));
             } finally {
-                mUwbWakeLock.release();
+                if (mUwbWakeLock.isHeld()) {
+                    mUwbWakeLock.release();
+                }
                 watchDog.cancel();
             }
         }
@@ -856,32 +863,6 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         }
     }
 
-    class AdapterInfo implements IBinder.DeathRecipient {
-        private final IBinder mIBinder;
-        private IUwbAdapterStateCallbacks mAdapterStateCallbacks;
-        private int mPid;
-
-        AdapterInfo(int pid, IUwbAdapterStateCallbacks adapterStateCallbacks) {
-            mIBinder = adapterStateCallbacks.asBinder();
-            mAdapterStateCallbacks = adapterStateCallbacks;
-            mPid = pid;
-        }
-
-        public IUwbAdapterStateCallbacks getAdapterStateCallbacks() {
-            return mAdapterStateCallbacks;
-        }
-
-        public IBinder getBinder() {
-            return mIBinder;
-        }
-
-        @Override
-        public void binderDied() {
-            mIBinder.unlinkToDeath(this, 0);
-            mAdapterMap.remove(mPid);
-        }
-    }
-
     private void takBugReportAfterDeviceError(String bugTitle) {
         if (mUwbInjector.getDeviceConfigFacade().isDeviceErrorBugreportEnabled()) {
             mUwbInjector.getUwbDiagnostics().takeBugReport(bugTitle);
@@ -889,14 +870,15 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     }
 
     /**
-     * Dump the UWB service status
+     * Dump the UWB session manager debug info
      */
     public synchronized void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         pw.println("---- Dump of UwbServiceCore ----");
         for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
-            pw.println("device state = " + getDeviceStateString(mChipIdToStateMap.get(chipId))
+            pw.println("Device state = " + getDeviceStateString(mChipIdToStateMap.get(chipId))
                     + " for chip id = " + chipId);
         }
         pw.println("mLastStateChangedReason = " + mLastStateChangedReason);
+        pw.println("---- Dump of UwbServiceCore ----");
     }
 }

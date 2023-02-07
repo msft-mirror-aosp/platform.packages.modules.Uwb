@@ -45,16 +45,23 @@ import com.google.uwb.support.oemextension.RangingReportMetadata;
 public class UwbTestUtils {
     public static final int TEST_SESSION_ID = 7;
     public static final int TEST_SESSION_ID_2 = 8;
+    public static final byte TEST_SESSION_TYPE = FiraParams.SESSION_TYPE_RANGING;
     public static final byte[] PEER_SHORT_MAC_ADDRESS = {0x35, 0x37};
+    public static final long PEER_SHORT_MAC_ADDRESS_LONG = 0x3735L;
     public static final byte[] PEER_EXTENDED_SHORT_MAC_ADDRESS =
             {0x35, 0x37, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    public static final long PEER_EXTENDED_SHORT_MAC_ADDRESS_LONG = 0x3735L;
     public static final byte[] PEER_EXTENDED_MAC_ADDRESS =
             {0x12, 0x14, 0x16, 0x18, 0x31, 0x33, 0x35, 0x37};
+    public static final long PEER_EXTENDED_MAC_ADDRESS_LONG = 0x3735333118161412L;
     public static final byte[] PEER_EXTENDED_MAC_ADDRESS_2 =
             {0x2, 0x4, 0x6, 0x8, 0x1, 0x3, 0x5, 0x7};
+    public static final long  PEER_EXTENDED_MAC_ADDRESS_2_LONG = 0x0705030108060402L;
     public static final byte[] PEER_BAD_MAC_ADDRESS = {0x12, 0x14, 0x16, 0x18};
     public static final UwbAddress PEER_EXTENDED_UWB_ADDRESS = UwbAddress.fromBytes(
             PEER_EXTENDED_MAC_ADDRESS);
+    public static final UwbAddress PEER_EXTENDED_UWB_ADDRESS_2 = UwbAddress.fromBytes(
+            PEER_EXTENDED_MAC_ADDRESS_2);
     public static final UwbAddress PEER_SHORT_UWB_ADDRESS = UwbAddress.fromBytes(
             PEER_SHORT_MAC_ADDRESS);
     public static final PersistableBundle PERSISTABLE_BUNDLE = new PersistableBundle();
@@ -72,6 +79,7 @@ public class UwbTestUtils {
     private static final int TEST_DISTANCE = 101;
     private static final float TEST_AOA_AZIMUTH = 67;
     private static final int TEST_AOA_AZIMUTH_FOM = 50;
+    private static final int TEST_BAD_AOA_AZIMUTH_FOM = 150;
     private static final float TEST_AOA_ELEVATION = 37;
     private static final int TEST_AOA_ELEVATION_FOM = 90;
     private static final float TEST_AOA_DEST_AZIMUTH = 67;
@@ -101,11 +109,22 @@ public class UwbTestUtils {
     /** Build UwbRangingData for all Ranging Measurement Type(s). */
     public static UwbRangingData generateRangingData(
             int rangingMeasurementType, int macAddressingMode, int rangingStatus) {
+        byte[] macAddress = (macAddressingMode == MAC_ADDRESSING_MODE_SHORT)
+                ? PEER_SHORT_MAC_ADDRESS : PEER_EXTENDED_MAC_ADDRESS;
+        return generateRangingData(
+                rangingMeasurementType, macAddressingMode, macAddress, rangingStatus);
+    }
+
+    /** Build UwbRangingData for all Ranging Measurement Type(s). */
+    public static UwbRangingData generateRangingData(
+            int rangingMeasurementType, int macAddressingMode, byte[] macAddress,
+            int rangingStatus) {
         switch (rangingMeasurementType) {
             case RANGING_MEASUREMENT_TYPE_TWO_WAY:
                 return generateTwoWayMeasurementRangingData(rangingStatus);
             case RANGING_MEASUREMENT_TYPE_OWR_AOA:
-                return generateOwrAoaMeasurementRangingData(macAddressingMode, rangingStatus);
+                return generateOwrAoaMeasurementRangingData(
+                        macAddressingMode, macAddress, rangingStatus);
             case RANGING_MEASUREMENT_TYPE_DL_TDOA:
                 return generateDlTDoAMeasurementRangingData(macAddressingMode, rangingStatus);
             default:
@@ -130,14 +149,27 @@ public class UwbTestUtils {
     }
 
     private static UwbRangingData generateOwrAoaMeasurementRangingData(
-            int macAddressingMode, int rangingStatus) {
+            int macAddressingMode, byte[] macAddress, int rangingStatus) {
         final int noOfRangingMeasures = 1;
-        byte[] macAddress = (macAddressingMode == MAC_ADDRESSING_MODE_SHORT)
-                ? PEER_SHORT_MAC_ADDRESS : PEER_EXTENDED_MAC_ADDRESS;
         final UwbOwrAoaMeasurement uwbOwrAoaMeasurement  = new UwbOwrAoaMeasurement(
                 macAddress, rangingStatus, TEST_LOS,
                 TEST_FRAME_SEQUENCE_NUMBER, TEST_BLOCK_IDX,
                 convertFloatToQFormat(TEST_AOA_AZIMUTH, 9, 7), TEST_AOA_AZIMUTH_FOM,
+                convertFloatToQFormat(TEST_AOA_ELEVATION, 9, 7), TEST_AOA_ELEVATION_FOM);
+        return new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
+                TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, RANGING_MEASUREMENT_TYPE_OWR_AOA,
+                macAddressingMode, noOfRangingMeasures, uwbOwrAoaMeasurement,
+                TEST_RAW_NTF_DATA);
+    }
+
+    /** Generate an OWR ranging data with a bad AoA Azimuth FOM */
+    public static UwbRangingData generateBadOwrAoaMeasurementRangingData(
+            int macAddressingMode, byte[] macAddress) {
+        final int noOfRangingMeasures = 1;
+        final UwbOwrAoaMeasurement uwbOwrAoaMeasurement  = new UwbOwrAoaMeasurement(
+                macAddress, TEST_STATUS, TEST_LOS,
+                TEST_FRAME_SEQUENCE_NUMBER, TEST_BLOCK_IDX,
+                convertFloatToQFormat(TEST_AOA_AZIMUTH, 9, 7), TEST_BAD_AOA_AZIMUTH_FOM,
                 convertFloatToQFormat(TEST_AOA_ELEVATION, 9, 7), TEST_AOA_ELEVATION_FOM);
         return new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
                 TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, RANGING_MEASUREMENT_TYPE_OWR_AOA,
