@@ -21,6 +21,7 @@ import static android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREG
 
 import static com.android.server.uwb.UwbSessionManager.SESSION_OPEN_RANGING;
 import static com.android.server.uwb.UwbTestUtils.DATA_PAYLOAD;
+import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
 import static com.android.server.uwb.UwbTestUtils.PEER_BAD_MAC_ADDRESS;
 import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_MAC_ADDRESS;
 import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_MAC_ADDRESS_2;
@@ -1760,7 +1761,7 @@ public class UwbSessionManagerTest {
         verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
         ArgumentCaptor<AlarmManager.OnAlarmListener> alarmListenerCaptor =
                 ArgumentCaptor.forClass(AlarmManager.OnAlarmListener.class);
-        verify(mAlarmManager).set(
+        verify(mAlarmManager).setExact(
                 anyInt(), anyLong(), anyString(), alarmListenerCaptor.capture(), any());
         assertThat(alarmListenerCaptor.getValue()).isNotNull();
 
@@ -1815,7 +1816,7 @@ public class UwbSessionManagerTest {
         verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
         ArgumentCaptor<AlarmManager.OnAlarmListener> alarmListenerCaptor =
                 ArgumentCaptor.forClass(AlarmManager.OnAlarmListener.class);
-        verify(mAlarmManager).set(
+        verify(mAlarmManager).setExact(
                 anyInt(), anyLong(), anyString(), alarmListenerCaptor.capture(), any());
         assertThat(alarmListenerCaptor.getValue()).isNotNull();
 
@@ -2579,6 +2580,24 @@ public class UwbSessionManagerTest {
 
         verify(mUwbSessionNotificationManager).onRangingReconfigureFailed(
                 eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_FAILED));
+    }
+
+    @Test
+    public void testQueryDataSize() throws Exception {
+        UwbSession uwbSession = prepareExistingUwbSession();
+
+        when(mNativeUwbManager.queryDataSize(eq(uwbSession.getSessionId()), eq(TEST_CHIP_ID)))
+                .thenReturn(MAX_DATA_SIZE);
+        assertThat(mUwbSessionManager.queryDataSize(uwbSession.getSessionHandle()))
+                .isEqualTo(MAX_DATA_SIZE);
+    }
+
+    @Test
+    public void testQueryDataSize_whenUwbSessionDoesNotExist() throws Exception {
+        SessionHandle mockSessionHandle = mock(SessionHandle.class);
+        assertThat(mUwbSessionManager.queryDataSize(mockSessionHandle))
+                .isEqualTo(UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST);
+        verify(mNativeUwbManager, never()).queryDataSize(anyInt(), anyString());
     }
 
     @Test
