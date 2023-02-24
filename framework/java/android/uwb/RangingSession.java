@@ -107,6 +107,7 @@ public final class RangingSession implements AutoCloseable {
                 REASON_SE_NOT_SUPPORTED,
                 REASON_SE_INTERACTION_FAILURE,
                 REASON_INSUFFICIENT_SLOTS_PER_RR,
+                REASON_SYSTEM_REGULATION,
         })
         @interface Reason {}
 
@@ -184,6 +185,12 @@ public final class RangingSession implements AutoCloseable {
          * Indicate insufficient slots per ranging round.
          */
         int REASON_INSUFFICIENT_SLOTS_PER_RR = 14;
+
+        /**
+         * Indicate that a system regulation caused the change, such as no allowed UWB channels in
+         * the country.
+         */
+        int REASON_SYSTEM_REGULATION = 15;
 
         /**
          * @hide
@@ -776,14 +783,14 @@ public final class RangingSession implements AutoCloseable {
      */
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     @RequiresPermission(Manifest.permission.UWB_PRIVILEGED)
-    public int queryDataSize() {
+    public int queryMaxDataSizeBytes() {
         if (mState != State.ACTIVE) {
             throw new IllegalStateException();
         }
 
-        Log.v(mTag, "QueryDataSize - sessionHandle: " + mSessionHandle);
+        Log.v(mTag, "QueryMaxDataSizeBytes - sessionHandle: " + mSessionHandle);
         try {
-            return mAdapter.queryDataSize(mSessionHandle);
+            return mAdapter.queryMaxDataSizeBytes(mSessionHandle);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
