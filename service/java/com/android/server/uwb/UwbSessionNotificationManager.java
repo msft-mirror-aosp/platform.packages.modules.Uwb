@@ -69,14 +69,21 @@ public class UwbSessionNotificationManager {
             return;
         }
 
-        RangingReport rangingReport = getRangingReport(rangingData, uwbSession.getProtocolName(),
-                uwbSession.getParams(), mUwbInjector.getElapsedSinceBootNanos());
+        RangingReport rangingReport = null;
+        try {
+            rangingReport = getRangingReport(rangingData, uwbSession.getProtocolName(),
+                    uwbSession.getParams(), mUwbInjector.getElapsedSinceBootNanos(), uwbSession);
+        } catch (Exception e) {
+            Log.e(TAG, "getRangingReport Failed.");
+            e.printStackTrace();
+        }
 
         if (mUwbInjector.getUwbServiceCore().isOemExtensionCbRegistered()) {
             try {
                 rangingReport = mUwbInjector.getUwbServiceCore().getOemExtensionCallback()
                                 .onRangingReportReceived(rangingReport);
             } catch (RemoteException e) {
+                Log.e(TAG, "UwbInjector - onRangingReportReceived : Failed.");
                 e.printStackTrace();
             }
         }
@@ -394,7 +401,7 @@ public class UwbSessionNotificationManager {
 
     private static RangingReport getRangingReport(
             @NonNull UwbRangingData rangingData, String protocolName,
-            Params sessionParams, long elapsedRealtimeNanos) {
+            Params sessionParams, long elapsedRealtimeNanos, UwbSession uwbSession) {
         if (rangingData.getRangingMeasuresType() != UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY
                 && rangingData.getRangingMeasuresType()
                     != UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA
@@ -504,6 +511,12 @@ public class UwbSessionNotificationManager {
                 PersistableBundle rangingMeasurementMetadata = new PersistableBundle();
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(rangingMeasurementMetadata);
 
+                UwbAddress addr = UwbAddress.fromBytes(uwbTwoWayMeasurement[i].getMacAddress());
+                UwbControlee controlee = uwbSession.getControlee(addr);
+                if (controlee != null) {
+                    controlee.filterMeasurement(rangingMeasurementBuilder);
+                }
+
                 rangingMeasurements.add(rangingMeasurementBuilder.build());
             }
 
@@ -530,6 +543,12 @@ public class UwbSessionNotificationManager {
                     rangingMeasurementBuilder.setAngleOfArrivalMeasurement(
                             angleOfArrivalMeasurement);
                 }
+            }
+
+            UwbAddress addr = UwbAddress.fromBytes(uwbOwrAoaMeasurement.getMacAddress());
+            UwbControlee controlee = uwbSession.getControlee(addr);
+            if (controlee != null) {
+                controlee.filterMeasurement(rangingMeasurementBuilder);
             }
 
             rangingReportBuilder.addMeasurement(rangingMeasurementBuilder.build());
@@ -575,10 +594,17 @@ public class UwbSessionNotificationManager {
                                 .getInitiatorResponderTof())
                         .setAnchorLocation(uwbDlTDoAMeasurements[i].getAnchorLocation())
                         .setActiveRangingRounds(uwbDlTDoAMeasurements[i].getActiveRangingRounds())
+                        .setRoundIndex(uwbDlTDoAMeasurements[i].getRoundIndex())
                         .build();
 
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(
                         dlTDoAMeasurement.toBundle());
+
+                UwbAddress addr = UwbAddress.fromBytes(uwbDlTDoAMeasurements[i].getMacAddress());
+                UwbControlee controlee = uwbSession.getControlee(addr);
+                if (controlee != null) {
+                    controlee.filterMeasurement(rangingMeasurementBuilder);
+                }
 
                 rangingMeasurements.add(rangingMeasurementBuilder.build());
             }

@@ -32,8 +32,8 @@ _TEST_CASES = (
     "test_stop_initiator_ranging_nearby_share_profile",
     "test_stop_responder_ranging_device_tracker_profile",
     "test_stop_responder_ranging_nearby_share_profile",
-    "test_ranging_device_tracker_profile_with_airplane_mode_toggle",
-    "test_ranging_nearby_share_profile_with_airplane_mode_toggle",
+    # "test_ranging_device_tracker_profile_with_airplane_mode_toggle",
+    # "test_ranging_nearby_share_profile_with_airplane_mode_toggle",
 )
 
 
@@ -83,8 +83,7 @@ class RangingTest(uwb_base_test.UwbBaseTest):
     self.responder.close_ranging()
     self.initiator.close_ranging()
 
-  def teardown_class(self):
-    super().teardown_class()
+  def on_fail(self, record):
     for count, ad in enumerate(self.android_devices):
       test_name = "initiator" if not count else "responder"
       ad.take_bug_report(

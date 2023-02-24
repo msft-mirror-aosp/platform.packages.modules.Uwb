@@ -21,6 +21,7 @@ import static android.uwb.UwbManager.AdapterStateCallback.STATE_ENABLED_ACTIVE;
 import static android.uwb.UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE;
 
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_TOGGLE_STATE;
+import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.fira.FiraParams.PACS_PROFILE_SERVICE_ID;
@@ -628,10 +629,11 @@ public class UwbServiceImplTest {
 
     @Test
     public void testSendVendorUciMessage() throws Exception {
+        final int mt = 1;
         final int gid = 0;
         final int oid = 0;
-        mUwbServiceImpl.sendVendorUciMessage(gid, oid, null);
-        verify(mUwbServiceCore).sendVendorUciMessage(gid, oid, null,
+        mUwbServiceImpl.sendVendorUciMessage(mt, gid, oid, null);
+        verify(mUwbServiceCore).sendVendorUciMessage(mt, gid, oid, null,
                 mUwbInjector.getMultichipData().getDefaultChipId());
     }
 
@@ -640,8 +642,20 @@ public class UwbServiceImplTest {
         assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         final PersistableBundle parameters = new PersistableBundle();
-        mUwbServiceImpl.onRangingRoundsUpdateDtTag(sessionHandle, parameters);
+        mUwbServiceImpl.updateRangingRoundsDtTag(sessionHandle, parameters);
 
         verify(mUwbServiceCore).rangingRoundsUpdateDtTag(sessionHandle, parameters);
+    }
+
+    @Test
+    public void testQueryDataSize() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
+        final SessionHandle sessionHandle = mock(SessionHandle.class);
+        final PersistableBundle parameters = new PersistableBundle();
+
+        when(mUwbServiceCore.queryDataSize(sessionHandle)).thenReturn(MAX_DATA_SIZE);
+        assertThat(mUwbServiceImpl.queryDataSize(sessionHandle)).isEqualTo(MAX_DATA_SIZE);
+
+        verify(mUwbServiceCore).queryDataSize(sessionHandle);
     }
 }

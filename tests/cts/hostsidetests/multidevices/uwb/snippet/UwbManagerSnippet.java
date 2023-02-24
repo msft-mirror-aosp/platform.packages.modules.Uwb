@@ -49,6 +49,7 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -451,15 +452,23 @@ public class UwbManagerSnippet implements Snippet {
         if (j.has("preamble")) {
             builder.setPreambleCodeIndex(j.getInt("preamble"));
         }
-        if (j.has("vendorId")) {
-            JSONArray jArray = j.getJSONArray("vendorId");
-            byte[] bArray = convertJSONArrayToByteArray(jArray);
-            builder.setVendorId(bArray);
-        }
-        if (j.has("staticStsIV")) {
-            JSONArray jArray = j.getJSONArray("staticStsIV");
-            byte[] bArray = convertJSONArrayToByteArray(jArray);
-            builder.setStaticStsIV(bArray);
+        if (j.getInt("stsConfig") == FiraParams.STS_CONFIG_STATIC) {
+            JSONArray jVendorIdArray = j.getJSONArray("vendorId");
+            builder.setVendorId(convertJSONArrayToByteArray(jVendorIdArray));
+            JSONArray jStatisStsIVArray = j.getJSONArray("staticStsIV");
+            builder.setStaticStsIV(convertJSONArrayToByteArray(jStatisStsIVArray));
+        } else if (j.getInt("stsConfig") == FiraParams.STS_CONFIG_PROVISIONED) {
+            builder.setStsConfig(j.getInt("stsConfig"));
+            JSONArray jSessionKeyArray = j.getJSONArray("sessionKey");
+            builder.setSessionKey(convertJSONArrayToByteArray(jSessionKeyArray));
+        } else if (j.getInt(
+                "stsConfig") == FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
+            builder.setStsConfig(j.getInt("stsConfig"));
+            JSONArray jSessionKeyArray = j.getJSONArray("sessionKey");
+            builder.setSessionKey(convertJSONArrayToByteArray(jSessionKeyArray));
+            JSONArray jSubSessionKeyArray = j.getJSONArray("subSessionKey");
+            builder.setSubsessionKey(convertJSONArrayToByteArray(jSubSessionKeyArray));
+            builder.setSubSessionId(j.getInt("subSessionId"));
         }
         if (j.has("aoaResultRequest")) {
             builder.setAoaResultRequest(j.getInt("aoaResultRequest"));
@@ -573,6 +582,16 @@ public class UwbManagerSnippet implements Snippet {
         return rangingMeasurement.getAngleOfArrivalMeasurement().getAltitude().getRadians();
     }
 
+    /** Get RSSI measurement. */
+    @Rpc(description = "Get RSSI measurement.")
+    public int getRssiDbmMeasurement(String key, JSONArray jArray) throws JSONException {
+        RangingMeasurement rangingMeasurement = getRangingMeasurement(key, jArray);
+        if (rangingMeasurement == null) {
+            throw new NullPointerException("Cannot get RSSI dBm measurement on null object.");
+        }
+        return rangingMeasurement.getRssiDbm();
+    }
+
     /** Stop UWB ranging. */
     @Rpc(description = "Stop UWB ranging")
     public void stopRangingSession(String key) {
@@ -586,6 +605,27 @@ public class UwbManagerSnippet implements Snippet {
         RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
         rangingSessionCallback.rangingSession.close();
         sRangingSessionCallbackMap.remove(key);
+    }
+
+    private JSONObject convertPersistableBundleToJson(PersistableBundle bundle)
+            throws JSONException {
+        JSONObject jsonObj = new JSONObject();
+        Set<String> keys = bundle.keySet();
+        for (String key: keys) {
+            if (bundle.get(key) instanceof PersistableBundle) {
+                jsonObj.put(key, convertPersistableBundleToJson(
+                        (PersistableBundle) bundle.get(key)));
+            } else {
+                jsonObj.put(key, JSONObject.wrap(bundle.get(key)));
+            }
+        }
+        return jsonObj;
+    }
+
+    /** Get UWB specification info */
+    @Rpc(description = "Get Uwb specification info")
+    public JSONObject getSpecificationInfo() throws JSONException {
+        return convertPersistableBundleToJson(mUwbManager.getSpecificationInfo());
     }
 
     @Override
