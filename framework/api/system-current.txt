@@ -106,7 +106,7 @@ package android.uwb {
     method @RequiresPermission(android.Manifest.permission.UWB_PRIVILEGED) public void addControlee(@NonNull android.os.PersistableBundle);
     method @RequiresPermission(android.Manifest.permission.UWB_PRIVILEGED) public void close();
     method @RequiresPermission(android.Manifest.permission.UWB_PRIVILEGED) public void pause(@NonNull android.os.PersistableBundle);
-    method @RequiresPermission(android.Manifest.permission.UWB_PRIVILEGED) public int queryDataSize();
+    method @RequiresPermission(android.Manifest.permission.UWB_PRIVILEGED) public int queryMaxDataSizeBytes();
     method @RequiresPermission(android.Manifest.permission.UWB_PRIVILEGED) public void reconfigure(@NonNull android.os.PersistableBundle);
     method @RequiresPermission(android.Manifest.permission.UWB_PRIVILEGED) public void removeControlee(@NonNull android.os.PersistableBundle);
     method @RequiresPermission(android.Manifest.permission.UWB_PRIVILEGED) public void resume(@NonNull android.os.PersistableBundle);
@@ -158,6 +158,7 @@ package android.uwb {
     field public static final int REASON_SE_INTERACTION_FAILURE = 13; // 0xd
     field public static final int REASON_SE_NOT_SUPPORTED = 12; // 0xc
     field public static final int REASON_SYSTEM_POLICY = 6; // 0x6
+    field public static final int REASON_SYSTEM_REGULATION = 15; // 0xf
     field public static final int REASON_UNKNOWN = 0; // 0x0
   }
 
