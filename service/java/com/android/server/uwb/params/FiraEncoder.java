@@ -118,9 +118,11 @@ public class FiraEncoder extends TlvEncoder {
                 .putByte(ConfigParam.BPRF_PHR_DATA_RATE,
                         (byte) params.getBprfPhrDataRate())
                 .putByte(ConfigParam.STS_LENGTH, (byte) params.getStsLength());
-        // Initiation time Changed from 4 byte field to 8 byte field in version 2.
         if (params.getProtocolVersion().getMajor() >= 2) {
-            tlvBufferBuilder.putLong(ConfigParam.UWB_INITIATION_TIME, params.getInitiationTimeMs());
+            tlvBufferBuilder
+                 // Initiation time Changed from 4 byte field to 8 byte field in version 2.
+                .putLong(ConfigParam.UWB_INITIATION_TIME, params.getInitiationTimeMs())
+                .putByte(ConfigParam.LINK_LAYER_MODE,  (byte) params.getLinkLayerMode());
         } else {
             tlvBufferBuilder.putInt(ConfigParam.UWB_INITIATION_TIME,
                     Math.toIntExact(params.getInitiationTimeMs()));
@@ -180,18 +182,24 @@ public class FiraEncoder extends TlvEncoder {
             tlvBufferBuilder.putByteArray(ConfigParam.CAP_SIZE_RANGE, params.getCapSize());
         }
         if (params.getDeviceRole() == FiraParams.RANGING_DEVICE_UT_TAG) {
-            tlvBufferBuilder.putLong(ConfigParam.UL_TDOA_TX_INTERVAL,
+            tlvBufferBuilder.putInt(ConfigParam.UL_TDOA_TX_INTERVAL,
                     params.getUlTdoaTxIntervalMs());
-            tlvBufferBuilder.putLong(ConfigParam.UL_TDOA_RANDOM_WINDOW,
+            tlvBufferBuilder.putInt(ConfigParam.UL_TDOA_RANDOM_WINDOW,
                     params.getUlTdoaRandomWindowMs());
             tlvBufferBuilder.putByteArray(ConfigParam.UL_TDOA_DEVICE_ID, getUlTdoaDeviceId(
                     params.getUlTdoaDeviceIdType(), params.getUlTdoaDeviceId()));
             tlvBufferBuilder.putByte(ConfigParam.UL_TDOA_TX_TIMESTAMP,
                     (byte) params.getUlTdoaTxTimestampType());
         }
+        if (params.getDeviceRole() == FiraParams.RANGING_DEVICE_ROLE_ADVERTISER ||
+            params.getDeviceRole() == FiraParams.RANGING_DEVICE_ROLE_OBSERVER) {
+            tlvBufferBuilder
+                .putByte(ConfigParam.MIN_FRAMES_PER_RR, (byte) params.getMinFramesPerRr())
+                .putShort(ConfigParam.MTU_SIZE, (short) params.getMtuSize())
+                .putByte(ConfigParam.INTER_FRAME_INTERVAL, (byte) params.getInterFrameInterval());
+        }
         return tlvBufferBuilder.build();
     }
-
     private byte[] getUlTdoaDeviceId(int ulTdoaDeviceIdType, byte[] ulTdoaDeviceId) {
         if (ulTdoaDeviceIdType == FiraParams.UL_TDOA_DEVICE_ID_NONE) {
             // Device ID not included
