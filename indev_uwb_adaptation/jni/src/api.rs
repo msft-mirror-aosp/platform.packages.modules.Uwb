@@ -17,8 +17,8 @@
 //! Internally after the UWB core service is instantiated, the pointer to the service is saved
 //! on the calling Java side.
 use jni::objects::{GlobalRef, JObject, JValue};
-use jni::signature::JavaType;
-use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject};
+use jni::signature::ReturnType;
+use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject, jvalue};
 use jni::JNIEnv;
 use log::{debug, error};
 use num_traits::FromPrimitive;
@@ -280,13 +280,14 @@ pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeSe
 pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeSendRawVendorCmd(
     env: JNIEnv,
     obj: JObject,
+    mt: jint,
     gid: jint,
     oid: jint,
     payload: jbyteArray,
 ) -> jobject {
     debug!("Java_com_android_server_uwb_indev_UwbServiceCore_nativeSendRawVendorCmd: enter");
     object_result_helper(
-        send_raw_vendor_cmd(JniContext::new(env, obj), gid, oid, payload),
+        send_raw_vendor_cmd(JniContext::new(env, obj), mt, gid, oid, payload),
         "send_raw_vendor_cmd",
     )
 }
@@ -398,12 +399,14 @@ fn set_country_code(ctx: JniContext, country_code: jbyteArray) -> Result<()> {
 
 fn send_raw_vendor_cmd(
     ctx: JniContext,
+    mt: jint,
     gid: jint,
     oid: jint,
     payload: jbyteArray,
 ) -> Result<jobject> {
     let uwb_service = get_uwb_service(ctx)?;
 
+    let mt = mt as u32;
     let gid = gid as u32;
     let oid = oid as u32;
     let payload = match ctx.env.convert_byte_array(payload) {
@@ -412,8 +415,8 @@ fn send_raw_vendor_cmd(
             return Err(Error::Parse(format!("Failed to convert payload {:?}", err)));
         }
     };
-    let vendor_message = uwb_service.send_vendor_cmd(gid, oid, payload);
-    // TODO(cante): figure out if we send RawVendorMessage back in a callback
+    let vendor_message = uwb_service.raw_uci_cmd(mt, gid, oid, payload);
+    // TODO(cante): figure out if we send RawUciMessage back in a callback
     todo!();
 }
 
@@ -422,7 +425,7 @@ fn get_power_stats(ctx: JniContext) -> Result<jobject> {
 
     let power_stats = uwb_service.android_get_power_stats()?;
     let ps_jni = PowerStatsJni::try_from(PowerStatsWithEnv::new(ctx.env, power_stats))?;
-    Ok(ps_jni.jni_context.obj.into_inner())
+    Ok(ps_jni.jni_context.obj.into_raw())
 }
 
 fn get_uwb_service(ctx: JniContext) -> Result<&mut UwbServiceWrapper> {
@@ -468,8 +471,8 @@ fn get_class_loader_obj(env: &JNIEnv) -> Result<GlobalRef> {
     let class_loader = env.call_method_unchecked(
         uwb_service_core_class,
         get_class_loader_method,
-        JavaType::Object("java/lang/ClassLoader".into()),
-        &[JValue::Void],
+        ReturnType::Object,
+        &[jvalue::from(JValue::Void)],
     )?;
     let class_loader_jobject = class_loader.l()?;
     Ok(env.new_global_ref(class_loader_jobject)?)

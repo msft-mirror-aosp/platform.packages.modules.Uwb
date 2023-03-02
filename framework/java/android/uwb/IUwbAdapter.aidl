@@ -25,6 +25,7 @@ import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 import android.uwb.IUwbVendorUciCallback;
 import android.uwb.IUwbOemExtensionCallback;
+import android.uwb.IOnUwbActivityEnergyInfoListener;
 
 /**
  * @hide
@@ -345,7 +346,22 @@ interface IUwbAdapter {
 
   int removeProfileAdf(in PersistableBundle serviceProfileBundle);
 
-  int sendVendorUciMessage(int gid, int oid, in byte[] payload);
+  int sendVendorUciMessage(int mt, int gid, int oid, in byte[] payload);
+
+  void onRangingRoundsUpdateDtTag(in SessionHandle sessionHandle, in PersistableBundle parameters);
+
+  /**
+   * @hide
+   */
+  void getUwbActivityEnergyInfoAsync(in IOnUwbActivityEnergyInfoListener listener);
+
+  /**
+   * @hide
+   *
+   * Returns the max Application Data payload size that can be sent by the UWBS in one ranging
+   * round.
+   */
+  int queryMaxDataSizeBytes(in SessionHandle sessionHandle);
 
   /**
    * The maximum allowed time to open a ranging session.
@@ -362,4 +378,9 @@ interface IUwbAdapter {
    * closed.
    */
   const int RANGING_SESSION_CLOSE_THRESHOLD_MS = 3000; // Value TBD
+
+  /**
+   * The maximum allowed time to configure ranging rounds update for DT Tag
+   */
+  const int RANGING_ROUNDS_UPDATE_DT_TAG_THRESHOLD_MS = 3000; // Value TBD
 }

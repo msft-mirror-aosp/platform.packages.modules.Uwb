@@ -19,6 +19,7 @@ package com.android.server.uwb;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 import android.annotation.NonNull;
+import android.app.admin.SecurityLog;
 import android.content.AttributionSource;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -29,8 +30,10 @@ import android.os.ParcelFileDescriptor;
 import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.RemoteException;
+import android.os.UserManager;
 import android.provider.Settings;
 import android.util.Log;
+import android.uwb.IOnUwbActivityEnergyInfoListener;
 import android.uwb.IUwbAdapter;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbAdfProvisionStateCallbacks;
@@ -66,6 +69,8 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     private final UwbSettingsStore mUwbSettingsStore;
     private final UwbServiceCore mUwbServiceCore;
 
+    private boolean mUwbUserRestricted;
+
 
     UwbServiceImpl(@NonNull Context context, @NonNull UwbInjector uwbInjector) {
         mContext = context;
@@ -73,6 +78,8 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         mUwbSettingsStore = uwbInjector.getUwbSettingsStore();
         mUwbServiceCore = uwbInjector.getUwbServiceCore();
         registerAirplaneModeReceiver();
+        mUwbUserRestricted = isUwbUserRestricted();
+        registerUserRestrictionsReceiver();
     }
 
     /**
@@ -97,15 +104,22 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             return;
         }
         mUwbSettingsStore.dump(fd, pw, args);
+        pw.println();
         mUwbInjector.getUwbMetrics().dump(fd, pw, args);
+        pw.println();
         mUwbServiceCore.dump(fd, pw, args);
+        pw.println();
+        mUwbInjector.getUwbSessionManager().dump(fd, pw, args);
+        pw.println();
         mUwbInjector.getUwbCountryCode().dump(fd, pw, args);
+        pw.println();
         mUwbInjector.getUwbConfigStore().dump(fd, pw, args);
+        pw.println();
         dumpPowerStats(fd, pw, args);
     }
 
     private void dumpPowerStats(FileDescriptor fd, PrintWriter pw, String[] args) {
-        pw.println("---- powerStats ----");
+        pw.println("---- PowerStats ----");
         try {
             PersistableBundle bundle = getSpecificationInfo(null);
             GenericSpecificationParams params = GenericSpecificationParams.fromBundle(bundle);
@@ -122,11 +136,37 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             pw.println("Exception while getting power stats.");
             e.printStackTrace(pw);
         }
+        pw.println("---- PowerStats ----");
     }
 
     private void enforceUwbPrivilegedPermission() {
         mContext.enforceCallingOrSelfPermission(android.Manifest.permission.UWB_PRIVILEGED,
                 "UwbService");
+    }
+
+    private void onUserRestrictionsChanged() {
+        if (mUwbUserRestricted == isUwbUserRestricted()) {
+            return;
+        }
+
+        Log.i(TAG, "Disallow UWB user restriction changed from " + mUwbUserRestricted + " to "
+                + !mUwbUserRestricted + ".");
+        mUwbUserRestricted = !mUwbUserRestricted;
+        logSecurityUwbUserRestrictionChanged(mUwbUserRestricted);
+
+        try {
+            mUwbServiceCore.setEnabled(isUwbEnabled());
+        } catch (Exception e) {
+            Log.e(TAG, "Unable to set UWB Adapter state.", e);
+        }
+    }
+
+    private void logSecurityUwbUserRestrictionChanged(boolean restricted) {
+        if (restricted) {
+            SecurityLog.writeEvent(SecurityLog.TAG_USER_RESTRICTION_ADDED);
+        } else {
+            SecurityLog.writeEvent(SecurityLog.TAG_USER_RESTRICTION_ADDED);
+        }
     }
 
     @Override
@@ -160,7 +200,6 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         mUwbServiceCore.unregisterAdapterStateCallbacks(adapterStateCallbacks);
     }
 
-    // TODO: Add @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE) after ag/19901449
     @Override
     public void registerOemExtensionCallback(IUwbOemExtensionCallback callbacks)
             throws RemoteException {
@@ -172,7 +211,6 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         mUwbServiceCore.registerOemExtensionCallback(callbacks);
     }
 
-    // TODO: Add @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE) after ag/19901449
     @Override
     public void unregisterOemExtensionCallback(IUwbOemExtensionCallback callbacks)
             throws RemoteException {
@@ -243,11 +281,11 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     @Override
-    public synchronized int sendVendorUciMessage(int gid, int oid, byte[] payload)
+    public synchronized int sendVendorUciMessage(int mt, int gid, int oid, byte[] payload)
             throws RemoteException {
         enforceUwbPrivilegedPermission();
         // TODO(b/237533396): Add a sendVendorUciMessage that takes a chipId parameter
-        return mUwbServiceCore.sendVendorUciMessage(gid, oid, payload, getDefaultChipId());
+        return mUwbServiceCore.sendVendorUciMessage(mt, gid, oid, payload, getDefaultChipId());
     }
 
     @Override
@@ -284,6 +322,25 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     @Override
+    public void onRangingRoundsUpdateDtTag(SessionHandle sessionHandle,
+            PersistableBundle parameters) throws RemoteException {
+        if (!SdkLevel.isAtLeastU()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.rangingRoundsUpdateDtTag(sessionHandle, parameters);
+    }
+
+    @Override
+    public int queryMaxDataSizeBytes(SessionHandle sessionHandle) {
+        if (!SdkLevel.isAtLeastU()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        return mUwbServiceCore.queryMaxDataSizeBytes(sessionHandle);
+    }
+
+    @Override
     public synchronized int getAdapterState() throws RemoteException {
         return mUwbServiceCore.getAdapterState();
     }
@@ -292,7 +349,8 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     public synchronized void setEnabled(boolean enabled) throws RemoteException {
         enforceUwbPrivilegedPermission();
         persistUwbToggleState(enabled);
-        // Shell command from rooted shell, we allow UWB toggle on even if APM mode is on.
+        // Shell command from rooted shell, we allow UWB toggle on even if APM mode and
+        // user restriction are on.
         if (Binder.getCallingUid() == Process.ROOT_UID) {
             mUwbServiceCore.setEnabled(isUwbToggleEnabled());
             return;
@@ -396,7 +454,7 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             @NonNull ParcelFileDescriptor out, @NonNull ParcelFileDescriptor err,
             @NonNull String[] args) {
 
-        UwbShellCommand shellCommand =  mUwbInjector.makeUwbShellCommand(this);
+        UwbShellCommand shellCommand = mUwbInjector.makeUwbShellCommand(this);
         return shellCommand.exec(this, in.getFileDescriptor(), out.getFileDescriptor(),
                 err.getFileDescriptor(), args);
     }
@@ -415,9 +473,25 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
                 Settings.Global.AIRPLANE_MODE_ON, 0) == 1;
     }
 
-    /** Returns true if UWB is enabled - based on UWB and APM toggle */
+    /** Returns true if UWB has user restriction set. */
+    private boolean isUwbUserRestricted() {
+        if (!SdkLevel.isAtLeastU()) {
+            return false; // older platforms did not have a uwb user restriction.
+        }
+        final long ident = Binder.clearCallingIdentity();
+        try {
+            return mUwbInjector.getUserManager().getUserRestrictions().getBoolean(
+                    // Not available on tm-mainline-prod
+                    // UserManager.DISALLOW_ULTRA_WIDEBAND_RADIO);
+                    "no_ultra_wideband_radio");
+        } finally {
+            Binder.restoreCallingIdentity(ident);
+        }
+    }
+
+    /** Returns true if UWB is enabled - based on UWB, APM toggle and user restriction */
     private boolean isUwbEnabled() {
-        return isUwbToggleEnabled() && !isAirplaneModeOn();
+        return isUwbToggleEnabled() && !isAirplaneModeOn() && !isUwbUserRestricted();
     }
 
     private void registerAirplaneModeReceiver() {
@@ -427,6 +501,18 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
                 handleAirplaneModeEvent();
             }
         }, new IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED));
+    }
+
+    private void registerUserRestrictionsReceiver() {
+        mContext.registerReceiver(
+                new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        onUserRestrictionsChanged();
+                    }
+                },
+                new IntentFilter(UserManager.ACTION_USER_RESTRICTIONS_CHANGED)
+        );
     }
 
     private void handleAirplaneModeEvent() {
@@ -462,4 +548,13 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             mUwbInjector.getUwbConfigStore().handleUserUnlock(userId);
         });
     }
+
+    @Override
+    public synchronized void getUwbActivityEnergyInfoAsync(
+            IOnUwbActivityEnergyInfoListener listener) throws RemoteException {
+        Log.i(TAG, "getUwbActivityEnergyInfoAsync uid=" + Binder.getCallingUid());
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.reportUwbActivityEnergyInfo(listener);
+    }
+
 }

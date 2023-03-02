@@ -30,6 +30,7 @@ import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 
 import com.android.server.uwb.UwbSessionManager.UwbSession;
+import com.android.server.uwb.data.UwbDlTDoAMeasurement;
 import com.android.server.uwb.data.UwbOwrAoaMeasurement;
 import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbTwoWayMeasurement;
@@ -40,6 +41,7 @@ import com.android.server.uwb.util.UwbUtil;
 import com.google.uwb.support.base.Params;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccRangingReconfiguredParams;
+import com.google.uwb.support.dltdoa.DlTDoAMeasurement;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.oemextension.RangingReportMetadata;
@@ -67,14 +69,21 @@ public class UwbSessionNotificationManager {
             return;
         }
 
-        RangingReport rangingReport = getRangingReport(rangingData, uwbSession.getProtocolName(),
-                uwbSession.getParams(), mUwbInjector.getElapsedSinceBootNanos());
+        RangingReport rangingReport = null;
+        try {
+            rangingReport = getRangingReport(rangingData, uwbSession.getProtocolName(),
+                    uwbSession.getParams(), mUwbInjector.getElapsedSinceBootNanos(), uwbSession);
+        } catch (Exception e) {
+            Log.e(TAG, "getRangingReport Failed.");
+            e.printStackTrace();
+        }
 
         if (mUwbInjector.getUwbServiceCore().isOemExtensionCbRegistered()) {
             try {
                 rangingReport = mUwbInjector.getUwbServiceCore().getOemExtensionCallback()
                                 .onRangingReportReceived(rangingReport);
             } catch (RemoteException e) {
+                Log.e(TAG, "UwbInjector - onRangingReportReceived : Failed.");
                 e.printStackTrace();
             }
         }
@@ -375,12 +384,29 @@ public class UwbSessionNotificationManager {
         }
     }
 
+    /** Notify the response for Ranging rounds update status for Dt Tag. */
+    public void onRangingRoundsUpdateStatus(
+            UwbSession uwbSession, PersistableBundle parameters) {
+        SessionHandle sessionHandle = uwbSession.getSessionHandle();
+        IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
+        try {
+            uwbRangingCallbacks.onRangingRoundsUpdateDtTagStatus(sessionHandle,
+                    parameters);
+            Log.i(TAG, "IUwbRangingCallbacks - onRangingRoundsUpdateDtTagStatus");
+        } catch (Exception e) {
+            Log.e(TAG, "IUwbRangingCallbacks - onRangingRoundsUpdateDtTagStatus : Failed");
+            e.printStackTrace();
+        }
+    }
+
     private static RangingReport getRangingReport(
             @NonNull UwbRangingData rangingData, String protocolName,
-            Params sessionParams, long elapsedRealtimeNanos) {
+            Params sessionParams, long elapsedRealtimeNanos, UwbSession uwbSession) {
         if (rangingData.getRangingMeasuresType() != UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY
                 && rangingData.getRangingMeasuresType()
-                    != UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA) {
+                    != UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA
+                && rangingData.getRangingMeasuresType()
+                    != UwbUciConstants.RANGING_MEASUREMENT_TYPE_DL_TDOA) {
             return null;
         }
         boolean isAoaAzimuthEnabled = true;
@@ -439,7 +465,7 @@ public class UwbSessionNotificationManager {
             List<RangingMeasurement> rangingMeasurements = new ArrayList<>();
             UwbTwoWayMeasurement[] uwbTwoWayMeasurement = rangingData.getRangingTwoWayMeasures();
             for (int i = 0; i < rangingData.getNoOfRangingMeasures(); ++i) {
-                int rangingStatus = uwbTwoWayMeasurement[i].getRangingStatus();
+                int rangingStatus = uwbTwoWayMeasurement[i].convertStatusCode();
 
                 RangingMeasurement.Builder rangingMeasurementBuilder = buildRangingMeasurement(
                         uwbTwoWayMeasurement[i].getMacAddress(), rangingStatus,
@@ -449,7 +475,7 @@ public class UwbSessionNotificationManager {
                     rangingMeasurementBuilder.setRssiDbm(rssi);
                 }
 
-                if (rangingStatus == FiraParams.STATUS_CODE_OK) {
+                if (uwbTwoWayMeasurement[i].isStatusCodeOk()) {
                     // Distance measurement is mandatory
                     rangingMeasurementBuilder.setDistanceMeasurement(
                             buildDistanceMeasurement(uwbTwoWayMeasurement[i].getDistance()));
@@ -485,6 +511,12 @@ public class UwbSessionNotificationManager {
                 PersistableBundle rangingMeasurementMetadata = new PersistableBundle();
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(rangingMeasurementMetadata);
 
+                UwbAddress addr = UwbAddress.fromBytes(uwbTwoWayMeasurement[i].getMacAddress());
+                UwbControlee controlee = uwbSession.getControlee(addr);
+                if (controlee != null) {
+                    controlee.filterMeasurement(rangingMeasurementBuilder);
+                }
+
                 rangingMeasurements.add(rangingMeasurementBuilder.build());
             }
 
@@ -513,7 +545,71 @@ public class UwbSessionNotificationManager {
                 }
             }
 
+            UwbAddress addr = UwbAddress.fromBytes(uwbOwrAoaMeasurement.getMacAddress());
+            UwbControlee controlee = uwbSession.getControlee(addr);
+            if (controlee != null) {
+                controlee.filterMeasurement(rangingMeasurementBuilder);
+            }
+
             rangingReportBuilder.addMeasurement(rangingMeasurementBuilder.build());
+        } else if (rangingData.getRangingMeasuresType()
+                == UwbUciConstants.RANGING_MEASUREMENT_TYPE_DL_TDOA) {
+            List<RangingMeasurement> rangingMeasurements = new ArrayList<>();
+            UwbDlTDoAMeasurement[] uwbDlTDoAMeasurements = rangingData.getUwbDlTDoAMeasurements();
+            for (int i = 0; i < rangingData.getNoOfRangingMeasures(); ++i) {
+                int rangingStatus = uwbDlTDoAMeasurements[i].getStatus();
+
+                RangingMeasurement.Builder rangingMeasurementBuilder = buildRangingMeasurement(
+                        uwbDlTDoAMeasurements[i].getMacAddress(), rangingStatus,
+                        elapsedRealtimeNanos, uwbDlTDoAMeasurements[i].getNLoS());
+                int rssi = uwbDlTDoAMeasurements[i].getRssi();
+                if (rssi < 0) {
+                    rangingMeasurementBuilder.setRssiDbm(rssi);
+                }
+                if (rangingStatus == FiraParams.STATUS_CODE_OK) {
+                    AngleOfArrivalMeasurement angleOfArrivalMeasurement =
+                            computeAngleOfArrivalMeasurement(
+                                    isAoaAzimuthEnabled, isAoaElevationEnabled,
+                                    uwbDlTDoAMeasurements[i].getAoaAzimuth(),
+                                    uwbDlTDoAMeasurements[i].getAoaAzimuthFom(),
+                                    uwbDlTDoAMeasurements[i].getAoaElevation(),
+                                    uwbDlTDoAMeasurements[i].getAoaElevationFom());
+                    if (angleOfArrivalMeasurement != null) {
+                        rangingMeasurementBuilder.setAngleOfArrivalMeasurement(
+                                angleOfArrivalMeasurement);
+                    }
+                }
+                DlTDoAMeasurement dlTDoAMeasurement = new DlTDoAMeasurement.Builder()
+                        .setMessageType(uwbDlTDoAMeasurements[i].getMessageType())
+                        .setMessageControl(uwbDlTDoAMeasurements[i].getMessageControl())
+                        .setBlockIndex(uwbDlTDoAMeasurements[i].getBlockIndex())
+                        .setNLoS(uwbDlTDoAMeasurements[i].getNLoS())
+                        .setTxTimestamp(uwbDlTDoAMeasurements[i].getTxTimestamp())
+                        .setRxTimestamp(uwbDlTDoAMeasurements[i].getRxTimestamp())
+                        .setAnchorCfo(uwbDlTDoAMeasurements[i].getAnchorCfo())
+                        .setCfo(uwbDlTDoAMeasurements[i].getCfo())
+                        .setInitiatorReplyTime(uwbDlTDoAMeasurements[i].getInitiatorReplyTime())
+                        .setResponderReplyTime(uwbDlTDoAMeasurements[i].getResponderReplyTime())
+                        .setInitiatorResponderTof(uwbDlTDoAMeasurements[i]
+                                .getInitiatorResponderTof())
+                        .setAnchorLocation(uwbDlTDoAMeasurements[i].getAnchorLocation())
+                        .setActiveRangingRounds(uwbDlTDoAMeasurements[i].getActiveRangingRounds())
+                        .setRoundIndex(uwbDlTDoAMeasurements[i].getRoundIndex())
+                        .build();
+
+                rangingMeasurementBuilder.setRangingMeasurementMetadata(
+                        dlTDoAMeasurement.toBundle());
+
+                UwbAddress addr = UwbAddress.fromBytes(uwbDlTDoAMeasurements[i].getMacAddress());
+                UwbControlee controlee = uwbSession.getControlee(addr);
+                if (controlee != null) {
+                    controlee.filterMeasurement(rangingMeasurementBuilder);
+                }
+
+                rangingMeasurements.add(rangingMeasurementBuilder.build());
+            }
+
+            rangingReportBuilder.addMeasurements(rangingMeasurements);
         }
         return rangingReportBuilder.build();
     }

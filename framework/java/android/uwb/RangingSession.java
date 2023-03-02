@@ -26,6 +26,10 @@ import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.util.Log;
 
+import androidx.annotation.RequiresApi;
+
+import com.android.modules.utils.build.SdkLevel;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.concurrent.Executor;
@@ -47,6 +51,9 @@ import java.util.concurrent.Executor;
  */
 @SystemApi
 public final class RangingSession implements AutoCloseable {
+    // TODO: Refer to Build.VERSION_CODES when it's available in every branch.
+    private static final int UPSIDE_DOWN_CAKE = 34;
+
     private final String mTag = "Uwb.RangingSession[" + this + "]";
     private final SessionHandle mSessionHandle;
     private final IUwbAdapter mAdapter;
@@ -101,6 +108,8 @@ public final class RangingSession implements AutoCloseable {
                 REASON_SERVICE_CONNECTION_FAILURE,
                 REASON_SE_NOT_SUPPORTED,
                 REASON_SE_INTERACTION_FAILURE,
+                REASON_INSUFFICIENT_SLOTS_PER_RR,
+                REASON_SYSTEM_REGULATION,
         })
         @interface Reason {}
 
@@ -173,6 +182,20 @@ public final class RangingSession implements AutoCloseable {
          * SE interactions failed.
          */
         int REASON_SE_INTERACTION_FAILURE = 13;
+
+        /**
+         * Indicate insufficient slots per ranging round.
+         * @hide
+         */
+        int REASON_INSUFFICIENT_SLOTS_PER_RR = 14;
+
+        /**
+         * @hide
+         *
+         * Indicate that a system regulation caused the change, such as no allowed UWB channels in
+         * the country.
+         */
+        int REASON_SYSTEM_REGULATION = 15;
 
         /**
          * @hide
@@ -417,6 +440,15 @@ public final class RangingSession implements AutoCloseable {
          * @param parameters protocol specific params for connected service.
          */
         default void onServiceConnected(@NonNull PersistableBundle parameters) {}
+
+        /**
+         * @hide
+         * Invoked when a response/status is received for active ranging rounds update
+         *
+         * @param parameters bundle of ranging rounds update status
+         */
+        @RequiresApi(UPSIDE_DOWN_CAKE)
+        default void onRangingRoundsUpdateDtTagStatus(@NonNull PersistableBundle parameters) {}
     }
 
     /**
@@ -722,6 +754,52 @@ public final class RangingSession implements AutoCloseable {
         Log.v(mTag, "sendData - sessionHandle: " + mSessionHandle);
         try {
             mAdapter.sendData(mSessionHandle, remoteDeviceAddress, params, data);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * @hide
+     * Update active ranging rounds for DT Tag
+     *
+     * <p> On successfully sending the command,
+     * {@link RangingSession.Callback#onRangingRoundsUpdateDtTag(PersistableBundle)}
+     * is invoked
+     * @param params Parameters to configure active ranging rounds
+     */
+    @RequiresApi(UPSIDE_DOWN_CAKE)
+    @RequiresPermission(Manifest.permission.UWB_PRIVILEGED)
+    public void onRangingRoundsUpdateDtTag(@NonNull PersistableBundle params) {
+        if (mState != State.ACTIVE) {
+            throw new IllegalStateException();
+        }
+
+        Log.v(mTag, "onRangingRoundsUpdateDtTag - sessionHandle: " + mSessionHandle);
+        try {
+            mAdapter.onRangingRoundsUpdateDtTag(mSessionHandle, params);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * @hide
+     *
+     * Query max application data size which can be sent by UWBS in one ranging round.
+     *
+     * @return max application data size
+     */
+    @RequiresApi(UPSIDE_DOWN_CAKE)
+    @RequiresPermission(Manifest.permission.UWB_PRIVILEGED)
+    public int queryMaxDataSizeBytes() {
+        if (mState != State.ACTIVE) {
+            throw new IllegalStateException();
+        }
+
+        Log.v(mTag, "QueryMaxDataSizeBytes - sessionHandle: " + mSessionHandle);
+        try {
+            return mAdapter.queryMaxDataSizeBytes(mSessionHandle);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
@@ -1051,6 +1129,21 @@ public final class RangingSession implements AutoCloseable {
 
         Log.v(mTag, "onServiceConnected - sessionHandle: " + mSessionHandle);
         executeCallback(() -> mCallback.onServiceConnected(params));
+    }
+
+    /**
+     * @hide
+     */
+    public void onRangingRoundsUpdateDtTagStatus(@NonNull PersistableBundle params) {
+        if (!isOpen()) {
+            Log.w(mTag, "onDlTDoARangingRoundsUpdateStatus invoked for non-open session");
+            return;
+        }
+
+        Log.v(mTag, "onDlTDoARangingRoundsUpdateStatus - sessionHandle: " + mSessionHandle);
+        if (SdkLevel.isAtLeastU()) {
+            executeCallback(() -> mCallback.onRangingRoundsUpdateDtTagStatus(params));
+        }
     }
 
     /**
