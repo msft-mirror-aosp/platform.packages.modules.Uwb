@@ -45,6 +45,7 @@ import com.google.uwb.support.oemextension.RangingReportMetadata;
 public class UwbTestUtils {
     public static final int TEST_SESSION_ID = 7;
     public static final int TEST_SESSION_ID_2 = 8;
+    public static final byte TEST_SESSION_TYPE = FiraParams.SESSION_TYPE_RANGING;
     public static final byte[] PEER_SHORT_MAC_ADDRESS = {0x35, 0x37};
     public static final long PEER_SHORT_MAC_ADDRESS_LONG = 0x3735L;
     public static final byte[] PEER_EXTENDED_SHORT_MAC_ADDRESS =
@@ -66,6 +67,7 @@ public class UwbTestUtils {
     public static final PersistableBundle PERSISTABLE_BUNDLE = new PersistableBundle();
     public static final byte[] DATA_PAYLOAD = new byte[] {0x13, 0x15, 0x18};
     public static final int RANGING_MEASUREMENT_TYPE_UNDEFINED = 0; // RFU in spec
+    public static final int MAX_DATA_SIZE = 100;
 
     private static final byte[] TEST_RAW_NTF_DATA = {0x10, 0x01, 0x05};
     private static final long TEST_SEQ_COUNTER = 5;
@@ -78,6 +80,7 @@ public class UwbTestUtils {
     private static final int TEST_DISTANCE = 101;
     private static final float TEST_AOA_AZIMUTH = 67;
     private static final int TEST_AOA_AZIMUTH_FOM = 50;
+    private static final int TEST_BAD_AOA_AZIMUTH_FOM = 150;
     private static final float TEST_AOA_ELEVATION = 37;
     private static final int TEST_AOA_ELEVATION_FOM = 90;
     private static final float TEST_AOA_DEST_AZIMUTH = 67;
@@ -92,8 +95,8 @@ public class UwbTestUtils {
     private static final int TEST_BLOCK_INDEX = 5;
     private static final int TEST_ROUND_INDEX = 1;
     private static final long TEST_TIMESTAMP = 500_000L;
-    private static final int TEST_ANCHOR_CFO = 100;
-    private static final int TEST_CFO = 200;
+    private static final float TEST_ANCHOR_CFO = 100.0f;
+    private static final float TEST_CFO = 200.50f;
     private static final long TEST_INTIATOR_REPLY_TIME = 500_000L;
     private static final long TEST_RESPONDER_REPLY_TIME = 300_000L;
     private static final int TEST_INITIATOR_RESPONDER_TOF = 500;
@@ -160,6 +163,21 @@ public class UwbTestUtils {
                 TEST_RAW_NTF_DATA);
     }
 
+    /** Generate an OWR ranging data with a bad AoA Azimuth FOM */
+    public static UwbRangingData generateBadOwrAoaMeasurementRangingData(
+            int macAddressingMode, byte[] macAddress) {
+        final int noOfRangingMeasures = 1;
+        final UwbOwrAoaMeasurement uwbOwrAoaMeasurement  = new UwbOwrAoaMeasurement(
+                macAddress, TEST_STATUS, TEST_LOS,
+                TEST_FRAME_SEQUENCE_NUMBER, TEST_BLOCK_IDX,
+                convertFloatToQFormat(TEST_AOA_AZIMUTH, 9, 7), TEST_BAD_AOA_AZIMUTH_FOM,
+                convertFloatToQFormat(TEST_AOA_ELEVATION, 9, 7), TEST_AOA_ELEVATION_FOM);
+        return new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
+                TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, RANGING_MEASUREMENT_TYPE_OWR_AOA,
+                macAddressingMode, noOfRangingMeasures, uwbOwrAoaMeasurement,
+                TEST_RAW_NTF_DATA);
+    }
+
     private static UwbRangingData generateDlTDoAMeasurementRangingData(
             int macAddressingMode, int rangingStatus) {
         final int noOfRangingMeasures = 1;
@@ -171,9 +189,11 @@ public class UwbTestUtils {
                 TEST_MESSAGE_TYPE, TEST_MESSAGE_CONTROL, TEST_BLOCK_INDEX, TEST_ROUND_INDEX,
                 TEST_LOS, convertFloatToQFormat(TEST_AOA_AZIMUTH, 9, 7),
                 TEST_AOA_AZIMUTH_FOM, convertFloatToQFormat(TEST_AOA_ELEVATION, 9, 7),
-                TEST_AOA_ELEVATION_FOM, TEST_RSSI, TEST_TIMESTAMP, TEST_TIMESTAMP, TEST_ANCHOR_CFO,
-                TEST_CFO, TEST_INTIATOR_REPLY_TIME, TEST_RESPONDER_REPLY_TIME,
-                TEST_INITIATOR_RESPONDER_TOF, TEST_ANCHOR_LOCATION, TEST_ACTIVE_RANGING_ROUNDS);
+                TEST_AOA_ELEVATION_FOM, TEST_RSSI, TEST_TIMESTAMP, TEST_TIMESTAMP,
+                convertFloatToQFormat(TEST_ANCHOR_CFO, 5, 11),
+                convertFloatToQFormat(TEST_CFO, 5, 11), TEST_INTIATOR_REPLY_TIME,
+                TEST_RESPONDER_REPLY_TIME, TEST_INITIATOR_RESPONDER_TOF, TEST_ANCHOR_LOCATION,
+                TEST_ACTIVE_RANGING_ROUNDS);
 
         return new UwbRangingData(TEST_SEQ_COUNTER, TEST_SESSION_ID,
                 TEST_RCR_INDICATION, TEST_CURR_RANGING_INTERVAL, RANGING_MEASUREMENT_TYPE_DL_TDOA,
@@ -299,6 +319,7 @@ public class UwbTestUtils {
                     .setInitiatorResponderTof(TEST_INITIATOR_RESPONDER_TOF)
                     .setAnchorLocation(TEST_ANCHOR_LOCATION)
                     .setActiveRangingRounds(TEST_ACTIVE_RANGING_ROUNDS)
+                    .setRoundIndex(TEST_ROUND_INDEX)
                     .build();
             rangingMeasurementBuilder.setRangingMeasurementMetadata(dlTDoAMeasurement.toBundle());
         }
