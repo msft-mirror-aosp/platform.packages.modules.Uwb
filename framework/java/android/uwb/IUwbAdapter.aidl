@@ -25,6 +25,7 @@ import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 import android.uwb.IUwbVendorUciCallback;
 import android.uwb.IUwbOemExtensionCallback;
+import android.uwb.IOnUwbActivityEnergyInfoListener;
 
 /**
  * @hide
@@ -348,6 +349,19 @@ interface IUwbAdapter {
   int sendVendorUciMessage(int mt, int gid, int oid, in byte[] payload);
 
   void updateRangingRoundsDtTag(in SessionHandle sessionHandle, in PersistableBundle parameters);
+
+  /**
+   * @hide
+   */
+  void getUwbActivityEnergyInfoAsync(in IOnUwbActivityEnergyInfoListener listener);
+
+  /**
+   * @hide
+   *
+   * Returns the max Application Data payload size that can be sent by the UWBS in one ranging
+   * round.
+   */
+  int queryMaxDataSizeBytes(in SessionHandle sessionHandle);
 
   /**
    * The maximum allowed time to open a ranging session.
