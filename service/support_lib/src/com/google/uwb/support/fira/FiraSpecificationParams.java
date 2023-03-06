@@ -471,7 +471,7 @@ public class FiraSpecificationParams extends FiraParams {
                 .hasNonDeferredModeSupport(bundle.getBoolean(KEY_NON_DEFERRED_MODE_SUPPORT))
                 .hasInitiationTimeSupport(bundle.getBoolean(KEY_INITIATION_TIME_SUPPORT))
                 .setMinRangingIntervalSupported(bundle.getInt(KEY_MIN_RANGING_INTERVAL, -1))
-                .setMinSlotDurationSupported(bundle.getInt(KEY_MIN_SLOT_DURATION, -1))
+                .setMinSlotDurationSupportedUs(bundle.getInt(KEY_MIN_SLOT_DURATION, -1))
                 .setMultiNodeCapabilities(
                         FlagEnum.toEnumSet(
                                 bundle.getInt(KEY_MULTI_NODE_CAPABILITIES),
@@ -544,7 +544,7 @@ public class FiraSpecificationParams extends FiraParams {
         private FiraProtocolVersion mMinMacVersionSupported = new FiraProtocolVersion(1, 1);
         private FiraProtocolVersion mMaxMacVersionSupported = new FiraProtocolVersion(1, 1);
 
-        private List<Integer> mSupportedChannels;
+        private List<Integer> mSupportedChannels = new ArrayList<>();
 
         private final EnumSet<AoaCapabilityFlag> mAoaCapabilities =
                 EnumSet.noneOf(AoaCapabilityFlag.class);
@@ -727,11 +727,11 @@ public class FiraSpecificationParams extends FiraParams {
         }
 
         /**
-         * Set minimum supported slot duration
-         * @param value : minimum slot duration supported
+         * Set minimum supported slot duration in microsecond
+         * @param value : minimum slot duration supported in microsecond
          * @return FiraSpecificationParams builder
          */
-        public FiraSpecificationParams.Builder setMinSlotDurationSupported(int value) {
+        public FiraSpecificationParams.Builder setMinSlotDurationSupportedUs(int value) {
             mMinSlotDuration = value;
             return this;
         }
@@ -845,10 +845,6 @@ public class FiraSpecificationParams extends FiraParams {
         }
 
         public FiraSpecificationParams build() {
-            if (mSupportedChannels == null || mSupportedChannels.size() == 0) {
-                throw new IllegalStateException("Supported channels are not set");
-            }
-
             return new FiraSpecificationParams(
                     mMinPhyVersionSupported,
                     mMaxPhyVersionSupported,

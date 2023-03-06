@@ -17,6 +17,8 @@
 package com.android.server.uwb;
 
 
+import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
+
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.ccc.CccParams.CHAPS_PER_SLOT_3;
 import static com.google.uwb.support.ccc.CccParams.HOPPING_CONFIG_MODE_NONE;
@@ -31,6 +33,7 @@ import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABL
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_RESPONDER;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLLER;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE;
+import static com.google.uwb.support.fira.FiraParams.SESSION_TYPE_RANGING;
 
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,6 +63,7 @@ import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
 import android.util.Pair;
 import android.uwb.AdapterState;
+import android.uwb.IOnUwbActivityEnergyInfoListener;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbRangingCallbacks;
 import android.uwb.IUwbVendorUciCallback;
@@ -130,6 +134,7 @@ public class UwbServiceCoreTest {
     private static final String TEST_PACKAGE_NAME = "com.android.uwb";
     private static final String TEST_DEFAULT_CHIP_ID = "default";
     private static final String TEST_CHIP_ONE_CHIP_ID = "chipIdString1";
+
     private static final AttributionSource TEST_ATTRIBUTION_SOURCE =
             new AttributionSource.Builder(TEST_UID)
                     .setPackageName(TEST_PACKAGE_NAME)
@@ -138,6 +143,7 @@ public class UwbServiceCoreTest {
             new FiraOpenSessionParams.Builder()
                     .setProtocolVersion(FiraParams.PROTOCOL_VERSION_1_1)
                     .setSessionId(1)
+                    .setSessionType(SESSION_TYPE_RANGING)
                     .setDeviceType(RANGING_DEVICE_TYPE_CONTROLLER)
                     .setDeviceRole(RANGING_DEVICE_ROLE_RESPONDER)
                     .setDeviceAddress(UwbAddress.fromBytes(new byte[] { 0x4, 0x6}))
@@ -553,9 +559,7 @@ public class UwbServiceCoreTest {
 
         verify(mNativeUwbManager).doInitialize();
         verify(mUwbCountryCode).setCountryCode(anyBoolean());
-        // TODO(b/244443764): This currently results in two onAdapterStateChanged() calls, due to
-        // both the enableInternal() and onCountryCode() callback enqueuing a notify message.
-        verify(cb, times(2)).onAdapterStateChanged(
+        verify(cb).onAdapterStateChanged(
                 UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE,
                 StateChangeReason.SYSTEM_POLICY);
 
@@ -626,7 +630,8 @@ public class UwbServiceCoreTest {
 
         verify(mUwbSessionManager).initSession(
                 eq(attributionSource),
-                eq(sessionHandle), eq(params.getSessionId()), eq(FiraParams.PROTOCOL_NAME),
+                eq(sessionHandle), eq(params.getSessionId()), eq((byte) params.getSessionType()),
+                eq(FiraParams.PROTOCOL_NAME),
                 argThat(p -> ((FiraOpenSessionParams) p).getSessionId() == params.getSessionId()),
                 eq(cb), eq(TEST_DEFAULT_CHIP_ID));
 
@@ -645,7 +650,8 @@ public class UwbServiceCoreTest {
 
         verify(mUwbSessionManager).initSession(
                 eq(attributionSource),
-                eq(sessionHandle), eq(params.getSessionId()), eq(CccParams.PROTOCOL_NAME),
+                eq(sessionHandle), eq(params.getSessionId()), eq((byte) params.getSessionType()),
+                eq(CccParams.PROTOCOL_NAME),
                 argThat(p -> ((CccOpenRangingParams) p).getSessionId() == params.getSessionId()),
                 eq(cb), eq(TEST_DEFAULT_CHIP_ID));
     }
@@ -962,6 +968,17 @@ public class UwbServiceCoreTest {
     }
 
     @Test
+    public void testQueryDataSize() throws Exception {
+        enableUwbWithCountryCode();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+
+        when(mUwbSessionManager.queryMaxDataSizeBytes(any())).thenReturn(MAX_DATA_SIZE);
+        mUwbServiceCore.queryMaxDataSizeBytes(sessionHandle);
+        verify(mUwbSessionManager).queryMaxDataSizeBytes(eq(sessionHandle));
+    }
+
+    @Test
     public void testDeviceStateCallback() throws Exception {
         IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
         when(cb.asBinder()).thenReturn(mock(IBinder.class));
@@ -1106,6 +1123,16 @@ public class UwbServiceCoreTest {
         byte[] payload = new byte[0];
         mUwbServiceCore.onVendorUciNotificationReceived(gid, oid, payload);
         verify(vendorCb).onVendorNotificationReceived(gid, oid, payload);
+    }
+
+    @Test
+    public void testReportUwbActivityEnergyInfo() throws Exception {
+        enableUwbWithCountryCode();
+
+        IOnUwbActivityEnergyInfoListener listener = mock(IOnUwbActivityEnergyInfoListener.class);
+        mUwbServiceCore.reportUwbActivityEnergyInfo(listener);
+        mTestLooper.dispatchAll();
+        verify(listener).onUwbActivityEnergyInfo(any());
     }
 
     public CccSpecificationParams getTestCccSpecificationParams() {
