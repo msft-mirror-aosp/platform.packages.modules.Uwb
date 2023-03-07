@@ -91,8 +91,8 @@ public class RangingControllerTest {
             return true;
         }).when(mBackendCallbackExecutor).execute(any(Runnable.class));
 
-        RangingParameters rangingParameters = new RangingParameters(CONFIG_ID_2, 1,
-                new byte[]{1, 2}, mComplexChannel,
+        RangingParameters rangingParameters = new RangingParameters(CONFIG_ID_2, 1, 0,
+                new byte[]{1, 2}, new byte[]{1, 2}, mComplexChannel,
                 new ArrayList<>(List.of(UwbAddress.getRandomizedShortAddress())), INFREQUENT);
         mRangingController = new RangingController(
                 mUwbManager, getExecutor(), mOpAsyncCallbackRunner);
@@ -111,6 +111,14 @@ public class RangingControllerTest {
         UwbComplexChannel channel = mRangingController.getComplexChannel();
         assertEquals(channel.getChannel(), Utils.channelForTesting);
         assertEquals(channel.getPreambleIndex(), Utils.preambleIndexForTesting);
+    }
+
+    @Test
+    public void testSetComplexChannel() {
+        UwbComplexChannel complexChannel = new UwbComplexChannel(9, 10);
+        mRangingController.setComplexChannel(complexChannel);
+        assertEquals(complexChannel.getChannel(), 9);
+        assertEquals(complexChannel.getPreambleIndex(), 10);
     }
 
     @Test
