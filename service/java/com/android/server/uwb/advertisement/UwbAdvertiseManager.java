@@ -33,7 +33,7 @@ public class UwbAdvertiseManager {
     private final ConcurrentHashMap<Long, UwbAdvertiseTarget> mAdvertiseTargetMap =
             new ConcurrentHashMap<>();
 
-    // TODO(b/246678053): Use overlays to allow OEMs to modify these values.
+    // TODO(b/269770342): Use overlays to allow OEMs to modify these values.
     @VisibleForTesting public static final int CRITERIA_ANGLE = 10;
     @VisibleForTesting public static final int TIME_THRESHOLD = 5000;
     @VisibleForTesting public static final int SIZE_OF_ARRAY_TO_CHECK = 10;
@@ -85,8 +85,7 @@ public class UwbAdvertiseManager {
     /**
      * Remove all the stored AdvertiseTarget data for the given device.
      */
-    public void removeAdvertiseTarget(byte[] macAddressBytes) {
-        long macAddress = macAddressByteArrayToLong(macAddressBytes);
+    public void removeAdvertiseTarget(long macAddress) {
         mAdvertiseTargetMap.remove(macAddress);
     }
 
@@ -113,7 +112,7 @@ public class UwbAdvertiseManager {
         }
 
         if (!isWithinTimeThreshold(uwbAdvertiseTarget)) {
-            removeAdvertiseTarget(macAddressBytes);
+            removeAdvertiseTarget(macAddress);
         }
     }
 

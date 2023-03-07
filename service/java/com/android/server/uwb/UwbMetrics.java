@@ -15,6 +15,7 @@
  */
 package com.android.server.uwb;
 
+import android.content.AttributionSource;
 import android.util.SparseArray;
 
 import com.android.server.uwb.UwbSessionManager.UwbSession;
@@ -62,7 +63,7 @@ public class UwbMetrics {
     public class RangingSessionStats {
         private int mSessionId;
         private int mChannel = 9;
-        private long mStartTimeWallClockMs;
+        private long mInitTimeWallClockMs;
         private long mStartTimeSinceBootMs;
         private int mInitLatencyMs;
         private int mInitStatus;
@@ -79,10 +80,12 @@ public class UwbMetrics {
         private boolean mIsController;
         private boolean mIsDiscoveredByFramework = false;
         private boolean mIsOutOfBand = true;
+        private AttributionSource mAttributionSource;
 
-        RangingSessionStats(int sessionId) {
+        RangingSessionStats(int sessionId, AttributionSource attributionSource) {
             mSessionId = sessionId;
-            mStartTimeWallClockMs = mUwbInjector.getWallClockMillis();
+            mInitTimeWallClockMs = mUwbInjector.getWallClockMillis();
+            mAttributionSource = attributionSource;
         }
 
         /**
@@ -173,11 +176,11 @@ public class UwbMetrics {
         @Override
         public String toString() {
             StringBuilder sb = new StringBuilder();
-            sb.append("rangingStartTime=");
+            sb.append("initTime=");
             Calendar c = Calendar.getInstance();
             synchronized (mLock) {
-                c.setTimeInMillis(mStartTimeWallClockMs);
-                sb.append(mStartTimeWallClockMs == 0 ? "            <null>" :
+                c.setTimeInMillis(mInitTimeWallClockMs);
+                sb.append(mInitTimeWallClockMs == 0 ? "            <null>" :
                         String.format("%tm-%td %tH:%tM:%tS.%tL", c, c, c, c, c, c));
                 sb.append(", sessionId=").append(mSessionId);
                 sb.append(", initLatencyMs=").append(mInitLatencyMs);
@@ -192,6 +195,8 @@ public class UwbMetrics {
                 sb.append(", initiator=").append(mIsInitiator);
                 sb.append(", controller=").append(mIsController);
                 sb.append(", discoveredByFramework=").append(mIsDiscoveredByFramework);
+                sb.append(", uid=").append(mAttributionSource.getUid());
+                sb.append(", packageName=").append(mAttributionSource.getPackageName());
                 return sb.toString();
             }
         }
@@ -257,7 +262,8 @@ public class UwbMetrics {
             while (mRangingSessionList.size() >= MAX_RANGING_SESSIONS) {
                 mRangingSessionList.removeFirst();
             }
-            RangingSessionStats session = new RangingSessionStats(uwbSession.getSessionId());
+            RangingSessionStats session = new RangingSessionStats(uwbSession.getSessionId(),
+                    uwbSession.getAttributionSource());
             session.parseParams(uwbSession.getParams());
             session.convertInitStatus(status);
             mRangingSessionList.add(session);
@@ -266,7 +272,8 @@ public class UwbMetrics {
                     session.mStsType, session.mIsInitiator,
                     session.mIsController, session.mIsDiscoveredByFramework, session.mIsOutOfBand,
                     session.mChannel, session.mInitStatus,
-                    session.mInitLatencyMs, session.mInitLatencyMs / 20);
+                    session.mInitLatencyMs, session.mInitLatencyMs / 20,
+                    uwbSession.getAttributionSource().getUid());
         }
     }
 
@@ -280,18 +287,18 @@ public class UwbMetrics {
                 return;
             }
             session.mStartCount++;
+            session.convertRangingStatus(status);
+            UwbStatsLog.write(UwbStatsLog.UWB_RANGING_START, uwbSession.getProfileType(),
+                    session.mStsType, session.mIsInitiator,
+                    session.mIsController, session.mIsDiscoveredByFramework, session.mIsOutOfBand,
+                    session.mRangingStatus);
             if (status != UwbUciConstants.STATUS_CODE_OK) {
                 session.mStartFailureCount++;
                 session.mStartTimeSinceBootMs = 0;
                 session.mHasValidRangingSinceStart = false;
                 return;
             }
-            session.convertRangingStatus(status);
             session.mStartTimeSinceBootMs = mUwbInjector.getElapsedSinceBootMillis();
-            UwbStatsLog.write(UwbStatsLog.UWB_RANGING_START, uwbSession.getProfileType(),
-                    session.mStsType, session.mIsInitiator,
-                    session.mIsController, session.mIsDiscoveredByFramework, session.mIsOutOfBand,
-                    session.mRangingStatus);
         }
     }
 
@@ -526,24 +533,25 @@ public class UwbMetrics {
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         synchronized (mLock) {
             pw.println("---- Dump of UwbMetrics ----");
-            pw.println("---- mRangingSessionList ----");
+            pw.println("-- mRangingSessionList --");
             for (RangingSessionStats stats: mRangingSessionList) {
                 pw.println(stats.toString());
             }
-            pw.println("---- mOpenedSessionMap ----");
+            pw.println("-- mOpenedSessionMap --");
             for (int i = 0; i < mOpenedSessionMap.size(); i++) {
                 pw.println(mOpenedSessionMap.valueAt(i).toString());
             }
-            pw.println("---- mRangingReportList ----");
+            pw.println("-- mRangingReportList --");
             for (RangingReportEvent event: mRangingReportList) {
                 pw.println(event.toString());
             }
             pw.println("mNumApps=" + mNumApps);
-            pw.println("---- Device operation success/error count ----");
+            pw.println("-- Device operation success/error count --");
             pw.println("mNumDeviceInitSuccess = " + mNumDeviceInitSuccess);
             pw.println("mNumDeviceInitFailure = " + mNumDeviceInitFailure);
             pw.println("mNumDeviceStatusError = " + mNumDeviceStatusError);
             pw.println("mNumUciGenericError = " + mNumUciGenericError);
+            pw.println("---- Dump of UwbMetrics ----");
         }
     }
 }

@@ -33,6 +33,7 @@ import android.os.RemoteException;
 import android.os.UserManager;
 import android.provider.Settings;
 import android.util.Log;
+import android.uwb.IOnUwbActivityEnergyInfoListener;
 import android.uwb.IUwbAdapter;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbAdfProvisionStateCallbacks;
@@ -103,15 +104,22 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             return;
         }
         mUwbSettingsStore.dump(fd, pw, args);
+        pw.println();
         mUwbInjector.getUwbMetrics().dump(fd, pw, args);
+        pw.println();
         mUwbServiceCore.dump(fd, pw, args);
+        pw.println();
+        mUwbInjector.getUwbSessionManager().dump(fd, pw, args);
+        pw.println();
         mUwbInjector.getUwbCountryCode().dump(fd, pw, args);
+        pw.println();
         mUwbInjector.getUwbConfigStore().dump(fd, pw, args);
+        pw.println();
         dumpPowerStats(fd, pw, args);
     }
 
     private void dumpPowerStats(FileDescriptor fd, PrintWriter pw, String[] args) {
-        pw.println("---- powerStats ----");
+        pw.println("---- PowerStats ----");
         try {
             PersistableBundle bundle = getSpecificationInfo(null);
             GenericSpecificationParams params = GenericSpecificationParams.fromBundle(bundle);
@@ -128,6 +136,7 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             pw.println("Exception while getting power stats.");
             e.printStackTrace(pw);
         }
+        pw.println("---- PowerStats ----");
     }
 
     private void enforceUwbPrivilegedPermission() {
@@ -272,11 +281,11 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     @Override
-    public synchronized int sendVendorUciMessage(int gid, int oid, byte[] payload)
+    public synchronized int sendVendorUciMessage(int mt, int gid, int oid, byte[] payload)
             throws RemoteException {
         enforceUwbPrivilegedPermission();
         // TODO(b/237533396): Add a sendVendorUciMessage that takes a chipId parameter
-        return mUwbServiceCore.sendVendorUciMessage(gid, oid, payload, getDefaultChipId());
+        return mUwbServiceCore.sendVendorUciMessage(mt, gid, oid, payload, getDefaultChipId());
     }
 
     @Override
@@ -320,6 +329,15 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         }
         enforceUwbPrivilegedPermission();
         mUwbServiceCore.rangingRoundsUpdateDtTag(sessionHandle, parameters);
+    }
+
+    @Override
+    public int queryMaxDataSizeBytes(SessionHandle sessionHandle) {
+        if (!SdkLevel.isAtLeastU()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        return mUwbServiceCore.queryMaxDataSizeBytes(sessionHandle);
     }
 
     @Override
@@ -530,4 +548,13 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             mUwbInjector.getUwbConfigStore().handleUserUnlock(userId);
         });
     }
+
+    @Override
+    public synchronized void getUwbActivityEnergyInfoAsync(
+            IOnUwbActivityEnergyInfoListener listener) throws RemoteException {
+        Log.i(TAG, "getUwbActivityEnergyInfoAsync uid=" + Binder.getCallingUid());
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.reportUwbActivityEnergyInfo(listener);
+    }
+
 }
