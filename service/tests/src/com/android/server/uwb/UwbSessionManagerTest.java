@@ -21,6 +21,7 @@ import static android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREG
 
 import static com.android.server.uwb.UwbSessionManager.SESSION_OPEN_RANGING;
 import static com.android.server.uwb.UwbTestUtils.DATA_PAYLOAD;
+import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
 import static com.android.server.uwb.UwbTestUtils.PEER_BAD_MAC_ADDRESS;
 import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_MAC_ADDRESS;
 import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_MAC_ADDRESS_2;
@@ -749,7 +750,8 @@ public class UwbSessionManagerTest {
     @Test
     public void onSessionStatusNotificationReceived_max_retry() {
         UwbSession mockUwbSession = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mockUwbSession);
+        when(mockUwbSession.getSessionId()).thenReturn(TEST_SESSION_ID);
+        mUwbSessionManager.mSessionTable.put(mock(SessionHandle.class), mockUwbSession);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
         when(mockUwbSession.getSessionState()).thenReturn(UwbUciConstants.UWB_SESSION_STATE_ACTIVE);
 
@@ -768,7 +770,8 @@ public class UwbSessionManagerTest {
     @Test
     public void onSessionStatusNotificationReceived_session_mgmt_cmds() {
         UwbSession mockUwbSession = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mockUwbSession);
+        when(mockUwbSession.getSessionId()).thenReturn(TEST_SESSION_ID);
+        mUwbSessionManager.mSessionTable.put(mock(SessionHandle.class), mockUwbSession);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
         when(mockUwbSession.getSessionState()).thenReturn(UwbUciConstants.UWB_SESSION_STATE_ACTIVE);
 
@@ -1042,18 +1045,20 @@ public class UwbSessionManagerTest {
 
     @Test
     public void getUwbSession_success() {
-        UwbSession expectedUwbSession = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, expectedUwbSession);
+        UwbSession mockUwbSession = mock(UwbSession.class);
+        when(mockUwbSession.getSessionId()).thenReturn(TEST_SESSION_ID);
+        mUwbSessionManager.mSessionTable.put(mock(SessionHandle.class), mockUwbSession);
 
         UwbSession actualUwbSession = mUwbSessionManager.getUwbSession(TEST_SESSION_ID);
 
-        assertThat(actualUwbSession).isEqualTo(expectedUwbSession);
+        assertThat(actualUwbSession).isEqualTo(mockUwbSession);
     }
 
     @Test
     public void getUwbSession_failed() {
         UwbSession mockUwbSession = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mockUwbSession);
+        when(mockUwbSession.getSessionId()).thenReturn(TEST_SESSION_ID);
+        mUwbSessionManager.mSessionTable.put(mock(SessionHandle.class), mockUwbSession);
 
         UwbSession actualUwbSession = mUwbSessionManager.getUwbSession(TEST_SESSION_ID - 1);
 
@@ -1063,8 +1068,9 @@ public class UwbSessionManagerTest {
     @Test
     public void getSessionId_success() {
         UwbSession mockUwbSession = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mockUwbSession);
+        when(mockUwbSession.getSessionId()).thenReturn(TEST_SESSION_ID);
         SessionHandle mockSessionHandle = mock(SessionHandle.class);
+        mUwbSessionManager.mSessionTable.put(mockSessionHandle, mockUwbSession);
         when(mockUwbSession.getSessionHandle()).thenReturn(mockSessionHandle);
 
         int actualSessionId = mUwbSessionManager.getSessionId(mockSessionHandle);
@@ -1075,8 +1081,9 @@ public class UwbSessionManagerTest {
     @Test
     public void getSessionId_failed() {
         UwbSession mockUwbSession = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mockUwbSession);
+        when(mockUwbSession.getSessionId()).thenReturn(TEST_SESSION_ID);
         SessionHandle mockSessionHandle = mock(SessionHandle.class);
+        mUwbSessionManager.mSessionTable.put(mockSessionHandle, mockUwbSession);
         when(mockUwbSession.getSessionHandle()).thenReturn(mockSessionHandle);
 
         Integer actualSessionId = mUwbSessionManager.getSessionId(mock(SessionHandle.class));
@@ -1104,7 +1111,9 @@ public class UwbSessionManagerTest {
 
     @Test
     public void isExistedSession_sessionId_success() {
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mock(UwbSession.class));
+        UwbSession mockUwbSession = mock(UwbSession.class);
+        when(mockUwbSession.getSessionId()).thenReturn(TEST_SESSION_ID);
+        mUwbSessionManager.mSessionTable.put(mock(SessionHandle.class), mockUwbSession);
 
         boolean result = mUwbSessionManager.isExistedSession(TEST_SESSION_ID);
 
@@ -1121,11 +1130,15 @@ public class UwbSessionManagerTest {
     @Test
     public void stopAllRanging() {
         UwbSession mockUwbSession1 = mock(UwbSession.class);
+        when(mockUwbSession1.getSessionId()).thenReturn(TEST_SESSION_ID);
         when(mockUwbSession1.getChipId()).thenReturn(TEST_CHIP_ID);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mockUwbSession1);
+        mUwbSessionManager.mSessionTable.put(mock(SessionHandle.class), mockUwbSession1);
+
         UwbSession mockUwbSession2 = mock(UwbSession.class);
+        when(mockUwbSession2.getSessionId()).thenReturn(TEST_SESSION_ID + 100);
         when(mockUwbSession2.getChipId()).thenReturn(TEST_CHIP_ID);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID + 100, mockUwbSession2);
+        mUwbSessionManager.mSessionTable.put(mock(SessionHandle.class), mockUwbSession2);
+
         when(mNativeUwbManager.stopRanging(eq(TEST_SESSION_ID), anyString()))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_FAILED);
         when(mNativeUwbManager.stopRanging(eq(TEST_SESSION_ID + 100), anyString()))
@@ -1142,7 +1155,8 @@ public class UwbSessionManagerTest {
     @Test
     public void setCurrentSessionState() {
         UwbSession mockUwbSession = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mockUwbSession);
+        when(mockUwbSession.getSessionId()).thenReturn(TEST_SESSION_ID);
+        mUwbSessionManager.mSessionTable.put(mock(SessionHandle.class), mockUwbSession);
 
         mUwbSessionManager.setCurrentSessionState(
                 TEST_SESSION_ID, UwbUciConstants.UWB_SESSION_STATE_ACTIVE);
@@ -1160,8 +1174,9 @@ public class UwbSessionManagerTest {
     @Test
     public void getCurrentSessionState_success() {
         UwbSession mockUwbSession = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mockUwbSession);
+        when(mockUwbSession.getSessionId()).thenReturn(TEST_SESSION_ID);
         when(mockUwbSession.getSessionState()).thenReturn(UwbUciConstants.UWB_SESSION_STATE_ACTIVE);
+        mUwbSessionManager.mSessionTable.put(mock(SessionHandle.class), mockUwbSession);
 
         int actualStatus = mUwbSessionManager.getCurrentSessionState(TEST_SESSION_ID);
 
@@ -1171,7 +1186,8 @@ public class UwbSessionManagerTest {
     @Test
     public void getSessionIdSet() {
         UwbSession mockUwbSession = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mockUwbSession);
+        when(mockUwbSession.getSessionId()).thenReturn(TEST_SESSION_ID);
+        mUwbSessionManager.mSessionTable.put(mock(SessionHandle.class), mockUwbSession);
 
         Set<Integer> actualSessionIds = mUwbSessionManager.getSessionIdSet();
 
@@ -1760,7 +1776,7 @@ public class UwbSessionManagerTest {
         verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
         ArgumentCaptor<AlarmManager.OnAlarmListener> alarmListenerCaptor =
                 ArgumentCaptor.forClass(AlarmManager.OnAlarmListener.class);
-        verify(mAlarmManager).set(
+        verify(mAlarmManager).setExact(
                 anyInt(), anyLong(), anyString(), alarmListenerCaptor.capture(), any());
         assertThat(alarmListenerCaptor.getValue()).isNotNull();
 
@@ -1815,7 +1831,7 @@ public class UwbSessionManagerTest {
         verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
         ArgumentCaptor<AlarmManager.OnAlarmListener> alarmListenerCaptor =
                 ArgumentCaptor.forClass(AlarmManager.OnAlarmListener.class);
-        verify(mAlarmManager).set(
+        verify(mAlarmManager).setExact(
                 anyInt(), anyLong(), anyString(), alarmListenerCaptor.capture(), any());
         assertThat(alarmListenerCaptor.getValue()).isNotNull();
 
@@ -1958,7 +1974,7 @@ public class UwbSessionManagerTest {
     }
 
     @Test
-    public void sendData_success_validUwbSession() throws Exception {
+    public void sendData_success_validUwbSession_extendedMacAddress() throws Exception {
         UwbSession uwbSession = prepareExistingUwbSession();
 
         // Setup the UwbSession to start ranging (and move it to active state).
@@ -1973,7 +1989,7 @@ public class UwbSessionManagerTest {
 
         // Send data on the UWB session.
         when(mNativeUwbManager.sendData(eq(TEST_SESSION_ID),
-                eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
+                eq(PEER_EXTENDED_MAC_ADDRESS),
                 eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
                 eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
@@ -1983,11 +1999,44 @@ public class UwbSessionManagerTest {
         mTestLooper.dispatchNext();
 
         verify(mNativeUwbManager).sendData(eq(TEST_SESSION_ID),
-                eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
+                eq(PEER_EXTENDED_MAC_ADDRESS),
                 eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
                 eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
         verify(mUwbSessionNotificationManager).onDataSent(
                 eq(uwbSession), eq(PEER_EXTENDED_UWB_ADDRESS), eq(PERSISTABLE_BUNDLE));
+    }
+
+    @Test
+    public void sendData_success_validUwbSession_shortMacAddress() throws Exception {
+        UwbSession uwbSession = prepareExistingUwbSession();
+
+        // Setup the UwbSession to start ranging (and move it to active state).
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE).when(uwbSession).getSessionState();
+        when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+
+        mUwbSessionManager.startRanging(
+                uwbSession.getSessionHandle(), uwbSession.getParams());
+        mTestLooper.dispatchAll();
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_ACTIVE).when(uwbSession).getSessionState();
+
+        // Send data on the UWB session.
+        when(mNativeUwbManager.sendData(eq(TEST_SESSION_ID),
+                eq(PEER_EXTENDED_SHORT_MAC_ADDRESS),
+                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
+                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+
+        mUwbSessionManager.sendData(uwbSession.getSessionHandle(), PEER_SHORT_UWB_ADDRESS,
+                PERSISTABLE_BUNDLE, DATA_PAYLOAD);
+        mTestLooper.dispatchNext();
+
+        verify(mNativeUwbManager).sendData(eq(TEST_SESSION_ID),
+                eq(PEER_EXTENDED_SHORT_MAC_ADDRESS),
+                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
+                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+        verify(mUwbSessionNotificationManager).onDataSent(
+                eq(uwbSession), eq(PEER_SHORT_UWB_ADDRESS), eq(PERSISTABLE_BUNDLE));
     }
 
     @Test
@@ -2582,6 +2631,25 @@ public class UwbSessionManagerTest {
     }
 
     @Test
+    public void testQueryDataSize() throws Exception {
+        UwbSession uwbSession = prepareExistingUwbSession();
+
+        when(mNativeUwbManager.queryMaxDataSizeBytes(
+                eq(uwbSession.getSessionId()), eq(TEST_CHIP_ID)))
+                .thenReturn(MAX_DATA_SIZE);
+        assertThat(mUwbSessionManager.queryMaxDataSizeBytes(uwbSession.getSessionHandle()))
+                .isEqualTo(MAX_DATA_SIZE);
+    }
+
+    @Test
+    public void testQueryDataSize_whenUwbSessionDoesNotExist() throws Exception {
+        SessionHandle mockSessionHandle = mock(SessionHandle.class);
+        assertThat(mUwbSessionManager.queryMaxDataSizeBytes(mockSessionHandle))
+                .isEqualTo(UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST);
+        verify(mNativeUwbManager, never()).queryMaxDataSizeBytes(anyInt(), anyString());
+    }
+
+    @Test
     public void deInitSession_notExistedSession() {
         doReturn(false).when(mUwbSessionManager).isExistedSession(any());
 
@@ -2608,6 +2676,7 @@ public class UwbSessionManagerTest {
     public void deInitSession_success_afterOwrAoaMeasurement() {
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getSessionHandle()).thenReturn(mock(SessionHandle.class));
         doReturn(mockUwbSession).when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
         // Setup the UwbSession to have the peer device's MacAddress stored (which happens when
@@ -2676,23 +2745,29 @@ public class UwbSessionManagerTest {
     @Test
     public void deinitAllSession() {
         UwbSession mockUwbSession1 = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID, mockUwbSession1);
+        SessionHandle mockSessionHandle1 = mock(SessionHandle.class);
+        when(mockUwbSession1.getSessionId()).thenReturn(TEST_SESSION_ID);
         when(mockUwbSession1.getBinder()).thenReturn(mock(IBinder.class));
         when(mockUwbSession1.getSessionId()).thenReturn(TEST_SESSION_ID);
         when(mockUwbSession1.getProtocolName()).thenReturn(FiraParams.PROTOCOL_NAME);
+        when(mockUwbSession1.getSessionHandle()).thenReturn(mockSessionHandle1);
+        mUwbSessionManager.mSessionTable.put(mockSessionHandle1, mockUwbSession1);
+
         UwbSession mockUwbSession2 = mock(UwbSession.class);
-        mUwbSessionManager.mSessionTable.put(TEST_SESSION_ID + 100, mockUwbSession2);
+        SessionHandle mockSessionHandle2 = mock(SessionHandle.class);
         when(mockUwbSession2.getBinder()).thenReturn(mock(IBinder.class));
         when(mockUwbSession2.getSessionId()).thenReturn(TEST_SESSION_ID + 100);
         when(mockUwbSession2.getProtocolName()).thenReturn(FiraParams.PROTOCOL_NAME);
+        when(mockUwbSession2.getSessionHandle()).thenReturn(mockSessionHandle2);
+        mUwbSessionManager.mSessionTable.put(mockSessionHandle2, mockUwbSession2);
 
         mUwbSessionManager.deinitAllSession();
 
         verify(mUwbSessionNotificationManager, times(2))
                 .onRangingClosedWithApiReasonCode(any(), eq(RangingChangeReason.SYSTEM_POLICY));
         verify(mUwbSessionManager, times(2)).removeSession(any());
-        // TODO: enable it when the resetDevice is enabled.
-        // verify(mNativeUwbManager).resetDevice(eq(UwbUciConstants.UWBS_RESET));
+        // TODO: enable it when the deviceReset is enabled.
+        // verify(mNativeUwbManager).deviceReset(eq(UwbUciConstants.UWBS_RESET));
         assertThat(mUwbSessionManager.getSessionCount()).isEqualTo(0);
     }
 
@@ -2712,6 +2787,24 @@ public class UwbSessionManagerTest {
         verify(mUwbMetrics).logRangingCloseEvent(
                 eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
         assertThat(mUwbSessionManager.getSessionCount()).isEqualTo(0);
+    }
+
+    @Test
+    public void onSessionStatusNotification_session_deinit_after_close() throws Exception {
+        UwbSession uwbSession = prepareExistingUwbSession();
+        when(mNativeUwbManager.deInitSession(eq(TEST_SESSION_ID), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+
+        mUwbSessionManager.deinitAllSession();
+        verify(mUwbSessionNotificationManager).onRangingClosedWithApiReasonCode(
+                eq(uwbSession), eq(RangingChangeReason.SYSTEM_POLICY));
+        verify(mUwbMetrics).logRangingCloseEvent(
+                eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+        assertThat(mUwbSessionManager.getSessionCount()).isEqualTo(0);
+
+        // Ignore the stale deinit
+        mUwbSessionManager.handleOnDeInit(uwbSession);
+        verifyNoMoreInteractions(mUwbSessionNotificationManager);
     }
 
     @Test

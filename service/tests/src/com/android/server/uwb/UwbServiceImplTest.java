@@ -21,6 +21,7 @@ import static android.uwb.UwbManager.AdapterStateCallback.STATE_ENABLED_ACTIVE;
 import static android.uwb.UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE;
 
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_TOGGLE_STATE;
+import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.fira.FiraParams.PACS_PROFILE_SERVICE_ID;
@@ -52,6 +53,7 @@ import android.os.UserManager;
 import android.platform.test.annotations.Presubmit;
 import android.provider.Settings;
 import android.test.suitebuilder.annotation.SmallTest;
+import android.uwb.IOnUwbActivityEnergyInfoListener;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbAdfProvisionStateCallbacks;
 import android.uwb.IUwbRangingCallbacks;
@@ -644,5 +646,37 @@ public class UwbServiceImplTest {
         mUwbServiceImpl.onRangingRoundsUpdateDtTag(sessionHandle, parameters);
 
         verify(mUwbServiceCore).rangingRoundsUpdateDtTag(sessionHandle, parameters);
+    }
+
+    @Test
+    public void testQueryDataSize() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
+        final SessionHandle sessionHandle = mock(SessionHandle.class);
+        final PersistableBundle parameters = new PersistableBundle();
+
+        when(mUwbServiceCore.queryMaxDataSizeBytes(sessionHandle)).thenReturn(MAX_DATA_SIZE);
+        assertThat(mUwbServiceImpl.queryMaxDataSizeBytes(sessionHandle)).isEqualTo(MAX_DATA_SIZE);
+
+        verify(mUwbServiceCore).queryMaxDataSizeBytes(sessionHandle);
+    }
+
+    @Test
+    public void testGetUwbActivityEnergyInfoAsync() throws Exception {
+        final IOnUwbActivityEnergyInfoListener listener = mock(
+                IOnUwbActivityEnergyInfoListener.class);
+        mUwbServiceImpl.getUwbActivityEnergyInfoAsync(listener);
+        verify(mUwbServiceCore).reportUwbActivityEnergyInfo(listener);
+    }
+
+    @Test
+    public void testGetUwbActivityEnergyInfoAsyncSecurityException() throws Exception {
+        final IOnUwbActivityEnergyInfoListener listener = mock(
+                IOnUwbActivityEnergyInfoListener.class);
+        doThrow(new SecurityException()).when(mContext).enforceCallingOrSelfPermission(
+                eq(UWB_PRIVILEGED), any());
+        try {
+            mUwbServiceImpl.getUwbActivityEnergyInfoAsync(listener);
+            fail();
+        } catch (SecurityException e) { /* pass */ }
     }
 }
