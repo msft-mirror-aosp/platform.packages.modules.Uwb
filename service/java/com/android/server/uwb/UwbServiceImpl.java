@@ -33,6 +33,7 @@ import android.os.RemoteException;
 import android.os.UserManager;
 import android.provider.Settings;
 import android.util.Log;
+import android.uwb.IOnUwbActivityEnergyInfoListener;
 import android.uwb.IUwbAdapter;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbAdfProvisionStateCallbacks;
@@ -103,15 +104,22 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             return;
         }
         mUwbSettingsStore.dump(fd, pw, args);
+        pw.println();
         mUwbInjector.getUwbMetrics().dump(fd, pw, args);
+        pw.println();
         mUwbServiceCore.dump(fd, pw, args);
+        pw.println();
+        mUwbInjector.getUwbSessionManager().dump(fd, pw, args);
+        pw.println();
         mUwbInjector.getUwbCountryCode().dump(fd, pw, args);
+        pw.println();
         mUwbInjector.getUwbConfigStore().dump(fd, pw, args);
+        pw.println();
         dumpPowerStats(fd, pw, args);
     }
 
     private void dumpPowerStats(FileDescriptor fd, PrintWriter pw, String[] args) {
-        pw.println("---- powerStats ----");
+        pw.println("---- PowerStats ----");
         try {
             PersistableBundle bundle = getSpecificationInfo(null);
             GenericSpecificationParams params = GenericSpecificationParams.fromBundle(bundle);
@@ -128,6 +136,7 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             pw.println("Exception while getting power stats.");
             e.printStackTrace(pw);
         }
+        pw.println("---- PowerStats ----");
     }
 
     private void enforceUwbPrivilegedPermission() {
@@ -323,6 +332,15 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     @Override
+    public int queryMaxDataSizeBytes(SessionHandle sessionHandle) {
+        if (!SdkLevel.isAtLeastU()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        return mUwbServiceCore.queryMaxDataSizeBytes(sessionHandle);
+    }
+
+    @Override
     public synchronized int getAdapterState() throws RemoteException {
         return mUwbServiceCore.getAdapterState();
     }
@@ -441,6 +459,12 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
                 err.getFileDescriptor(), args);
     }
 
+    @Override
+    public void updatePose(SessionHandle sessionHandle, PersistableBundle params) {
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.updatePose(sessionHandle, params);
+    }
+
     private void persistUwbToggleState(boolean enabled) {
         mUwbSettingsStore.put(UwbSettingsStore.SETTINGS_TOGGLE_STATE, enabled);
     }
@@ -529,4 +553,13 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             mUwbInjector.getUwbConfigStore().handleUserUnlock(userId);
         });
     }
+
+    @Override
+    public synchronized void getUwbActivityEnergyInfoAsync(
+            IOnUwbActivityEnergyInfoListener listener) throws RemoteException {
+        Log.i(TAG, "getUwbActivityEnergyInfoAsync uid=" + Binder.getCallingUid());
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.reportUwbActivityEnergyInfo(listener);
+    }
+
 }
