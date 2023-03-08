@@ -84,8 +84,8 @@ public class CapabilityParam {
             UwbVendorCapabilityTlvTypes.SUPPORTED_RSSI_REPORTING;
     public static final int SUPPORTED_DIAGNOSTICS =
             UwbVendorCapabilityTlvTypes.SUPPORTED_DIAGNOSTICS;
-    public static final int SUPPORTED_MIN_SLOT_DURATION =
-            UwbVendorCapabilityTlvTypes.SUPPORTED_MIN_SLOT_DURATION_MS;
+    public static final int SUPPORTED_MIN_SLOT_DURATION_RSTU =
+            UwbVendorCapabilityTlvTypes.SUPPORTED_MIN_SLOT_DURATION_RSTU;
     public static final int SUPPORTED_MAX_RANGING_SESSION_NUMBER =
             UwbVendorCapabilityTlvTypes.SUPPORTED_MAX_RANGING_SESSION_NUMBER;
 
