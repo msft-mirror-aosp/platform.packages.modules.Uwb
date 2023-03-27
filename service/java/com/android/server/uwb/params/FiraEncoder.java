@@ -75,8 +75,6 @@ public class FiraEncoder extends TlvEncoder {
                         (byte) params.getDestAddressList().size())
                 .putByteArray(ConfigParam.DEVICE_MAC_ADDRESS, params.getDeviceAddress().size(),
                         TlvUtil.getReverseBytes(params.getDeviceAddress().toBytes()))
-                .putByteArray(ConfigParam.DST_MAC_ADDRESS, dstAddressList.position(),
-                        Arrays.copyOf(dstAddressList.array(), dstAddressList.position()))
                 .putShort(ConfigParam.SLOT_DURATION, (short) params.getSlotDurationRstu())
                 .putInt(ConfigParam.RANGING_INTERVAL, params.getRangingIntervalMs())
                 .putByte(ConfigParam.MAC_FCS_TYPE, (byte) params.getFcsType())
@@ -103,10 +101,6 @@ public class FiraEncoder extends TlvEncoder {
                 .putByte(ConfigParam.KEY_ROTATION_RATE, (byte) params.getKeyRotationRate())
                 .putByte(ConfigParam.SESSION_PRIORITY, (byte) params.getSessionPriority())
                 .putByte(ConfigParam.MAC_ADDRESS_MODE, (byte) params.getMacAddressMode())
-                .putByteArray(ConfigParam.VENDOR_ID, params.getVendorId() != null
-                        ? TlvUtil.getReverseBytes(params.getVendorId()) : null)
-                .putByteArray(ConfigParam.STATIC_STS_IV,
-                        params.getStaticStsIV())
                 .putByte(ConfigParam.NUMBER_OF_STS_SEGMENTS, (byte) params.getStsSegmentCount())
                 .putShort(ConfigParam.MAX_RR_RETRY, (short) params.getMaxRangingRoundRetries())
                 .putByte(ConfigParam.HOPPING_MODE,
@@ -118,9 +112,16 @@ public class FiraEncoder extends TlvEncoder {
                 .putByte(ConfigParam.BPRF_PHR_DATA_RATE,
                         (byte) params.getBprfPhrDataRate())
                 .putByte(ConfigParam.STS_LENGTH, (byte) params.getStsLength());
-        // Initiation time Changed from 4 byte field to 8 byte field in version 2.
+        if (params.getDestAddressList().size() > 0) {
+            tlvBufferBuilder.putByteArray(
+                    ConfigParam.DST_MAC_ADDRESS, dstAddressList.position(),
+                    Arrays.copyOf(dstAddressList.array(), dstAddressList.position()));
+        }
         if (params.getProtocolVersion().getMajor() >= 2) {
-            tlvBufferBuilder.putLong(ConfigParam.UWB_INITIATION_TIME, params.getInitiationTimeMs());
+            tlvBufferBuilder
+                 // Initiation time Changed from 4 byte field to 8 byte field in version 2.
+                .putLong(ConfigParam.UWB_INITIATION_TIME, params.getInitiationTimeMs())
+                .putByte(ConfigParam.LINK_LAYER_MODE,  (byte) params.getLinkLayerMode());
         } else {
             tlvBufferBuilder.putInt(ConfigParam.UWB_INITIATION_TIME,
                     Math.toIntExact(params.getInitiationTimeMs()));
@@ -129,12 +130,19 @@ public class FiraEncoder extends TlvEncoder {
                 && (deviceType == FiraParams.RANGING_DEVICE_TYPE_CONTROLEE)) {
             tlvBufferBuilder.putInt(ConfigParam.SUB_SESSION_ID, params.getSubSessionId());
         }
-        if ((stsConfig == FiraParams.STS_CONFIG_PROVISIONED)
+        if (stsConfig == FiraParams.STS_CONFIG_STATIC) {
+            tlvBufferBuilder
+                    .putByteArray(ConfigParam.VENDOR_ID, params.getVendorId() != null
+                            ? TlvUtil.getReverseBytes(params.getVendorId())
+                            : null)
+                    .putByteArray(ConfigParam.STATIC_STS_IV, params.getStaticStsIV());
+        } else if ((stsConfig == FiraParams.STS_CONFIG_PROVISIONED)
                 || (stsConfig
                 == FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY)) {
             tlvBufferBuilder.putByteArray(ConfigParam.SESSION_KEY, params.getSessionKey());
             if (stsConfig
                     == FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
+                tlvBufferBuilder.putInt(ConfigParam.SUB_SESSION_ID, params.getSubSessionId());
                 tlvBufferBuilder.putByteArray(ConfigParam.SUBSESSION_KEY,
                         params.getSubsessionKey());
             }
@@ -188,6 +196,13 @@ public class FiraEncoder extends TlvEncoder {
                     params.getUlTdoaDeviceIdType(), params.getUlTdoaDeviceId()));
             tlvBufferBuilder.putByte(ConfigParam.UL_TDOA_TX_TIMESTAMP,
                     (byte) params.getUlTdoaTxTimestampType());
+        }
+        if (params.getDeviceRole() == FiraParams.RANGING_DEVICE_ROLE_ADVERTISER ||
+            params.getDeviceRole() == FiraParams.RANGING_DEVICE_ROLE_OBSERVER) {
+            tlvBufferBuilder
+                .putByte(ConfigParam.MIN_FRAMES_PER_RR, (byte) params.getMinFramesPerRr())
+                .putShort(ConfigParam.MTU_SIZE, (short) params.getMtuSize())
+                .putByte(ConfigParam.INTER_FRAME_INTERVAL, (byte) params.getInterFrameInterval());
         }
         return tlvBufferBuilder.build();
     }

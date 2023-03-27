@@ -126,11 +126,16 @@ public class FiraOpenSessionParams extends FiraParams {
     private final int mNumOfMsrmtFocusOnAoaAzimuth;
     private final int mNumOfMsrmtFocusOnAoaElevation;
     private final Long mRangingErrorStreakTimeoutMs;
+    private final int mLinkLayerMode;
+    private final int mMinFramesPerRr;
+    private final int mMtuSize;
+    private final int mInterFrameInterval;
     private final int mUlTdoaTxIntervalMs;
     private final int mUlTdoaRandomWindowMs;
     @UlTdoaDeviceIdType private final int mUlTdoaDeviceIdType;
     @Nullable private final byte[] mUlTdoaDeviceId;
     @UlTdoaTxTimestampType private final int mUlTdoaTxTimestampType;
+    @FilterType private final int mFilterType;
 
     private static final int BUNDLE_VERSION_1 = 1;
     private static final int BUNDLE_VERSION_CURRENT = BUNDLE_VERSION_1;
@@ -212,11 +217,20 @@ public class FiraOpenSessionParams extends FiraParams {
             "num_of_msrmt_focus_on_aoa_elevation";
     private static final String RANGING_ERROR_STREAK_TIMEOUT_MS =
             "ranging_error_streak_timeout_ms";
+    private static final String KEY_LINK_LAYER_MODE =
+            "link_layer_mode";
+    private static final String KEY_MIN_FRAMES_PER_RR =
+            "min_frames_per_rr";
+    private static final String KEY_MTU_SIZE =
+            "mtu_size";
+    private static final String KEY_INTER_FRAME_INTERVAL =
+            "inter_frame_interval";
     private static final String UL_TDOA_TX_INTERVAL = "ul_tdoa_tx_interval";
     private static final String UL_TDOA_RANDOM_WINDOW = "ul_tdoa_random_window";
     private static final String UL_TDOA_DEVICE_ID_TYPE = "ul_tdoa_device_id_type";
     private static final String UL_TDOA_DEVICE_ID = "ul_tdoa_device_id";
     private static final String UL_TDOA_TX_TIMESTAMP_TYPE = "ul_tdoa_tx_timestamp_type";
+    private static final String KEY_FILTER_TYPE = "filter_type";
 
     private FiraOpenSessionParams(
             FiraProtocolVersion protocolVersion,
@@ -282,11 +296,16 @@ public class FiraOpenSessionParams extends FiraParams {
             int numOfMsrmtFocusOnAoaAzimuth,
             int numOfMsrmtFocusOnAoaElevation,
             Long rangingErrorStreakTimeoutMs,
+            int linkLayerMode,
+            int minFramePerRr,
+            int mtuSize,
+            int interFrameInterval,
             int ulTdoaTxIntervalMs,
             int ulTdoaRandomWindowMs,
             int ulTdoaDeviceIdType,
             @Nullable byte[] ulTdoaDeviceId,
-            int ulTdoaTxTimestampType) {
+            int ulTdoaTxTimestampType,
+            int filterType) {
         mProtocolVersion = protocolVersion;
         mSessionId = sessionId;
         mSessionType = sessionType;
@@ -350,11 +369,16 @@ public class FiraOpenSessionParams extends FiraParams {
         mNumOfMsrmtFocusOnAoaAzimuth = numOfMsrmtFocusOnAoaAzimuth;
         mNumOfMsrmtFocusOnAoaElevation = numOfMsrmtFocusOnAoaElevation;
         mRangingErrorStreakTimeoutMs = rangingErrorStreakTimeoutMs;
+        mLinkLayerMode = linkLayerMode;
+        mMinFramesPerRr = minFramePerRr;
+        mMtuSize = mtuSize;
+        mInterFrameInterval = interFrameInterval;
         mUlTdoaTxIntervalMs = ulTdoaTxIntervalMs;
         mUlTdoaRandomWindowMs = ulTdoaRandomWindowMs;
         mUlTdoaDeviceIdType = ulTdoaDeviceIdType;
         mUlTdoaDeviceId = ulTdoaDeviceId;
         mUlTdoaTxTimestampType = ulTdoaTxTimestampType;
+        mFilterType = filterType;
     }
 
     @Override
@@ -638,6 +662,22 @@ public class FiraOpenSessionParams extends FiraParams {
         return mRangingErrorStreakTimeoutMs;
     }
 
+    public int getLinkLayerMode() {
+        return mLinkLayerMode;
+    }
+
+    public int getMinFramesPerRr() {
+        return mMinFramesPerRr;
+    }
+
+    public int getMtuSize() {
+        return mMtuSize;
+    }
+
+    public int getInterFrameInterval() {
+        return mInterFrameInterval;
+    }
+
     public int getUlTdoaTxIntervalMs() {
         return mUlTdoaTxIntervalMs;
     }
@@ -657,6 +697,11 @@ public class FiraOpenSessionParams extends FiraParams {
 
     public int getUlTdoaTxTimestampType() {
         return mUlTdoaTxTimestampType;
+    }
+
+    @FilterType
+    public int getFilterType() {
+        return mFilterType;
     }
 
     @Nullable
@@ -770,11 +815,16 @@ public class FiraOpenSessionParams extends FiraParams {
         bundle.putInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_AZIMUTH, mNumOfMsrmtFocusOnAoaAzimuth);
         bundle.putInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_ELEVATION, mNumOfMsrmtFocusOnAoaElevation);
         bundle.putLong(RANGING_ERROR_STREAK_TIMEOUT_MS, mRangingErrorStreakTimeoutMs);
+        bundle.putInt(KEY_LINK_LAYER_MODE, mLinkLayerMode);
+        bundle.putInt(KEY_MIN_FRAMES_PER_RR, mMinFramesPerRr);
+        bundle.putInt(KEY_MTU_SIZE, mMtuSize);
+        bundle.putInt(KEY_INTER_FRAME_INTERVAL, mInterFrameInterval);
         bundle.putInt(UL_TDOA_TX_INTERVAL, mUlTdoaTxIntervalMs);
         bundle.putInt(UL_TDOA_RANDOM_WINDOW, mUlTdoaRandomWindowMs);
         bundle.putInt(UL_TDOA_DEVICE_ID_TYPE, mUlTdoaDeviceIdType);
         bundle.putIntArray(UL_TDOA_DEVICE_ID, byteArrayToIntArray(mUlTdoaDeviceId));
         bundle.putInt(UL_TDOA_TX_TIMESTAMP_TYPE, mUlTdoaTxTimestampType);
+        bundle.putInt(KEY_FILTER_TYPE, mFilterType);
         return bundle;
     }
 
@@ -807,7 +857,7 @@ public class FiraOpenSessionParams extends FiraParams {
             destAddressList.add(longToUwbAddress(address, addressByteLength));
         }
 
-        return new FiraOpenSessionParams.Builder()
+        FiraOpenSessionParams.Builder builder = new FiraOpenSessionParams.Builder()
                 .setProtocolVersion(
                         FiraProtocolVersion.fromString(
                                 requireNonNull(bundle.getString(KEY_PROTOCOL_VERSION))))
@@ -839,7 +889,7 @@ public class FiraOpenSessionParams extends FiraParams {
                 .setRframeConfig(bundle.getInt(KEY_RFRAME_CONFIG))
                 .setPrfMode(bundle.getInt(KEY_PRF_MODE))
                 .setCapSize(intArrayToByteArray(bundle.getIntArray(KEY_CAP_SIZE_RANGE)))
-                .setScheduledMode(bundle.getInt(KEY_SCHEDULED_MODE, 0))
+                .setScheduledMode(bundle.getInt(KEY_SCHEDULED_MODE, TIME_SCHEDULED_RANGING))
                 .setPreambleDuration(bundle.getInt(KEY_PREAMBLE_DURATION))
                 .setSfdId(bundle.getInt(KEY_SFD_ID))
                 .setStsSegmentCount(bundle.getInt(KEY_STS_SEGMENT_COUNT))
@@ -891,12 +941,19 @@ public class FiraOpenSessionParams extends FiraParams {
                         bundle.getInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_ELEVATION))
                 .setRangingErrorStreakTimeoutMs(bundle
                         .getLong(RANGING_ERROR_STREAK_TIMEOUT_MS, 30_000L))
+                .setLinkLayerMode(bundle.getInt(KEY_LINK_LAYER_MODE, 0))
+                .setMinFramePerRr(bundle.getInt(KEY_MIN_FRAMES_PER_RR, 1))
+                .setMtuSize(bundle.getInt(KEY_MTU_SIZE, 1048))
+                .setInterFrameInterval(bundle.getInt(KEY_INTER_FRAME_INTERVAL, 1))
                 .setUlTdoaTxIntervalMs(bundle.getInt(UL_TDOA_TX_INTERVAL))
                 .setUlTdoaRandomWindowMs(bundle.getInt(UL_TDOA_RANDOM_WINDOW))
                 .setUlTdoaDeviceIdType(bundle.getInt(UL_TDOA_DEVICE_ID_TYPE))
                 .setUlTdoaDeviceId(intArrayToByteArray(bundle.getIntArray(UL_TDOA_DEVICE_ID)))
-                .setUlTdoaTxTimestampType(bundle.getInt(UL_TDOA_TX_TIMESTAMP_TYPE))
-                .build();
+                .setUlTdoaTxTimestampType(bundle.getInt(UL_TDOA_TX_TIMESTAMP_TYPE));
+
+        builder.setFilterType(bundle.getInt(KEY_FILTER_TYPE, FILTER_TYPE_DEFAULT));
+
+        return builder.build();
     }
 
     public FiraProtocolVersion getProtocolVersion() {
@@ -1086,6 +1143,18 @@ public class FiraOpenSessionParams extends FiraParams {
         /** Ranging result error streak timeout in Milliseconds*/
         private long mRangingErrorStreakTimeoutMs = 30_000L;
 
+        /** UCI spec default: 0 */
+        private int mLinkLayerMode = 0;
+
+        /** UCI spec default: 1 */
+        public int mMinFramesPerRr = 1;
+
+        /** No UCI spec default*/
+        public int mMtuSize = 1048;
+
+        /** UCI spec default: 1 */
+        public int mInterFrameInterval = 1;
+
         /** Ul-TDoA Tx Interval in Milliseconds */
         private int mUlTdoaTxIntervalMs = 2000;
 
@@ -1100,6 +1169,9 @@ public class FiraOpenSessionParams extends FiraParams {
 
         /** Ul-TDoA Tx Timestamp Type */
         @UlTdoaTxTimestampType private int mUlTdoaTxTimestampType = TX_TIMESTAMP_NONE;
+
+        /** AoA/distance filtering type */
+        @FilterType private int mFilterType = FILTER_TYPE_DEFAULT;
 
         public Builder() {}
 
@@ -1169,6 +1241,10 @@ public class FiraOpenSessionParams extends FiraParams {
             mNumOfMsrmtFocusOnAoaAzimuth = builder.mNumOfMsrmtFocusOnAoaAzimuth;
             mNumOfMsrmtFocusOnAoaElevation = builder.mNumOfMsrmtFocusOnAoaElevation;
             mRangingErrorStreakTimeoutMs = builder.mRangingErrorStreakTimeoutMs;
+            mLinkLayerMode = builder.mLinkLayerMode;
+            mMinFramesPerRr = builder.mMinFramesPerRr;
+            mMtuSize = builder.mMtuSize;
+            mInterFrameInterval = builder.mInterFrameInterval;
             mUlTdoaTxIntervalMs = builder.mUlTdoaTxIntervalMs;
             mUlTdoaRandomWindowMs = builder.mUlTdoaRandomWindowMs;
             mUlTdoaDeviceIdType = builder.mUlTdoaDeviceIdType;
@@ -1242,11 +1318,16 @@ public class FiraOpenSessionParams extends FiraParams {
             mNumOfMsrmtFocusOnAoaAzimuth = params.mNumOfMsrmtFocusOnAoaAzimuth;
             mNumOfMsrmtFocusOnAoaElevation = params.mNumOfMsrmtFocusOnAoaElevation;
             mRangingErrorStreakTimeoutMs = params.mRangingErrorStreakTimeoutMs;
+            mLinkLayerMode = params.mLinkLayerMode;
+            mMinFramesPerRr = params.mMinFramesPerRr;
+            mMtuSize = params.mMtuSize;
+            mInterFrameInterval = params.mInterFrameInterval;
             mUlTdoaTxIntervalMs = params.mUlTdoaTxIntervalMs;
             mUlTdoaRandomWindowMs = params.mUlTdoaRandomWindowMs;
             mUlTdoaDeviceIdType = params.mUlTdoaDeviceIdType;
             mUlTdoaDeviceId = params.mUlTdoaDeviceId;
             mUlTdoaTxTimestampType = params.mUlTdoaTxTimestampType;
+            mFilterType = params.mFilterType;
         }
 
         public FiraOpenSessionParams.Builder setProtocolVersion(FiraProtocolVersion version) {
@@ -1595,6 +1676,26 @@ public class FiraOpenSessionParams extends FiraParams {
             return this;
         }
 
+        public FiraOpenSessionParams.Builder setLinkLayerMode(int linkLayerMode) {
+            mLinkLayerMode = linkLayerMode;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setMinFramePerRr(int minFramePerRr) {
+            mMinFramesPerRr = minFramePerRr;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setMtuSize(int mtuSize) {
+            mMtuSize = mtuSize;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setInterFrameInterval(int interFrameInterval) {
+            mInterFrameInterval = interFrameInterval;
+            return this;
+        }
+
         public FiraOpenSessionParams.Builder setUlTdoaTxIntervalMs(
                 int ulTdoaTxIntervalMs) {
             mUlTdoaTxIntervalMs = ulTdoaTxIntervalMs;
@@ -1765,6 +1866,12 @@ public class FiraOpenSessionParams extends FiraParams {
             }
         }
 
+        /** Sets the type of filtering used by the session. Defaults to FILTER_TYPE_DEFAULT */
+        public FiraOpenSessionParams.Builder setFilterType(@FilterType int filterType) {
+            this.mFilterType = filterType;
+            return this;
+        }
+
         public FiraOpenSessionParams build() {
             checkAddress();
             checkStsConfig();
@@ -1834,11 +1941,16 @@ public class FiraOpenSessionParams extends FiraParams {
                     mNumOfMsrmtFocusOnAoaAzimuth,
                     mNumOfMsrmtFocusOnAoaElevation,
                     mRangingErrorStreakTimeoutMs,
+                    mLinkLayerMode,
+                    mMinFramesPerRr,
+                    mMtuSize,
+                    mInterFrameInterval,
                     mUlTdoaTxIntervalMs,
                     mUlTdoaRandomWindowMs,
                     mUlTdoaDeviceIdType,
                     mUlTdoaDeviceId,
-                    mUlTdoaTxTimestampType);
+                    mUlTdoaTxTimestampType,
+                    mFilterType);
         }
     }
 }

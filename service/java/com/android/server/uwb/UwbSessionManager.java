@@ -27,6 +27,9 @@ import static com.android.server.uwb.data.UwbUciConstants.UWB_DEVICE_SHORT_MAC_A
 import static com.android.server.uwb.data.UwbUciConstants.UWB_SESSION_STATE_ACTIVE;
 import static com.android.server.uwb.util.DataTypeConversionUtil.macAddressByteArrayToLong;
 
+import static com.google.uwb.support.fira.FiraParams.FILTER_TYPE_APPLICATION;
+import static com.google.uwb.support.fira.FiraParams.FILTER_TYPE_DEFAULT;
+import static com.google.uwb.support.fira.FiraParams.FILTER_TYPE_NONE;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
 import static com.google.uwb.support.fira.FiraParams.PROTOCOL_NAME;
@@ -58,6 +61,9 @@ import android.uwb.UwbAddress;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.server.uwb.advertisement.UwbAdvertiseManager;
+import com.android.server.uwb.correction.UwbFilterEngine;
+import com.android.server.uwb.correction.pose.ApplicationPoseSource;
+import com.android.server.uwb.correction.pose.IPoseSource;
 import com.android.server.uwb.data.DtTagUpdateRangingRoundsStatus;
 import com.android.server.uwb.data.UwbMulticastListUpdateStatus;
 import com.android.server.uwb.data.UwbOwrAoaMeasurement;
@@ -68,6 +74,7 @@ import com.android.server.uwb.jni.INativeUwbManager;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.proto.UwbStatsLog;
 import com.android.server.uwb.util.ArrayUtils;
+import com.android.server.uwb.util.DataTypeConversionUtil;
 import com.android.server.uwb.util.LruList;
 import com.android.server.uwb.util.UwbUtil;
 
@@ -80,11 +87,13 @@ import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate;
 import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdateStatus;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
+import com.google.uwb.support.fira.FiraPoseUpdateParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
 import com.google.uwb.support.oemextension.AdvertisePointedTarget;
 import com.google.uwb.support.oemextension.SessionStatus;
 
+import java.io.Closeable;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
@@ -93,7 +102,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -131,7 +139,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
 
     // TODO: don't expose the internal field for testing.
     @VisibleForTesting
-    final ConcurrentHashMap<Integer, UwbSession> mSessionTable = new ConcurrentHashMap();
+    final ConcurrentHashMap<SessionHandle, UwbSession> mSessionTable = new ConcurrentHashMap();
     // Used for storing recently closed sessions for debugging purposes.
     final LruList<UwbSession> mDbgRecentlyClosedSessions = new LruList<>(5);
     final ConcurrentHashMap<Integer, List<UwbSession>> mNonPrivilegedUidToFiraSessionsTable =
@@ -241,6 +249,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         long sessionId = rangingData.getSessionId();
         UwbSession uwbSession = getUwbSession((int) sessionId);
         if (uwbSession != null) {
+            // TODO: b/268065070 Include UWB logs for both filtered and unfiltered data.
             mUwbMetrics.logRangingResult(uwbSession.getProfileType(), rangingData);
             mSessionNotificationManager.onRangingResult(uwbSession, rangingData);
             processRangeData(rangingData, uwbSession);
@@ -262,8 +271,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
     public void onDataReceived(
             long sessionId, int status, long sequenceNum,
             byte[] address, int sourceEndPoint, int destEndPoint, byte[] data) {
-        Log.d(TAG, "onDataReceived - address: " + UwbUtil.toHexString(address)
-                + ", Data: " + UwbUtil.toHexString(data));
+        Log.d(TAG, "onDataReceived(): Received data packet - "
+                + "Address: " + UwbUtil.toHexString(address)
+                + ", Data: " + UwbUtil.toHexString(data)
+                + ", sessionId: " + sessionId
+                + ", status: " + status
+                + ", sequenceNum: " + sequenceNum);
 
         UwbSession uwbSession = getUwbSession((int) sessionId);
         if (uwbSession == null) {
@@ -291,6 +304,19 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         info.payload = data;
 
         uwbSession.addReceivedDataInfo(info);
+    }
+
+    /** Updates pose information if the session is using an ApplicationPoseSource */
+    public void updatePose(SessionHandle sessionHandle, PersistableBundle params) {
+        int sessionId = getSessionId(sessionHandle);
+        UwbSession uwbSession = getUwbSession(sessionId);
+
+        if (uwbSession == null) {
+            // Session doesn't exist yet/anymore.
+            return;
+        }
+
+        uwbSession.updatePose(FiraPoseUpdateParams.fromBundle(params));
     }
 
     @VisibleForTesting
@@ -324,7 +350,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         Log.i(TAG, "onSessionStatusNotificationReceived - Session ID : " + sessionId + ", state : "
                 + UwbSessionNotificationHelper.getSessionStateString(state)
                 + ", reasonCode:" + reasonCode);
-        UwbSession uwbSession = mSessionTable.get((int) sessionId);
+        UwbSession uwbSession = getUwbSession((int) sessionId);
 
         if (uwbSession == null) {
             Log.d(TAG, "onSessionStatusNotificationReceived - invalid session");
@@ -427,8 +453,9 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                 return;
             }
         }
-        if (isExistedSession(sessionId)) {
-            Log.i(TAG, "Duplicated sessionId");
+        if (isExistedSession(sessionHandle) || isExistedSession(sessionId)) {
+            Log.i(TAG, "Duplicated session. SessionHandle: " + sessionHandle + ", SessionId: "
+                    + sessionId);
             rangingCallbacks.onRangingOpenFailed(sessionHandle, RangingChangeReason.BAD_PARAMETERS,
                     UwbSessionNotificationHelper.convertUciStatusToParam(protocolName,
                             UwbUciConstants.STATUS_CODE_ERROR_SESSION_DUPLICATE));
@@ -462,7 +489,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             return;
         }
 
-        mSessionTable.put(sessionId, uwbSession);
+        mSessionTable.put(sessionHandle, uwbSession);
         addToNonPrivilegedUidToFiraSessionTableIfNecessary(uwbSession);
         mEventTask.execute(SESSION_OPEN_RANGING, uwbSession);
         return;
@@ -557,29 +584,37 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         stopRangingInternal(sessionHandle, false /* triggeredBySystemPolicy */);
     }
 
+    /**
+     * Get the UwbSession corresponding to the given UWB Session ID. This API returns {@code null}
+     * when the UWB session is not found.
+     */
+    @Nullable
     public UwbSession getUwbSession(int sessionId) {
-        return mSessionTable.get(sessionId);
+        return mSessionTable.values()
+                .stream()
+                .filter(v -> v.getSessionId() == sessionId)
+                .findAny()
+                .orElse(null);
     }
 
+    /**
+     * Get the Uwb Session ID corresponding to the given UWB Session Handle. This API returns
+     * {@code null} when the UWB session ID is not found.
+     */
+    @Nullable
     public Integer getSessionId(SessionHandle sessionHandle) {
-        for (Map.Entry<Integer, UwbSession> sessionEntry : mSessionTable.entrySet()) {
-            UwbSession uwbSession = sessionEntry.getValue();
-            if ((uwbSession.getSessionHandle()).equals(sessionHandle)) {
-                return sessionEntry.getKey();
-            }
-        }
-        return null;
+        UwbSession session = mSessionTable.get(sessionHandle);
+        if (session == null) return null;
+        return session.getSessionId();
     }
 
     private int getActiveSessionCount() {
-        int count = 0;
-        for (Map.Entry<Integer, UwbSession> sessionEntry : mSessionTable.entrySet()) {
-            UwbSession uwbSession = sessionEntry.getValue();
-            if ((uwbSession.getSessionState() == UwbUciConstants.DEVICE_STATE_ACTIVE)) {
-                count++;
-            }
-        }
-        return count;
+        return Math.toIntExact(
+                mSessionTable.values()
+                        .stream()
+                        .filter(v -> v.getSessionState() == UwbUciConstants.DEVICE_STATE_ACTIVE)
+                        .count()
+        );
     }
 
     private void processRangeData(UwbRangingData rangingData, UwbSession uwbSession) {
@@ -659,20 +694,19 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
     }
 
     public boolean isExistedSession(int sessionId) {
-        return mSessionTable.containsKey(sessionId);
+        return getUwbSession(sessionId) != null;
     }
 
     public void stopAllRanging() {
         Log.d(TAG, "stopAllRanging()");
-        for (Map.Entry<Integer, UwbSession> sessionEntry : mSessionTable.entrySet()) {
-            int status = mNativeUwbManager.stopRanging(sessionEntry.getKey(),
-                    sessionEntry.getValue().getChipId());
+        for (UwbSession uwbSession : mSessionTable.values()) {
+            int status = mNativeUwbManager.stopRanging(uwbSession.getSessionId(),
+                    uwbSession.getChipId());
 
             if (status != UwbUciConstants.STATUS_CODE_OK) {
-                Log.i(TAG, "stopAllRanging() - Session " + sessionEntry.getKey()
+                Log.i(TAG, "stopAllRanging() - Session " + uwbSession.getSessionId()
                         + " is failed to stop ranging");
             } else {
-                UwbSession uwbSession = sessionEntry.getValue();
                 mUwbMetrics.longRangingStopEvent(uwbSession);
                 uwbSession.setSessionState(UwbUciConstants.UWB_SESSION_STATE_IDLE);
             }
@@ -681,17 +715,16 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
 
     public synchronized void deinitAllSession() {
         Log.d(TAG, "deinitAllSession()");
-        for (Map.Entry<Integer, UwbSession> sessionEntry : mSessionTable.entrySet()) {
-            UwbSession uwbSession = sessionEntry.getValue();
+        for (UwbSession uwbSession : mSessionTable.values()) {
             handleOnDeInit(uwbSession);
         }
 
         // Not resetting chip on UWB toggle off.
-        // mNativeUwbManager.resetDevice(UwbUciConstants.UWBS_RESET);
+        // mNativeUwbManager.deviceReset(UwbUciConstants.UWBS_RESET);
     }
 
     public synchronized void handleOnDeInit(UwbSession uwbSession) {
-        if (!isExistedSession(uwbSession.getSessionId())) {
+        if (!isExistedSession(uwbSession.getSessionHandle())) {
             Log.i(TAG, "onDeinit - Ignoring already deleted session "
                     + uwbSession.getSessionId());
             return;
@@ -707,14 +740,14 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
     }
 
     public void setCurrentSessionState(int sessionId, int state) {
-        UwbSession uwbSession = mSessionTable.get(sessionId);
+        UwbSession uwbSession = getUwbSession(sessionId);
         if (uwbSession != null) {
             uwbSession.setSessionState(state);
         }
     }
 
     public int getCurrentSessionState(int sessionId) {
-        UwbSession uwbSession = mSessionTable.get(sessionId);
+        UwbSession uwbSession = getUwbSession(sessionId);
         if (uwbSession != null) {
             return uwbSession.getSessionState();
         }
@@ -726,7 +759,10 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
     }
 
     public Set<Integer> getSessionIdSet() {
-        return mSessionTable.keySet();
+        return mSessionTable.values()
+                .stream()
+                .map(v -> v.getSessionId())
+                .collect(Collectors.toSet());
     }
 
     private synchronized int reconfigureInternal(SessionHandle sessionHandle,
@@ -788,6 +824,26 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         info.params = bundle;
 
         mEventTask.execute(SESSION_UPDATE_ACTIVE_RR_DT_TAG, info);
+    }
+
+    /** Query Max Application data size for the given UWB Session */
+    public synchronized int queryMaxDataSizeBytes(SessionHandle sessionHandle) {
+        int status = UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST;
+        if (!isExistedSession(sessionHandle)) {
+            Log.i(TAG, "Not initialized session ID");
+            return status;
+        }
+        int sessionId = getSessionId(sessionHandle);
+        UwbSession uwbSession = getUwbSession(sessionId);
+        if (uwbSession == null) {
+            Log.i(TAG, "UwbSession not found");
+            return status;
+        }
+
+        synchronized (uwbSession.getWaitObj()) {
+            return mNativeUwbManager.queryMaxDataSizeBytes(uwbSession.getSessionId(),
+                    uwbSession.getChipId());
+        }
     }
 
     /** Handle ranging rounds update for DT Tag */
@@ -853,9 +909,10 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
     void removeSession(UwbSession uwbSession) {
         if (uwbSession != null) {
             uwbSession.getBinder().unlinkToDeath(uwbSession, 0);
+            uwbSession.close();
             removeFromNonPrivilegedUidToFiraSessionTableIfNecessary(uwbSession);
             removeAdvertiserData(uwbSession);
-            mSessionTable.remove(uwbSession.getSessionId());
+            mSessionTable.remove(uwbSession.getSessionHandle());
             mDbgRecentlyClosedSessions.add(uwbSession);
         }
     }
@@ -1169,10 +1226,10 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             int status = UwbUciConstants.STATUS_CODE_FAILED;
             int timeoutMs = IUwbAdapter.RANGING_SESSION_START_THRESHOLD_MS;
             if (uwbSession.getProtocolName().equals(PROTOCOL_NAME)) {
-                // TODO (b/235714647): Temporary workaround to 2x ranging interval.
-                int minTimeoutNecessary = uwbSession.getCurrentFiraRangingIntervalMs() * 2;
+                int minTimeoutNecessary = uwbSession.getCurrentFiraRangingIntervalMs() * 4;
                 timeoutMs = timeoutMs > minTimeoutNecessary ? timeoutMs : minTimeoutNecessary;
             }
+            Log.v(TAG, "Stop timeout: " + timeoutMs);
             try {
                 status = mUwbInjector.runTaskOnSingleThreadExecutor(stopRangingTask, timeoutMs);
             } catch (TimeoutException e) {
@@ -1424,7 +1481,9 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                     byte sequenceNum = uwbSession.getDataSndSequenceNumber();
 
                     sendDataStatus = mNativeUwbManager.sendData(
-                            uwbSession.getSessionId(), sendDataInfo.remoteDeviceAddress.toBytes(),
+                            uwbSession.getSessionId(),
+                            DataTypeConversionUtil.convertShortMacAddressBytesToExtended(
+                                    sendDataInfo.remoteDeviceAddress.toBytes()),
                             UwbUciConstants.UWB_DESTINATION_END_POINT_HOST, sequenceNum,
                             sendDataInfo.data, uwbSession.getChipId());
                     Log.d(TAG, "MSG_SESSION_SEND_DATA status: " + sendDataStatus
@@ -1499,7 +1558,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         return true;
     }
 
-    public class UwbSession implements IBinder.DeathRecipient {
+    /** Represents a UWB session */
+    public class UwbSession implements IBinder.DeathRecipient, Closeable {
         @VisibleForTesting
         public static final long RANGING_RESULT_ERROR_NO_TIMEOUT = 0;
         private static final String RANGING_RESULT_ERROR_STREAK_TIMER_TAG =
@@ -1517,6 +1577,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         private final String mProtocolName;
         private final IBinder mIBinder;
         private final WaitObj mWaitObj;
+        private boolean mAcquiredDefaultPose = false;
         private Params mParams;
         private int mSessionState;
         private UwbMulticastListUpdateStatus mMulticastListUpdateStatus;
@@ -1534,9 +1595,10 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
         //   the data (there can be multiple advertisers in the same UWB session).
         // - The inner key (SequenceNumber) is used to ensure we don't store duplicate packets,
         //   and notify them to the higher layers in-order.
-        // TODO(b/246678053): Change the type of SequenceNumber from Long to Integer everywhere.
+        // TODO(b/270068278): Change the type of SequenceNumber from Long to Integer everywhere.
         private final ConcurrentHashMap<Long, SortedMap<Long, ReceivedDataInfo>>
                 mReceivedDataInfoMap;
+        private IPoseSource mPoseSource;
 
         // Store the UCI sequence number for the next Data packet (to be sent to UWBS).
         private byte mDataSndSequenceNumber;
@@ -1562,10 +1624,22 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
 
             if (params instanceof FiraOpenSessionParams) {
                 FiraOpenSessionParams firaParams = (FiraOpenSessionParams) params;
+
+                // Set up pose sources before we start creating UwbControlees.
+                switch (firaParams.getFilterType()) {
+                    case FILTER_TYPE_DEFAULT:
+                        this.mPoseSource = mUwbInjector.acquirePoseSource();
+                        this.mAcquiredDefaultPose = true;
+                        break;
+                    case FILTER_TYPE_APPLICATION:
+                        this.mPoseSource = new ApplicationPoseSource();
+                        break;
+                }
+
                 if (firaParams.getDestAddressList() != null) {
                     // Set up list of all controlees involved.
                     mControleeList = firaParams.getDestAddressList().stream()
-                            .map(UwbControlee::new)
+                            .map(addr -> new UwbControlee(addr, createFilterEngine(), mUwbInjector))
                             .collect(Collectors.toList());
                 }
                 mRangingErrorStreakTimeoutMs = firaParams
@@ -1601,6 +1675,9 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             return null;
         }
 
+        /**
+         * Gets the list of controlees active under this session.
+         */
         public List<UwbControlee> getControleeList() {
             return Collections.unmodifiableList(mControleeList);
         }
@@ -1657,9 +1734,26 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
          */
         public void addControlee(UwbAddress address) {
             if (mControleeList != null
-                    && !mControleeList.stream().anyMatch(e -> e.getUwbAddress().equals(address))) {
-                mControleeList.add(new UwbControlee(address));
+                    && mControleeList.stream().noneMatch(e -> e.getUwbAddress().equals(address))) {
+                mControleeList.add(new UwbControlee(address, createFilterEngine(), mUwbInjector));
             }
+        }
+
+        /**
+         * Fetches a {@link UwbControlee} object by {@link UwbAddress}.
+         * @param address The UWB address of the Controlee to find.
+         * @return The matching {@link UwbControlee}, or null if not found.
+         */
+        public UwbControlee getControlee(UwbAddress address) {
+            UwbControlee result = mControleeList
+                    .stream()
+                    .filter(e -> e.getUwbAddress().equals(address))
+                    .findFirst()
+                    .orElse(null);
+            if (result == null) {
+                Log.d(TAG, "Failure to find controlee " + address);
+            }
+            return result;
         }
 
         /**
@@ -1669,7 +1763,13 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
          */
         public void removeControlee(UwbAddress address) {
             if (mControleeList != null) {
-                mControleeList.removeIf(e -> e.getUwbAddress().equals(address));
+                for (UwbControlee controlee : mControleeList) {
+                    if (controlee.getUwbAddress().equals(address)) {
+                        controlee.close();
+                        mControleeList.remove(controlee);
+                        break;
+                    }
+                }
             }
         }
 
@@ -1817,11 +1917,14 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             // Start a timer on first failure to detect continuous failures.
             if (mRangingResultErrorStreakTimerListener == null) {
                 mRangingResultErrorStreakTimerListener = () -> {
-                    Log.w(TAG, "Continuous errors or no ranging results detected for 30 seconds."
+                    Log.w(TAG, "Continuous errors or no ranging results detected for "
+                            + mRangingErrorStreakTimeoutMs + " ms."
                             + " Stopping session");
                     stopRangingInternal(mSessionHandle, true /* triggeredBySystemPolicy */);
                 };
-                mAlarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                Log.v(TAG, "Starting error timer for "
+                        + mRangingErrorStreakTimeoutMs + " ms.");
+                mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP,
                         mUwbInjector.getElapsedSinceBootMillis()
                                 + mRangingErrorStreakTimeoutMs,
                         RANGING_RESULT_ERROR_STREAK_TIMER_TAG,
@@ -1839,7 +1942,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
 
         /**
          * Starts a timer to detect if the app that started the UWB session is in the background
-         * for longer than {@link UwbSession#mNonPrivilegedBgTimeoutMs }.
+         * for longer than {@link UwbSession#NON_PRIVILEGED_BG_APP_TIMEOUT_MS}.
          */
         private void startNonPrivilegedBgAppTimerIfNotSet() {
             // Start a timer when the non-privileged app goes into the background.
@@ -1905,6 +2008,28 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             mOperationType = type;
         }
 
+        /** Creates a filter engine based on the device configuration. */
+        public UwbFilterEngine createFilterEngine() {
+            if (mParams instanceof FiraOpenSessionParams) {
+                FiraOpenSessionParams firaParams = (FiraOpenSessionParams) mParams;
+                if (firaParams.getFilterType() == FILTER_TYPE_NONE) {
+                    return null; /* Bail early. App requested no engine. */
+                }
+            }
+
+            return mUwbInjector.createFilterEngine(mPoseSource);
+        }
+
+        /** Updates the pose information if an ApplicationPoseSource is being used. */
+        public void updatePose(FiraPoseUpdateParams updateParams) {
+            if (mPoseSource instanceof ApplicationPoseSource) {
+                ApplicationPoseSource aps = (ApplicationPoseSource) mPoseSource;
+                aps.applyPose(updateParams.getPoseInfo());
+            } else {
+                throw new IllegalStateException("Session not configured for application poses.");
+            }
+        }
+
         @Override
         public void binderDied() {
             Log.i(TAG, "binderDied : getSessionId is getSessionId() " + getSessionId());
@@ -1921,6 +2046,32 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                                     + "Error");
                 }
             }
+        }
+
+        /**
+         * Cleans up resources held by this object.
+         */
+        public void close() {
+            if (this.mAcquiredDefaultPose) {
+                if (mControleeList != null) {
+                    for (UwbControlee controlee : mControleeList) {
+                        controlee.close();
+                    }
+                    mControleeList.clear();
+                }
+
+                this.mAcquiredDefaultPose = false;
+                mUwbInjector.releasePoseSource();
+            }
+        }
+
+        /**
+         * Gets the pose source for this session. This may be the default pose source provided
+         * by UwbInjector.java when the session was created, or a specialized pose source later
+         * requested by the application.
+         */
+        public IPoseSource getPoseSource() {
+            return mPoseSource;
         }
 
         @Override
@@ -1958,8 +2109,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
     public synchronized void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         pw.println("---- Dump of UwbSessionManager ----");
         pw.println("Active sessions: ");
-        for (Map.Entry<Integer, UwbSession> entry : mSessionTable.entrySet()) {
-            UwbSession uwbSession = entry.getValue();
+        for (UwbSession uwbSession : mSessionTable.values()) {
             pw.println(uwbSession);
         }
         pw.println("Recently closed sessions: ");

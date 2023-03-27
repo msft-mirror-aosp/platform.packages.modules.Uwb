@@ -33,6 +33,7 @@ import android.os.RemoteException;
 import android.os.UserManager;
 import android.provider.Settings;
 import android.util.Log;
+import android.uwb.IOnUwbActivityEnergyInfoListener;
 import android.uwb.IUwbAdapter;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbAdfProvisionStateCallbacks;
@@ -331,6 +332,15 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     @Override
+    public int queryMaxDataSizeBytes(SessionHandle sessionHandle) {
+        if (!SdkLevel.isAtLeastU()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        return mUwbServiceCore.queryMaxDataSizeBytes(sessionHandle);
+    }
+
+    @Override
     public synchronized int getAdapterState() throws RemoteException {
         return mUwbServiceCore.getAdapterState();
     }
@@ -449,6 +459,12 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
                 err.getFileDescriptor(), args);
     }
 
+    @Override
+    public void updatePose(SessionHandle sessionHandle, PersistableBundle params) {
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.updatePose(sessionHandle, params);
+    }
+
     private void persistUwbToggleState(boolean enabled) {
         mUwbSettingsStore.put(UwbSettingsStore.SETTINGS_TOGGLE_STATE, enabled);
     }
@@ -538,4 +554,13 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             mUwbInjector.getUwbConfigStore().handleUserUnlock(userId);
         });
     }
+
+    @Override
+    public synchronized void getUwbActivityEnergyInfoAsync(
+            IOnUwbActivityEnergyInfoListener listener) throws RemoteException {
+        Log.i(TAG, "getUwbActivityEnergyInfoAsync uid=" + Binder.getCallingUid());
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.reportUwbActivityEnergyInfo(listener);
+    }
+
 }

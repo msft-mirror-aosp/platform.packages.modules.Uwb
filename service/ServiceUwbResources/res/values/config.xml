@@ -28,4 +28,86 @@
     specified in multichip-parser/uwbConfig.xsd. If config_isMultichip is false, this value will be
     ignored. -->
     <string translatable="false" name="config_multichipConfigPath"></string>
+
+    <!-- When true, the filter engine will alter UWB values to improve accuracy. -->
+    <bool name="enable_filters">false</bool>
+
+    <!-- Used to filter distance measurements. Determines percentage (1-100) of inliers within the
+    sliding window will be used to perform the average. At least one inlier will be used.
+    Therefore, a value of 0 is a true median, and a value  of 100 is a true average. -->
+    <integer name="filter_distance_inliers_percent">50</integer>
+
+    <!-- The size in samples of the sliding window for the distance filter. Note that this increases
+    latency to about half the window size. -->
+    <integer name="filter_distance_window">5</integer>
+
+    <!-- Used to filter AoA angle measurements. Determines percentage (1-100) of inliers within the
+    sliding window will be used to perform the average. At least one inlier will be used.
+    Therefore, a value of 0 is a true median, and a value  of 100 is a true average. -->
+    <integer name="filter_angle_inliers_percent">50</integer>
+
+    <!-- The size in samples of the sliding window for the AoA filters. Note that this increases
+    latency to about half the window size. -->
+    <integer name="filter_angle_window">5</integer>
+
+    <!-- Selects which pose source will be used by default to anticipate the next UWB measurement.
+    The pose source helps lower latency by shifting the filter states to reflect how the phone has
+    moved.
+    NONE = No pose source.
+    ROTATION_VECTOR = Requires gyro, accel and compass. Very accurate, rotation only.
+    GYRO = Gyro only. Less accurate, Saves a tiny bit of power.
+    SIXDOF = 6DOF sensor. Extremely accurate, accounts for position. Not available on most hardware.
+    DOUBLE_INTEGRATE = Double integration. Under development. Expect very bad motion drift.
+    -->
+    <string name="pose_source_type">ROTATION_VECTOR</string>
+
+    <!-- Enables elevation estimation. Strongly recommended for hardware that doesn't support
+    elevation. This helps produce better predictions from pose changes, and improves the quality
+    of the AoA primer. -->
+    <bool name="enable_primer_est_elevation">true</bool>
+
+    <!-- Enables the AoA conversion primer. This is needed on hardware that does not convert AoA
+    to spherical coordinates, including hardware that does not support elevation.-->
+    <bool name="enable_primer_aoa">true</bool>
+
+    <!-- Sets the field of view, in degrees. Note that this is in degrees from 0 (straight ahead),
+    which is not the same as how camera FOV is represented.
+    UWB values outside the field of view will be replaced with predicted values based on pose
+    changes. The FOV is circular, so a value of 90 will only provide continuous azimuth values if
+    elevation is zero.
+    If <=0 or >=180, the primer will be disabled, allowing an unlimited field of view. -->
+    <integer name="primer_fov_degrees">60</integer>
+
+    <!-- Sets how long reports with an error code will be replaced with predicted reports, in
+     seconds. This is measured from the time of the last non-error report. -->
+    <integer name="prediction_timeout_seconds">5</integer>
+
+    <!-- The Advertising Profile AoA Criteria Angle. This is the threshold with which the
+    Azimuth and Elevation values (from received OwrAoa measurements) are compared, to determine if
+    the IoT device is being pointed to by the phone. -->
+    <integer name="advertise_aoa_criteria_angle">10</integer>
+
+    <!-- The Advertising profile time threshold (for the received Owr Aoa Measurements). This
+    parameter controls the time window during which the received OwrAoa measurements are considered
+    to be valid (for determining if the IoT device is being pointed to). -->
+    <integer name="advertise_time_threshold_millis">5000</integer>
+
+    <!-- The Advertising profile array size. This controls the number of received Owr Aoa
+    measurements (or derived values), that will be stored. -->
+    <integer name="advertise_array_size_to_check">10</integer>
+
+    <!-- The Advertising profile array start index, for the stored values from Owr Aoa
+    measurements. Only the stored values at index >= the array start index will be used in the
+    Azimuth/Elevation variance calculation. -->
+    <integer name="advertise_array_start_index_to_cal_variance">2</integer>
+
+    <!-- The Advertising profile array end index, for the stored values from Owr Aoa
+    measurements. Only the stored values at index < the array end index will be used in the
+    Azimuth/Elevation variance calculation. -->
+    <integer name="advertise_array_end_index_to_cal_variance">8</integer>
+
+    <!-- The Advertising profile trusted variance value. This is the threshold within which the
+    computed Azimuth/Elevation variance values (from the received OwrAoa measurements)
+    is acceptable. -->
+    <integer name="advertise_trusted_variance_value">5</integer>
 </resources>
