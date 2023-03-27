@@ -898,6 +898,9 @@ public class UwbSessionManagerTest {
                 && uwbSession.getControleeList().get(0).getUwbAddress().equals(UWB_DEST_ADDRESS))
                 .isTrue();
 
+        assertThat(uwbSession.getControlee(UWB_DEST_ADDRESS)
+                .getUwbAddress().equals(UWB_DEST_ADDRESS)).isTrue();
+
         verify(uwbSession, never()).binderDied();
         verify(mockRangingCallbacks, never()).onRangingOpenFailed(any(), anyInt(), any());
         verify(mockBinder, never()).unlinkToDeath(any(), anyInt());
@@ -2599,7 +2602,7 @@ public class UwbSessionManagerTest {
         mTestLooper.dispatchNext();
 
         verify(mUwbInjector).runTaskOnSingleThreadExecutor(
-                any(), eq(TEST_RANGING_INTERVAL_MS * 2 * 11));
+                any(), eq(TEST_RANGING_INTERVAL_MS * 4 * 11));
         verify(mUwbSessionNotificationManager)
                 .onRangingStoppedWithApiReasonCode(eq(uwbSession),
                         eq(RangingChangeReason.LOCAL_API));

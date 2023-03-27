@@ -139,7 +139,8 @@ public class UwbInjector {
                 new UwbConfigurationManager(mNativeUwbManager);
         UwbSessionNotificationManager uwbSessionNotificationManager =
                 new UwbSessionNotificationManager(this);
-        UwbAdvertiseManager uwbAdvertiseManager = new UwbAdvertiseManager(this);
+        UwbAdvertiseManager uwbAdvertiseManager = new UwbAdvertiseManager(this,
+                mDeviceConfigFacade);
         mUwbSessionManager =
                 new UwbSessionManager(uwbConfigurationManager, mNativeUwbManager, mUwbMetrics,
                         uwbAdvertiseManager, uwbSessionNotificationManager, this,
@@ -481,7 +482,7 @@ public class UwbInjector {
         try {
             // Keep our ref counts accurate because isEnableFilters can change at runtime.
             --mPoseSourceRefCount;
-            if (mPoseSourceRefCount <= 0) {
+            if (mPoseSourceRefCount <= 0 && mDefaultPoseSource != null) {
                 mDefaultPoseSource.close();
                 mDefaultPoseSource = null;
             }
