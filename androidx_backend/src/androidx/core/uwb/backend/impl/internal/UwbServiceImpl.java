@@ -34,6 +34,8 @@ import com.google.uwb.support.multichip.ChipInfoParams;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -58,6 +60,7 @@ public class UwbServiceImpl {
         if (mHasUwbFeature) {
             mUwbManager = context.getSystemService(UwbManager.class);
             requireNonNull(mUwbManager);
+            mAdapterState = mUwbManager.getAdapterState();
             mUwbManager.registerAdapterStateCallback(mSerialExecutor, mAdapterStateCallback);
         } else {
             mUwbManager = null;
@@ -128,11 +131,20 @@ public class UwbServiceImpl {
             supportedChannels =
                     new ArrayList<Integer>(RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CHANNEL);
         }
+
+        Set<Integer> supportedNtfConfigsSet = new TreeSet<>();
+        for (FiraParams.RangeDataNtfConfigCapabilityFlag e :
+                specificationParams.getRangeDataNtfConfigCapabilities()) {
+            supportedNtfConfigsSet.add(Utils.convertFromFiraNtfConfig(e.ordinal()));
+        }
+        List<Integer> supportedNtfConfigs = new ArrayList<>(supportedNtfConfigsSet);
+
         return new RangingCapabilities(
                 true,
                 aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_AZIMUTH_SUPPORT),
                 aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_ELEVATION_SUPPORT),
                 minRangingInterval,
-                supportedChannels);
+                supportedChannels,
+                supportedNtfConfigs);
     }
 }
