@@ -545,6 +545,7 @@ public class UwbManagerTest {
         public boolean onStartFailedCalled;
         public boolean onReconfiguredCalled;
         public boolean onReconfiguredFailedCalled;
+        public boolean onStoppedCalled;
         public boolean onClosedCalled;
         public RangingSession rangingSession;
         public RangingReport rangingReport;
@@ -596,7 +597,10 @@ public class UwbManagerTest {
             mCtrlCountDownLatch.countDown();
         }
 
-        public void onStopped(int reason, @NonNull PersistableBundle parameters) { }
+        public void onStopped(int reason, @NonNull PersistableBundle parameters) {
+            onStoppedCalled = true;
+            mCtrlCountDownLatch.countDown();
+        }
 
         public void onStopFailed(int reason, @NonNull PersistableBundle params) { }
 
@@ -611,6 +615,37 @@ public class UwbManagerTest {
                 mResultCountDownLatch.countDown();
             }
         }
+
+        public void onControleeAdded(PersistableBundle params) { }
+
+        public void onControleeAddFailed(int reason, PersistableBundle params) { }
+
+        public void onControleeRemoved(PersistableBundle params) { }
+
+        public void onControleeRemoveFailed(int reason, PersistableBundle params) { }
+
+        public void onPaused(PersistableBundle params) { }
+
+        public void onPauseFailed(int reason, PersistableBundle params) { }
+
+        public void onResumed(PersistableBundle params) { }
+
+        public void onResumeFailed(int reason, PersistableBundle params) { }
+
+        public void onDataSent(UwbAddress remoteDeviceAddress, PersistableBundle params) { }
+
+        public void onDataSendFailed(UwbAddress remoteDeviceAddress,
+                int reason, PersistableBundle params) { }
+
+        public void onDataReceived(UwbAddress remoteDeviceAddress,
+                PersistableBundle params, byte[] data) { }
+
+        public void onDataReceiveFailed(UwbAddress remoteDeviceAddress,
+                int reason, PersistableBundle params) { }
+
+        public void onServiceDiscovered(PersistableBundle params) { }
+
+        public void onServiceConnected(PersistableBundle params) { }
     }
 
     @Test
@@ -859,16 +894,8 @@ public class UwbManagerTest {
         }
     }
 
-    @Test
-    @CddTest(requirements = {"7.3.13/C-1-1,C-1-2,C-1-5"})
-    public void testFiraRangingSession() throws Exception {
-        UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
-        CancellationSignal cancellationSignal = null;
-        CountDownLatch countDownLatch = new CountDownLatch(1);
-        CountDownLatch resultCountDownLatch = new CountDownLatch(1);
-        RangingSessionCallback rangingSessionCallback =
-                new RangingSessionCallback(countDownLatch, resultCountDownLatch);
-        FiraOpenSessionParams firaOpenSessionParams = new FiraOpenSessionParams.Builder()
+    private FiraOpenSessionParams.Builder makeOpenSessionBuilder() {
+        return new FiraOpenSessionParams.Builder()
                 .setProtocolVersion(new FiraProtocolVersion(1, 1))
                 .setSessionId(1)
                 .setSessionType(FiraParams.SESSION_TYPE_RANGING)
@@ -879,12 +906,24 @@ public class UwbManagerTest {
                 .setDeviceRole(FiraParams.RANGING_DEVICE_ROLE_INITIATOR)
                 .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
                 .setDeviceAddress(UwbAddress.fromBytes(new byte[] {0x5, 6}))
-                .setDestAddressList(List.of(UwbAddress.fromBytes(new byte[] {0x5, 6})))
+                .setDestAddressList(List.of(UwbAddress.fromBytes(new byte[] {0x5, 6})));
+    }
+
+    @Test
+    @CddTest(requirements = {"7.3.13/C-1-1,C-1-2,C-1-5"})
+    public void testFiraRangingSession() throws Exception {
+        UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
+        CancellationSignal cancellationSignal = null;
+        CountDownLatch countDownLatch = new CountDownLatch(1);
+        CountDownLatch resultCountDownLatch = new CountDownLatch(1);
+        RangingSessionCallback rangingSessionCallback =
+                new RangingSessionCallback(countDownLatch, resultCountDownLatch);
+        FiraOpenSessionParams firaOpenSessionParams = makeOpenSessionBuilder()
                 .build();
         try {
             // Needs UWB_PRIVILEGED & UWB_RANGING permission which is held by shell.
             uiAutomation.adoptShellPermissionIdentity();
-            // Try to start a ranging session with invalid params, should fail.
+            // Start ranging session
             cancellationSignal = mUwbManager.openRangingSession(
                     firaOpenSessionParams.toBundle(),
                     Executors.newSingleThreadExecutor(),
@@ -911,8 +950,14 @@ public class UwbManagerTest {
             // Check the UWB state.
             assertThat(mUwbManager.getAdapterState()).isEqualTo(STATE_ENABLED_ACTIVE);
 
+            countDownLatch = new CountDownLatch(1);
+            rangingSessionCallback.replaceCtrlCountDownLatch(countDownLatch);
             // Stop ongoing session.
             rangingSessionCallback.rangingSession.stop();
+
+            // Wait for on stopped callback.
+            assertThat(countDownLatch.await(1, TimeUnit.SECONDS)).isTrue();
+            assertThat(rangingSessionCallback.onStoppedCalled).isTrue();
         } finally {
             if (cancellationSignal != null) {
                 countDownLatch = new CountDownLatch(1);
@@ -1012,8 +1057,14 @@ public class UwbManagerTest {
             // Check the UWB state.
             assertThat(mUwbManager.getAdapterState()).isEqualTo(STATE_ENABLED_ACTIVE);
 
+            countDownLatch = new CountDownLatch(1);
+            rangingSessionCallback.replaceCtrlCountDownLatch(countDownLatch);
             // Stop ongoing session.
             rangingSessionCallback.rangingSession.stop();
+
+            // Wait for on stopped callback.
+            assertThat(countDownLatch.await(1, TimeUnit.SECONDS)).isTrue();
+            assertThat(rangingSessionCallback.onStoppedCalled).isTrue();
         } finally {
             if (cancellationSignal != null) {
                 countDownLatch = new CountDownLatch(1);
