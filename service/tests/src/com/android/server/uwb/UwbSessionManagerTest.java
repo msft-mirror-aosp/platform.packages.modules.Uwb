@@ -96,6 +96,7 @@ import android.uwb.UwbOemExtensionCallbackListener;
 import com.android.server.uwb.UwbSessionManager.UwbSession;
 import com.android.server.uwb.UwbSessionManager.WaitObj;
 import com.android.server.uwb.advertisement.UwbAdvertiseManager;
+import com.android.server.uwb.data.DtTagUpdateRangingRoundsStatus;
 import com.android.server.uwb.data.UwbMulticastListUpdateStatus;
 import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbUciConstants;
@@ -107,6 +108,7 @@ import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccPulseShapeCombo;
 import com.google.uwb.support.ccc.CccSpecificationParams;
 import com.google.uwb.support.ccc.CccStartRangingParams;
+import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraProtocolVersion;
@@ -156,6 +158,7 @@ public class UwbSessionManagerTest {
     private static final int SOURCE_END_POINT = 100;
     private static final int DEST_END_POINT = 200;
     private static final int HANDLE_ID = 12;
+    private static final int MAX_RX_DATA_PACKETS_TO_STORE = 10;
     private static final int PID = Process.myPid();
 
     @Mock
@@ -178,6 +181,8 @@ public class UwbSessionManagerTest {
     private ActivityManager mActivityManager;
     @Mock
     private UwbServiceCore mUwbServiceCore;
+    @Mock
+    private DeviceConfigFacade mDeviceConfigFacade;
     private TestLooper mTestLooper = new TestLooper();
     private UwbSessionManager mUwbSessionManager;
     @Captor
@@ -191,6 +196,7 @@ public class UwbSessionManagerTest {
         when(mUwbInjector.isSystemApp(UID, PACKAGE_NAME)).thenReturn(true);
         when(mUwbInjector.isForegroundAppOrService(UID, PACKAGE_NAME)).thenReturn(true);
         when(mUwbInjector.getUwbServiceCore()).thenReturn(mUwbServiceCore);
+        when(mUwbInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
         doAnswer(invocation -> {
             FutureTask t = invocation.getArgument(0);
             t.run();
@@ -897,6 +903,9 @@ public class UwbSessionManagerTest {
         assertThat(uwbSession.getControleeList().size() == 1
                 && uwbSession.getControleeList().get(0).getUwbAddress().equals(UWB_DEST_ADDRESS))
                 .isTrue();
+
+        assertThat(uwbSession.getControlee(UWB_DEST_ADDRESS)
+                .getUwbAddress().equals(UWB_DEST_ADDRESS)).isTrue();
 
         verify(uwbSession, never()).binderDied();
         verify(mockRangingCallbacks, never()).onRangingOpenFailed(any(), anyInt(), any());
@@ -1860,6 +1869,8 @@ public class UwbSessionManagerTest {
                 PEER_EXTENDED_MAC_ADDRESS_2_LONG, DATA_SEQUENCE_NUM);
         UwbSessionManager.ReceivedDataInfo deviceTwoPacketTwo = buildReceivedDataInfo(
                 PEER_EXTENDED_MAC_ADDRESS_2_LONG, DATA_SEQUENCE_NUM_1);
+        when(mDeviceConfigFacade.getRxDataMaxPacketsToStore())
+                .thenReturn(MAX_RX_DATA_PACKETS_TO_STORE);
 
         uwbSession.addReceivedDataInfo(deviceOnePacketOne);
         uwbSession.addReceivedDataInfo(deviceOnePacketTwo);
@@ -1878,6 +1889,63 @@ public class UwbSessionManagerTest {
         assertThat(uwbSession.getAllReceivedDataInfo(PEER_EXTENDED_MAC_ADDRESS_2_LONG)).isEqualTo(
                 List.of(deviceTwoPacketOne, deviceTwoPacketTwo));
         assertThat(uwbSession.getAllReceivedDataInfo(PEER_EXTENDED_MAC_ADDRESS_2_LONG)).isEqualTo(
+                List.of());
+    }
+
+    @Test
+    public void session_receivedDataInfo_maxCapacity() throws Exception {
+        UwbSession uwbSession = prepareExistingUwbSession();
+
+        UwbSessionManager.ReceivedDataInfo rxPacketOne = buildReceivedDataInfo(
+                PEER_EXTENDED_MAC_ADDRESS_LONG, DATA_SEQUENCE_NUM + 1);
+        UwbSessionManager.ReceivedDataInfo rxPacketTwo = buildReceivedDataInfo(
+                PEER_EXTENDED_MAC_ADDRESS_LONG, DATA_SEQUENCE_NUM + 2);
+        UwbSessionManager.ReceivedDataInfo rxPacketThree = buildReceivedDataInfo(
+                PEER_EXTENDED_MAC_ADDRESS_LONG, DATA_SEQUENCE_NUM + 3);
+        UwbSessionManager.ReceivedDataInfo rxPacketFour = buildReceivedDataInfo(
+                PEER_EXTENDED_MAC_ADDRESS_LONG, DATA_SEQUENCE_NUM + 4);
+
+        // Setup the UwbSession to have multiple data packets (being received) from one remote
+        // device, such that it's at the capacity. We send the packets out-of-order, but do want
+        // to extract them in order.
+        when(mDeviceConfigFacade.getRxDataMaxPacketsToStore()).thenReturn(3);
+
+        // Case 1 - Setup the UwbSession to have multiple Rx data packets (beyond capacity), such
+        // that the last packet is the smallest one and should be dropped.
+        uwbSession.addReceivedDataInfo(rxPacketTwo);
+        uwbSession.addReceivedDataInfo(rxPacketFour);
+        uwbSession.addReceivedDataInfo(rxPacketThree);
+        uwbSession.addReceivedDataInfo(rxPacketOne);
+
+        // Verify that the first call to getAllReceivedDataInfo() returns the max capacity number of
+        // packets (in-order), and the second call receives an empty list.
+        assertThat(uwbSession.getAllReceivedDataInfo(PEER_EXTENDED_MAC_ADDRESS_LONG)).isEqualTo(
+                List.of(rxPacketTwo, rxPacketThree, rxPacketFour));
+        assertThat(uwbSession.getAllReceivedDataInfo(PEER_EXTENDED_MAC_ADDRESS_LONG)).isEqualTo(
+                List.of());
+
+        // Case 2 - Setup the UwbSession to have multiple Rx data packets (beyond capacity), such
+        // that one of the stored packets is the smallest one and should be dropped.
+        uwbSession.addReceivedDataInfo(rxPacketOne);
+        uwbSession.addReceivedDataInfo(rxPacketTwo);
+        uwbSession.addReceivedDataInfo(rxPacketFour);
+        uwbSession.addReceivedDataInfo(rxPacketThree);
+
+        assertThat(uwbSession.getAllReceivedDataInfo(PEER_EXTENDED_MAC_ADDRESS_LONG)).isEqualTo(
+                List.of(rxPacketTwo, rxPacketThree, rxPacketFour));
+        assertThat(uwbSession.getAllReceivedDataInfo(PEER_EXTENDED_MAC_ADDRESS_LONG)).isEqualTo(
+                List.of());
+
+        // Case 3 - Setup the UwbSession to have multiple Rx data packets (beyond capacity), such
+        // that one of the stored packets is repeated. The repeated packet should be ignored.
+        uwbSession.addReceivedDataInfo(rxPacketTwo);
+        uwbSession.addReceivedDataInfo(rxPacketFour);
+        uwbSession.addReceivedDataInfo(rxPacketThree);
+        uwbSession.addReceivedDataInfo(rxPacketFour);
+
+        assertThat(uwbSession.getAllReceivedDataInfo(PEER_EXTENDED_MAC_ADDRESS_LONG)).isEqualTo(
+                List.of(rxPacketTwo, rxPacketThree, rxPacketFour));
+        assertThat(uwbSession.getAllReceivedDataInfo(PEER_EXTENDED_MAC_ADDRESS_LONG)).isEqualTo(
                 List.of());
     }
 
@@ -2599,7 +2667,7 @@ public class UwbSessionManagerTest {
         mTestLooper.dispatchNext();
 
         verify(mUwbInjector).runTaskOnSingleThreadExecutor(
-                any(), eq(TEST_RANGING_INTERVAL_MS * 2 * 11));
+                any(), eq(TEST_RANGING_INTERVAL_MS * 4 * 11));
         verify(mUwbSessionNotificationManager)
                 .onRangingStoppedWithApiReasonCode(eq(uwbSession),
                         eq(RangingChangeReason.LOCAL_API));
@@ -2790,6 +2858,24 @@ public class UwbSessionManagerTest {
     }
 
     @Test
+    public void onSessionStatusNotification_session_deinit_after_close() throws Exception {
+        UwbSession uwbSession = prepareExistingUwbSession();
+        when(mNativeUwbManager.deInitSession(eq(TEST_SESSION_ID), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+
+        mUwbSessionManager.deinitAllSession();
+        verify(mUwbSessionNotificationManager).onRangingClosedWithApiReasonCode(
+                eq(uwbSession), eq(RangingChangeReason.SYSTEM_POLICY));
+        verify(mUwbMetrics).logRangingCloseEvent(
+                eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+        assertThat(mUwbSessionManager.getSessionCount()).isEqualTo(0);
+
+        // Ignore the stale deinit
+        mUwbSessionManager.handleOnDeInit(uwbSession);
+        verifyNoMoreInteractions(mUwbSessionNotificationManager);
+    }
+
+    @Test
     public void onSessionStatusNotification_session_deinit_owrAoa() throws Exception {
         UwbSession uwbSession = prepareExistingUwbSession();
         UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
@@ -2797,6 +2883,8 @@ public class UwbSessionManagerTest {
                 UwbUciConstants.STATUS_CODE_OK);
 
         // First call onDataReceived() to get the application payload data.
+        when(mDeviceConfigFacade.getRxDataMaxPacketsToStore())
+                .thenReturn(MAX_RX_DATA_PACKETS_TO_STORE);
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
                 DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
                 DATA_PAYLOAD);
@@ -2843,6 +2931,30 @@ public class UwbSessionManagerTest {
         verify(mUwbMetrics).logRangingCloseEvent(
                 eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_FAILED));
         assertThat(mUwbSessionManager.getSessionCount()).isEqualTo(0);
+    }
+
+    @Test
+    public void testDtTagRangingRoundsUpdate() throws Exception {
+        UwbSession uwbSession = prepareExistingUwbSession();
+        byte[] indices = {1, 2};
+        DtTagUpdateRangingRoundsStatus status = new DtTagUpdateRangingRoundsStatus(0,
+                indices.length, indices);
+        PersistableBundle bundle = new DlTDoARangingRoundsUpdate.Builder()
+                .setSessionId(uwbSession.getSessionId())
+                .setNoOfActiveRangingRounds(indices.length)
+                .setRangingRoundIndexes(indices)
+                .build()
+                .toBundle();
+
+        when(mNativeUwbManager.sessionUpdateActiveRoundsDtTag(anyInt(), anyInt(), any(),
+                anyString())).thenReturn(status);
+
+        mUwbSessionManager.rangingRoundsUpdateDtTag(uwbSession.getSessionHandle(), bundle);
+        mTestLooper.dispatchAll();
+
+        verify(mNativeUwbManager).sessionUpdateActiveRoundsDtTag(uwbSession.getSessionId(),
+                indices.length, indices, uwbSession.getChipId());
+        verify(mUwbSessionNotificationManager).onRangingRoundsUpdateStatus(any(), any());
     }
 
     private UwbSessionManager.ReceivedDataInfo buildReceivedDataInfo(long macAddress) {
