@@ -16,8 +16,6 @@
 
 package com.android.server.uwb;
 
-import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_OK;
-
 import android.annotation.NonNull;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -34,13 +32,13 @@ import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
-import android.util.Pair;
 
 import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.Keep;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.HandlerExecutor;
+import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
 
 import java.io.FileDescriptor;
@@ -203,7 +201,7 @@ public class UwbCountryCode {
             telephonyCountryCodeInfoSlot.lastKnownCountryCode =
                     lastKnownCountryCode.toUpperCase(Locale.US);
         }
-        return setCountryCode(false).second;
+        return setCountryCode(false);
     }
 
     private boolean setWifiCountryCode(String countryCode) {
@@ -216,7 +214,7 @@ public class UwbCountryCode {
         } else {
             mWifiCountryCode = countryCode.toUpperCase(Locale.US);
         }
-        return setCountryCode(false).second;
+        return setCountryCode(false);
     }
 
     /**
@@ -258,10 +256,9 @@ public class UwbCountryCode {
      *
      * @param forceUpdate Force update the country code even if it was the same as previously cached
      *                    value.
-     * @return Pair<UWBS StatusCode from setting the country code,
-     *         true if the country code is set successfully, false otherwise or if not required>.
+     * @return true if the country code is set successfully, false otherwise.
      */
-    public Pair<Integer, Boolean> setCountryCode(boolean forceUpdate) {
+    public boolean setCountryCode(boolean forceUpdate) {
         String country = pickCountryCode();
         if (country == null) {
             Log.i(TAG, "No valid country code, reset to " + DEFAULT_COUNTRY_CODE);
@@ -269,20 +266,21 @@ public class UwbCountryCode {
         }
         if (!forceUpdate && Objects.equals(country, mCountryCode)) {
             Log.i(TAG, "Ignoring already set country code: " + country);
-            return new Pair<>(STATUS_CODE_OK, false);
+            return false;
         }
         Log.d(TAG, "setCountryCode to " + country);
         int status = mNativeUwbManager.setCountryCode(country.getBytes(StandardCharsets.UTF_8));
-        if (status != STATUS_CODE_OK) {
-            Log.i(TAG, "Failed to set country code, with status code: " + status);
-            return new Pair<>(status, false);
+        boolean success = (status == UwbUciConstants.STATUS_CODE_OK);
+        if (!success) {
+            Log.i(TAG, "Failed to set country code");
+            return false;
         }
         mCountryCode = country;
         mCountryCodeUpdatedTimestamp = LocalDateTime.now().format(FORMATTER);
         for (CountryCodeChangedListener listener : mListeners) {
             listener.onCountryCodeChanged(country);
         }
-        return new Pair<>(status, true);
+        return true;
     }
 
     /**
