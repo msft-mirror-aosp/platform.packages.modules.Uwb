@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from mobly import asserts
 from mobly.controllers import android_device
-from mobly.controllers.android_device_lib import callback_handler
+from mobly.controllers.android_device_lib import callback_handler_v2
 
 from lib import uwb_ranging_decorator
 
@@ -15,18 +15,17 @@ from lib import uwb_ranging_decorator
 WAIT_TIME_SEC = 3
 
 
-def verify_uwb_state_callback(ad: android_device.AndroidDevice,
-                              uwb_event: str,
-                              callback_key: Optional[str] = None,
-                              handler: Optional[
-                                  callback_handler.CallbackHandler] = None,
-                              timeout: int = WAIT_TIME_SEC) -> bool:
+def verify_uwb_state_callback(
+    ad: android_device.AndroidDevice,
+    uwb_event: str,
+    handler: Optional[callback_handler_v2.CallbackHandlerV2] = None,
+    timeout: int = WAIT_TIME_SEC,
+) -> bool:
   """Verifies expected UWB callback is received.
 
   Args:
     ad: android device object.
     uwb_event: expected callback event.
-    callback_key: callback key.
     handler: callback handler.
     timeout: timeout for callback event.
 
@@ -34,6 +33,7 @@ def verify_uwb_state_callback(ad: android_device.AndroidDevice,
     True if expected callback is received, False if not.
   """
   callback_status = False
+  callback_key = None
   start_time = time.time()
   if handler is None:
     callback_key = "uwb_state_%s" % random.randint(1, 100)
@@ -74,7 +74,7 @@ def get_uwb_state(ad: android_device.AndroidDevice) -> bool:
 def set_uwb_state_and_verify(
     ad: android_device.AndroidDevice,
     state: bool,
-    handler: Optional[callback_handler.CallbackHandler] = None,
+    handler: Optional[callback_handler_v2.CallbackHandlerV2] = None,
 ):
   """Sets UWB state to on or off and verifies it.
 
