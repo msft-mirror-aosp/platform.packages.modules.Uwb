@@ -16,7 +16,17 @@
 
 package com.android.server.uwb;
 
-import static org.mockito.Mockito.*;
+import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_OK;
+
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -29,6 +39,7 @@ import android.os.test.TestLooper;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
+import android.util.Pair;
 
 import androidx.test.filters.SmallTest;
 
@@ -99,7 +110,7 @@ public class UwbCountryCodeTest {
         when(mContext.getPackageManager()).thenReturn(mPackageManager);
         when(mPackageManager.hasSystemFeature(PackageManager.FEATURE_WIFI)).thenReturn(true);
         when(mNativeUwbManager.setCountryCode(any())).thenReturn(
-                (byte) UwbUciConstants.STATUS_CODE_OK);
+                (byte) STATUS_CODE_OK);
         mUwbCountryCode = new UwbCountryCode(
                 mContext, mNativeUwbManager, new Handler(mTestLooper.getLooper()), mUwbInjector);
     }
@@ -120,6 +131,14 @@ public class UwbCountryCodeTest {
     }
 
     @Test
+    public void testSkipWhenExceptionThrownInInitializeCountryCodeFromTelephony() {
+        doThrow(new IllegalArgumentException()).when(mTelephonyManager).getNetworkCountryIso(
+                anyInt());
+        mUwbCountryCode.initialize();
+        verify(mNativeUwbManager, never()).setCountryCode(any());
+    }
+
+    @Test
     public void testInitializeCountryCodeFromTelephonyVerifyListener() {
         UwbCountryCode.CountryCodeChangedListener listener = mock(
                 UwbCountryCode.CountryCodeChangedListener.class);
@@ -137,7 +156,8 @@ public class UwbCountryCodeTest {
         mUwbCountryCode.initialize();
         clearInvocations(mNativeUwbManager);
 
-        mUwbCountryCode.setCountryCode(false);
+        assertEquals(Pair.create(STATUS_CODE_OK, TEST_COUNTRY_CODE),
+                mUwbCountryCode.setCountryCode(false));
         // already set.
         verify(mNativeUwbManager, never()).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
@@ -149,7 +169,8 @@ public class UwbCountryCodeTest {
         mUwbCountryCode.initialize();
         clearInvocations(mNativeUwbManager);
 
-        mUwbCountryCode.setCountryCode(true);
+        assertEquals(Pair.create(STATUS_CODE_OK, TEST_COUNTRY_CODE),
+                mUwbCountryCode.setCountryCode(true));
         // set again
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
@@ -161,9 +182,24 @@ public class UwbCountryCodeTest {
         mUwbCountryCode.initialize();
         clearInvocations(mNativeUwbManager);
 
-        mUwbCountryCode.setCountryCode(false);
+        assertEquals(Pair.create(STATUS_CODE_OK, TEST_COUNTRY_CODE),
+                mUwbCountryCode.setCountryCode(false));
         // already set.
         verify(mNativeUwbManager, never()).setCountryCode(
+                TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void testSetCountryCode_statusError() {
+        when(mTelephonyManager.getNetworkCountryIso(anyInt())).thenReturn(TEST_COUNTRY_CODE);
+        mUwbCountryCode.initialize();
+        clearInvocations(mNativeUwbManager);
+
+        when(mNativeUwbManager.setCountryCode(any())).thenReturn(
+                (byte) UwbUciConstants.STATUS_CODE_FAILED);
+        assertEquals(Pair.create(UwbUciConstants.STATUS_CODE_FAILED, TEST_COUNTRY_CODE),
+                mUwbCountryCode.setCountryCode(true));
+        verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
     }
 
