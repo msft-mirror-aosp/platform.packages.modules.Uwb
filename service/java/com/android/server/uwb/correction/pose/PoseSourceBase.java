@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,13 +46,13 @@ public abstract class PoseSourceBase implements IPoseSource {
 
     /**
      * Starts the pose source. Called by the {@link PoseSourceBase} when the first
-     *  listener subscribes.
+     * listener subscribes.
      */
     protected abstract void start();
 
     /**
      * Stops the pose source. Called by the {@link PoseSourceBase} when the last
-     *  listener unsubscribes.
+     * listener unsubscribes.
      */
     protected abstract void stop();
 
@@ -61,7 +61,15 @@ public abstract class PoseSourceBase implements IPoseSource {
      */
     @Override
     public void close() {
-
+        mLockObject.lock();
+        try {
+            if (mListeners.size() > 0) {
+                mListeners.clear();
+                stop(); // Run inside the lock to make sure stops and starts are sequential.
+            }
+        } finally {
+            mLockObject.unlock();
+        }
     }
 
     /**
@@ -110,7 +118,7 @@ public abstract class PoseSourceBase implements IPoseSource {
         mLockObject.lock();
         try {
             // Copy snapshot to minimize lock time and allow changes to listeners while
-            //  we report pose changes.
+            // we report pose changes.
             listeners = new ArrayList<>(this.mListeners);
         } finally {
             mLockObject.unlock();

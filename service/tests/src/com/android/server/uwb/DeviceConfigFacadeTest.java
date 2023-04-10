@@ -30,11 +30,15 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
 import android.app.test.MockAnswerUtil;
+import android.content.Context;
+import android.content.res.Resources;
 import android.os.Handler;
 import android.os.test.TestLooper;
 import android.provider.DeviceConfig;
 
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
+import com.android.server.uwb.DeviceConfigFacade.PoseSourceType;
+import com.android.uwb.resources.R;
 
 import org.junit.After;
 import org.junit.Before;
@@ -45,7 +49,8 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 
 public class DeviceConfigFacadeTest {
-    @Mock UwbInjector mUwbInjector;
+    @Mock private Resources mResources;
+    @Mock private Context mContext;
 
     final ArgumentCaptor<DeviceConfig.OnPropertiesChangedListener>
             mOnPropertiesChangedListenerCaptor =
@@ -56,7 +61,7 @@ public class DeviceConfigFacadeTest {
     private MockitoSession mSession;
 
     /**
-     * Setup the mocks and an instance of WifiConfigManager before each test.
+     * Setup the mocks and an instance of DeviceConfig before each test.
      */
     @Before
     public void setUp() throws Exception {
@@ -91,8 +96,44 @@ public class DeviceConfigFacadeTest {
                     }
                 });
 
+        when(mResources.getBoolean(R.bool.enable_filters)).thenReturn(true);
+        when(mResources.getBoolean(R.bool.enable_primer_est_elevation)).thenReturn(true);
+        when(mResources.getBoolean(R.bool.enable_primer_aoa)).thenReturn(true);
+        when(mResources.getInteger(R.integer.filter_distance_inliers_percent))
+                .thenReturn(1);
+        when(mResources.getInteger(R.integer.filter_distance_window))
+                .thenReturn(2);
+        when(mResources.getInteger(R.integer.filter_angle_inliers_percent))
+                .thenReturn(3);
+        when(mResources.getInteger(R.integer.filter_angle_window))
+                .thenReturn(4);
+        when(mResources.getInteger(R.integer.primer_fov_degrees))
+                .thenReturn(5);
+        when(mResources.getString(R.string.pose_source_type))
+                .thenReturn("ROTATION_VECTOR");
+        when(mResources.getInteger(R.integer.prediction_timeout_seconds))
+                .thenReturn(6);
+
+        // Setup the default values for the Advertising profile and Rx data packet parameters.
+        when(mResources.getInteger(R.integer.advertise_aoa_criteria_angle))
+                .thenReturn(5);
+        when(mResources.getInteger(R.integer.advertise_time_threshold_millis))
+                .thenReturn(2000);
+        when(mResources.getInteger(R.integer.advertise_array_size_to_check))
+                .thenReturn(12);
+        when(mResources.getInteger(R.integer.advertise_array_start_index_to_cal_variance))
+                .thenReturn(3);
+        when(mResources.getInteger(R.integer.advertise_array_end_index_to_cal_variance))
+                .thenReturn(7);
+        when(mResources.getInteger(R.integer.advertise_trusted_variance_value))
+                .thenReturn(12);
+        when(mResources.getInteger(R.integer.rx_data_max_packets_to_store))
+                .thenReturn(10);
+
+        when(mContext.getResources()).thenReturn(mResources);
+
         mDeviceConfigFacade = new DeviceConfigFacade(new Handler(mLooper.getLooper()),
-                mUwbInjector);
+                mContext);
         verify(() -> DeviceConfig.addOnPropertiesChangedListener(anyString(), any(),
                 mOnPropertiesChangedListenerCaptor.capture()));
     }
@@ -116,6 +157,30 @@ public class DeviceConfigFacadeTest {
         assertEquals(false, mDeviceConfigFacade.isDeviceErrorBugreportEnabled());
         assertEquals(DeviceConfigFacade.DEFAULT_BUG_REPORT_MIN_INTERVAL_MS,
                 mDeviceConfigFacade.getBugReportMinIntervalMs());
+
+        assertEquals(true, mDeviceConfigFacade.isEnableFilters());
+        assertEquals(true, mDeviceConfigFacade.isEnablePrimerEstElevation());
+        assertEquals(true, mDeviceConfigFacade.isEnablePrimerAoA());
+
+        assertEquals(1, mDeviceConfigFacade.getFilterDistanceInliersPercent());
+        assertEquals(2, mDeviceConfigFacade.getFilterDistanceWindow());
+        assertEquals(3, mDeviceConfigFacade.getFilterAngleInliersPercent());
+        assertEquals(4, mDeviceConfigFacade.getFilterAngleWindow());
+        assertEquals(5, mDeviceConfigFacade.getPrimerFovDegree());
+        assertEquals(PoseSourceType.ROTATION_VECTOR, mDeviceConfigFacade.getPoseSourceType());
+        assertEquals(6, mDeviceConfigFacade.getPredictionTimeoutSeconds());
+
+        // true because FOV is 5: within limits.
+        assertEquals(true, mDeviceConfigFacade.isEnablePrimerFov());
+
+        // Check the default values for the Advertising profile and Rx packet parameters.
+        assertEquals(5, mDeviceConfigFacade.getAdvertiseAoaCriteriaAngle());
+        assertEquals(2000, mDeviceConfigFacade.getAdvertiseTimeThresholdMillis());
+        assertEquals(12, mDeviceConfigFacade.getAdvertiseArraySizeToCheck());
+        assertEquals(3, mDeviceConfigFacade.getAdvertiseArrayStartIndexToCalVariance());
+        assertEquals(7, mDeviceConfigFacade.getAdvertiseArrayEndIndexToCalVariance());
+        assertEquals(12, mDeviceConfigFacade.getAdvertiseTrustedVarianceValue());
+        assertEquals(10, mDeviceConfigFacade.getRxDataMaxPacketsToStore());
     }
 
     /**
@@ -131,11 +196,70 @@ public class DeviceConfigFacadeTest {
         when(DeviceConfig.getInt(anyString(), eq("bug_report_min_interval_ms"),
                 anyInt())).thenReturn(10 * 3600_000);
 
+        when(DeviceConfig.getBoolean(anyString(), eq("enable_filters"),
+                anyBoolean())).thenReturn(false);
+        when(DeviceConfig.getBoolean(anyString(), eq("enable_primer_est_elevation"),
+                anyBoolean())).thenReturn(false);
+        when(DeviceConfig.getBoolean(anyString(), eq("enable_primer_aoa"),
+                anyBoolean())).thenReturn(false);
+
+        when(DeviceConfig.getInt(anyString(), eq("filter_distance_inliers_percent"),
+                anyInt())).thenReturn(6);
+        when(DeviceConfig.getInt(anyString(), eq("filter_distance_window"),
+                anyInt())).thenReturn(7);
+        when(DeviceConfig.getInt(anyString(), eq("filter_angle_inliers_percent"),
+                anyInt())).thenReturn(8);
+        when(DeviceConfig.getInt(anyString(), eq("filter_angle_window"),
+                anyInt())).thenReturn(9);
+        when(DeviceConfig.getInt(anyString(), eq("primer_fov_degrees"),
+                anyInt())).thenReturn(0);
+        when(DeviceConfig.getString(anyString(), eq("pose_source_type"),
+                anyString())).thenReturn("NONE");
+        when(DeviceConfig.getInt(anyString(), eq("prediction_timeout_seconds"),
+                anyInt())).thenReturn(5);
+
+        when(DeviceConfig.getInt(anyString(), eq("advertise_aoa_criteria_angle"), anyInt()))
+                .thenReturn(20);
+        when(DeviceConfig.getInt(anyString(), eq("advertise_time_threshold_millis"), anyInt()))
+                .thenReturn(3000);
+        when(DeviceConfig.getInt(anyString(), eq("advertise_array_size_to_check"), anyInt()))
+                .thenReturn(15);
+        when(DeviceConfig.getInt(anyString(), eq("advertise_array_start_index_to_cal_variance"),
+                anyInt())).thenReturn(3);
+        when(DeviceConfig.getInt(anyString(), eq("advertise_array_end_index_to_cal_variance"),
+                anyInt())).thenReturn(7);
+        when(DeviceConfig.getInt(anyString(), eq("advertise_trusted_variance_value"), anyInt()))
+                .thenReturn(12);
+        when(DeviceConfig.getInt(anyString(), eq("rx_data_max_packets_to_store"),
+                anyInt())).thenReturn(20);
+
         mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);
 
         // Verifying fields are updated to the new values
         assertEquals(4000, mDeviceConfigFacade.getRangingResultLogIntervalMs());
         assertEquals(true, mDeviceConfigFacade.isDeviceErrorBugreportEnabled());
         assertEquals(10 * 3600_000, mDeviceConfigFacade.getBugReportMinIntervalMs());
+
+        assertEquals(false, mDeviceConfigFacade.isEnableFilters());
+        assertEquals(false, mDeviceConfigFacade.isEnablePrimerEstElevation());
+        assertEquals(false, mDeviceConfigFacade.isEnablePrimerAoA());
+        assertEquals(6, mDeviceConfigFacade.getFilterDistanceInliersPercent());
+        assertEquals(7, mDeviceConfigFacade.getFilterDistanceWindow());
+        assertEquals(8, mDeviceConfigFacade.getFilterAngleInliersPercent());
+        assertEquals(9, mDeviceConfigFacade.getFilterAngleWindow());
+        assertEquals(0, mDeviceConfigFacade.getPrimerFovDegree());
+        assertEquals(PoseSourceType.NONE, mDeviceConfigFacade.getPoseSourceType());
+        assertEquals(5, mDeviceConfigFacade.getPredictionTimeoutSeconds());
+
+        // false because FOV is 0.
+        assertEquals(false, mDeviceConfigFacade.isEnablePrimerFov());
+
+        assertEquals(20, mDeviceConfigFacade.getAdvertiseAoaCriteriaAngle());
+        assertEquals(3000, mDeviceConfigFacade.getAdvertiseTimeThresholdMillis());
+        assertEquals(15, mDeviceConfigFacade.getAdvertiseArraySizeToCheck());
+        assertEquals(3, mDeviceConfigFacade.getAdvertiseArrayStartIndexToCalVariance());
+        assertEquals(7 , mDeviceConfigFacade.getAdvertiseArrayEndIndexToCalVariance());
+        assertEquals(12, mDeviceConfigFacade.getAdvertiseTrustedVarianceValue());
+        assertEquals(20, mDeviceConfigFacade.getRxDataMaxPacketsToStore());
     }
 }

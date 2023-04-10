@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ public class SphericalVectorTest {
         assertClose(toDegrees(vec.elevation), 10);
 
         // This is looking right and up so far that you're basically looking
-        //  at what's behind you on your left.
+        // at what's behind you on your left.
         vec = SphericalVector.fromRadians((float) toRadians(5), (float) toRadians(110), 10);
         assertClose(vec.azimuth, toRadians(-175)); // +5deg from "behind".
 
@@ -45,19 +45,10 @@ public class SphericalVectorTest {
         assertClose(vec.elevation, toRadians(70));
     }
 
-    @Test public void testCtorNegDistance() {
-        SphericalVector vec = SphericalVector.fromDegrees(10, 12, -14);
-
-        // A negative distance should flip azimuth by 180 and negate elevation.
-        assertClose(toDegrees(vec.azimuth), -170);
-        assertClose(toDegrees(vec.elevation), -12);
-        assertClose(vec.distance, 14);
-    }
-
     @Test
     public void testToAoAVector() {
         SphericalVector sv = SphericalVector.fromDegrees(0, 18, 10);
-        AoAVector av = sv.toAoAVector();
+        AoaVector av = sv.toAoAVector();
 
         // When az/el is at 0deg, aoav and sv are effectively the same.
         assertThat(av.azimuth).isEqualTo(sv.azimuth);
@@ -78,7 +69,7 @@ public class SphericalVectorTest {
                 1);
 
         SphericalVector svec = SphericalVector.fromDegrees(15, 25, 6);
-        AoAVector avec = svec.toAoAVector();
+        AoaVector avec = svec.toAoAVector();
         assertClose(svec.toCartesian(), avec.toCartesian());
 
         svec = SphericalVector.fromDegrees(95, 25, 6);
@@ -116,7 +107,7 @@ public class SphericalVectorTest {
         // looking up.
         SphericalVector gimbalLock = SphericalVector.fromCartesian(new Vector3(0, 1, 0));
         // Note that this suffers from gimbal lock - meaning that ALL azimuth values are valid
-        //  when looking up or down.
+        // when looking up or down.
         assertClose(toDegrees(gimbalLock.elevation), 90);
         assertClose(gimbalLock.distance, 1);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,18 +41,21 @@ import java.util.Objects;
 /**
  * Represents a point in space represented as distance, azimuth and elevation.
  * This uses OpenGL's right-handed coordinate system, where the origin is facing in the
- *  -Z direction. Increasing azimuth rotates around Y and increases X.  Increasing
- *  elevation rotates around X and increases Y.
+ * -Z direction. Increasing azimuth rotates around Y and increases X.  Increasing
+ * elevation rotates around X and increases Y.
  */
 @Immutable
 public class SphericalVector {
+    // If true, negative distances will be converted to a positive distance facing the opposite
+    //  direction.
+    private static final boolean NORMALIZE_NEGATIVE_DISTANCE = false;
     public final float distance;
     public final float azimuth;
     public final float elevation;
 
     /**
      * Creates a SphericalVector from the azimuth, elevation and distance of a viewpoint that is
-     *  facing into the -Z axis.
+     * facing into the -Z axis.
      *
      * @param azimuth The angle along the X axis, around the Y axis.
      * @param elevation The angle along the Y axis, around the X axis.
@@ -63,11 +66,11 @@ public class SphericalVector {
         float ae = abs(elevation);
         if (ae > F_HALF_PI) {
             // Normalize elevation to be only +/-90 - if it's outside that, mirror and bound the
-            //  elevation and flip the azimuth.
+            // elevation and flip the azimuth.
             elevation = (F_PI - ae) * signum(elevation);
             azimuth += F_PI;
         }
-        if (distance < 0) {
+        if (NORMALIZE_NEGATIVE_DISTANCE && distance < 0) {
             // Negative distance is equivalent to a flipped elevation and azimuth.
             azimuth += F_PI; // turn 180deg.
             elevation = -elevation; // Mirror top-to-bottom
@@ -84,8 +87,8 @@ public class SphericalVector {
      * Converts the SphericalVector to an AoA vector.
      * @return An equivalent AoA vector.
      */
-    public AoAVector toAoAVector() {
-        return AoAVector.fromSphericalVector(this);
+    public AoaVector toAoAVector() {
+        return AoaVector.fromSphericalVector(this);
     }
 
     /**
@@ -119,7 +122,7 @@ public class SphericalVector {
 
     /**
      * Produces a SphericalVector from a cartesian vector, converting X, Y and Z values to
-     *  azimuth, elevation and distance.
+     * azimuth, elevation and distance.
      *
      * @param position The cartesian representation to convert.
      * @return An equivalent spherical vector representation.
@@ -132,7 +135,7 @@ public class SphericalVector {
 
     /**
      * Produces a spherical vector from a cartesian vector, converting X, Y and Z values to
-     *  azimuth, elevation and distance.
+     * azimuth, elevation and distance.
      *
      * @param x The cartesian x-coordinate to convert.
      * @param y The cartesian y-coordinate to convert.
@@ -155,7 +158,7 @@ public class SphericalVector {
      * @param vec The AoAVector to convert.
      * @return An equivalent SphericalVector.
      */
-    public static SphericalVector fromAoAVector(AoAVector vec) {
+    public static SphericalVector fromAoAVector(AoaVector vec) {
         float azimuth = vec.azimuth;
         boolean mirrored = abs(azimuth) > F_HALF_PI;
         if (mirrored) {
@@ -208,7 +211,7 @@ public class SphericalVector {
 
     /**
      * Converts this SphericalVector to an equivalent sparse Spherical Vector that has all 3
-     *  components.
+     * components.
      *
      * @return An equivalent {@link Sparse}.
      */
@@ -218,7 +221,7 @@ public class SphericalVector {
 
     /**
      * Converts this SphericalVector to an equivalent sparse Spherical Vector, with the specified
-     *  presence or absence of values.
+     * presence or absence of values.
      *
      * @param hasAzimuth True if the vector includes azimuth.
      * @param hasElevation True if the vector includes elevation.

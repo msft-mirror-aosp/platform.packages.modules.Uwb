@@ -18,6 +18,8 @@ package android.uwb;
 
 import static android.uwb.RangingSession.Callback.REASON_BAD_PARAMETERS;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -27,9 +29,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import android.content.AttributionSource;
 import android.os.PersistableBundle;
@@ -43,6 +47,7 @@ import com.android.modules.utils.build.SdkLevel;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -65,6 +70,7 @@ public class RangingSessionTest {
             new AttributionSource.Builder(UID).setPackageName(PACKAGE_NAME).build();
     private static final int HANDLE_ID = 12;
     private static final int PID = Process.myPid();
+    private static final int MAX_DATA_SIZE = 100;
 
     @Test
     public void testOnRangingOpened_OnOpenSuccessCalled() {
@@ -413,6 +419,19 @@ public class RangingSessionTest {
     }
 
     @Test
+    public void testQueryDataSize() throws RemoteException {
+        SessionHandle handle = new SessionHandle(HANDLE_ID, ATTRIBUTION_SOURCE, PID);
+        RangingSession.Callback callback = mock(RangingSession.Callback.class);
+        IUwbAdapter adapter = mock(IUwbAdapter.class);
+        RangingSession session = new RangingSession(EXECUTOR, callback, adapter, handle);
+
+        when(adapter.queryMaxDataSizeBytes(handle)).thenReturn(MAX_DATA_SIZE);
+
+        session.onRangingStarted(PARAMS);
+        assertThat(session.queryMaxDataSizeBytes()).isEqualTo(MAX_DATA_SIZE);
+    }
+
+    @Test
     public void testOnRangingResult_OnReportReceivedCalledWhenOpen() {
         SessionHandle handle = new SessionHandle(HANDLE_ID, ATTRIBUTION_SOURCE, PID);
         RangingSession.Callback callback = mock(RangingSession.Callback.class);
@@ -475,6 +494,64 @@ public class RangingSessionTest {
         session.onRangingRoundsUpdateDtTagStatus(params);
 
         verify(callback, times(1)).onRangingRoundsUpdateDtTagStatus(params);
+    }
+
+    @Test
+    public void testQueryMaxDataSizeBytes() throws RemoteException {
+        assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
+        SessionHandle handle = new SessionHandle(HANDLE_ID, ATTRIBUTION_SOURCE, PID);
+        RangingSession.Callback callback = mock(RangingSession.Callback.class);
+        IUwbAdapter adapter = mock(IUwbAdapter.class);
+        RangingSession session = new RangingSession(EXECUTOR, callback, adapter, handle);
+
+        when(adapter.queryMaxDataSizeBytes(handle)).thenReturn(MAX_DATA_SIZE);
+
+        // Confirm that queryMaxDataSizeBytes() throws an IllegalStateException when the ranging
+        // session is not open.
+        assertFalse(session.isOpen());
+        verifyThrowIllegalState(() -> session.queryMaxDataSizeBytes());
+
+        // Confirm that queryMaxDataSizeBytes() returns a value when the ranging session has been
+        // opened.
+        session.onRangingOpened();
+        assertEquals(session.queryMaxDataSizeBytes(), MAX_DATA_SIZE);
+
+        // Confirm that queryMaxDataSizeBytes() returns a value when the ranging session has been
+        // started.
+        session.onRangingStarted(PARAMS);
+        assertEquals(session.queryMaxDataSizeBytes(), MAX_DATA_SIZE);
+
+        // Confirm that queryMaxDataSizeBytes() still returns a value, when the ranging session
+        // was stopped.
+        session.onRangingStopped(REASON, PARAMS);
+        assertEquals(session.queryMaxDataSizeBytes(), MAX_DATA_SIZE);
+
+        // Confirm that queryMaxDataSizeBytes() throws an IllegalStateException when the ranging
+        // session has now been closed.
+        session.onRangingClosed(REASON, PARAMS);
+        verifyThrowIllegalState(() -> session.queryMaxDataSizeBytes());
+    }
+
+    @Test
+    public void testPoseUpdate() throws RemoteException {
+        assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
+        SessionHandle handle = new SessionHandle(HANDLE_ID, ATTRIBUTION_SOURCE, PID);
+        RangingSession.Callback callback = mock(RangingSession.Callback.class);
+        IUwbAdapter adapter = mock(IUwbAdapter.Stub.class);
+        doNothing().when(adapter).updatePose(any(), any());
+        RangingSession session = new RangingSession(EXECUTOR, callback, adapter, handle);
+        assertFalse(session.isOpen());
+
+        session.onRangingOpened();
+        session.updatePose(PARAMS);
+
+        ArgumentCaptor<SessionHandle> shCaptor = ArgumentCaptor.forClass(SessionHandle.class);
+        ArgumentCaptor<PersistableBundle> bundleCaptor = ArgumentCaptor.forClass(
+                PersistableBundle.class);
+
+        verify(adapter, times(1))
+                .updatePose(shCaptor.capture(), bundleCaptor.capture());
+        assertEquals(handle.getId(), shCaptor.getValue().getId());
     }
 
     private void verifyOpenState(RangingSession session, boolean expected) {

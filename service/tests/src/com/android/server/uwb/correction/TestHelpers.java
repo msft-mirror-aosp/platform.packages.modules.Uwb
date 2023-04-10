@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package com.android.server.uwb.correction;
 
 import static java.lang.Math.abs;
 
-import com.android.server.uwb.correction.math.AoAVector;
+import com.android.server.uwb.correction.math.AoaVector;
 import com.android.server.uwb.correction.math.SphericalVector;
 import com.android.server.uwb.correction.math.Vector3;
 
@@ -38,7 +38,7 @@ public final class TestHelpers {
         assertClose(v.distance, c.distance);
     }
 
-    public static void assertClose(AoAVector v, AoAVector c) {
+    public static void assertClose(AoaVector v, AoaVector c) {
         assertClose(v.azimuth, c.azimuth);
         assertClose(v.elevation, c.elevation);
         assertClose(v.distance, c.distance);

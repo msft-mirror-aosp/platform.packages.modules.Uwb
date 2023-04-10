@@ -33,7 +33,7 @@ import java.util.concurrent.Executor;
 public class RangingControlee extends RangingDevice {
 
     RangingControlee(UwbManager manager, Executor executor,
-            OpAsyncCallbackRunner opAsyncCallbackRunner) {
+            OpAsyncCallbackRunner<Boolean> opAsyncCallbackRunner) {
         super(manager, executor, opAsyncCallbackRunner);
     }
 
@@ -42,5 +42,11 @@ public class RangingControlee extends RangingDevice {
         requireNonNull(mRangingParameters);
         return ConfigurationManager.createOpenSessionParams(
                 FiraParams.RANGING_DEVICE_TYPE_CONTROLEE, getLocalAddress(), mRangingParameters);
+    }
+
+    @Override
+    protected int hashSessionId(RangingParameters rangingParameters) {
+        UwbAddress controllerAddress = rangingParameters.getPeerAddresses().get(0);
+        return calculateHashedSessionId(controllerAddress, rangingParameters.getComplexChannel());
     }
 }
