@@ -828,16 +828,14 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
 
     /** Query Max Application data size for the given UWB Session */
     public synchronized int queryMaxDataSizeBytes(SessionHandle sessionHandle) {
-        int status = UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST;
         if (!isExistedSession(sessionHandle)) {
-            Log.i(TAG, "Not initialized session ID");
-            return status;
+            throw new IllegalStateException("Not initialized session ID");
         }
+
         int sessionId = getSessionId(sessionHandle);
         UwbSession uwbSession = getUwbSession(sessionId);
         if (uwbSession == null) {
-            Log.i(TAG, "UwbSession not found");
-            return status;
+            throw new IllegalStateException("UwbSession not found");
         }
 
         synchronized (uwbSession.getWaitObj()) {
@@ -1226,8 +1224,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
             int status = UwbUciConstants.STATUS_CODE_FAILED;
             int timeoutMs = IUwbAdapter.RANGING_SESSION_START_THRESHOLD_MS;
             if (uwbSession.getProtocolName().equals(PROTOCOL_NAME)) {
-                // TODO (b/235714647): Temporary workaround to 2x ranging interval.
-                int minTimeoutNecessary = uwbSession.getCurrentFiraRangingIntervalMs() * 2;
+                int minTimeoutNecessary = uwbSession.getCurrentFiraRangingIntervalMs() * 4;
                 timeoutMs = timeoutMs > minTimeoutNecessary ? timeoutMs : minTimeoutNecessary;
             }
             Log.v(TAG, "Stop timeout: " + timeoutMs);
@@ -1694,7 +1691,22 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification 
                 innerMap = new TreeMap<>();
                 mReceivedDataInfoMap.put(receivedDataInfo.address, innerMap);
             }
-            innerMap.putIfAbsent(receivedDataInfo.sequenceNum, receivedDataInfo);
+
+            // Check if the sorted InnerMap has reached the max number of Rx packets we want to
+            // store; if so we drop the smallest (sequence number) packet between the new received
+            // packet and the stored packets.
+            int maxRxPacketsToStore =
+                    mUwbInjector.getDeviceConfigFacade().getRxDataMaxPacketsToStore();
+            if (innerMap.size() < maxRxPacketsToStore) {
+                innerMap.putIfAbsent(receivedDataInfo.sequenceNum, receivedDataInfo);
+            } else if (innerMap.size() == maxRxPacketsToStore) {
+                Long smallestStoredSequenceNumber = innerMap.firstKey();
+                if (smallestStoredSequenceNumber < receivedDataInfo.sequenceNum
+                        && !innerMap.containsKey(receivedDataInfo.sequenceNum)) {
+                    innerMap.remove(smallestStoredSequenceNumber);
+                    innerMap.putIfAbsent(receivedDataInfo.sequenceNum, receivedDataInfo);
+                }
+            }
         }
 
         /**
