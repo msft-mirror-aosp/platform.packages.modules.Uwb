@@ -271,7 +271,6 @@ impl NotificationManagerAndroid {
         env: &'a AttachGuard<'static>,
         class_name: &'a str,
     ) -> Result<JClass<'a>> {
-        debug!("UCI JNI: find local class {}", class_name);
         // Look for cached class
         if jclass_map.get(class_name).is_none() {
             // Find class using the class loader object, needed as this call is initiated from a
@@ -754,7 +753,7 @@ impl NotificationManagerAndroid {
                     "([BIIIIIIIIIIIII)V",
                     &[
                         JValue::Object(mac_address_jobject),
-                        JValue::Int(measurement.status as i32),
+                        JValue::Int(i32::from(measurement.status)),
                         JValue::Int(measurement.nlos as i32),
                         JValue::Int(measurement.distance as i32),
                         JValue::Int(measurement.aoa_azimuth as i32),
@@ -1011,7 +1010,7 @@ impl NotificationManager for NotificationManagerAndroid {
                 "onCoreGenericErrorNotificationReceived",
                 "(ILjava/lang/String;)V",
                 &[
-                    jvalue::from(JValue::Int(generic_error as i32)),
+                    jvalue::from(JValue::Int(i32::from(generic_error))),
                     jvalue::from(JValue::Object(env_chip_id_jobject)),
                 ],
             ),
