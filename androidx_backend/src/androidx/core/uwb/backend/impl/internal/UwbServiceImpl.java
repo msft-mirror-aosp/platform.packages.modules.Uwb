@@ -19,12 +19,23 @@ package androidx.core.uwb.backend.impl.internal;
 import static android.content.pm.PackageManager.FEATURE_UWB;
 import static android.uwb.UwbManager.AdapterStateCallback.STATE_DISABLED;
 
+import static androidx.core.uwb.backend.impl.internal.RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CONFIG_IDS;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_DL_TDOA_DT_TAG;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_MULTICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_UNICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA;
+import static androidx.core.uwb.backend.impl.internal.Utils.RANGE_DATA_NTF_ENABLE;
+
 import static java.util.Objects.requireNonNull;
 
 import android.content.Context;
+import android.os.Build.VERSION;
+import android.os.Build.VERSION_CODES;
 import android.os.PersistableBundle;
 import android.uwb.UwbManager;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.uwb.support.fira.FiraParams;
@@ -34,6 +45,8 @@ import com.google.uwb.support.multichip.ChipInfoParams;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -45,6 +58,7 @@ public class UwbServiceImpl {
     private int mAdapterState = STATE_DISABLED;
     private final boolean mHasUwbFeature;
     @Nullable private final UwbManager mUwbManager;
+    @NonNull private final UwbFeatureFlags mUwbFeatureFlags;
 
     /** Adapter State callback used to update adapterState field */
     private final UwbManager.AdapterStateCallback mAdapterStateCallback =
@@ -53,11 +67,13 @@ public class UwbServiceImpl {
     /** A serial thread used to handle session callback */
     private final ExecutorService mSerialExecutor = Executors.newSingleThreadExecutor();
 
-    public UwbServiceImpl(Context context) {
+    public UwbServiceImpl(Context context, @NonNull UwbFeatureFlags uwbFeatureFlags) {
         mHasUwbFeature = context.getPackageManager().hasSystemFeature(FEATURE_UWB);
+        mUwbFeatureFlags = uwbFeatureFlags;
         if (mHasUwbFeature) {
             mUwbManager = context.getSystemService(UwbManager.class);
             requireNonNull(mUwbManager);
+            mAdapterState = mUwbManager.getAdapterState();
             mUwbManager.registerAdapterStateCallback(mSerialExecutor, mAdapterStateCallback);
         } else {
             mUwbManager = null;
@@ -112,6 +128,20 @@ public class UwbServiceImpl {
     /** Gets ranging capabilities of the device. */
     public RangingCapabilities getRangingCapabilities() {
         requireNonNull(mUwbManager);
+        requireNonNull(mUwbFeatureFlags);
+
+        if (mUwbFeatureFlags.skipRangingCapabilitiesCheck()
+                && VERSION.SDK_INT <= VERSION_CODES.S_V2) {
+            return new RangingCapabilities(
+                    /* supportsDistance= */ true,
+                    mUwbFeatureFlags.hasAzimuthSupport(),
+                    mUwbFeatureFlags.hasElevationSupport(),
+                    /* minRangingInterval= */ RangingCapabilities.FIRA_DEFAULT_RANGING_INTERVAL_MS,
+                    new ArrayList<Integer>(RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CHANNEL),
+                    new ArrayList<>(RANGE_DATA_NTF_ENABLE),
+                    FIRA_DEFAULT_SUPPORTED_CONFIG_IDS);
+        }
+
         PersistableBundle bundle = mUwbManager.getSpecificationInfo();
         if (bundle.keySet().contains(FIRA_SPECIFICATION_BUNDLE_KEY)) {
             bundle = requireNonNull(bundle.getPersistableBundle(FIRA_SPECIFICATION_BUNDLE_KEY));
@@ -128,11 +158,40 @@ public class UwbServiceImpl {
             supportedChannels =
                     new ArrayList<Integer>(RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CHANNEL);
         }
+
+        Set<Integer> supportedNtfConfigsSet = new TreeSet<>();
+        for (FiraParams.RangeDataNtfConfigCapabilityFlag e :
+                specificationParams.getRangeDataNtfConfigCapabilities()) {
+            supportedNtfConfigsSet.add(Utils.convertFromFiraNtfConfig(e.ordinal()));
+        }
+        List<Integer> supportedNtfConfigs = new ArrayList<>(supportedNtfConfigsSet);
+
+        List<Integer> supportedConfigIds = new ArrayList<>(FIRA_DEFAULT_SUPPORTED_CONFIG_IDS);
+        EnumSet<FiraParams.StsCapabilityFlag> stsCapabilityFlags =
+                specificationParams.getStsCapabilities();
+        if (stsCapabilityFlags.contains(FiraParams.StsCapabilityFlag.HAS_PROVISIONED_STS_SUPPORT)) {
+            supportedConfigIds.add(CONFIG_PROVISIONED_UNICAST_DS_TWR);
+            supportedConfigIds.add(CONFIG_PROVISIONED_MULTICAST_DS_TWR);
+            supportedConfigIds.add(CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA);
+        }
+        if (stsCapabilityFlags.contains(FiraParams.StsCapabilityFlag
+                        .HAS_PROVISIONED_STS_INDIVIDUAL_CONTROLEE_KEY_SUPPORT)) {
+            supportedConfigIds.add(CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR);
+        }
+        EnumSet<FiraParams.RangingRoundCapabilityFlag> rangingRoundCapabilityFlags =
+                specificationParams.getRangingRoundCapabilities();
+        if (rangingRoundCapabilityFlags.contains(FiraParams.RangingRoundCapabilityFlag
+                .HAS_OWR_DL_TDOA_SUPPORT)) {
+            supportedConfigIds.add(CONFIG_DL_TDOA_DT_TAG);
+        }
+
         return new RangingCapabilities(
                 true,
                 aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_AZIMUTH_SUPPORT),
                 aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_ELEVATION_SUPPORT),
                 minRangingInterval,
-                supportedChannels);
+                supportedChannels,
+                supportedNtfConfigs,
+                supportedConfigIds);
     }
 }

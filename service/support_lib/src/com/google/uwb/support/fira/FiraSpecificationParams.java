@@ -148,6 +148,8 @@ public class FiraSpecificationParams extends FiraParams {
     private static final String KEY_SESSION_KEY_LENGTH =
             "session_key_length";
 
+    public static final int DEFAULT_MAX_RANGING_SESSIONS_NUMBER = 5;
+
     private FiraSpecificationParams(
             FiraProtocolVersion minPhyVersionSupported,
             FiraProtocolVersion maxPhyVersionSupported,
@@ -471,7 +473,7 @@ public class FiraSpecificationParams extends FiraParams {
                 .hasNonDeferredModeSupport(bundle.getBoolean(KEY_NON_DEFERRED_MODE_SUPPORT))
                 .hasInitiationTimeSupport(bundle.getBoolean(KEY_INITIATION_TIME_SUPPORT))
                 .setMinRangingIntervalSupported(bundle.getInt(KEY_MIN_RANGING_INTERVAL, -1))
-                .setMinSlotDurationSupported(bundle.getInt(KEY_MIN_SLOT_DURATION, -1))
+                .setMinSlotDurationSupportedUs(bundle.getInt(KEY_MIN_SLOT_DURATION, -1))
                 .setMultiNodeCapabilities(
                         FlagEnum.toEnumSet(
                                 bundle.getInt(KEY_MULTI_NODE_CAPABILITIES),
@@ -577,7 +579,7 @@ public class FiraSpecificationParams extends FiraParams {
 
         private int mMinSlotDuration = -1;
 
-        private int mMaxRangingSessionNumber = -1;
+        private int mMaxRangingSessionNumber = DEFAULT_MAX_RANGING_SESSIONS_NUMBER;
 
         // Unicast support is mandatory
         private final EnumSet<MultiNodeCapabilityFlag> mMultiNodeCapabilities =
@@ -727,11 +729,11 @@ public class FiraSpecificationParams extends FiraParams {
         }
 
         /**
-         * Set minimum supported slot duration
-         * @param value : minimum slot duration supported
+         * Set minimum supported slot duration in microsecond
+         * @param value : minimum slot duration supported in microsecond
          * @return FiraSpecificationParams builder
          */
-        public FiraSpecificationParams.Builder setMinSlotDurationSupported(int value) {
+        public FiraSpecificationParams.Builder setMinSlotDurationSupportedUs(int value) {
             mMinSlotDuration = value;
             return this;
         }

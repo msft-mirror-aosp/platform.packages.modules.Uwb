@@ -28,6 +28,9 @@ import android.content.AttributionSource;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.database.ContentObserver;
+import android.location.Geocoder;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -105,7 +108,7 @@ public class UwbInjector {
     private final UwbMultichipData mUwbMultichipData;
     private final SystemBuildProperties mSystemBuildProperties;
     private final UwbDiagnostics mUwbDiagnostics;
-    private IPoseSource mPoseSource;
+    private IPoseSource mDefaultPoseSource;
     private final ReentrantLock mPoseLock = new ReentrantLock();
     private int mPoseSourceRefCount = 0;
 
@@ -139,7 +142,8 @@ public class UwbInjector {
                 new UwbConfigurationManager(mNativeUwbManager);
         UwbSessionNotificationManager uwbSessionNotificationManager =
                 new UwbSessionNotificationManager(this);
-        UwbAdvertiseManager uwbAdvertiseManager = new UwbAdvertiseManager(this);
+        UwbAdvertiseManager uwbAdvertiseManager = new UwbAdvertiseManager(this,
+                mDeviceConfigFacade);
         mUwbSessionManager =
                 new UwbSessionManager(uwbConfigurationManager, mNativeUwbManager, mUwbMetrics,
                         uwbAdvertiseManager, uwbSessionNotificationManager, this,
@@ -223,6 +227,21 @@ public class UwbInjector {
     }
 
     /**
+     * Creates a Geocoder.
+     */
+    @Nullable
+    public Geocoder makeGeocoder() {
+        return new Geocoder(mContext);
+    }
+
+    /**
+     * Returns whether geocoder is supported on this device or not.
+     */
+    public boolean isGeocoderPresent() {
+        return Geocoder.isPresent();
+    }
+
+    /**
      * Throws security exception if the UWB_RANGING permission is not granted for the calling app.
      *
      * <p>Should be used in situations where the app op should not be noted.
@@ -266,15 +285,41 @@ public class UwbInjector {
      *
      * @throws Settings.SettingNotFoundException
      */
-    public int getSettingsInt(@NonNull String key) throws Settings.SettingNotFoundException {
+    public int getGlobalSettingsInt(@NonNull String key) throws Settings.SettingNotFoundException {
         return Settings.Global.getInt(mContext.getContentResolver(), key);
     }
 
     /**
      * Get integer value from Settings.
      */
-    public int getSettingsInt(@NonNull String key, int defValue) {
+    public int getGlobalSettingsInt(@NonNull String key, int defValue) {
         return Settings.Global.getInt(mContext.getContentResolver(), key, defValue);
+    }
+
+    /**
+     * Get string value from Settings.
+     */
+    @Nullable
+    public String getGlobalSettingsString(@NonNull String key) {
+        return Settings.Global.getString(mContext.getContentResolver(), key);
+    }
+
+    /**
+     * Helper method for classes to register a ContentObserver
+     * {@see ContentResolver#registerContentObserver(Uri,boolean,ContentObserver)}.
+     */
+    public void registerContentObserver(Uri uri, boolean notifyForDescendants,
+            ContentObserver contentObserver) {
+        mContext.getContentResolver().registerContentObserver(uri, notifyForDescendants,
+                contentObserver);
+    }
+
+    /**
+     * Helper method for classes to unregister a ContentObserver
+     * {@see ContentResolver#unregisterContentObserver(ContentObserver)}.
+     */
+    public void unregisterContentObserver(ContentObserver contentObserver) {
+        mContext.getContentResolver().unregisterContentObserver(contentObserver);
     }
 
     /**
@@ -438,30 +483,30 @@ public class UwbInjector {
                 return null;
             }
 
-            if (mPoseSource != null) {
+            if (mDefaultPoseSource != null) {
                 // Already have a pose source.
-                return mPoseSource;
+                return mDefaultPoseSource;
             }
 
             switch (mDeviceConfigFacade.getPoseSourceType()) {
                 case NONE:
-                    mPoseSource = null;
+                    mDefaultPoseSource = null;
                     break;
                 case ROTATION_VECTOR:
-                    mPoseSource = new RotationPoseSource(mContext, 100);
+                    mDefaultPoseSource = new RotationPoseSource(mContext, 100);
                     break;
                 case GYRO:
-                    mPoseSource = new GyroPoseSource(mContext, 100);
+                    mDefaultPoseSource = new GyroPoseSource(mContext, 100);
                     break;
                 case SIXDOF:
-                    mPoseSource = new SixDofPoseSource(mContext, 100);
+                    mDefaultPoseSource = new SixDofPoseSource(mContext, 100);
                     break;
                 case DOUBLE_INTEGRATE:
-                    mPoseSource = new IntegPoseSource(mContext, 100);
+                    mDefaultPoseSource = new IntegPoseSource(mContext, 100);
                     break;
             }
 
-            return mPoseSource;
+            return mDefaultPoseSource;
         } catch (Exception ex) {
             Log.e(TAG, "Unable to create the configured UWB pose source: "
                     + ex.getMessage());
@@ -481,9 +526,9 @@ public class UwbInjector {
         try {
             // Keep our ref counts accurate because isEnableFilters can change at runtime.
             --mPoseSourceRefCount;
-            if (mPoseSourceRefCount <= 0) {
-                mPoseSource.close();
-                mPoseSource = null;
+            if (mPoseSourceRefCount <= 0 && mDefaultPoseSource != null) {
+                mDefaultPoseSource.close();
+                mDefaultPoseSource = null;
             }
         } finally {
             mPoseLock.unlock();
@@ -496,7 +541,7 @@ public class UwbInjector {
      *
      * @return A fully configured filter engine, or null if filtering is disabled.
      */
-    public UwbFilterEngine createFilterEngine() {
+    public UwbFilterEngine createFilterEngine(IPoseSource poseSource) {
         DeviceConfigFacade cfg = getDeviceConfigFacade();
         if (!cfg.isEnableFilters()) {
             return null;
@@ -521,8 +566,8 @@ public class UwbInjector {
 
             UwbFilterEngine.Builder builder = new UwbFilterEngine.Builder().setFilter(posFilter);
 
-            if (mPoseSource != null) {
-                builder.setPoseSource(mPoseSource);
+            if (poseSource != null) {
+                builder.setPoseSource(poseSource);
             }
 
             // Order is important.

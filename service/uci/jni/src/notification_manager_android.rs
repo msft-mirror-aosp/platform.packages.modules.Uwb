@@ -37,7 +37,7 @@ use uwb_core::uci::{
 use uwb_uci_packets::{
     ControleeStatus, ExtendedAddressDlTdoaRangingMeasurement,
     ExtendedAddressOwrAoaRangingMeasurement, ExtendedAddressTwoWayRangingMeasurement,
-    MacAddressIndicator, OwrAoaStatusCode, RangingMeasurementType, ReasonCode, SessionState,
+    MacAddressIndicator, OwrAoaStatusCode, RangingMeasurementType, SessionState,
     ShortAddressDlTdoaRangingMeasurement, ShortAddressOwrAoaRangingMeasurement,
     ShortAddressTwoWayRangingMeasurement, StatusCode,
 };
@@ -271,7 +271,6 @@ impl NotificationManagerAndroid {
         env: &'a AttachGuard<'static>,
         class_name: &'a str,
     ) -> Result<JClass<'a>> {
-        debug!("UCI JNI: find local class {}", class_name);
         // Look for cached class
         if jclass_map.get(class_name).is_none() {
             // Find class using the class loader object, needed as this call is initiated from a
@@ -354,7 +353,7 @@ impl NotificationManagerAndroid {
         &mut self,
         session_id: u32,
         session_state: SessionState,
-        reason_code: ReasonCode,
+        reason_code: u8,
     ) -> Result<()> {
         self.cached_jni_call(
             "onSessionStatusNotificationReceived",
@@ -754,7 +753,7 @@ impl NotificationManagerAndroid {
                     "([BIIIIIIIIIIIII)V",
                     &[
                         JValue::Object(mac_address_jobject),
-                        JValue::Int(measurement.status as i32),
+                        JValue::Int(i32::from(measurement.status)),
                         JValue::Int(measurement.nlos as i32),
                         JValue::Int(measurement.distance as i32),
                         JValue::Int(measurement.aoa_azimuth as i32),
@@ -1011,7 +1010,7 @@ impl NotificationManager for NotificationManagerAndroid {
                 "onCoreGenericErrorNotificationReceived",
                 "(ILjava/lang/String;)V",
                 &[
-                    jvalue::from(JValue::Int(generic_error as i32)),
+                    jvalue::from(JValue::Int(i32::from(generic_error))),
                     jvalue::from(JValue::Object(env_chip_id_jobject)),
                 ],
             ),
@@ -1059,7 +1058,7 @@ impl NotificationManager for NotificationManagerAndroid {
             SessionNotification::DataCredit { session_id, credit_availability } => {
                 error!(
                     "UCI JNI: Received unexpected DataCredit notification for \
-                       session_id {}, credit_availability {}",
+                       session_id {}, credit_availability {:?}",
                     session_id, credit_availability
                 );
                 Ok(())
@@ -1067,7 +1066,7 @@ impl NotificationManager for NotificationManagerAndroid {
             SessionNotification::DataTransferStatus { session_id, uci_sequence_number, status } => {
                 error!(
                     "UCI JNI: Received unexpected DataTransferStatus notification for \
-                    session_id {}, uci_sequence_number {} with status {}",
+                    session_id {}, uci_sequence_number {} with status {:?}",
                     session_id, uci_sequence_number, status
                 );
                 Ok(())

@@ -105,7 +105,7 @@ import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_MAX_MESSAG
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_MAX_MESSAGE_SIZE_VER_2_0;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_MAX_RANGING_SESSION_NUMBER;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_MIN_RANGING_INTERVAL_MS;
-import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_MIN_SLOT_DURATION;
+import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_MIN_SLOT_DURATION_RSTU;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_MULTI_NODE_MODES_VER_1_0;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_MULTI_NODE_MODES_VER_2_0;
 import static com.android.server.uwb.config.CapabilityParam.SUPPORTED_RANGE_DATA_NTF_CONFIG;
@@ -420,14 +420,14 @@ public class FiraDecoder extends TlvDecoder {
                 int maxMessageSizeUci = tlvs.getShort(SUPPORTED_MAX_MESSAGE_SIZE_VER_1_0);
                 builder.setMaxMessageSize(Integer.valueOf(maxMessageSizeUci));
             } catch (IllegalArgumentException e) {
-                Log.w(TAG, "SUPPORTED_MAX_MESSAGE_SIZE not found.", e);
+                Log.w(TAG, "SUPPORTED_MAX_MESSAGE_SIZE not found.");
             }
             try {
                 int maxDataPacketPayloadSizeUci = tlvs.getShort(
                         SUPPORTED_MAX_DATA_PACKET_PAYLOAD_SIZE_VER_1_0);
                 builder.setMaxDataPacketPayloadSize(Integer.valueOf(maxDataPacketPayloadSizeUci));
             } catch (IllegalArgumentException e) {
-                Log.w(TAG, "SUPPORTED_MAX_DATA_PACKET_PAYLOAD_SIZE not found.", e);
+                Log.w(TAG, "SUPPORTED_MAX_DATA_PACKET_PAYLOAD_SIZE not found.");
             }
         } else if (versionCheck.length == 4) {
             // FiRa Version 2.0
@@ -711,14 +711,14 @@ public class FiraDecoder extends TlvDecoder {
                 int maxMessageSizeUci = tlvs.getShort(SUPPORTED_MAX_MESSAGE_SIZE_VER_2_0);
                 builder.setMaxMessageSize(Integer.valueOf(maxMessageSizeUci));
             } catch (IllegalArgumentException e) {
-                Log.w(TAG, "SUPPORTED_MAX_MESSAGE_SIZE not found.", e);
+                Log.w(TAG, "SUPPORTED_MAX_MESSAGE_SIZE not found.");
             }
             try {
                 int maxDataPacketPayloadSizeUci = tlvs.getShort(
                         SUPPORTED_MAX_DATA_PACKET_PAYLOAD_SIZE_VER_2_0);
                 builder.setMaxDataPacketPayloadSize(Integer.valueOf(maxDataPacketPayloadSizeUci));
             } catch (IllegalArgumentException e) {
-                Log.w(TAG, "SUPPORTED_MAX_DATA_PACKET_PAYLOAD_SIZE not found.", e);
+                Log.w(TAG, "SUPPORTED_MAX_DATA_PACKET_PAYLOAD_SIZE not found.");
             }
 
             int deviceType = tlvs.getByte(SUPPORTED_DEVICE_TYPE_VER_2_0);
@@ -741,8 +741,8 @@ public class FiraDecoder extends TlvDecoder {
         }
 
         try {
-            int minSlotDuration = tlvs.getInt(SUPPORTED_MIN_SLOT_DURATION);
-            builder.setMinRangingIntervalSupported(minSlotDuration);
+            int minSlotDurationUs = TlvUtil.rstuToUs(tlvs.getInt(SUPPORTED_MIN_SLOT_DURATION_RSTU));
+            builder.setMinSlotDurationSupportedUs(minSlotDurationUs);
         } catch (IllegalArgumentException e) {
             Log.w(TAG, "SUPPORTED_MIN_SLOT_DURATION not found.");
         }
@@ -826,7 +826,7 @@ public class FiraDecoder extends TlvDecoder {
             }
             builder.setRangeDataNtfConfigCapabilities(rangeDataNtfConfigCapabilityFlag);
         } catch (IllegalArgumentException e) {
-            Log.w(TAG, "SUPPORTED_RANGE_DATA_NTF_CONFIG not found.", e);
+            Log.w(TAG, "SUPPORTED_RANGE_DATA_NTF_CONFIG not found.");
         }
         return builder.build();
     }
