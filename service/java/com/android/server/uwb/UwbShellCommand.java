@@ -16,6 +16,8 @@
 
 package com.android.server.uwb;
 
+import static android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_BACKGROUND;
+import static android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND;
 import static android.uwb.UwbAddress.SHORT_ADDRESS_BYTE_LENGTH;
 
 import static com.google.uwb.support.ccc.CccParams.CHAPS_PER_SLOT_3;
@@ -46,12 +48,15 @@ import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_DS_TWR_
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_NON_DEFERRED_MODE;
+import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_PROVISIONED;
+import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_STATIC;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import android.annotation.NonNull;
 import android.content.AttributionSource;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.Looper;
@@ -59,6 +64,7 @@ import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.RemoteException;
 import android.util.ArrayMap;
+import android.util.Log;
 import android.util.Pair;
 import android.uwb.IUwbRangingCallbacks;
 import android.uwb.RangingReport;
@@ -94,6 +100,7 @@ import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -114,6 +121,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     private static final int RSSI_FLAG = 1;
     private static final int AOA_FLAG = 1 << 1;
     private static final int CIR_FLAG = 1 << 2;
+    private static final int CMD_TIMEOUT_MS = 10_000;
 
     // These don't require root access.
     // However, these do perform permission checks in the corresponding UwbService methods.
@@ -175,6 +183,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     private static final Map<Integer, SessionInfo> sSessionIdToInfo = new ArrayMap<>();
     private static int sSessionHandleIdNext = 0;
 
+    private final UwbInjector mUwbInjector;
     private final UwbServiceImpl mUwbService;
     private final UwbServiceCore mUwbServiceCore;
     private final UwbCountryCode mUwbCountryCode;
@@ -186,6 +195,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     private final Context mContext;
 
     UwbShellCommand(UwbInjector uwbInjector, UwbServiceImpl uwbService, Context context) {
+        mUwbInjector = uwbInjector;
         mUwbService = uwbService;
         mContext = context;
         mUwbCountryCode = uwbInjector.getUwbCountryCode();
@@ -560,6 +570,36 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 int preambleCodeIndex = Integer.parseInt(getNextArgRequired());
                 builder.setPreambleCodeIndex(preambleCodeIndex);
             }
+            if (option.equals("-o")) {
+                String stsConfigType = getNextArgRequired();
+                if (stsConfigType.equals("static")) {
+                    builder.setStsConfig(STS_CONFIG_STATIC);
+                } else if (stsConfigType.equals("provisioned")) {
+                    builder.setStsConfig(STS_CONFIG_PROVISIONED);
+                } else {
+                    throw new IllegalArgumentException("unknown sts config type");
+                }
+            }
+            if (option.equals("-n")) {
+                String sessionKey = getNextArgRequired();
+                if (sessionKey.length() == 32 || sessionKey.length() == 64) {
+                    builder.setSessionKey(BaseEncoding.base16().decode(sessionKey));
+                } else {
+                    throw new IllegalArgumentException("sessionKey expecting 16 or 32 bytes");
+                }
+            }
+            if (option.equals("-u")) {
+                String subSessionKey = getNextArgRequired();
+                if (subSessionKey.length() == 32 || subSessionKey.length() == 64) {
+                    builder.setSubsessionKey(BaseEncoding.base16().decode(subSessionKey));
+                } else {
+                    throw new IllegalArgumentException(("subSessionKey expecting 16 or 32 bytes"));
+                }
+            }
+            if (option.equals("-j")) {
+                int errorStreakTimeoutMs = Integer.parseInt(getNextArgRequired());
+                builder.setRangingErrorStreakTimeoutMs(errorStreakTimeoutMs);
+            }
             option = getNextOption();
         }
         if (aoaResultReqEnabled && interleavingEnabled) {
@@ -848,6 +888,15 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("Ranging session reconfigured");
     }
 
+    private int runTaskOnSingleThreadExecutor(FutureTask<Integer> task) {
+        try {
+            return mUwbInjector.runTaskOnSingleThreadExecutor(task, CMD_TIMEOUT_MS);
+        } catch (TimeoutException | InterruptedException | ExecutionException e) {
+            Log.e(TAG, "Failed to send command", e);
+        }
+        return -1;
+    }
+
     @Override
     public int onCommand(String cmd) {
         // Treat no command as help command.
@@ -869,6 +918,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             switch (cmd) {
                 case "force-country-code": {
                     boolean enabled = getNextArgRequiredTrueOrFalse("enabled", "disabled");
+                    FutureTask<Integer> task;
                     if (enabled) {
                         String countryCode = getNextArgRequired();
                         if (!UwbCountryCode.isValid(countryCode)) {
@@ -877,16 +927,37 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                                     + " instead");
                             return -1;
                         }
-                        mUwbCountryCode.setOverrideCountryCode(countryCode);
-                        return 0;
+                        task = new FutureTask<>(() -> {
+                            mUwbCountryCode.setOverrideCountryCode(countryCode);
+                            return 0;
+                        });
                     } else {
-                        mUwbCountryCode.clearOverrideCountryCode();
-                        return 0;
+                        task = new FutureTask<>(() -> {
+                            mUwbCountryCode.clearOverrideCountryCode();
+                            return 0;
+                        });
                     }
+                    return runTaskOnSingleThreadExecutor(task);
                 }
                 case "get-country-code":
                     pw.println("Uwb Country Code = " + mUwbCountryCode.getCountryCode());
                     return 0;
+                case "simulate-app-state-change": {
+                    String appPackageName = getNextArgRequired();
+                    boolean isFg = getNextArgRequiredTrueOrFalse("foreground", "background");
+                    int uid = 0;
+                    try {
+                        uid = mContext.getPackageManager().getApplicationInfo(
+                                appPackageName, 0).uid;
+                    } catch (PackageManager.NameNotFoundException e) {
+                        pw.println("Unable to find package name: " + appPackageName);
+                        return -1;
+                    }
+                    int importance = isFg ? IMPORTANCE_FOREGROUND : IMPORTANCE_BACKGROUND;
+                    mUwbInjector.setOverridePackageImportance(appPackageName, importance);
+                    mUwbInjector.getUwbSessionManager().onUidImportance(uid, importance);
+                    return 0;
+                }
                 case "set-log-mode": {
                     String logMode = getNextArgRequired();
                     if (!UciLogModeStore.isValid(logMode)) {
@@ -1067,7 +1138,11 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-w enabled|disabled](has-result-report-phase)"
                 + " [-y enabled|disabled](hopping-mode, default = disabled)"
                 + " [-p <preamble-code-index>](preamble-code-index, default = 10)"
-                + " [-h <slot-duration-rstu>(slot-duration-rstu, default=2400)");
+                + " [-h <slot-duration-rstu>(slot-duration-rstu, default=2400)"
+                + " [-o static|provisioned](sts-config-type)"
+                + " [-n <sessionKey>](sessionKey 16 or 32 bytes)"
+                + " [-u <subSessionKey>](subSessionKey 16 or 32 bytes)"
+                + " [-j <errorStreakTimeoutMs>](error streak timeout in millis, default=30000)");
         pw.println("    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
@@ -1116,6 +1191,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("    Disable vendor diagnostics notification");
         pw.println("  take-bugreport");
         pw.println("    take bugreport through betterBug or alternatively bugreport manager");
+        pw.println("  simulate-app-state-change <package-name> foreground|background");
+        pw.println("    Simulate app moving to foreground/background to test stack handling");
     }
 
     private void onHelpPrivileged(PrintWriter pw) {

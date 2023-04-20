@@ -3,6 +3,7 @@
 import sys
 from typing import List
 
+from mobly import asserts
 from mobly import config_parser
 from mobly import test_runner
 import timeout_decorator
@@ -138,12 +139,6 @@ class ProvisionedStsRangingTest(uwb_base_test.UwbBaseTest):
     self.initiator.stop_ranging()
     self.responder.close_ranging()
     self.initiator.close_ranging()
-
-  def on_fail(self, record):
-    for count, ad in enumerate(self.android_devices):
-      test_name = "initiator" if not count else "responder"
-      ad.take_bug_report(
-          test_name=test_name, destination=self.current_test_info.output_path)
 
   ### Helper Methods ###
 
@@ -356,7 +351,7 @@ class ProvisionedStsRangingTest(uwb_base_test.UwbBaseTest):
     )
 
 if __name__ == "__main__":
-  if '--' in sys.argv:
-    index = sys.argv.index('--')
+  if "--" in sys.argv:
+    index = sys.argv.index("--")
     sys.argv = sys.argv[:1] + sys.argv[index + 1:]
   test_runner.main()
