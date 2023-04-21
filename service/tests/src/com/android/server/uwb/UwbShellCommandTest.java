@@ -25,7 +25,9 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.fira.FiraParams.RangeDataNtfConfigCapabilityFlag.HAS_RANGE_DATA_NTF_CONFIG_DISABLE;
 import static com.google.uwb.support.fira.FiraParams.RangeDataNtfConfigCapabilityFlag.HAS_RANGE_DATA_NTF_CONFIG_ENABLE;
 
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
@@ -71,6 +73,7 @@ import org.mockito.MockitoAnnotations;
 import java.io.FileDescriptor;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.concurrent.FutureTask;
 
 /**
  * Unit tests for {@link com.android.server.uwb.UwbShellCommand}.
@@ -94,6 +97,11 @@ public class UwbShellCommandTest {
 
         when(mUwbInjector.getUwbCountryCode()).thenReturn(mUwbCountryCode);
         when(mUwbInjector.getUwbServiceCore()).thenReturn(mUwbServiceCore);
+        doAnswer(invocation -> {
+            FutureTask t = invocation.getArgument(0);
+            t.run();
+            return t.get();
+        }).when(mUwbInjector).runTaskOnSingleThreadExecutor(any(FutureTask.class), anyInt());
         GenericSpecificationParams params = new GenericSpecificationParams.Builder()
                 .setCccSpecificationParams(mock(CccSpecificationParams.class))
                 .setFiraSpecificationParams(
@@ -278,6 +286,26 @@ public class UwbShellCommandTest {
         triggerAndVerifyRangingStart(
                 new String[]{"start-fira-ranging-session"},
                 DEFAULT_FIRA_OPEN_SESSION_PARAMS.build());
+    }
+
+    @Test
+    public void testStartFiraRangingUsesUniqueSessionHandle() throws Exception {
+        FiraOpenSessionParams.Builder openSessionParamsBuilder =
+                new FiraOpenSessionParams.Builder(DEFAULT_FIRA_OPEN_SESSION_PARAMS);
+
+        openSessionParamsBuilder.setSessionId(1);
+        Pair<IUwbRangingCallbacks, SessionHandle> cbAndSessionHandle1 =
+                triggerAndVerifyRangingStart(
+                        new String[]{"start-fira-ranging-session", "-i", "1"},
+                        openSessionParamsBuilder.build());
+        clearInvocations(mUwbService);
+
+        openSessionParamsBuilder.setSessionId(2);
+        Pair<IUwbRangingCallbacks, SessionHandle> cbAndSessionHandle2 =
+                triggerAndVerifyRangingStart(
+                        new String[]{"start-fira-ranging-session", "-i", "2"},
+                        openSessionParamsBuilder.build());
+        assertThat(cbAndSessionHandle1.second).isNotEqualTo(cbAndSessionHandle2.second);
     }
 
     @Test

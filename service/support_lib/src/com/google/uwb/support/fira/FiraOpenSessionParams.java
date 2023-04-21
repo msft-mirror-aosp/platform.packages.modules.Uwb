@@ -1327,6 +1327,7 @@ public class FiraOpenSessionParams extends FiraParams {
             mUlTdoaDeviceIdType = params.mUlTdoaDeviceIdType;
             mUlTdoaDeviceId = params.mUlTdoaDeviceId;
             mUlTdoaTxTimestampType = params.mUlTdoaTxTimestampType;
+            mFilterType = params.mFilterType;
         }
 
         public FiraOpenSessionParams.Builder setProtocolVersion(FiraProtocolVersion version) {
@@ -1784,13 +1785,15 @@ public class FiraOpenSessionParams extends FiraParams {
             }
 
             if (mStsConfig == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
-                if (!mSubSessionId.isSet()) {
-                    mSubSessionId.set(0);
-                }
                 checkArgument(mSessionKey != null
                         && (mSessionKey.length == 16 || mSessionKey.length == 32));
-                checkArgument(mSubsessionKey != null
-                        && (mSubsessionKey.length == 16 || mSubsessionKey.length == 32));
+                if (mDeviceType.get() == RANGING_DEVICE_TYPE_CONTROLEE) {
+                    if (!mSubSessionId.isSet()) {
+                        mSubSessionId.set(0);
+                    }
+                    checkArgument(mSubsessionKey != null
+                            && (mSubsessionKey.length == 16 || mSubsessionKey.length == 32));
+                }
             }
         }
 

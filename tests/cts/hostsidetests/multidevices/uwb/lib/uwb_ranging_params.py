@@ -71,9 +71,13 @@ class FiraParamEnums:
   # list update actions
   MULTICAST_LIST_UPDATE_ACTION_ADD = 0
   MULTICAST_LIST_UPDATE_ACTION_DELETE = 1
+  P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_16_BYTE = 2
+  P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_32_BYTE = 3
 
   # sts config
   STS_CONFIG_STATIC = 0
+  STS_CONFIG_PROVISIONED = 3
+  STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY = 4
 
 
 @dataclasses.dataclass
@@ -105,6 +109,36 @@ class UwbRangingReconfigureParams():
 
 
 @dataclasses.dataclass
+class UwbRangingControleeParams():
+    """Class for UWB ranging controlee parameters.
+
+    Attributes:
+      action: Type of reconfigure action.
+      address_list: new address list.
+      sub_session_id_list: new subsession id list.
+    """
+    action: Optional[int] = None
+    address_list: Optional[List[List[int]]] = None
+    sub_session_id_list: Optional[List[int]] = None
+
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Returns UWB ranging controlee parameters in dictionary for sl4a.
+
+        Returns:
+          UWB ranging controlee parameters in dictionary.
+        """
+        controlee_params = {}
+        if self.action is not None:
+            controlee_params["action"] = self.action
+        if self.address_list is not None:
+            controlee_params["addressList"] = self.address_list
+        if self.sub_session_id_list is not None:
+            controlee_params["subSessionIdList"] = self.sub_session_id_list
+        return controlee_params
+
+
+@dataclasses.dataclass
 class UwbRangingParams():
   """Class for Uwb ranging parameters.
 
@@ -131,6 +165,7 @@ class UwbRangingParams():
     vendor_id: Ranging device vendor ID.
     static_sts_iv: Static STS value.
     sts_config: STS config.
+    session_key: Provisioned sts session key.
 
   Example:
       An example of UWB ranging parameters passed to sl4a is below.
@@ -166,21 +201,30 @@ class UwbRangingParams():
   channel: int = FiraParamEnums.UWB_CHANNEL_9
   preamble: int = FiraParamEnums.UWB_PREAMBLE_CODE_INDEX_10
   multi_node_mode: int = FiraParamEnums.MULTI_NODE_MODE_ONE_TO_MANY
-  ranging_round_usage: int = FiraParamEnums.RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE
+  ranging_round_usage: int = (
+      FiraParamEnums.RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE
+  )
   mac_address_mode: int = FiraParamEnums.MAC_ADDRESS_MODE_2_BYTES
   initiation_time_ms: int = FiraParamEnums.INITIATION_TIME_MS
   slot_duration_rstu: int = FiraParamEnums.SLOT_DURATION_RSTU
   ranging_interval_ms: int = FiraParamEnums.RANGING_INTERVAL_MS
   slots_per_ranging_round: int = FiraParamEnums.SLOTS_PER_RR
-  in_band_termination_attempt_count: int = FiraParamEnums.IN_BAND_TERMINATION_ATTEMPT_COUNT
-  aoa_result_request: int = FiraParamEnums.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS
-  hopping_mode: int = FiraParamEnums.HOPPING_MODE_DISABLE
+  in_band_termination_attempt_count: int = (
+      FiraParamEnums.IN_BAND_TERMINATION_ATTEMPT_COUNT
+  )
+  aoa_result_request: int = (
+      FiraParamEnums.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS
+  )
+  hopping_mode: int = FiraParamEnums.HOPPING_MODE_FIRA_HOPPING_ENABLE
   max_ranging_round_retries: int = FiraParamEnums.MAX_RANGING_ROUND_RETRIES
   block_stride_length: int = FiraParamEnums.BLOCK_STRIDE_LENGTH
   vendor_id: List[int] = dataclasses.field(default_factory=lambda: [5, 6])
   static_sts_iv: List[int] = dataclasses.field(
       default_factory=lambda: [5, 6, 7, 8, 9, 10])
   sts_config: int = FiraParamEnums.STS_CONFIG_STATIC
+  session_key: List[int] = dataclasses.field(
+      default_factory=lambda: [1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1]
+  )
 
   def to_dict(self) -> Dict[str, Any]:
     """Returns UWB ranging parameters in dictionary for sl4a.
@@ -211,6 +255,7 @@ class UwbRangingParams():
         "vendorId": self.vendor_id,
         "staticStsIV": self.static_sts_iv,
         "stsConfig": self.sts_config,
+        "sessionKey": self.session_key,
     }
 
   def update(self, **kwargs: Any):

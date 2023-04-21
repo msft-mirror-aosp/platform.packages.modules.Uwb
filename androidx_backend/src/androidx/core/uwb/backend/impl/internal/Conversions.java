@@ -46,13 +46,24 @@ final class Conversions {
         return new RangingMeasurement(confidenceLevel, (float) value, valid);
     }
 
+    private static boolean isDlTDoAMeasurement(android.uwb.RangingMeasurement measurement) {
+        if (Build.VERSION.SDK_INT <= VERSION_CODES.TIRAMISU) {
+            return false;
+        }
+        try {
+            return com.google.uwb.support.dltdoa.DlTDoAMeasurement.isDlTDoAMeasurement(
+                    measurement.getRangingMeasurementMetadata());
+        } catch (NoSuchMethodError e) {
+            return false;
+        }
+    }
+
     /** Convert system API's {@link android.uwb.RangingMeasurement} to {@link RangingPosition} */
     @Nullable
     static RangingPosition convertToPosition(android.uwb.RangingMeasurement measurement) {
-        RangingMeasurement distance = null;
+        RangingMeasurement distance;
         DlTDoAMeasurement dlTdoaMeasurement = null;
-        if (com.google.uwb.support.dltdoa.DlTDoAMeasurement.isDlTDoAMeasurement(
-                measurement.getRangingMeasurementMetadata())) {
+        if (isDlTDoAMeasurement(measurement)) {
             com.google.uwb.support.dltdoa.DlTDoAMeasurement
                     dlTDoAMeasurement = com.google.uwb.support.dltdoa.DlTDoAMeasurement.fromBundle(
                     measurement.getRangingMeasurementMetadata());
@@ -141,21 +152,35 @@ final class Conversions {
             return RangingSessionCallback.REASON_MAX_RANGING_ROUND_RETRY_REACHED;
         }
 
+        if (reason == RangingSession.Callback.REASON_SYSTEM_POLICY) {
+            return RangingSessionCallback.REASON_SYSTEM_POLICY;
+        }
+
         return RangingSessionCallback.REASON_UNKNOWN;
     }
 
-    static android.uwb.UwbAddress convertUwbAddress(UwbAddress address) {
-        return android.uwb.UwbAddress.fromBytes(address.toBytes());
+    static android.uwb.UwbAddress convertUwbAddress(UwbAddress address, boolean reverseMacAddress) {
+        return reverseMacAddress
+                ? android.uwb.UwbAddress.fromBytes(getReverseBytes(address.toBytes()))
+                : android.uwb.UwbAddress.fromBytes(address.toBytes());
     }
 
-    static List<android.uwb.UwbAddress> convertUwbAddressList(UwbAddress[] addressList) {
+    static List<android.uwb.UwbAddress> convertUwbAddressList(
+            UwbAddress[] addressList, boolean reverseMacAddress) {
         List<android.uwb.UwbAddress> list = new ArrayList<>();
         for (UwbAddress address : addressList) {
-            list.add(convertUwbAddress(address));
+            list.add(convertUwbAddress(address, reverseMacAddress));
         }
         return list;
     }
 
-    private Conversions() {
+    static byte[] getReverseBytes(byte[] data) {
+        byte[] buffer = new byte[data.length];
+        for (int i = 0; i < data.length; i++) {
+            buffer[i] = data[data.length - 1 - i];
+        }
+        return buffer;
     }
+
+    private Conversions() {}
 }

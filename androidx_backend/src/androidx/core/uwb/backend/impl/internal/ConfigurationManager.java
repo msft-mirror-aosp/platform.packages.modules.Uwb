@@ -16,14 +16,14 @@
 
 package androidx.core.uwb.backend.impl.internal;
 
-import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_2;
-import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_3;
-import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_4;
-import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_5;
-import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_6;
-import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_7;
-import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_8;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_DL_TDOA_DT_TAG;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_MULTICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_MULTICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_UNICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_UNICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_UNICAST_DS_TWR_NO_AOA;
 import static androidx.core.uwb.backend.impl.internal.Utils.STATIC_STS_SESSION_KEY_INFO_SIZE;
 import static androidx.core.uwb.backend.impl.internal.Utils.VENDOR_ID_SIZE;
 import static androidx.core.uwb.backend.impl.internal.Utils.getRangingTimingParams;
@@ -102,12 +102,12 @@ public final class ConfigurationManager {
 
         // ID_2 properties.
         sConfigs.put(
-                CONFIG_ID_2,
+                CONFIG_MULTICAST_DS_TWR,
                 new UwbConfiguration() {
 
                     @Override
                     public int getConfigId() {
-                        return CONFIG_ID_2;
+                        return CONFIG_MULTICAST_DS_TWR;
                     }
 
                     @Override
@@ -138,12 +138,12 @@ public final class ConfigurationManager {
 
         // ID_3 properties.
         sConfigs.put(
-                CONFIG_ID_3,
+                CONFIG_UNICAST_DS_TWR_NO_AOA,
                 new UwbConfiguration() {
 
                     @Override
                     public int getConfigId() {
-                        return CONFIG_ID_3;
+                        return CONFIG_UNICAST_DS_TWR_NO_AOA;
                     }
 
                     @Override
@@ -174,12 +174,12 @@ public final class ConfigurationManager {
 
         // ID_4 properties.
         sConfigs.put(
-                CONFIG_ID_4,
+                CONFIG_PROVISIONED_UNICAST_DS_TWR,
                 new UwbConfiguration() {
 
                     @Override
                     public int getConfigId() {
-                        return CONFIG_ID_4;
+                        return CONFIG_PROVISIONED_UNICAST_DS_TWR;
                     }
 
                     @Override
@@ -210,12 +210,12 @@ public final class ConfigurationManager {
 
         // ID_5 properties.
         sConfigs.put(
-                CONFIG_ID_5,
+                CONFIG_PROVISIONED_MULTICAST_DS_TWR,
                 new UwbConfiguration() {
 
                     @Override
                     public int getConfigId() {
-                        return CONFIG_ID_5;
+                        return CONFIG_PROVISIONED_MULTICAST_DS_TWR;
                     }
 
                     @Override
@@ -246,11 +246,11 @@ public final class ConfigurationManager {
 
         // ID_6 properties.
         sConfigs.put(
-                CONFIG_ID_6,
+                CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA,
                 new UwbConfiguration() {
                     @Override
                     public int getConfigId() {
-                        return CONFIG_ID_6;
+                        return CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA;
                     }
 
                     @Override
@@ -281,12 +281,12 @@ public final class ConfigurationManager {
 
         // ID_7 properties.
         sConfigs.put(
-                CONFIG_ID_7,
+                CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
                 new UwbConfiguration() {
 
                     @Override
                     public int getConfigId() {
-                        return CONFIG_ID_7;
+                        return CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR;
                     }
 
                     @Override
@@ -317,12 +317,12 @@ public final class ConfigurationManager {
 
         // ID_8 properties.
         sConfigs.put(
-                CONFIG_ID_8,
+                CONFIG_DL_TDOA_DT_TAG,
                 new UwbConfiguration() {
 
                     @Override
                     public int getConfigId() {
-                        return CONFIG_ID_8;
+                        return CONFIG_DL_TDOA_DT_TAG;
                     }
 
                     @Override
@@ -352,13 +352,15 @@ public final class ConfigurationManager {
                 });
     }
 
-    private ConfigurationManager() {}
+    private ConfigurationManager() {
+    }
 
     /** Creates a {@link FiraOpenSessionParams}. */
     public static FiraOpenSessionParams createOpenSessionParams(
             @FiraParams.RangingDeviceType int deviceType,
             UwbAddress localAddress,
-            RangingParameters rangingParameters) {
+            RangingParameters rangingParameters,
+            UwbFeatureFlags featureFlags) {
         RangingTimingParams timingParams =
                 getRangingTimingParams(rangingParameters.getUwbConfigId());
         UwbConfiguration configuration = sConfigs.get(rangingParameters.getUwbConfigId());
@@ -393,12 +395,14 @@ public final class ConfigurationManager {
                         .setDeviceType(deviceType)
                         .setDeviceRole(deviceRole)
                         .setSessionId(rangingParameters.getSessionId())
-                        .setDeviceAddress(Conversions.convertUwbAddress(localAddress))
+                        .setDeviceAddress(Conversions.convertUwbAddress(localAddress,
+                                featureFlags.isReversedMacAddress()))
                         .setDestAddressList(
                                 Conversions.convertUwbAddressList(
                                         rangingParameters
                                                 .getPeerAddresses()
-                                                .toArray(new UwbAddress[0])))
+                                                .toArray(new UwbAddress[0]),
+                                        featureFlags.isReversedMacAddress()))
                         .setAoaResultRequest(configuration.getAoaResultRequestMode())
                         .setChannelNumber(rangingParameters.getComplexChannel().getChannel())
                         .setPreambleCodeIndex(
@@ -409,7 +413,17 @@ public final class ConfigurationManager {
                         .setRangingIntervalMs(
                                 timingParams.getRangingInterval(
                                         rangingParameters.getRangingUpdateRate()))
-                        .setInBandTerminationAttemptCount(3);
+                        .setRangeDataNtfConfig(
+                                Utils.convertToFiraNtfConfig(
+                                        rangingParameters
+                                                .getUwbRangeDataNtfConfig()
+                                                .getRangeDataNtfConfigType()))
+                        .setRangeDataNtfProximityNear(
+                                rangingParameters.getUwbRangeDataNtfConfig().getNtfProximityNear())
+                        .setRangeDataNtfProximityFar(
+                                rangingParameters.getUwbRangeDataNtfConfig().getNtfProximityFar())
+                        .setInBandTerminationAttemptCount(3)
+                        .setStsConfig(configuration.getStsConfig());
 
         if (configuration.getStsConfig() == FiraParams.STS_CONFIG_STATIC) {
             byte[] staticStsIv =
@@ -420,14 +434,17 @@ public final class ConfigurationManager {
             builder.setVendorId(
                             Arrays.copyOf(rangingParameters.getSessionKeyInfo(), VENDOR_ID_SIZE))
                     .setStaticStsIV(staticStsIv);
-        }
-        if (configuration.getStsConfig() == STS_CONFIG_PROVISIONED) {
-            builder.setSessionKey(rangingParameters.getSessionKeyInfo());
-        }
-        if (configuration.getStsConfig() == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
+        } else if (configuration.getStsConfig() == STS_CONFIG_PROVISIONED) {
+            builder.setSessionKey(rangingParameters.getSessionKeyInfo())
+                    .setIsKeyRotationEnabled(true)
+                    .setKeyRotationRate(0);
+        } else if (configuration.getStsConfig()
+                == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
             builder.setSessionKey(rangingParameters.getSessionKeyInfo())
                     .setSubSessionId(rangingParameters.getSubSessionId())
-                    .setSubsessionKey(rangingParameters.getSubSessionKeyInfo());
+                    .setSubsessionKey(rangingParameters.getSubSessionKeyInfo())
+                    .setIsKeyRotationEnabled(true)
+                    .setKeyRotationRate(0);
         }
 
         if (timingParams.isHoppingEnabled()) {
@@ -442,13 +459,15 @@ public final class ConfigurationManager {
             @FiraParams.MulticastListUpdateAction int action,
             UwbAddress[] peerAddresses,
             @Nullable int[] subSessionIdList,
-            @Nullable byte[] subSessionKey) {
+            @Nullable byte[] subSessionKey,
+            UwbFeatureFlags uwbFeatureFlags) {
         UwbConfiguration configuration = sConfigs.get(configId);
         FiraRangingReconfigureParams.Builder builder =
                 new FiraRangingReconfigureParams.Builder()
                         .setAction(action)
                         .setAddressList(
-                                Conversions.convertUwbAddressList(peerAddresses)
+                                Conversions.convertUwbAddressList(peerAddresses,
+                                                uwbFeatureFlags.isReversedMacAddress())
                                         .toArray(new android.uwb.UwbAddress[0]));
         if (configuration.getStsConfig()
                 == FiraParams.STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY) {

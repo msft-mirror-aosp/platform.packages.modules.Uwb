@@ -84,8 +84,8 @@ public class CapabilityParam {
             UwbVendorCapabilityTlvTypes.SUPPORTED_RSSI_REPORTING;
     public static final int SUPPORTED_DIAGNOSTICS =
             UwbVendorCapabilityTlvTypes.SUPPORTED_DIAGNOSTICS;
-    public static final int SUPPORTED_MIN_SLOT_DURATION =
-            UwbVendorCapabilityTlvTypes.SUPPORTED_MIN_SLOT_DURATION_MS;
+    public static final int SUPPORTED_MIN_SLOT_DURATION_RSTU =
+            UwbVendorCapabilityTlvTypes.SUPPORTED_MIN_SLOT_DURATION_RSTU;
     public static final int SUPPORTED_MAX_RANGING_SESSION_NUMBER =
             UwbVendorCapabilityTlvTypes.SUPPORTED_MAX_RANGING_SESSION_NUMBER;
 
@@ -108,6 +108,8 @@ public class CapabilityParam {
             UwbVendorCapabilityTlvTypes.CCC_SUPPORTED_CHANNELS;
     public static final int CCC_SUPPORTED_HOPPING_CONFIG_MODES_AND_SEQUENCES =
             UwbVendorCapabilityTlvTypes.CCC_SUPPORTED_HOPPING_CONFIG_MODES_AND_SEQUENCES;
+    public static final int CCC_SUPPORTED_MIN_UWB_INITIATION_TIME_MS =
+            UwbVendorCapabilityTlvTypes.CCC_SUPPORTED_MIN_UWB_INITIATION_TIME_MS;
 
     public static final int RESPONDER = 0x01;
     public static final int INITIATOR = 0x02;

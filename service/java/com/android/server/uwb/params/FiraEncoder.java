@@ -75,10 +75,7 @@ public class FiraEncoder extends TlvEncoder {
                         (byte) params.getDestAddressList().size())
                 .putByteArray(ConfigParam.DEVICE_MAC_ADDRESS, params.getDeviceAddress().size(),
                         TlvUtil.getReverseBytes(params.getDeviceAddress().toBytes()))
-                .putByteArray(ConfigParam.DST_MAC_ADDRESS, dstAddressList.position(),
-                        Arrays.copyOf(dstAddressList.array(), dstAddressList.position()))
                 .putShort(ConfigParam.SLOT_DURATION, (short) params.getSlotDurationRstu())
-                .putInt(ConfigParam.RANGING_INTERVAL, params.getRangingIntervalMs())
                 .putByte(ConfigParam.MAC_FCS_TYPE, (byte) params.getFcsType())
                 .putByte(ConfigParam.RANGING_ROUND_CONTROL,
                         (byte) rangingRoundControl/* params.getMeasurementReportType()*/)
@@ -103,10 +100,6 @@ public class FiraEncoder extends TlvEncoder {
                 .putByte(ConfigParam.KEY_ROTATION_RATE, (byte) params.getKeyRotationRate())
                 .putByte(ConfigParam.SESSION_PRIORITY, (byte) params.getSessionPriority())
                 .putByte(ConfigParam.MAC_ADDRESS_MODE, (byte) params.getMacAddressMode())
-                .putByteArray(ConfigParam.VENDOR_ID, params.getVendorId() != null
-                        ? TlvUtil.getReverseBytes(params.getVendorId()) : null)
-                .putByteArray(ConfigParam.STATIC_STS_IV,
-                        params.getStaticStsIV())
                 .putByte(ConfigParam.NUMBER_OF_STS_SEGMENTS, (byte) params.getStsSegmentCount())
                 .putShort(ConfigParam.MAX_RR_RETRY, (short) params.getMaxRangingRoundRetries())
                 .putByte(ConfigParam.HOPPING_MODE,
@@ -118,6 +111,14 @@ public class FiraEncoder extends TlvEncoder {
                 .putByte(ConfigParam.BPRF_PHR_DATA_RATE,
                         (byte) params.getBprfPhrDataRate())
                 .putByte(ConfigParam.STS_LENGTH, (byte) params.getStsLength());
+        if (params.getDeviceRole() != FiraParams.RANGING_DEVICE_UT_TAG) {
+            tlvBufferBuilder.putInt(ConfigParam.RANGING_INTERVAL, params.getRangingIntervalMs());
+        }
+        if (params.getDestAddressList().size() > 0) {
+            tlvBufferBuilder.putByteArray(
+                    ConfigParam.DST_MAC_ADDRESS, dstAddressList.position(),
+                    Arrays.copyOf(dstAddressList.array(), dstAddressList.position()));
+        }
         if (params.getProtocolVersion().getMajor() >= 2) {
             tlvBufferBuilder
                  // Initiation time Changed from 4 byte field to 8 byte field in version 2.
@@ -131,12 +132,20 @@ public class FiraEncoder extends TlvEncoder {
                 && (deviceType == FiraParams.RANGING_DEVICE_TYPE_CONTROLEE)) {
             tlvBufferBuilder.putInt(ConfigParam.SUB_SESSION_ID, params.getSubSessionId());
         }
-        if ((stsConfig == FiraParams.STS_CONFIG_PROVISIONED)
+        if (stsConfig == FiraParams.STS_CONFIG_STATIC) {
+            tlvBufferBuilder
+                    .putByteArray(ConfigParam.VENDOR_ID, params.getVendorId() != null
+                            ? TlvUtil.getReverseBytes(params.getVendorId())
+                            : null)
+                    .putByteArray(ConfigParam.STATIC_STS_IV, params.getStaticStsIV());
+        } else if ((stsConfig == FiraParams.STS_CONFIG_PROVISIONED)
                 || (stsConfig
                 == FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY)) {
             tlvBufferBuilder.putByteArray(ConfigParam.SESSION_KEY, params.getSessionKey());
             if (stsConfig
-                    == FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
+                    == FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY
+                    && (deviceType == FiraParams.RANGING_DEVICE_TYPE_CONTROLEE)) {
+                tlvBufferBuilder.putInt(ConfigParam.SUB_SESSION_ID, params.getSubSessionId());
                 tlvBufferBuilder.putByteArray(ConfigParam.SUBSESSION_KEY,
                         params.getSubsessionKey());
             }
