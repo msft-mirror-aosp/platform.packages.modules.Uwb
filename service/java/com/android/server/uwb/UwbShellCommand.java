@@ -16,6 +16,8 @@
 
 package com.android.server.uwb;
 
+import static android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_BACKGROUND;
+import static android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND;
 import static android.uwb.UwbAddress.SHORT_ADDRESS_BYTE_LENGTH;
 
 import static com.google.uwb.support.ccc.CccParams.CHAPS_PER_SLOT_3;
@@ -54,6 +56,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import android.annotation.NonNull;
 import android.content.AttributionSource;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.Looper;
@@ -556,8 +559,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 builder.setSlotDurationRstu(slotDurationRstu);
             }
             if (option.equals("-w")) {
-                boolean hasResultReportPhase = getNextArgRequiredTrueOrFalse("enabled", "disabled");
-                builder.setHasResultReportPhase(hasResultReportPhase);
+                boolean hasRangingResultReportMessage =
+                        getNextArgRequiredTrueOrFalse("enabled", "disabled");
+                builder.setHasRangingResultReportMessage(hasRangingResultReportMessage);
             }
             if (option.equals("-y")) {
                 boolean hoppingEnabled = getNextArgRequiredTrueOrFalse("enabled", "disabled");
@@ -939,6 +943,27 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 case "get-country-code":
                     pw.println("Uwb Country Code = " + mUwbCountryCode.getCountryCode());
                     return 0;
+                case "simulate-app-state-change": {
+                    String appPackageName = getNextArgRequired();
+                    String nextArg = getNextArg();
+                    if (nextArg != null) {
+                        boolean isFg = argTrueOrFalse(nextArg, "foreground", "background");
+                        int importance = isFg ? IMPORTANCE_FOREGROUND : IMPORTANCE_BACKGROUND;
+                        int uid = 0;
+                        try {
+                            uid = mContext.getPackageManager().getApplicationInfo(
+                                    appPackageName, 0).uid;
+                        } catch (PackageManager.NameNotFoundException e) {
+                            pw.println("Unable to find package name: " + appPackageName);
+                            return -1;
+                        }
+                        mUwbInjector.setOverridePackageImportance(appPackageName, importance);
+                        mUwbInjector.getUwbSessionManager().onUidImportance(uid, importance);
+                    } else {
+                        mUwbInjector.resetOverridePackageImportance(appPackageName);
+                    }
+                    return 0;
+                }
                 case "set-log-mode": {
                     String logMode = getNextArgRequired();
                     if (!UciLogModeStore.isValid(logMode)) {
@@ -1067,17 +1092,22 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         }
     }
 
-    private boolean getNextArgRequiredTrueOrFalse(String trueString, String falseString)
-            throws IllegalArgumentException {
-        String nextArg = getNextArgRequired();
-        if (trueString.equals(nextArg)) {
+    private static boolean argTrueOrFalse(String arg, String trueString, String falseString) {
+        if (trueString.equals(arg)) {
             return true;
-        } else if (falseString.equals(nextArg)) {
+        } else if (falseString.equals(arg)) {
             return false;
         } else {
             throw new IllegalArgumentException("Expected '" + trueString + "' or '" + falseString
-                    + "' as next arg but got '" + nextArg + "'");
+                    + "' as next arg but got '" + arg + "'");
         }
+
+    }
+
+    private boolean getNextArgRequiredTrueOrFalse(String trueString, String falseString)
+            throws IllegalArgumentException {
+        String nextArg = getNextArgRequired();
+        return argTrueOrFalse(nextArg, trueString, falseString);
     }
 
     private void printStatus(PrintWriter pw) throws RemoteException {
@@ -1172,6 +1202,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("    Disable vendor diagnostics notification");
         pw.println("  take-bugreport");
         pw.println("    take bugreport through betterBug or alternatively bugreport manager");
+        pw.println("  simulate-app-state-change <package-name> foreground|background");
+        pw.println("    Simulate app moving to foreground/background to test stack handling");
     }
 
     private void onHelpPrivileged(PrintWriter pw) {
