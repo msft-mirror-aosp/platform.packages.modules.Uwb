@@ -162,17 +162,6 @@ public class NativeUwbManager {
     }
 
     /**
-     * Retrieves maximum number of UWB sessions concurrently
-     *
-     * @return : Retrieves maximum number of UWB sessions concurrently
-     */
-    public int getMaxSessionNumber() {
-        synchronized (mNativeLock) {
-            return nativeGetMaxSessionNumber();
-        }
-    }
-
-    /**
      * Retrieves power related stats
      */
     public UwbPowerStats getPowerStats(String chipId) {
@@ -371,12 +360,8 @@ public class NativeUwbManager {
      * @return true if the log mode is set successfully, false otherwise.
      */
     public boolean setLogMode(String logModeStr) {
-        if (mUciLogModeStore.storeMode(logModeStr)) {
-            synchronized (mNativeLock) {
-                return nativeSetLogMode(mUciLogModeStore.getMode());
-            }
-        } else {
-            return false;
+        synchronized (mNativeLock) {
+            return nativeSetLogMode(mUciLogModeStore.getMode());
         }
     }
 
@@ -410,6 +395,13 @@ public class NativeUwbManager {
         }
     }
 
+    /**
+     * Receive the data transfer status for a UCI data packet earlier sent from Host to UWBS.
+     */
+    public void onDataSendStatus(long sessionId, int dataTransferStatus, long sequenceNum) {
+        Log.d(TAG, "onDataSendStatus ");
+        mSessionListener.onDataSendStatus(sessionId, dataTransferStatus, sequenceNum);
+    }
 
     /**
      * Update active Ranging Rounds for DT Tag
@@ -457,8 +449,6 @@ public class NativeUwbManager {
     private native long nativeGetTimestampResolutionNanos();
 
     private native UwbPowerStats nativeGetPowerStats(String chipId);
-
-    private native int nativeGetMaxSessionNumber();
 
     private native byte nativeDeviceReset(byte resetConfig, String chipId);
 
