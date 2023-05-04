@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from mobly import asserts
 from mobly.controllers import android_device
-from mobly.controllers.android_device_lib import callback_handler
+from mobly.controllers.android_device_lib import callback_handler_v2
 
 from lib import uwb_ranging_decorator
 
@@ -15,11 +15,12 @@ from lib import uwb_ranging_decorator
 WAIT_TIME_SEC = 3
 
 
-def verify_uwb_state_callback(ad: android_device.AndroidDevice,
-                              uwb_event: str,
-                              handler: Optional[
-                                  callback_handler.CallbackHandler] = None,
-                              timeout: int = WAIT_TIME_SEC) -> bool:
+def verify_uwb_state_callback(
+    ad: android_device.AndroidDevice,
+    uwb_event: str,
+    handler: Optional[callback_handler_v2.CallbackHandlerV2] = None,
+    timeout: int = WAIT_TIME_SEC,
+) -> bool:
   """Verifies expected UWB callback is received.
 
   Args:
@@ -73,7 +74,7 @@ def get_uwb_state(ad: android_device.AndroidDevice) -> bool:
 def set_uwb_state_and_verify(
     ad: android_device.AndroidDevice,
     state: bool,
-    handler: Optional[callback_handler.CallbackHandler] = None,
+    handler: Optional[callback_handler_v2.CallbackHandlerV2] = None,
 ):
   """Sets UWB state to on or off and verifies it.
 
@@ -144,3 +145,35 @@ def set_screen_rotation(ad: android_device.AndroidDevice, val: int):
   """
   ad.adb.shell(["settings", "put", "system", "accelerometer_rotation", "0"])
   ad.adb.shell(["settings", "put", "system", "user_rotation", str(val)])
+
+
+def initialize_uwb_country_code_if_not_set(
+        ad: android_device.AndroidDevice,
+        handler: Optional[callback_handler_v2.CallbackHandlerV2] = None):
+  """Sets UWB country code to US if the device does not have a valid country code set.
+
+  Note: This intentionally relies on an unstable API (shell command) since we don't want to expose\
+  an API that allows users to circumvent the UWB regulatory requirements.
+
+  Args:
+    ad: android device object.
+    handler: callback handler.
+  """
+  # Wait to see if UWB state is reported as enabled. If not, this could be because the country
+  # code is not set. Try forcing the country code in that case.
+  state = verify_uwb_state_callback(
+    ad=ad, uwb_event="Inactive", handler=handler, timeout=120)
+  # Country code already available, nothing to do.
+  if state:
+    return
+  try:
+    ad.adb.shell(["cmd", "uwb", "force-country-code", "enabled", "US"])
+  except adb.AdbError:
+    logging.warning("Unable to force country code")
+  # Unable to get UWB enabled even after setting country code, abort!
+  asserts.fail(
+      not verify_uwb_state_callback(
+          ad=ad, uwb_event="Inactive", handler=handler, timeout=120
+      ),
+      "Uwb is not enabled",
+  )
