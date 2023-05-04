@@ -51,6 +51,7 @@ public class DeviceConfigFacade {
     // Cached values of fields updated via updateDeviceConfigFlags()
     private int mRangingResultLogIntervalMs;
     private boolean mDeviceErrorBugreportEnabled;
+    private boolean mSessionInitErrorBugreportEnabled;
     private int mBugReportMinIntervalMs;
     private boolean mEnableFilters;
     private int mFilterDistanceInliersPercent;
@@ -72,6 +73,9 @@ public class DeviceConfigFacade {
     private int mAdvertiseArrayEndIndexToCalVariance;
     private int mAdvertiseTrustedVarianceValue;
 
+    // Config parameters related to Rx/Tx data packets.
+    private int mRxDataMaxPacketsToStore;
+
     public DeviceConfigFacade(Handler handler, Context context) {
         mContext = context;
 
@@ -90,6 +94,8 @@ public class DeviceConfigFacade {
                 "ranging_result_log_interval_ms", DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
         mDeviceErrorBugreportEnabled = DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_UWB,
                 "device_error_bugreport_enabled", false);
+        mSessionInitErrorBugreportEnabled = DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_UWB,
+                "session_init_error_bugreport_enabled", false);
         mBugReportMinIntervalMs = DeviceConfig.getInt(DeviceConfig.NAMESPACE_UWB,
                 "bug_report_min_interval_ms", DEFAULT_BUG_REPORT_MIN_INTERVAL_MS);
 
@@ -179,6 +185,13 @@ public class DeviceConfigFacade {
                 mContext.getResources().getInteger(R.integer.advertise_trusted_variance_value)
         );
 
+        // Rx data packets.
+        mRxDataMaxPacketsToStore = DeviceConfig.getInt(
+                DeviceConfig.NAMESPACE_UWB,
+                "rx_data_max_packets_to_store",
+                mContext.getResources().getInteger(R.integer.rx_data_max_packets_to_store)
+        );
+
         // A little parsing and cleanup:
         try {
             mPoseSourceType = PoseSourceType.valueOf(poseSourceName);
@@ -202,6 +215,13 @@ public class DeviceConfigFacade {
      */
     public boolean isDeviceErrorBugreportEnabled() {
         return mDeviceErrorBugreportEnabled;
+    }
+
+    /**
+     * Gets the feature flag for reporting session init error
+     */
+    public boolean isSessionInitErrorBugreportEnabled() {
+        return mSessionInitErrorBugreportEnabled;
     }
 
     /**
@@ -331,5 +351,13 @@ public class DeviceConfigFacade {
      */
     public int getAdvertiseTrustedVarianceValue() {
         return mAdvertiseTrustedVarianceValue;
+    }
+
+    /**
+     * Gets the max number of Rx data packets (received on a UWB session from the remote device),
+     * to be stored in the UWB framework.
+     */
+    public int getRxDataMaxPacketsToStore() {
+        return mRxDataMaxPacketsToStore;
     }
 }
