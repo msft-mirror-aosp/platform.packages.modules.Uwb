@@ -16,8 +16,10 @@
 
 package com.android.server.uwb;
 
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
 import static com.android.server.uwb.DeviceConfigFacade.DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS;
 
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.when;
@@ -71,10 +73,14 @@ public class UwbMetricsTest {
     private static final String PACKAGE_NAME = "com.android.uwb.test";
     private static final AttributionSource ATTRIBUTION_SOURCE =
             new AttributionSource.Builder(UID).setPackageName(PACKAGE_NAME).build();
+    private static final int RANGING_INTERVAL_MS = 200;
+    private static final int PARALLEL_SESSION_COUNT = 0;
     @Mock
     private UwbInjector mUwbInjector;
     @Mock
     private DeviceConfigFacade mDeviceConfigFacade;
+    @Mock
+    private UwbDiagnostics mUwbDiagnostics;
     private UwbTwoWayMeasurement[] mTwoWayMeasurements = new UwbTwoWayMeasurement[1];
     @Mock
     private UwbTwoWayMeasurement mTwoWayMeasurement;
@@ -108,10 +114,12 @@ public class UwbMetricsTest {
                 UwbStatsLog.UWB_SESSION_INITIATED__PROFILE__FIRA);
         when(mUwbSession.getParams()).thenReturn(mFiraParams);
         when(mUwbSession.getAttributionSource()).thenReturn(ATTRIBUTION_SOURCE);
+        when(mUwbSession.getParallelSessionCount()).thenReturn(PARALLEL_SESSION_COUNT);
         when(mFiraParams.getStsConfig()).thenReturn(FiraParams.STS_CONFIG_STATIC);
         when(mFiraParams.getDeviceRole()).thenReturn(FiraParams.RANGING_DEVICE_ROLE_INITIATOR);
         when(mFiraParams.getDeviceType()).thenReturn(FiraParams.RANGING_DEVICE_TYPE_CONTROLLER);
         when(mFiraParams.getChannelNumber()).thenReturn(CHANNEL_DEFAULT);
+        when(mFiraParams.getRangingIntervalMs()).thenReturn(RANGING_INTERVAL_MS);
 
         when(mTwoWayMeasurement.getDistance()).thenReturn(DISTANCE_DEFAULT_CM);
         when(mTwoWayMeasurement.getAoaAzimuth()).thenReturn((float) AZIMUTH_DEFAULT_DEGREE);
@@ -122,7 +130,9 @@ public class UwbMetricsTest {
         when(mTwoWayMeasurement.getRssi()).thenReturn(RSSI_DEFAULT_DBM);
         when(mDeviceConfigFacade.getRangingResultLogIntervalMs())
                 .thenReturn(DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
+        when(mDeviceConfigFacade.isSessionInitErrorBugreportEnabled()).thenReturn(true);
         when(mUwbInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
+        when(mUwbInjector.getUwbDiagnostics()).thenReturn(mUwbDiagnostics);
 
         mUwbMetrics = new UwbMetrics(mUwbInjector);
         mMockSession = ExtendedMockito.mockitoSession()
@@ -159,7 +169,7 @@ public class UwbMetricsTest {
                 UwbStatsLog.UWB_SESSION_INITIATED__STS__STATIC, true,
                 true, false, true,
                 CHANNEL_DEFAULT, UwbStatsLog.UWB_SESSION_INITIATED__STATUS__SUCCESS,
-                0, 0, UID
+                0, 0, UID, RANGING_INTERVAL_MS, PARALLEL_SESSION_COUNT
         ));
 
         mUwbMetrics.longRangingStartEvent(mUwbSession,
@@ -223,8 +233,9 @@ public class UwbMetricsTest {
                 UwbStatsLog.UWB_SESSION_INITIATED__STS__DYNAMIC, false,
                 false, false, true,
                 CHANNEL_DEFAULT, UwbStatsLog.UWB_SESSION_INITIATED__STATUS__BAD_PARAMS,
-                0, 0, UID
+                0, 0, UID, RANGING_INTERVAL_MS, PARALLEL_SESSION_COUNT
         ));
+        verify(mUwbDiagnostics).takeBugReport(anyString());
     }
 
     @Test
