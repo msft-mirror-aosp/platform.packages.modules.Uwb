@@ -6,6 +6,7 @@ import time
 from typing import List
 
 from mobly import asserts
+from mobly import config_parser
 from mobly import test_runner
 
 from lib import uwb_base_test
@@ -15,7 +16,19 @@ from test_utils import uwb_test_utils
 
 MEASUREMENT_WAIT_TIME= 30
 MAX_VARIANCE = 5
+MEASUREMENTS_COUNT = 1000
+MEASUREMENTS_SPREAD_LOWER_BOUND_INDEX = 25
+MEASUREMENTS_SPREAD_UPPER_BOUND_INDEX = 975
+DISTANCE_MEASUREMENTS_MAX_SPREAD_CM = 30
+DISTANCE_MEASUREMENTS_MEDIAN_LOWER_BOUND_CM = 75
+DISTANCE_MEASUREMENTS_MEDIAN_UPPER_BOUND_CM = 125
 
+
+_TEST_CASES = {
+    "test_rssi_measurement_device_tracker_profile",
+    "test_rssi_measurement_nearby_share_profile",
+    "test_distance_measurement_accuracy",
+}
 
 class RangingMeasurementTest(uwb_base_test.UwbBaseTest):
   """Measurement tests for Ranging APIs.
@@ -23,6 +36,15 @@ class RangingMeasurementTest(uwb_base_test.UwbBaseTest):
   Attributes:
     android_devices: list of android device objects.
   """
+
+  def __init__(self, configs: config_parser.TestRunConfig):
+      """Init method for the test class.
+
+      Args:
+        configs: A config_parser.TestRunConfig object.
+      """
+      super().__init__(configs)
+      self.tests = _TEST_CASES
 
   def setup_class(self):
     super().setup_class()
@@ -43,12 +65,6 @@ class RangingMeasurementTest(uwb_base_test.UwbBaseTest):
     self.initiator.stop_ranging()
     self.responder.close_ranging()
     self.initiator.close_ranging()
-
-  def on_fail(self, record):
-    for count, ad in enumerate(self.android_devices):
-      test_name = "initiator" if not count else "responder"
-      ad.take_bug_report(
-          test_name=test_name, destination=self.current_test_info.output_path)
 
   ### Helper Methods ###
 
@@ -133,6 +149,65 @@ class RangingMeasurementTest(uwb_base_test.UwbBaseTest):
     uwb_test_utils.verify_peer_found(responder, initiator_addr)
     self._get_rssi(initiator, responder, initiator_addr, peer_addr)
 
+  def _check_distance_accuracy(self, initiator: uwb_ranging_decorator.UwbRangingDecorator,
+                               responder_addr: List[int]):
+      """Verifies the distance measurement is within the required ranges.
+
+      Args:
+        initiator: uwb device object.
+        responder_addr: address of uwb device.
+      """
+      distance_measurements = []
+      for _ in range(MEASUREMENTS_COUNT):
+        distance = initiator.get_distance_measurement(responder_addr)
+        distance_measurements.append(distance * 100)
+      distance_measurements.sort()
+      median_distance_cm = statistics.median(distance_measurements)
+      logging.info("Median distance between peers: %s cm", median_distance_cm)
+      distance_spread_lower_bound_cm = distance_measurements[
+          MEASUREMENTS_SPREAD_LOWER_BOUND_INDEX - 1]
+      distance_spread_upper_bound_cm = distance_measurements[
+          MEASUREMENTS_SPREAD_UPPER_BOUND_INDEX - 1]
+      distance_spread_cm = distance_spread_upper_bound_cm - distance_spread_lower_bound_cm
+      logging.info("Distance spread of the required boundaries : %s cm", distance_spread_cm)
+      asserts.assert_true(
+          distance_spread_cm < DISTANCE_MEASUREMENTS_MAX_SPREAD_CM,
+          "Distance spread %s cm is greater than the required limit of %s cm" %
+          (distance_spread_cm, DISTANCE_MEASUREMENTS_MAX_SPREAD_CM))
+      asserts.assert_true(
+          DISTANCE_MEASUREMENTS_MEDIAN_LOWER_BOUND_CM < median_distance_cm <
+          DISTANCE_MEASUREMENTS_MEDIAN_UPPER_BOUND_CM,
+          "Median distance %s cm is out of the required range of [%s cm, %s cm]" %
+          (median_distance_cm, DISTANCE_MEASUREMENTS_MEDIAN_LOWER_BOUND_CM,
+           DISTANCE_MEASUREMENTS_MEDIAN_UPPER_BOUND_CM))
+
+  def _verify_distance_measurement_accuracy(
+          self, initiator: uwb_ranging_decorator.UwbRangingDecorator,
+          responder: uwb_ranging_decorator.UwbRangingDecorator,
+          initiator_params: uwb_ranging_params.UwbRangingParams,
+          responder_params: uwb_ranging_params.UwbRangingParams,
+          initiator_addr: List[int], responder_addr: List[int]):
+      """Verifies the accuracy of distance measurement.
+
+      Args:
+        initiator: uwb device object.
+        responder: uwb device object.
+        initiator_params: ranging params for initiator.
+        responder_params: ranging params for responder.
+        initiator_addr: address of initiator.
+        responder_addr: address of uwb device.
+      """
+      # open and start ranging on initiator and responder.
+      initiator.open_fira_ranging(initiator_params)
+      responder.open_fira_ranging(responder_params)
+      initiator.start_fira_ranging()
+      responder.start_fira_ranging()
+
+      # verify accuracy of distance measurement
+      uwb_test_utils.verify_peer_found(initiator, responder_addr)
+      uwb_test_utils.verify_peer_found(responder, initiator_addr)
+      self._check_distance_accuracy(initiator, responder_addr)
+
   ### Test Cases ###
 
   def test_rssi_measurement_device_tracker_profile(self):
@@ -190,6 +265,34 @@ class RangingMeasurementTest(uwb_base_test.UwbBaseTest):
     self._verify_peer_found(self.initiator, self.responder, initiator_params,
                             responder_params, self.initiator_addr,
                             self.responder_addr)
+
+  def test_distance_measurement_accuracy(self):
+    """Checks accuracy of distance measurements.
+       @CddTest = 7.4.9/C-1-6,C-1-7
+    """
+    initiator_params = uwb_ranging_params.UwbRangingParams(
+        device_role=uwb_ranging_params.FiraParamEnums.DEVICE_ROLE_INITIATOR,
+        device_type=uwb_ranging_params.FiraParamEnums.DEVICE_TYPE_CONTROLLER,
+        device_address=self.initiator_addr,
+        destination_addresses=[self.responder_addr],
+        initiation_time_ms=100,
+        ranging_interval_ms=200,
+        slots_per_ranging_round=20,
+        in_band_termination_attempt_count=3,
+    )
+    responder_params = uwb_ranging_params.UwbRangingParams(
+        device_role=uwb_ranging_params.FiraParamEnums.DEVICE_ROLE_RESPONDER,
+        device_type=uwb_ranging_params.FiraParamEnums.DEVICE_TYPE_CONTROLEE,
+        device_address=self.responder_addr,
+        destination_addresses=[self.initiator_addr],
+        initiation_time_ms=100,
+        ranging_interval_ms=200,
+        slots_per_ranging_round=20,
+        in_band_termination_attempt_count=3,
+    )
+    self._verify_distance_measurement_accuracy(self.initiator, self.responder, initiator_params,
+                                               responder_params, self.initiator_addr,
+                                               self.responder_addr)
 
 
 if __name__ == "__main__":
