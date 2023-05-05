@@ -53,9 +53,6 @@ class UwbManagerTest(uwb_base_test.UwbBaseTest):
     super().teardown_test()
     self.dut.uwb.unregisterUwbAdapterStateCallback(self.callback)
 
-  def on_fail(self, record):
-    self.dut.take_bug_report(destination=self.current_test_info.output_path)
-
   ### Helper methods ###
 
   def _test_uwb_state_after_reboot(
@@ -73,7 +70,7 @@ class UwbManagerTest(uwb_base_test.UwbBaseTest):
     """
     uwb_test_utils.set_uwb_state_and_verify(dut, state)
     dut.reboot()
-    dut.adb.shell(["cmd", "uwb", "force-country-code", "enabled", "US"])
+    uwb_test_utils.initialize_uwb_country_code_if_not_set(dut.adb)
     state_after_reboot = uwb_test_utils.get_uwb_state(dut)
     asserts.assert_equal(
         state, state_after_reboot,
