@@ -19,9 +19,7 @@ package com.android.server.uwb;
 import static android.uwb.UwbManager.MESSAGE_TYPE_COMMAND;
 
 import static com.android.server.uwb.data.UwbUciConstants.FIRA_VERSION_MAJOR_2;
-
-import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
-import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
+import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_OK;
 
 import android.content.AttributionSource;
 import android.content.Context;
@@ -74,11 +72,9 @@ import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -102,11 +98,9 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     @VisibleForTesting
     public static final int WATCHDOG_MS = 10000;
     private static final int SEND_VENDOR_CMD_TIMEOUT_MS = 10000;
-    @VisibleForTesting
-    public static final int TASK_NOTIFY_ADAPTER_STATE_MESSAGE_DELAY_MS = 15000;
 
     private boolean mIsDiagnosticsEnabled = false;
-    private int mDiagramsFrameReportsFieldsFlags = 0;
+    private byte mDiagramsFrameReportsFieldsFlags = 0;
 
     private final PowerManager.WakeLock mUwbWakeLock;
     private final Context mContext;
@@ -122,7 +116,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     private final UwbInjector mUwbInjector;
     private final Map<String, /* @UwbManager.AdapterStateCallback.State */ Integer>
             mChipIdToStateMap;
-    private @StateChangeReason int mLastStateChangedReason;
+    private @StateChangeReason int mLastAdapterStateChangedReason = StateChangeReason.UNKNOWN;
     private @AdapterStateCallback.State int mLastAdapterStateNotification = -1;
     private  IUwbVendorUciCallback mCallBack = null;
     private IUwbOemExtensionCallback mOemExtensionCallback = null;
@@ -155,9 +149,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         mUwbInjector.getMultichipData().setOnInitializedListener(
                 () -> {
                     for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
-                        updateState(AdapterStateCallback.STATE_DISABLED,
-                                StateChangeReason.SYSTEM_BOOT,
-                                chipId);
+                        updateState(AdapterStateCallback.STATE_DISABLED, chipId);
                     }
                 });
 
@@ -177,18 +169,17 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         return mOemExtensionCallback;
     }
 
-    private void updateState(int state, int reason, String chipId) {
-        Log.d(TAG, "updateState(): state=" + state + ", reason=" + reason + ", chipId=" + chipId);
+    private void updateState(int state, String chipId) {
+        Log.d(TAG, "updateState(): state=" + state + ", chipId=" + chipId);
         synchronized (UwbServiceCore.this) {
             mChipIdToStateMap.put(chipId, state);
-            mLastStateChangedReason = reason;
             Log.d(TAG, "chipIdToStateMap = " + mChipIdToStateMap);
         }
     }
 
     private boolean isUwbEnabled() {
         synchronized (UwbServiceCore.this) {
-            return getAdapterState() != AdapterStateCallback.STATE_DISABLED;
+            return getInternalAdapterState() != AdapterStateCallback.STATE_DISABLED;
         }
     }
 
@@ -225,6 +216,9 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
 
     @Override
     public void onDeviceStatusNotificationReceived(int deviceState, String chipId) {
+        Log.d(TAG, "onDeviceStatusNotificationReceived(): deviceState = " + deviceState
+                + ", current country code = " + mUwbCountryCode.getCountryCode());
+
         // If error status is received, toggle UWB off to reset stack state.
         // TODO(b/227488208): Should we try to restart (like wifi) instead?
         if (!mUwbInjector.getMultichipData().getChipIds().contains(chipId)) {
@@ -241,23 +235,21 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             oemExtensionDeviceStatusUpdate(deviceState, chipId);
             return;
         }
+
         updateDeviceState(deviceState, chipId);
-        // TODO(b/244443764): We should use getAdapterState() here, as for multi-chip case
-        // the configured state above can be different from the computed adapter state
-        // (after the call to updateState()).
-        mUwbTask.enqueueNotifyAdapterState(
-                getAdapterStateFromDeviceState(deviceState),
+
+        mUwbTask.computeAndNotifyAdapterStateChange(
                 getReasonFromDeviceState(deviceState),
-                mUwbCountryCode.getCountryCode());
+                mUwbCountryCode.getCountryCode(),
+                Optional.empty());
     }
 
     void updateDeviceState(int deviceState, String chipId) {
-        Log.i(TAG, "updateState(): deviceState = " + getDeviceStateString(deviceState)
-                + ", current adapter state = " + getAdapterState());
+        Log.i(TAG, "updateDeviceState(): deviceState = " + getDeviceStateString(deviceState)
+                + ", current internal adapter state = " + getInternalAdapterState());
 
         oemExtensionDeviceStatusUpdate(deviceState, chipId);
-        updateState(getAdapterStateFromDeviceState(deviceState),
-                getReasonFromDeviceState(deviceState), chipId);
+        updateState(getAdapterStateFromDeviceState(deviceState), chipId);
     }
 
     void oemExtensionDeviceStatusUpdate(int deviceState, String chipId) {
@@ -279,25 +271,27 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         // Check if the current adapter state is same as the state in the last adapter state
         // notification, to avoid sending extra onAdapterStateChanged() notifications. For example,
         // this can happen when UWB is toggled on and a valid country code is already set.
-        if (mLastAdapterStateNotification == adapterState) {
+        if (mLastAdapterStateNotification == adapterState
+                && mLastAdapterStateChangedReason == reason) {
             return;
         }
+        Log.d(TAG, "notifyAdapterState(): adapterState = " + adapterState + ", reason = " + reason);
 
-        if (mAdapterStateCallbacksList.getRegisteredCallbackCount() == 0) {
-            return;
-        }
-        final int count = mAdapterStateCallbacksList.beginBroadcast();
-        for (int i = 0; i < count; i++) {
-            try {
-                mAdapterStateCallbacksList.getBroadcastItem(i)
-                       .onAdapterStateChanged(adapterState, reason);
-            } catch (RemoteException e) {
-                Log.e(TAG, "onAdapterStateChanged is failed");
+        if (mAdapterStateCallbacksList.getRegisteredCallbackCount() > 0) {
+            final int count = mAdapterStateCallbacksList.beginBroadcast();
+            for (int i = 0; i < count; i++) {
+                try {
+                    mAdapterStateCallbacksList.getBroadcastItem(i)
+                            .onAdapterStateChanged(adapterState, reason);
+                } catch (RemoteException e) {
+                    Log.e(TAG, "onAdapterStateChanged is failed");
+                }
             }
+            mAdapterStateCallbacksList.finishBroadcast();
         }
-        mAdapterStateCallbacksList.finishBroadcast();
 
         mLastAdapterStateNotification = adapterState;
+        mLastAdapterStateChangedReason = reason;
     }
 
     int getAdapterStateFromDeviceState(int deviceState) {
@@ -339,17 +333,27 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     public void onCountryCodeChanged(@Nullable String countryCode) {
         Log.i(TAG, "Received onCountryCodeChanged() with countryCode = " + countryCode);
         if (mUwbCountryCode.isValid(countryCode)) {
-            // Remove any existing messages for notifying UWB stack state, and enqueue a message
-            // for immediate delivery.
-            mUwbTask.executeUnique(TASK_NOTIFY_ADAPTER_STATE,
-                    getAdapterState(), mLastStateChangedReason);
+            // Notify the current UWB adapter state. For example, if UWB was earlier enabled and at
+            // that time the country code was not valid, will now notify STATE_ENABLED_INACTIVE.
+            mUwbTask.computeAndNotifyAdapterStateChange(
+                    getReasonFromDeviceState(getInternalAdapterState()),
+                    countryCode,
+                    Optional.empty());
+            Log.d(TAG, "Resetting cached specifications");
+            mCachedSpecificationParams = null;
         }
     }
 
     public void registerAdapterStateCallbacks(IUwbAdapterStateCallbacks adapterStateCallbacks)
             throws RemoteException {
         mAdapterStateCallbacksList.register(adapterStateCallbacks);
-        adapterStateCallbacks.onAdapterStateChanged(getAdapterState(), mLastStateChangedReason);
+
+        int adapterState = getAdapterState();
+        Log.d(TAG, "registerAdapterStateCallbacks(): notify adapterState = " + adapterState
+                + ", reason = " + mLastAdapterStateChangedReason);
+        // We have a new listener being registered (there is no UWB event), so we send the current
+        // adapter state with the last known StateChangeReason.
+        adapterStateCallbacks.onAdapterStateChanged(adapterState, mLastAdapterStateChangedReason);
     }
 
     public void unregisterAdapterStateCallbacks(IUwbAdapterStateCallbacks callbacks) {
@@ -414,7 +418,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     }
 
     /** Set whether diagnostics is enabled and set enabled fields */
-    public void enableDiagnostics(boolean enabled, int flags) {
+    public void enableDiagnostics(boolean enabled, byte flags) {
         this.mIsDiagnosticsEnabled = enabled;
         this.mDiagramsFrameReportsFieldsFlags = flags;
     }
@@ -534,9 +538,10 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         if (FiraParams.isCorrectProtocol(params)) {
             FiraControleeParams controleeParams = FiraControleeParams.fromBundle(params);
             reconfigureRangingParams = new FiraRangingReconfigureParams.Builder()
-                    .setAction(MULTICAST_LIST_UPDATE_ACTION_ADD)
+                    .setAction(controleeParams.getAction())
                     .setAddressList(controleeParams.getAddressList())
                     .setSubSessionIdList(controleeParams.getSubSessionIdList())
+                    .setSubSessionKeyList(controleeParams.getSubSessionKeyList())
                     .build();
         }
         mSessionManager.reconfigure(sessionHandle, reconfigureRangingParams);
@@ -550,9 +555,10 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         if (FiraParams.isCorrectProtocol(params)) {
             FiraControleeParams controleeParams = FiraControleeParams.fromBundle(params);
             reconfigureRangingParams = new FiraRangingReconfigureParams.Builder()
-                    .setAction(MULTICAST_LIST_UPDATE_ACTION_DELETE)
+                    .setAction(controleeParams.getAction())
                     .setAddressList(controleeParams.getAddressList())
                     .setSubSessionIdList(controleeParams.getSubSessionIdList())
+                    .setSubSessionKeyList(controleeParams.getSubSessionKeyList())
                     .build();
         }
         mSessionManager.reconfigure(sessionHandle, reconfigureRangingParams);
@@ -568,7 +574,26 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         mSessionManager.sendData(sessionHandle, remoteDeviceAddress, params, data);
     }
 
+    /**
+     * Get the UWB Adapter State.
+     */
     public /* @UwbManager.AdapterStateCallback.State */ int getAdapterState() {
+        return computeAdapterState(mUwbCountryCode.getCountryCode(), Optional.empty());
+    }
+
+    private int computeAdapterState(String countryCode, Optional<Integer> setCountryCodeStatus) {
+        // When either the country code is not valid or setting it in UWBS failed with an error,
+        // notify the UWB stack state as DISABLED (even though internally the UWB device state
+        // may be stored as READY), so that applications wait for starting a ranging session.
+        if (!mUwbCountryCode.isValid(countryCode)
+                || (setCountryCodeStatus.isPresent()
+                && setCountryCodeStatus.get() != STATUS_CODE_OK)) {
+            return AdapterStateCallback.STATE_DISABLED;
+        }
+        return getInternalAdapterState();
+    }
+
+    private /* @UwbManager.AdapterStateCallback.State */ int getInternalAdapterState() {
         synchronized (UwbServiceCore.this) {
             if (mChipIdToStateMap.isEmpty()) {
                 return AdapterStateCallback.STATE_DISABLED;
@@ -631,23 +656,20 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             return  UwbUciConstants.STATUS_CODE_FAILED;
         }
         // TODO(b/211445008): Consolidate to a single uwb thread.
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        FutureTask<Byte> sendVendorCmdTask = new FutureTask<>(
+        FutureTask<Integer> sendVendorCmdTask = new FutureTask<>(
                 () -> {
                     UwbVendorUciResponse response =
                             mNativeUwbManager.sendRawVendorCmd(mt, gid, oid, payload, chipId);
                     if (response.status == UwbUciConstants.STATUS_CODE_OK) {
                         sendVendorUciResponse(response.gid, response.oid, response.payload);
                     }
-                    return response.status;
+                    return Integer.valueOf(response.status);
                 });
-        executor.submit(sendVendorCmdTask);
         int status = UwbUciConstants.STATUS_CODE_FAILED;
         try {
-            status = sendVendorCmdTask.get(
-                    SEND_VENDOR_CMD_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            status = mUwbInjector.runTaskOnSingleThreadExecutor(sendVendorCmdTask,
+                    SEND_VENDOR_CMD_TIMEOUT_MS);
         } catch (TimeoutException e) {
-            executor.shutdownNow();
             Log.i(TAG, "Failed to send vendor command - status : TIMEOUT");
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -770,19 +792,20 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                 watchDog.start();
 
                 Log.i(TAG, "Initialization start ...");
-                mUwbWakeLock.acquire();
+                synchronized (mUwbWakeLock) {
+                    mUwbWakeLock.acquire();
+                }
+
                 try {
                     if (!mNativeUwbManager.doInitialize()) {
                         Log.e(TAG, "Error enabling UWB");
                         mUwbMetrics.incrementDeviceInitFailureCount();
                         takBugReportAfterDeviceError("UWB Bugreport: error enabling UWB");
                         for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
-                            updateState(AdapterStateCallback.STATE_DISABLED,
-                                    StateChangeReason.SYSTEM_POLICY, chipId);
+                            updateState(AdapterStateCallback.STATE_DISABLED, chipId);
                         }
                     } else {
-                        String countryCode = mUwbCountryCode.getCountryCode();
-                        Log.i(TAG, "Initialization success, current country code = " + countryCode);
+                        Log.i(TAG, "Initialization success");
                         /* TODO : keep it until MW, FW fix b/196943897 */
                         mUwbMetrics.incrementDeviceInitSuccessCount();
 
@@ -793,17 +816,25 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
 
                         // Set country code on every enable (example: for the scenario when the
                         // country code was determined/changed while the UWB stack was disabled).
-                        // TODO(b/255977441): Check if this succeeds before notifying.
-                        mUwbCountryCode.setCountryCode(true);
-
-                        enqueueNotifyAdapterState(
-                                getAdapterStateFromDeviceState(UwbUciConstants.DEVICE_STATE_READY),
+                        //
+                        // TODO(b/255977441): Handle the case when the countryCode is valid and
+                        // setting the country code returned an error by doing a UWBS reset.
+                        Pair<Integer, String> setCountryCodeResult =
+                                mUwbCountryCode.setCountryCode(true);
+                        Optional<Integer> setCountryCodeStatus =
+                                Optional.of(setCountryCodeResult.first);
+                        String countryCode = setCountryCodeResult.second;
+                        Log.i(TAG, "Current country code = " + countryCode);
+                        computeAndNotifyAdapterStateChange(
                                 getReasonFromDeviceState(UwbUciConstants.DEVICE_STATE_READY),
-                                countryCode);
+                                countryCode,
+                                setCountryCodeStatus);
                     }
                 } finally {
-                    if (mUwbWakeLock.isHeld()) {
-                        mUwbWakeLock.release();
+                    synchronized (mUwbWakeLock) {
+                        if (mUwbWakeLock.isHeld()) {
+                            mUwbWakeLock.release();
+                        }
                     }
                     watchDog.cancel();
                 }
@@ -823,7 +854,9 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
 
             try {
                 Log.i(TAG, "Deinitialization start ...");
-                mUwbWakeLock.acquire();
+                synchronized (mUwbWakeLock) {
+                    mUwbWakeLock.acquire();
+                }
 
                 if (!mNativeUwbManager.doDeinitialize()) {
                     Log.w(TAG, "Error disabling UWB");
@@ -834,12 +867,14 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                 for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
                     updateDeviceState(UwbUciConstants.DEVICE_STATE_OFF, chipId);
                 }
-                executeUnique(TASK_NOTIFY_ADAPTER_STATE,
+                notifyAdapterState(
                         getAdapterStateFromDeviceState(UwbUciConstants.DEVICE_STATE_OFF),
                         getReasonFromDeviceState(UwbUciConstants.DEVICE_STATE_OFF));
             } finally {
-                if (mUwbWakeLock.isHeld()) {
-                    mUwbWakeLock.release();
+                synchronized (mUwbWakeLock) {
+                    if (mUwbWakeLock.isHeld()) {
+                        mUwbWakeLock.release();
+                    }
                 }
                 watchDog.cancel();
             }
@@ -857,17 +892,18 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             }
         }
 
-        private void enqueueNotifyAdapterState(int adapterState, int reason, String countryCode) {
-            // When there is already a proper country code initialized in the UWB stack,
-            // immediately proceed to notify about the UWB stack state. If not, enqueue
-            // a delayed message for the notification (which will get replaced if we
-            // were to receive an onCountryCodeChanged notification).
-            if (mUwbCountryCode.isValid(countryCode)) {
-                execute(TASK_NOTIFY_ADAPTER_STATE, adapterState, reason);
-            } else {
-                delayedExecute(TASK_NOTIFY_ADAPTER_STATE, adapterState, reason,
-                         TASK_NOTIFY_ADAPTER_STATE_MESSAGE_DELAY_MS);
+        private void computeAndNotifyAdapterStateChange(int reason,
+                String countryCode, Optional<Integer> setCountryCodeStatus) {
+            // When either the country code is not valid or setting it in UWBS failed with the error
+            // STATUS_CODE_ANDROID_REGULATION_UWB_OFF, notify with the reason SYSTEM_REGULATION.
+            if (!mUwbCountryCode.isValid(countryCode)
+                    || (setCountryCodeStatus.isPresent()
+                        && setCountryCodeStatus.get()
+                        == UwbUciConstants.STATUS_CODE_ANDROID_REGULATION_UWB_OFF)) {
+                reason = StateChangeReason.SYSTEM_REGULATION;
             }
+
+            notifyAdapterState(computeAdapterState(countryCode, setCountryCodeStatus), reason);
         }
 
         public class WatchDogThread extends Thread {
@@ -895,9 +931,10 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                     interrupt();
                 }
 
-                if (mUwbWakeLock.isHeld()) {
-                    Log.e(TAG, "Release mUwbWakeLock before aborting.");
-                    mUwbWakeLock.release();
+                synchronized (mUwbWakeLock) {
+                    if (mUwbWakeLock.isHeld()) {
+                        mUwbWakeLock.release();
+                    }
                 }
             }
 
@@ -925,7 +962,8 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             pw.println("Device state = " + getDeviceStateString(mChipIdToStateMap.get(chipId))
                     + " for chip id = " + chipId);
         }
-        pw.println("mLastStateChangedReason = " + mLastStateChangedReason);
+        pw.println("mLastAdapterStateChangedReason = " + mLastAdapterStateChangedReason);
+        pw.println("mLastAdapterStateNotification = " + mLastAdapterStateNotification);
         pw.println("---- Dump of UwbServiceCore ----");
     }
 
@@ -964,9 +1002,13 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                     + " rxIdleTimeMillis=" + stats.getIdleTimeMs()
                     + " wake_count=" + stats.getTotalWakeCount());
 
-            return new UwbActivityEnergyInfo.Builder(SystemClock.elapsedRealtime(),
-                    getAdapterState(), stats.getTxTimeMs(), stats.getRxTimeMs(),
-                    stats.getIdleTimeMs(), stats.getTotalWakeCount())
+            return new UwbActivityEnergyInfo.Builder()
+                    .setTimeSinceBootMillis(SystemClock.elapsedRealtime())
+                    .setStackState(getInternalAdapterState())
+                    .setControllerTxDurationMillis(stats.getTxTimeMs())
+                    .setControllerRxDurationMillis(stats.getRxTimeMs())
+                    .setControllerIdleDurationMillis(stats.getIdleTimeMs())
+                    .setControllerWakeCount(stats.getTotalWakeCount())
                     .build();
         } catch (Exception e) {
             e.printStackTrace();

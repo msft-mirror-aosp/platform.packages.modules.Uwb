@@ -32,15 +32,22 @@ import java.util.concurrent.Executor;
 @RequiresApi(api = VERSION_CODES.S)
 public class RangingControlee extends RangingDevice {
 
-    RangingControlee(
-            UwbManager manager, Executor executor, OpAsyncCallbackRunner opAsyncCallbackRunner) {
-        super(manager, executor, opAsyncCallbackRunner);
+    RangingControlee(UwbManager manager, Executor executor,
+            OpAsyncCallbackRunner<Boolean> opAsyncCallbackRunner, UwbFeatureFlags uwbFeatureFlags) {
+        super(manager, executor, opAsyncCallbackRunner, uwbFeatureFlags);
     }
 
     @Override
     protected FiraOpenSessionParams getOpenSessionParams() {
         requireNonNull(mRangingParameters);
         return ConfigurationManager.createOpenSessionParams(
-                FiraParams.RANGING_DEVICE_TYPE_CONTROLEE, getLocalAddress(), mRangingParameters);
+                FiraParams.RANGING_DEVICE_TYPE_CONTROLEE, getLocalAddress(), mRangingParameters,
+                mUwbFeatureFlags);
+    }
+
+    @Override
+    protected int hashSessionId(RangingParameters rangingParameters) {
+        UwbAddress controllerAddress = rangingParameters.getPeerAddresses().get(0);
+        return calculateHashedSessionId(controllerAddress, rangingParameters.getComplexChannel());
     }
 }

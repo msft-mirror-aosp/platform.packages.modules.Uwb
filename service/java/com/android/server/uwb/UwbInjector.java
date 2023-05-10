@@ -28,6 +28,9 @@ import android.content.AttributionSource;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.database.ContentObserver;
+import android.location.Geocoder;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -54,6 +57,7 @@ import com.android.server.uwb.correction.pose.IntegPoseSource;
 import com.android.server.uwb.correction.pose.RotationPoseSource;
 import com.android.server.uwb.correction.pose.SixDofPoseSource;
 import com.android.server.uwb.correction.primers.AoaPrimer;
+import com.android.server.uwb.correction.primers.BackAzimuthPrimer;
 import com.android.server.uwb.correction.primers.ElevationPrimer;
 import com.android.server.uwb.correction.primers.FovPrimer;
 import com.android.server.uwb.data.ServiceProfileData;
@@ -62,7 +66,9 @@ import com.android.server.uwb.multchip.UwbMultichipData;
 import com.android.server.uwb.pm.ProfileManager;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -139,7 +145,8 @@ public class UwbInjector {
                 new UwbConfigurationManager(mNativeUwbManager);
         UwbSessionNotificationManager uwbSessionNotificationManager =
                 new UwbSessionNotificationManager(this);
-        UwbAdvertiseManager uwbAdvertiseManager = new UwbAdvertiseManager(this);
+        UwbAdvertiseManager uwbAdvertiseManager = new UwbAdvertiseManager(this,
+                mDeviceConfigFacade);
         mUwbSessionManager =
                 new UwbSessionManager(uwbConfigurationManager, mNativeUwbManager, mUwbMetrics,
                         uwbAdvertiseManager, uwbSessionNotificationManager, this,
@@ -223,6 +230,21 @@ public class UwbInjector {
     }
 
     /**
+     * Creates a Geocoder.
+     */
+    @Nullable
+    public Geocoder makeGeocoder() {
+        return new Geocoder(mContext);
+    }
+
+    /**
+     * Returns whether geocoder is supported on this device or not.
+     */
+    public boolean isGeocoderPresent() {
+        return Geocoder.isPresent();
+    }
+
+    /**
      * Throws security exception if the UWB_RANGING permission is not granted for the calling app.
      *
      * <p>Should be used in situations where the app op should not be noted.
@@ -266,15 +288,41 @@ public class UwbInjector {
      *
      * @throws Settings.SettingNotFoundException
      */
-    public int getSettingsInt(@NonNull String key) throws Settings.SettingNotFoundException {
+    public int getGlobalSettingsInt(@NonNull String key) throws Settings.SettingNotFoundException {
         return Settings.Global.getInt(mContext.getContentResolver(), key);
     }
 
     /**
      * Get integer value from Settings.
      */
-    public int getSettingsInt(@NonNull String key, int defValue) {
+    public int getGlobalSettingsInt(@NonNull String key, int defValue) {
         return Settings.Global.getInt(mContext.getContentResolver(), key, defValue);
+    }
+
+    /**
+     * Get string value from Settings.
+     */
+    @Nullable
+    public String getGlobalSettingsString(@NonNull String key) {
+        return Settings.Global.getString(mContext.getContentResolver(), key);
+    }
+
+    /**
+     * Helper method for classes to register a ContentObserver
+     * {@see ContentResolver#registerContentObserver(Uri,boolean,ContentObserver)}.
+     */
+    public void registerContentObserver(Uri uri, boolean notifyForDescendants,
+            ContentObserver contentObserver) {
+        mContext.getContentResolver().registerContentObserver(uri, notifyForDescendants,
+                contentObserver);
+    }
+
+    /**
+     * Helper method for classes to unregister a ContentObserver
+     * {@see ContentResolver#unregisterContentObserver(ContentObserver)}.
+     */
+    public void unregisterContentObserver(ContentObserver contentObserver) {
+        mContext.getContentResolver().unregisterContentObserver(contentObserver);
     }
 
     /**
@@ -383,8 +431,20 @@ public class UwbInjector {
                 == PackageManager.SIGNATURE_MATCH;
     }
 
+    private static Map<String, Integer> sOverridePackageImportance = new HashMap();
+    public void setOverridePackageImportance(String packageName, int importance) {
+        sOverridePackageImportance.put(packageName, importance);
+    }
+    public void resetOverridePackageImportance(String packageName) {
+        sOverridePackageImportance.remove(packageName);
+    }
+
     /** Helper method to retrieve app importance. */
     private int getPackageImportance(int uid, @NonNull String packageName) {
+        if (sOverridePackageImportance.containsKey(packageName)) {
+            Log.w(TAG, "Overriding package importance for testing");
+            return sOverridePackageImportance.get(packageName);
+        }
         try {
             return createPackageContextAsUser(uid)
                     .getSystemService(ActivityManager.class)
@@ -481,7 +541,7 @@ public class UwbInjector {
         try {
             // Keep our ref counts accurate because isEnableFilters can change at runtime.
             --mPoseSourceRefCount;
-            if (mPoseSourceRefCount <= 0) {
+            if (mPoseSourceRefCount <= 0 && mDefaultPoseSource != null) {
                 mDefaultPoseSource.close();
                 mDefaultPoseSource = null;
             }
@@ -538,6 +598,17 @@ public class UwbInjector {
             // Fov requires an elevation and a spherical coord.
             if (cfg.isEnablePrimerFov()) {
                 builder.addPrimer(new FovPrimer(cfg.getPrimerFovDegree()));
+            }
+
+            // Back azimuth detection requires true spherical.
+            if (cfg.isEnableBackAzimuth()) {
+                builder.addPrimer(new BackAzimuthPrimer(
+                        cfg.getFrontAzimuthRadiansPerSecond(),
+                        cfg.getBackAzimuthRadiansPerSecond(),
+                        cfg.getBackAzimuthWindow(),
+                        cfg.isEnableBackAzimuthMasking(),
+                        cfg.getMirrorScoreStdRadians(),
+                        cfg.getBackNoiseInfluenceCoeff()));
             }
 
             return builder.build();
