@@ -45,15 +45,14 @@ java_library {
     installable: false,
     defaults: ["service-uwb-common-defaults"],
     srcs: [ ":service-uwb-srcs" ],
-    // java_api_finder must accompany `srcs`
-    plugins: ["java_api_finder"],
     required: ["libuwb_uci_jni_rust"],
-    sdk_version: "system_server_Tiramisu",
+    sdk_version: "system_server_current",
 
     lint: {
         strict_updatability_linting: true,
     },
     libs: [
+        "androidx.annotation_annotation",
         "framework-annotations-lib",
         "framework-uwb-pre-jarjar",
         "ServiceUwbResources",
@@ -63,8 +62,7 @@ java_library {
     ],
 
     static_libs: [
-        "androidx.annotation_annotation",
-        "android.hardware.uwb.fira_android-V2-java",
+        "android.hardware.uwb.fira_android-V3-java",
         "com.uwb.support.ccc",
         "com.uwb.support.fira",
         "com.uwb.support.generic",
@@ -79,6 +77,8 @@ java_library {
         "uwb-config-proto",
         "modules-utils-statemachine",
         "modules-utils-build",
+        "cbor-java",
+        "bouncycastle-uwb",
     ],
 
     apex_available: [
@@ -110,7 +110,7 @@ java_library {
         "framework-connectivity.stubs.module_lib",
     ],
 
-    sdk_version: "system_server_Tiramisu",
+    sdk_version: "system_server_current",
 
     jarjar_rules: ":uwb-jarjar-rules",
     optimize: {

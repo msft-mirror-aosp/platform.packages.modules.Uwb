@@ -21,6 +21,7 @@ import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_UWB_ADDRESS;
 import static com.android.server.uwb.UwbTestUtils.PEER_SHORT_MAC_ADDRESS;
 import static com.android.server.uwb.UwbTestUtils.PERSISTABLE_BUNDLE;
 import static com.android.server.uwb.data.UwbUciConstants.MAC_ADDRESSING_MODE_SHORT;
+import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_DL_TDOA;
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA;
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY;
 import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_FAILED;
@@ -29,6 +30,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.verify;
@@ -36,6 +38,7 @@ import static org.mockito.Mockito.when;
 
 import android.content.AttributionSource;
 import android.os.PersistableBundle;
+import android.os.RemoteException;
 import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
 import android.util.Pair;
@@ -58,6 +61,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+
+import java.util.Set;
 
 /**
  * Unit tests for {@link com.android.server.uwb.UwbSettingsStore}.
@@ -91,7 +96,9 @@ public class UwbSessionNotificationManagerTest {
         when(mUwbSession.getAttributionSource()).thenReturn(ATTRIBUTION_SOURCE);
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(false);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(false);
+        when(mFiraParams.hasControlMessage()).thenReturn(false);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(true);
         when(mUwbInjector.checkUwbRangingPermissionForDataDelivery(any(), any())).thenReturn(true);
         when(mUwbInjector.getElapsedSinceBootNanos()).thenReturn(TEST_ELAPSED_NANOS);
         when(mUwbInjector.getUwbServiceCore()).thenReturn(mUwbServiceCore);
@@ -178,12 +185,14 @@ public class UwbSessionNotificationManagerTest {
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
     }
-  
+
     @Test
     public void testOnRangingResult_forTwoWay_WithAoaAndDestAoa() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(true);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(true);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -201,7 +210,9 @@ public class UwbSessionNotificationManagerTest {
     public void testOnRangingResult_forTwoWay_WithAoaAndNoDestAzimuth() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(true);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -219,7 +230,9 @@ public class UwbSessionNotificationManagerTest {
     public void testOnRangingResult_forTwoWay_WithAoaAndNoDestElevation() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(true);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(false);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -237,7 +250,9 @@ public class UwbSessionNotificationManagerTest {
     public void testOnRangingResult_forTwoWay_WithNoAoaAndDestAoa() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_NO_AOA_REPORT);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(true);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(true);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -255,7 +270,9 @@ public class UwbSessionNotificationManagerTest {
     public void testOnRangingResult_forTwoWay_WithNoAoaAzimuthAndDestAoa() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_ELEVATION_ONLY);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(true);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(true);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -273,7 +290,9 @@ public class UwbSessionNotificationManagerTest {
     public void testOnRangingResult_forTwoWay_WithNoAoaElevationAndDestAoa() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_AZIMUTH_ONLY);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(true);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(true);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -298,6 +317,27 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+    }
+
+    @Test
+    public void testOnRangingResult_forDlTDoA() throws Exception {
+        Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
+                UwbTestUtils.generateRangingDataAndRangingReport(
+                        PEER_SHORT_MAC_ADDRESS, MAC_ADDRESSING_MODE_SHORT,
+                        RANGING_MEASUREMENT_TYPE_DL_TDOA,
+                        true, true, false, false, TEST_ELAPSED_NANOS);
+        mUwbSessionNotificationManager.onRangingResult(
+                mUwbSession, testRangingDataAndRangingReport.first);
+        verify(mIUwbRangingCallbacks).onRangingResult(
+                mSessionHandle, testRangingDataAndRangingReport.second);
+    }
+
+    @Test
+    public void testOnRangingResult_badRangingDataForOwrAoa() throws Exception {
+        UwbRangingData testRangingData = UwbTestUtils.generateBadOwrAoaMeasurementRangingData(
+                MAC_ADDRESSING_MODE_SHORT, PEER_SHORT_MAC_ADDRESS);
+        mUwbSessionNotificationManager.onRangingResult(mUwbSession, testRangingData);
+        verify(mIUwbRangingCallbacks).onRangingResult(mSessionHandle, null);
     }
 
     @Test
@@ -336,12 +376,61 @@ public class UwbSessionNotificationManagerTest {
     }
 
     @Test
-    public void  testOnRangingStoppedWithUciReasonCode() throws Exception {
-        int status = UwbUciConstants.REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS;
-        mUwbSessionNotificationManager.onRangingStoppedWithUciReasonCode(mUwbSession, status);
+    public void testOnRangingStoppedWithUciReasonCode_reasonLocalApi() throws Exception {
+        int reasonCode = UwbUciConstants.REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS;
+        mUwbSessionNotificationManager.onRangingStoppedWithUciReasonCode(mUwbSession, reasonCode);
 
         verify(mIUwbRangingCallbacks).onRangingStopped(
                 eq(mSessionHandle), eq(RangingChangeReason.LOCAL_API),
+                isA(PersistableBundle.class));
+    }
+    @Test
+    public void testOnRangingStoppedWithUciReasonCode_reasonMaxRRRetryReached() throws Exception {
+        int reasonCode = UwbUciConstants.REASON_MAX_RANGING_ROUND_RETRY_COUNT_REACHED;
+        mUwbSessionNotificationManager.onRangingStoppedWithUciReasonCode(mUwbSession, reasonCode);
+
+        verify(mIUwbRangingCallbacks).onRangingStopped(
+                eq(mSessionHandle), eq(RangingChangeReason.MAX_RR_RETRY_REACHED),
+                isA(PersistableBundle.class));
+    }
+
+    @Test
+    public void testOnRangingStoppedWithUciReasonCode_reasonRemoteRequest() throws Exception {
+        int reasonCode = UwbUciConstants.REASON_MAX_NUMBER_OF_MEASUREMENTS_REACHED;
+        mUwbSessionNotificationManager.onRangingStoppedWithUciReasonCode(mUwbSession, reasonCode);
+
+        verify(mIUwbRangingCallbacks).onRangingStopped(
+                eq(mSessionHandle), eq(RangingChangeReason.REMOTE_REQUEST),
+                isA(PersistableBundle.class));
+    }
+
+    @Test
+    public void testOnRangingStoppedWithUciReasonCode_reasonBadParameters() throws Exception {
+        Set<Integer> reasonCodes = Set.of(
+                UwbUciConstants.REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR,
+                UwbUciConstants.REASON_ERROR_SLOT_LENGTH_NOT_SUPPORTED,
+                UwbUciConstants.REASON_ERROR_INVALID_UL_TDOA_RANDOM_WINDOW,
+                UwbUciConstants.REASON_ERROR_MAC_ADDRESS_MODE_NOT_SUPPORTED,
+                UwbUciConstants.REASON_ERROR_INVALID_RANGING_INTERVAL,
+                UwbUciConstants.REASON_ERROR_INVALID_STS_CONFIG,
+                UwbUciConstants.REASON_ERROR_INVALID_RFRAME_CONFIG);
+        for (int reasonCode : reasonCodes) {
+            clearInvocations(mIUwbRangingCallbacks);
+            mUwbSessionNotificationManager.onRangingStoppedWithUciReasonCode(mUwbSession,
+                    reasonCode);
+            verify(mIUwbRangingCallbacks).onRangingStopped(
+                    eq(mSessionHandle), eq(RangingChangeReason.BAD_PARAMETERS),
+                    isA(PersistableBundle.class));
+        }
+    }
+
+    @Test
+    public void testOnRangingStoppedWithUciReasonCode_reasonSystemRegulation() throws Exception {
+        int reasonCode = UwbUciConstants.REASON_REGULATION_UWB_OFF;
+        mUwbSessionNotificationManager.onRangingStoppedWithUciReasonCode(mUwbSession, reasonCode);
+
+        verify(mIUwbRangingCallbacks).onRangingStopped(
+                eq(mSessionHandle), eq(RangingChangeReason.SYSTEM_REGULATION),
                 isA(PersistableBundle.class));
     }
 
@@ -483,5 +572,14 @@ public class UwbSessionNotificationManagerTest {
         verify(mIUwbRangingCallbacks).onDataSendFailed(eq(mSessionHandle), eq(
                         PEER_EXTENDED_UWB_ADDRESS),
                 eq(STATUS_CODE_FAILED), eq(PERSISTABLE_BUNDLE));
+    }
+
+    @Test
+    public void testOnRangingRoundsUpdateStatus() throws RemoteException {
+        PersistableBundle bundle = new PersistableBundle();
+        mUwbSessionNotificationManager.onRangingRoundsUpdateStatus(mUwbSession, bundle);
+
+        verify(mIUwbRangingCallbacks).onRangingRoundsUpdateDtTagStatus(eq(mSessionHandle),
+                eq(bundle));
     }
 }

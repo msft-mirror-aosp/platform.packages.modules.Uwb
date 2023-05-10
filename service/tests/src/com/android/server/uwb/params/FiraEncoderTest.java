@@ -22,7 +22,14 @@ import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_UNICAST;
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_LEVEL_TRIG;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_RESPONDER;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLLER;
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_UT_TAG;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE;
+import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_UL_TDOA;
+import static com.google.uwb.support.fira.FiraParams.SESSION_TYPE_RANGING;
+import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_PROVISIONED;
+import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_STATIC;
+import static com.google.uwb.support.fira.FiraParams.TX_TIMESTAMP_40_BIT;
+import static com.google.uwb.support.fira.FiraParams.UL_TDOA_DEVICE_ID_16_BIT;
 
 import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
@@ -53,6 +60,7 @@ public class FiraEncoderTest {
             new FiraOpenSessionParams.Builder()
                     .setProtocolVersion(FiraParams.PROTOCOL_VERSION_1_1)
                     .setSessionId(1)
+                    .setSessionType(SESSION_TYPE_RANGING)
                     .setRangeDataNtfConfig(RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_LEVEL_TRIG)
                     .setDeviceType(RANGING_DEVICE_TYPE_CONTROLLER)
                     .setDeviceRole(RANGING_DEVICE_ROLE_RESPONDER)
@@ -60,24 +68,20 @@ public class FiraEncoderTest {
                     .setDestAddressList(Arrays.asList(UwbAddress.fromBytes(new byte[] { 0x4, 0x6})))
                     .setMultiNodeMode(MULTI_NODE_MODE_UNICAST)
                     .setRangingRoundUsage(RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE)
+                    .setStsConfig(STS_CONFIG_STATIC)
                     .setVendorId(new byte[]{0x5, 0x78})
-                    .setSessionKey(new byte[] {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                        0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F})
-                    .setSubsessionKey(new byte[] {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-                        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F})
                     .setStaticStsIV(new byte[]{0x1a, 0x55, 0x77, 0x47, 0x7e, 0x7d})
                     .setRangeDataNtfAoaAzimuthLower(-1.5)
                     .setRangeDataNtfAoaAzimuthUpper(2.5)
-                    .setRangeDataNtfAoaElevationLower(-2.5)
-                    .setRangeDataNtfAoaElevationUpper(3);
+                    .setRangeDataNtfAoaElevationLower(-1.5)
+                    .setRangeDataNtfAoaElevationUpper(1.2);
 
     private static final byte[] TEST_FIRA_OPEN_SESSION_TLV_DATA =
-            UwbUtil.getByteArray("000101010101020100030100040109050101060206040702060408"
-                    + "0260090904C80000000B01000C01030D01010E01040F0200001002204E11010012010314010"
-                    + "A1501021601001701011B011E1C01001F01002301002401002501322601002702780528061A"
-                    + "5577477E7D2901012A0200002B04000000002C01002D01002E01012F01013004000000003101"
-                    + "003501014510000102030405060708090A0B0C0D0E0F4610000102030405060708090A0B0C0D"
-                    + "0E0FE30100E40100E501001D04079E6161");
+            UwbUtil.getByteArray("0001010101010201000301000401090501010602060408"
+                    + "0260090B01000C01030D01010E01040F0200001002204E11010012010313010014010A"
+                    + "1501021601001701011A01011B01191C01001F0100220101230100240100250132260100"
+                    + "2901012A0200002C01002D01002E01012F0101310100350101090"
+                    + "4C8000000070206042B04000000002702780528061A5577477E7D1D0807D59E4707D56022");
 
     private static final FiraRangingReconfigureParams.Builder TEST_FIRA_RECONFIGURE_PARAMS =
             new FiraRangingReconfigureParams.Builder()
@@ -87,20 +91,47 @@ public class FiraEncoderTest {
                     .setRangeDataProximityNear(4)
                     .setRangeDataAoaAzimuthLower(-1.5)
                     .setRangeDataAoaAzimuthUpper(2.5)
-                    .setRangeDataAoaElevationLower(-2.5)
-                    .setRangeDataAoaElevationUpper(3);
+                    .setRangeDataAoaElevationLower(-1.5)
+                    .setRangeDataAoaElevationUpper(1.2);
 
     private static final byte[] TEST_FIRA_RECONFIGURE_TLV_DATA =
-            UwbUtil.getByteArray("2D01060E01040F020400100206001D04079E61F1");
+            UwbUtil.getByteArray("2D01060E01040F020400100206001D0807D59E4707D56022");
+
+    private static final FiraOpenSessionParams.Builder TEST_FIRA_UT_TAG_OPEN_SESSION_PARAM =
+            new FiraOpenSessionParams.Builder()
+                    .setProtocolVersion(FiraParams.PROTOCOL_VERSION_1_1)
+                    .setSessionId(2)
+                    .setSessionType(SESSION_TYPE_RANGING)
+                    .setDeviceType(RANGING_DEVICE_TYPE_CONTROLLER)
+                    .setDeviceRole(RANGING_DEVICE_UT_TAG)
+                    .setDeviceAddress(UwbAddress.fromBytes(new byte[] { 0x4, 0x6}))
+                    .setDestAddressList(Arrays.asList(UwbAddress.fromBytes(new byte[] { 0x4, 0x6})))
+                    .setMultiNodeMode(MULTI_NODE_MODE_UNICAST)
+                    .setStsConfig(STS_CONFIG_STATIC)
+                    .setVendorId(new byte[]{0x5, 0x78})
+                    .setStaticStsIV(new byte[]{0x1a, 0x55, 0x77, 0x47, 0x7e, 0x7d})
+                    .setRangingRoundUsage(RANGING_ROUND_USAGE_UL_TDOA)
+                    .setUlTdoaTxIntervalMs(1200)
+                    .setUlTdoaRandomWindowMs(30)
+                    .setUlTdoaDeviceIdType(UL_TDOA_DEVICE_ID_16_BIT)
+                    .setUlTdoaDeviceId(new byte[]{0x0B, 0x0A})
+                    .setUlTdoaTxTimestampType(TX_TIMESTAMP_40_BIT);
+
+    private static final byte[] TEST_FIRA_OPEN_SESSION_TLV_DATA_UT_TAG =
+            UwbUtil.getByteArray("0001010101000201000301000401090501010602060408"
+                    + "0260090B01000C01030D01010E01010F0200001002204E11010412010313010014010A"
+                    + "1501021601001701011A01011B01191C01001F0100220101230100240100250132260100"
+                    + "2901012A0200002C01002D01002E01012F0101310100350101070206042B04000"
+                    + "000002702780528061A5577477E7D3304B004000034041E0000003803010B0A390101");
 
     private final FiraEncoder mFiraEncoder = new FiraEncoder();
 
     @Test
-    public void testFiraOpenSesisonParams() throws Exception {
+    public void testFiraOpenSessionParams() throws Exception {
         FiraOpenSessionParams params = TEST_FIRA_OPEN_SESSION_PARAMS.build();
         TlvBuffer tlvs = mFiraEncoder.getTlvBuffer(params);
 
-        assertThat(tlvs.getNoOfParams()).isEqualTo(47);
+        assertThat(tlvs.getNoOfParams()).isEqualTo(44);
         assertThat(tlvs.getByteArray()).isEqualTo(TEST_FIRA_OPEN_SESSION_TLV_DATA);
     }
 
@@ -118,7 +149,7 @@ public class FiraEncoderTest {
         FiraOpenSessionParams params = TEST_FIRA_OPEN_SESSION_PARAMS.build();
         TlvBuffer tlvs = TlvEncoder.getEncoder(FiraParams.PROTOCOL_NAME).getTlvBuffer(params);
 
-        assertThat(tlvs.getNoOfParams()).isEqualTo(47);
+        assertThat(tlvs.getNoOfParams()).isEqualTo(44);
         assertThat(tlvs.getByteArray()).isEqualTo(TEST_FIRA_OPEN_SESSION_TLV_DATA);
     }
 
@@ -129,5 +160,52 @@ public class FiraEncoderTest {
 
         assertThat(tlvs.getNoOfParams()).isEqualTo(5);
         assertThat(tlvs.getByteArray()).isEqualTo(TEST_FIRA_RECONFIGURE_TLV_DATA);
+    }
+
+    @Test
+    public void testFiraOpenSessionParamsUtTag() throws Exception {
+        FiraOpenSessionParams params = TEST_FIRA_UT_TAG_OPEN_SESSION_PARAM.build();
+        TlvBuffer tlvs = mFiraEncoder.getTlvBuffer(params);
+
+        assertThat(tlvs.getNoOfParams()).isEqualTo(46);
+        assertThat(tlvs.getByteArray()).isEqualTo(TEST_FIRA_OPEN_SESSION_TLV_DATA_UT_TAG);
+    }
+
+    @Test
+    public void testFiraOpenSessionParamsProvisionedSts() throws Exception {
+        FiraOpenSessionParams params =
+                new FiraOpenSessionParams.Builder()
+                        .setProtocolVersion(FiraParams.PROTOCOL_VERSION_1_1)
+                        .setSessionId(1)
+                        .setSessionType(SESSION_TYPE_RANGING)
+                        .setRangeDataNtfConfig(
+                                RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_LEVEL_TRIG)
+                        .setDeviceType(RANGING_DEVICE_TYPE_CONTROLLER)
+                        .setDeviceRole(RANGING_DEVICE_ROLE_RESPONDER)
+                        .setDeviceAddress(UwbAddress.fromBytes(new byte[] { 0x4, 0x6}))
+                        .setDestAddressList(Arrays.asList(UwbAddress.fromBytes(
+                                new byte[] { 0x4, 0x6})))
+                        .setMultiNodeMode(MULTI_NODE_MODE_UNICAST)
+                        .setRangingRoundUsage(RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE)
+                        .setStsConfig(STS_CONFIG_PROVISIONED)
+                        .setSessionKey(new byte[]{0x5, 0x78, 0x5, 0x78, 0x5, 0x78, 0x5, 0x78, 0x5,
+                                0x78, 0x5, 0x78, 0x5, 0x78, 0x5, 0x78})
+                        .setRangeDataNtfAoaAzimuthLower(-1.5)
+                        .setRangeDataNtfAoaAzimuthUpper(2.5)
+                        .setRangeDataNtfAoaElevationLower(-1.5)
+                        .setRangeDataNtfAoaElevationUpper(1.2)
+                        .build();
+
+        byte[] expected_data =
+                UwbUtil.getByteArray("0001010101010201030301000401090501010602060408"
+                        + "0260090B01000C01030D01010E01040F0200001002204E110100120103130100"
+                        + "14010A1501021601001701011A01011B01191C01001F0100220101230100240100250132"
+                        + "2601002901012A0200002C01002D01002E01012F0101310100350101090"
+                        + "4C8000000070206042B0400000000451005780578057805780578057805780578"
+                        + "1D0807D59E4707D56022");
+        TlvBuffer tlvs = mFiraEncoder.getTlvBuffer(params);
+
+        assertThat(tlvs.getNoOfParams()).isEqualTo(43);
+        assertThat(tlvs.getByteArray()).isEqualTo(expected_data);
     }
 }

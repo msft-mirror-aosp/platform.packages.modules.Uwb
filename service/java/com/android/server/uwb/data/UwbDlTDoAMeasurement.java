@@ -16,6 +16,7 @@
 
 package com.android.server.uwb.data;
 
+import com.android.server.uwb.util.UwbUtil;
 
 import java.util.Arrays;
 
@@ -34,8 +35,8 @@ public class UwbDlTDoAMeasurement {
     public int mRssi;
     public long mTxTimestamp;
     public long mRxTimestamp;
-    public int mAnchorCfo;
-    public int mCfo;
+    public float mAnchorCfo;
+    public float mCfo;
     public long mInitiatorReplyTime;
     public long mResponderReplyTime;
     public int mInitiatorResponderTof;
@@ -43,8 +44,8 @@ public class UwbDlTDoAMeasurement {
     public byte[] mActiveRangingRounds;
 
     public UwbDlTDoAMeasurement(byte[] macAddress, int status, int messageType, int messageControl,
-            int blockIndex, int roundIndex, int NLoS, float aoaAzimuth, int aoaAzimuthFom,
-            float aoaElevation, int aoaElevationFom, int rssi, long txTimestamp, long rxTimestamp,
+            int blockIndex, int roundIndex, int nLoS, int aoaAzimuth, int aoaAzimuthFom,
+            int aoaElevation, int aoaElevationFom, int rssi, long txTimestamp, long rxTimestamp,
             int anchorCfo, int cfo, long initiatorReplyTime, long responderReplyTime,
             int initiatorResponderTof, byte[] anchorLocation, byte[] activeRangingRounds) {
         mMacAddress = macAddress;
@@ -53,16 +54,16 @@ public class UwbDlTDoAMeasurement {
         mMessageControl = messageControl;
         mBlockIndex = blockIndex;
         mRoundIndex = roundIndex;
-        mNLoS = NLoS;
-        mAoaAzimuth = aoaAzimuth;
+        mNLoS = nLoS;
+        mAoaAzimuth = toFloatFromQ9_7_Format(aoaAzimuth);
         mAoaAzimuthFom = aoaAzimuthFom;
-        mAoaElevation = aoaElevation;
+        mAoaElevation = toFloatFromQ9_7_Format(aoaElevation);
         mAoaElevationFom = aoaElevationFom;
         mRssi = rssi;
         mTxTimestamp = txTimestamp;
         mRxTimestamp = rxTimestamp;
-        mAnchorCfo = anchorCfo;
-        mCfo = cfo;
+        mAnchorCfo = toFloatFromQ5_11_Format(anchorCfo);
+        mCfo = toFloatFromQ5_11_Format(cfo);
         mInitiatorReplyTime = initiatorReplyTime;
         mResponderReplyTime = responderReplyTime;
         mInitiatorResponderTof = initiatorResponderTof;
@@ -126,11 +127,11 @@ public class UwbDlTDoAMeasurement {
         return mRxTimestamp;
     }
 
-    public int getAnchorCfo() {
+    public float getAnchorCfo() {
         return mAnchorCfo;
     }
 
-    public int getCfo() {
+    public float getCfo() {
         return mCfo;
     }
 
@@ -152,6 +153,16 @@ public class UwbDlTDoAMeasurement {
 
     public byte[] getActiveRangingRounds() {
         return mActiveRangingRounds;
+    }
+
+    private float toFloatFromQ9_7_Format(int value) {
+        return UwbUtil.convertQFormatToFloat(UwbUtil.twos_compliment(value, 16),
+                9, 7);
+    }
+
+    private float toFloatFromQ5_11_Format(int value) {
+        return UwbUtil.convertQFormatToFloat(UwbUtil.twos_compliment(value, 16),
+                5, 11);
     }
 
     @Override

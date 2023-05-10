@@ -61,7 +61,7 @@ public final class RangingReport implements Parcelable {
 
     /**
      * Gets ranging report metadata passed by vendor
-     *
+     * @hide
      * @return vendor data for ranging report
      */
     @NonNull
@@ -113,8 +113,9 @@ public final class RangingReport implements Parcelable {
                 public RangingReport createFromParcel(Parcel in) {
                     Builder builder = new Builder();
                     builder.addMeasurements(in.createTypedArrayList(RangingMeasurement.CREATOR));
-                    builder.addRangingReportMetadata(in.readPersistableBundle(
-                            getClass().getClassLoader()));
+                    PersistableBundle metadata =
+                            in.readPersistableBundle(getClass().getClassLoader());
+                    if (metadata != null) builder.addRangingReportMetadata(metadata);
                     return builder.build();
                 }
 
@@ -164,7 +165,7 @@ public final class RangingReport implements Parcelable {
 
         /**
          * Add ranging report metadata
-         *
+         * @hide
          * @param rangingReportMetadata vendor data per ranging report
          *
          * @throws IllegalStateException if rangingReportMetadata is null

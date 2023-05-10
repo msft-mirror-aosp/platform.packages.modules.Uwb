@@ -30,12 +30,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.os.Message;
 import android.os.test.TestLooper;
 
 import com.android.server.uwb.discovery.Transport;
-import com.android.server.uwb.pm.ControlleeInfo;
 import com.android.server.uwb.pm.RunningProfileSessionInfo;
+import com.android.server.uwb.secure.csml.ControleeInfo;
 import com.android.server.uwb.secure.csml.DispatchCommand;
 import com.android.server.uwb.secure.csml.DispatchResponse;
 import com.android.server.uwb.secure.csml.FiRaResponse;
@@ -45,6 +44,7 @@ import com.android.server.uwb.secure.csml.InitiateTransactionResponse;
 import com.android.server.uwb.secure.csml.SelectAdfCommand;
 import com.android.server.uwb.secure.csml.SwapInAdfCommand;
 import com.android.server.uwb.secure.csml.TunnelCommand;
+import com.android.server.uwb.secure.csml.UwbCapability;
 import com.android.server.uwb.secure.iso7816.CommandApdu;
 import com.android.server.uwb.secure.iso7816.ResponseApdu;
 import com.android.server.uwb.secure.iso7816.StatusWord;
@@ -71,8 +71,6 @@ public class InitiatorSecureChannelTest {
     private SecureElementChannel mSecureElementChannel;
     @Mock
     private Transport mTransport;
-    @Mock
-    RunningProfileSessionInfo mRunningProfileSessionInfo;
 
     private TestLooper mTestLooper = new TestLooper();
 
@@ -88,16 +86,14 @@ public class InitiatorSecureChannelTest {
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
+    }
 
+    private void doInit(RunningProfileSessionInfo runningProfileSessionInfo) {
         mInitiatorSecureChannel = new InitiatorSecureChannel(mSecureElementChannel,
                 mTransport,
                 mTestLooper.getLooper(),
-                mRunningProfileSessionInfo);
+                runningProfileSessionInfo);
 
-        doInit();
-    }
-
-    private void doInit() {
         doNothing().when(mSecureElementChannel).init(mInitCompletionCallbackCaptor.capture());
 
         mInitiatorSecureChannel.init(mSecureChannelCallback);
@@ -107,30 +103,26 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void init() {
+        doInit(mock(RunningProfileSessionInfo.class));
         assertThat(mTestLooper.nextMessage().what).isEqualTo(CMD_OPEN_CHANNEL);
         assertThat(mInitiatorSecureChannel.getStatus())
                 .isEqualTo(FiRaSecureChannel.Status.INITIALIZED);
     }
 
-    private void sendAndDispatchMessage(int what, Optional<Object> obj) {
-        Message msg = mInitiatorSecureChannel.mWorkHandler.obtainMessage(what);
-        if (obj.isPresent()) {
-            msg = mInitiatorSecureChannel.mWorkHandler.obtainMessage(what, obj.get());
-        }
-        mInitiatorSecureChannel.mWorkHandler.sendMessage(msg);
-        mTestLooper.dispatchNext();
-    }
-
-    private void doOpenChannel() {
+    private void doOpenChannel(RunningProfileSessionInfo runningProfileSessionInfo) {
+        doInit(runningProfileSessionInfo);
         when(mSecureElementChannel.openChannel()).thenReturn(true);
         when(mSecureElementChannel.isOpened()).thenReturn(true);
-        when(mRunningProfileSessionInfo.getSecureBlob()).thenReturn(Optional.empty());
 
         mTestLooper.dispatchNext();
     }
     @Test
     public void openChannelGeneralSuccess() {
-        doOpenChannel();
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), ObjectIdentifier.INVALID_OID)
+                        .build();
+        doOpenChannel(runningProfileSessionInfo);
 
         assertThat(mInitiatorSecureChannel.getStatus()).isEqualTo(
                 FiRaSecureChannel.Status.CHANNEL_OPENED);
@@ -139,6 +131,7 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void openChannelGeneralFailed() {
+        doInit(mock(RunningProfileSessionInfo.class));
         when(mSecureElementChannel.openChannel()).thenReturn(false);
 
         mTestLooper.dispatchNext(); // OPEN_CHANNEL
@@ -152,13 +145,16 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void openChannelSwapInAdfSuccess() throws IOException {
+        ControleeInfo mockControleeInfo = mock(ControleeInfo.class);
+        when(mockControleeInfo.toBytes()).thenReturn(new byte[0]);
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), ObjectIdentifier.INVALID_OID)
+                        .setSecureBlob(new byte[0])
+                        .setControleeInfo(mockControleeInfo)
+                        .build();
+        doInit(runningProfileSessionInfo);
         when(mSecureElementChannel.openChannel()).thenReturn(true);
-        when(mRunningProfileSessionInfo.getSecureBlob()).thenReturn(Optional.of(new byte[0]));
-        when(mRunningProfileSessionInfo.getOidOfProvisionedAdf())
-                .thenReturn(ObjectIdentifier.INVALID_OID);
-        ControlleeInfo mockControlleeInfo = mock(ControlleeInfo.class);
-        when(mockControlleeInfo.toBytes()).thenReturn(new byte[0]);
-        when(mRunningProfileSessionInfo.getControlleeInfo()).thenReturn(mockControlleeInfo);
         when(mSecureElementChannel.transmit(any(SwapInAdfCommand.class))).thenReturn(
                 ResponseApdu.fromResponse(
                         DataTypeConversionUtil.hexStringToByteArray("0604000000019000")));
@@ -172,13 +168,16 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void openChannelSwapInAdfFailed() throws IOException {
+        ControleeInfo mockControleeInfo = mock(ControleeInfo.class);
+        when(mockControleeInfo.toBytes()).thenReturn(new byte[0]);
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), ObjectIdentifier.INVALID_OID)
+                        .setControleeInfo(mockControleeInfo)
+                        .setSecureBlob(new byte[0])
+                        .build();
+        doInit(runningProfileSessionInfo);
         when(mSecureElementChannel.openChannel()).thenReturn(true);
-        when(mRunningProfileSessionInfo.getSecureBlob()).thenReturn(Optional.of(new byte[0]));
-        ControlleeInfo mockControlleeInfo = mock(ControlleeInfo.class);
-        when(mockControlleeInfo.toBytes()).thenReturn(new byte[0]);
-        when(mRunningProfileSessionInfo.getControlleeInfo()).thenReturn(mockControlleeInfo);
-        when(mRunningProfileSessionInfo.getOidOfProvisionedAdf())
-                .thenReturn(ObjectIdentifier.INVALID_OID);
         when(mSecureElementChannel.transmit(any(SwapInAdfCommand.class))).thenReturn(
                 ResponseApdu.fromStatusWord(StatusWord.SW_WARNING_STATE_UNCHANGED));
 
@@ -191,21 +190,23 @@ public class InitiatorSecureChannelTest {
         assertThat(mTestLooper.nextMessage()).isNull();
     }
 
-    private void doSelectAdf() throws IOException {
+    private void doSelectAdf(RunningProfileSessionInfo runningProfileSessionInfo)
+            throws IOException {
         when(mSecureElementChannel.transmit(any(SelectAdfCommand.class)))
                 .thenReturn(ResponseApdu.SW_SUCCESS_APDU);
 
-        when(mRunningProfileSessionInfo.getOidOfProvisionedAdf())
-                .thenReturn(ObjectIdentifier.INVALID_OID);
-
-        doOpenChannel();
+        doOpenChannel(runningProfileSessionInfo);
 
         mTestLooper.dispatchNext();
     }
 
     @Test
     public void selectAdfSuccess() throws IOException {
-        doSelectAdf();
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), ObjectIdentifier.INVALID_OID)
+                        .build();
+        doSelectAdf(runningProfileSessionInfo);
 
         assertThat(mTestLooper.nextMessage().what).isEqualTo(CMD_INITIATE_TRANSACTION);
         assertThat(mInitiatorSecureChannel.getStatus()).isEqualTo(
@@ -216,7 +217,11 @@ public class InitiatorSecureChannelTest {
     public void selectAdfFailed() throws IOException {
         when(mSecureElementChannel.transmit(any(SelectAdfCommand.class)))
                 .thenReturn(ResponseApdu.SW_FILE_NOT_FOUND_APDU);
-        doOpenChannel();
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), ObjectIdentifier.INVALID_OID)
+                        .build();
+        doOpenChannel(runningProfileSessionInfo);
 
         mTestLooper.dispatchNext();
 
@@ -239,11 +244,13 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void unicastInitiateTransactionSuccess() throws IOException {
-        doSelectAdf();
-        when(mRunningProfileSessionInfo.isUnicast()).thenReturn(true);
-        when(mRunningProfileSessionInfo.getSelectableOidsOfPeerDevice())
-                .thenReturn(ImmutableList.of(
-                        ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 })));
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), mock(ObjectIdentifier.class))
+                        .setSelectableOidsOfResponder(ImmutableList.of(
+                                        ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 })))
+                        .build();
+        doSelectAdf(runningProfileSessionInfo);
         when(mSecureElementChannel.transmit(any(InitiateTransactionCommand.class)))
                 .thenReturn(constructSuccessInitiateTransactionResponse());
 
@@ -254,12 +261,14 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void unicastInitiateTransactionFail() throws IOException {
-        doSelectAdf();
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), mock(ObjectIdentifier.class))
+                        .setSelectableOidsOfResponder(ImmutableList.of(
+                                ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 })))
+                        .build();
+        doSelectAdf(runningProfileSessionInfo);
 
-        when(mRunningProfileSessionInfo.isUnicast()).thenReturn(true);
-        when(mRunningProfileSessionInfo.getSelectableOidsOfPeerDevice())
-                .thenReturn(ImmutableList.of(
-                        ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 })));
         when(mSecureElementChannel.transmit(any(InitiateTransactionCommand.class)))
                 .thenReturn(ResponseApdu.SW_CONDITIONS_NOT_SATISFIED_APDU);
 
@@ -272,12 +281,14 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void multicastInitiateTransactionSuccess() throws IOException {
-        doSelectAdf();
-        when(mRunningProfileSessionInfo.isUnicast()).thenReturn(false);
-        when(mRunningProfileSessionInfo.getSharedPrimarySessionId()).thenReturn(Optional.of(1));
-        when(mRunningProfileSessionInfo.getSelectableOidsOfPeerDevice())
-                .thenReturn(ImmutableList.of(
-                        ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 })));
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), mock(ObjectIdentifier.class))
+                        .setSharedPrimarySessionIdAndSessionKeyInfo(1, new byte[0])
+                        .setSelectableOidsOfResponder(ImmutableList.of(
+                                ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 })))
+                        .build();
+        doSelectAdf(runningProfileSessionInfo);
         when(mSecureElementChannel.transmit(any(InitiateTransactionCommand.class)))
                 .thenReturn(constructSuccessInitiateTransactionResponse());
 
@@ -288,13 +299,15 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void multicastInitiateTransactionFail() throws IOException {
-        doSelectAdf();
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), mock(ObjectIdentifier.class))
+                        .setSharedPrimarySessionIdAndSessionKeyInfo(1, new byte[0])
+                        .setSelectableOidsOfResponder(ImmutableList.of(
+                                ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 })))
+                        .build();
+        doSelectAdf(runningProfileSessionInfo);
 
-        when(mRunningProfileSessionInfo.isUnicast()).thenReturn(false);
-        when(mRunningProfileSessionInfo.getSharedPrimarySessionId()).thenReturn(Optional.of(1));
-        when(mRunningProfileSessionInfo.getSelectableOidsOfPeerDevice())
-                .thenReturn(ImmutableList.of(
-                        ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 })));
         when(mSecureElementChannel.transmit(any(InitiateTransactionCommand.class)))
                 .thenReturn(ResponseApdu.SW_CONDITIONS_NOT_SATISFIED_APDU);
 
@@ -306,16 +319,20 @@ public class InitiatorSecureChannelTest {
     }
 
     private void doPrepareSC() throws IOException {
-        doSelectAdf();
-        when(mRunningProfileSessionInfo.isUnicast()).thenReturn(true);
-        when(mRunningProfileSessionInfo.getSelectableOidsOfPeerDevice())
-                .thenReturn(ImmutableList.of(
-                        ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 })));
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), mock(ObjectIdentifier.class))
+                        .setSelectableOidsOfResponder(ImmutableList.of(
+                                ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 })))
+                        .build();
+        doSelectAdf(runningProfileSessionInfo);
+
         when(mSecureElementChannel.transmit(any(InitiateTransactionCommand.class)))
                 .thenReturn(constructSuccessInitiateTransactionResponse());
 
         mTestLooper.dispatchAll();
     }
+
     private void doEstablishSC() throws IOException {
         doPrepareSC();
         // response: status-81,data-9000, notification format-00, notification id-01
@@ -327,17 +344,62 @@ public class InitiatorSecureChannelTest {
         mInitiatorSecureChannel.processRemoteCommandOrResponse(new byte[0]);
     }
 
+    private void doEstablishSCWithDefaultSessionId() throws IOException {
+        doPrepareSC();
+        // response: status-81,data-9000, notification format-00, notification id-01
+        ResponseApdu responseApdu = ResponseApdu.fromDataAndStatusWord(
+                DataTypeConversionUtil.hexStringToByteArray("710F80018181029000E106800100810101"),
+                StatusWord.SW_NO_ERROR.toInt());
+        when(mSecureElementChannel.transmit(any(DispatchCommand.class))).thenReturn(responseApdu);
+        ResponseApdu sessionIdResponseApdu = ResponseApdu.fromDataAndStatusWord(
+                DataTypeConversionUtil.hexStringToByteArray("810101"),
+                StatusWord.SW_NO_ERROR.toInt());
+        when(mSecureElementChannel.transmit(any(GetDoCommand.class)))
+                .thenReturn(sessionIdResponseApdu);
+        mInitiatorSecureChannel.processRemoteCommandOrResponse(new byte[0]);
+        verify(mSecureElementChannel).transmit(any(GetDoCommand.class));
+    }
+
     @Test
     public void receiveResponseOfScSetupSuccess() throws IOException {
         doEstablishSC();
 
         assertThat(mInitiatorSecureChannel.getStatus()).isEqualTo(
                 FiRaSecureChannel.Status.ESTABLISHED);
-        verify(mSecureChannelCallback).onEstablished();
+        verify(mSecureChannelCallback).onEstablished(any());
+    }
+
+    @Test
+    public void receiveResponseOfScSetupSuccessWithDefaultSessionId() throws IOException {
+        doEstablishSCWithDefaultSessionId();
+
+        assertThat(mInitiatorSecureChannel.getStatus()).isEqualTo(
+                FiRaSecureChannel.Status.ESTABLISHED);
+        verify(mSecureChannelCallback).onEstablished(eq(Optional.of(1)));
+    }
+
+    @Test
+    public void receiveResponseOfAutoTerminatedAndRdsAvailable() throws IOException {
+        doPrepareSC();
+
+        // response: status-81,data-9000, notification format-00, notification id-01
+        // TLV - refer to CSML table 107 - DISPATCH Response Data
+        ResponseApdu responseApdu = ResponseApdu.fromDataAndStatusWord(
+                DataTypeConversionUtil.hexStringToByteArray(
+                        "711380018181029000E10A80010081010282020101"),
+                StatusWord.SW_NO_ERROR.toInt());
+        when(mSecureElementChannel.transmit(any(DispatchCommand.class))).thenReturn(responseApdu);
+
+        mInitiatorSecureChannel.processRemoteCommandOrResponse(new byte[0]);
+
+        assertThat(mInitiatorSecureChannel.getStatus()).isEqualTo(
+                FiRaSecureChannel.Status.TERMINATED);
+        verify(mSecureChannelCallback).onRdsAvailableAndTerminated(eq(1));
     }
 
     @Test
     public void receiveResponseOfScSetupChannelWasNotOpen() {
+        doInit(mock(RunningProfileSessionInfo.class));
         mTestLooper.dispatchAll();
 
         mInitiatorSecureChannel.processRemoteCommandOrResponse(new byte[0]);
@@ -410,6 +472,7 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void sendLocalCommandApduSuccess() throws IOException {
+        doInit(mock(RunningProfileSessionInfo.class));
         when(mSecureElementChannel.isOpened()).thenReturn(true);
         when(mSecureElementChannel.transmit(any(CommandApdu.class)))
                 .thenReturn(ResponseApdu.SW_SUCCESS_APDU);
@@ -421,11 +484,12 @@ public class InitiatorSecureChannelTest {
         mInitiatorSecureChannel.sendLocalCommandApdu(commandApdu, externalRequestCallback);
         mTestLooper.dispatchAll();
 
-        verify(externalRequestCallback).onSuccess();
+        verify(externalRequestCallback).onSuccess(any());
     }
 
     @Test
-    public void sendLocalCommamdApduFail() throws IOException {
+    public void sendLocalCommandApduFail() throws IOException {
+        doInit(mock(RunningProfileSessionInfo.class));
         when(mSecureElementChannel.isOpened()).thenReturn(true);
         when(mSecureElementChannel.transmit(any(CommandApdu.class)))
                 .thenReturn(ResponseApdu.SW_CLA_NOT_SUPPORTED_APDU);
@@ -442,6 +506,7 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void sendLocalCommandApduFailAsSeWasNotOpen() throws IOException {
+        doInit(mock(RunningProfileSessionInfo.class));
         when(mSecureElementChannel.isOpened()).thenReturn(false);
         FiRaSecureChannel.ExternalRequestCallback externalRequestCallback =
                 mock(FiRaSecureChannel.ExternalRequestCallback.class);
@@ -456,6 +521,7 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void sendLocalCommandApduFailAsException() throws IOException {
+        doInit(mock(RunningProfileSessionInfo.class));
         when(mSecureElementChannel.isOpened()).thenReturn(true);
         when(mSecureElementChannel.transmit(any(CommandApdu.class)))
                 .thenThrow(new IOException());
@@ -487,7 +553,7 @@ public class InitiatorSecureChannelTest {
 
     @Test
     public void terminateUnestablishedChannelLocally() throws IOException {
-
+        doInit(mock(RunningProfileSessionInfo.class));
         mInitiatorSecureChannel.terminateLocally();
         mTestLooper.dispatchAll();
 
@@ -537,7 +603,7 @@ public class InitiatorSecureChannelTest {
         mTestLooper.dispatchNext();
 
         assertThat(mTestLooper.nextMessage().what).isEqualTo(CMD_SEND_OOB_DATA);
-        verify(externalRequestCallback).onSuccess();
+        verify(externalRequestCallback).onSuccess(any());
     }
 
     @Test

@@ -25,6 +25,7 @@ import com.android.server.uwb.discovery.Transport;
 import com.android.server.uwb.pm.RunningProfileSessionInfo;
 import com.android.server.uwb.secure.omapi.OmapiConnection;
 import com.android.server.uwb.secure.omapi.OmapiConnectionImpl;
+import com.android.server.uwb.secure.provisioning.ProvisioningManager;
 
 /**
  * The factory is used to instance the secure session which setup secure channel and
@@ -40,20 +41,21 @@ public class SecureFactory {
             @NonNull Looper workLooper,
             @NonNull SecureSession.Callback secureSessionCallback,
             @NonNull RunningProfileSessionInfo runningProfileSessionInfo,
-            @NonNull Transport transport) {
+            @NonNull Transport transport,
+            boolean isController) {
         OmapiConnection omapiConnection = new OmapiConnectionImpl(context);
         SecureElementChannel secureElementChannel = new SecureElementChannel(omapiConnection);
         FiRaSecureChannel fiRaSecureChannel =
                 new InitiatorSecureChannel(
                         secureElementChannel, transport, workLooper, runningProfileSessionInfo);
-        if (runningProfileSessionInfo.isUwbController()) {
+        if (isController) {
             return new ControllerInitiatorSession(
                     workLooper,
                     fiRaSecureChannel,
                     secureSessionCallback,
                     runningProfileSessionInfo);
         } else {
-            return new ControlleeInitiatorSession(
+            return new ControleeInitiatorSession(
                     workLooper,
                     fiRaSecureChannel,
                     secureSessionCallback,
@@ -70,24 +72,36 @@ public class SecureFactory {
             @NonNull Looper workLooper,
             @NonNull SecureSession.Callback secureSessionCallback,
             @NonNull RunningProfileSessionInfo runningProfileSessionInfo,
-            @NonNull Transport transport) {
+            @NonNull Transport transport,
+            boolean isController) {
         OmapiConnection omapiConnection = new OmapiConnectionImpl(context);
         SecureElementChannel secureElementChannel = new SecureElementChannel(omapiConnection);
         FiRaSecureChannel fiRaSecureChannel =
                 new ResponderSecureChannel(
                         secureElementChannel, transport, workLooper, runningProfileSessionInfo);
-        if (runningProfileSessionInfo.isUwbController()) {
+        if (isController) {
             return new ControllerResponderSession(
                     workLooper,
                     fiRaSecureChannel,
                     secureSessionCallback,
                     runningProfileSessionInfo);
         } else {
-            return new ControlleeResponderSession(
+            return new ControleeResponderSession(
                     workLooper,
                     fiRaSecureChannel,
                     secureSessionCallback,
                     runningProfileSessionInfo);
         }
+    }
+
+    /** Creates an instance of the {@link ProvisioningManager}. */
+    @NonNull
+    public static ProvisioningManager makeProvisioningManager(
+            @NonNull Context context,
+            @NonNull Looper workLooper) {
+        OmapiConnection omapiConnection = new OmapiConnectionImpl(context);
+        SecureElementChannel secureElementChannel = new SecureElementChannel(omapiConnection);
+
+        return new ProvisioningManager(secureElementChannel, workLooper);
     }
 }

@@ -69,14 +69,21 @@ public class UwbSessionNotificationManager {
             return;
         }
 
-        RangingReport rangingReport = getRangingReport(rangingData, uwbSession.getProtocolName(),
-                uwbSession.getParams(), mUwbInjector.getElapsedSinceBootNanos());
+        RangingReport rangingReport = null;
+        try {
+            rangingReport = getRangingReport(rangingData, uwbSession.getProtocolName(),
+                    uwbSession.getParams(), mUwbInjector.getElapsedSinceBootNanos(), uwbSession);
+        } catch (Exception e) {
+            Log.e(TAG, "getRangingReport Failed.");
+            e.printStackTrace();
+        }
 
         if (mUwbInjector.getUwbServiceCore().isOemExtensionCbRegistered()) {
             try {
                 rangingReport = mUwbInjector.getUwbServiceCore().getOemExtensionCallback()
                                 .onRangingReportReceived(rangingReport);
             } catch (RemoteException e) {
+                Log.e(TAG, "UwbInjector - onRangingReportReceived : Failed.");
                 e.printStackTrace();
             }
         }
@@ -377,12 +384,29 @@ public class UwbSessionNotificationManager {
         }
     }
 
+    /** Notify the response for Ranging rounds update status for Dt Tag. */
+    public void onRangingRoundsUpdateStatus(
+            UwbSession uwbSession, PersistableBundle parameters) {
+        SessionHandle sessionHandle = uwbSession.getSessionHandle();
+        IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
+        try {
+            uwbRangingCallbacks.onRangingRoundsUpdateDtTagStatus(sessionHandle,
+                    parameters);
+            Log.i(TAG, "IUwbRangingCallbacks - onRangingRoundsUpdateDtTagStatus");
+        } catch (Exception e) {
+            Log.e(TAG, "IUwbRangingCallbacks - onRangingRoundsUpdateDtTagStatus : Failed");
+            e.printStackTrace();
+        }
+    }
+
     private static RangingReport getRangingReport(
             @NonNull UwbRangingData rangingData, String protocolName,
-            Params sessionParams, long elapsedRealtimeNanos) {
+            Params sessionParams, long elapsedRealtimeNanos, UwbSession uwbSession) {
         if (rangingData.getRangingMeasuresType() != UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY
                 && rangingData.getRangingMeasuresType()
-                    != UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA) {
+                    != UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA
+                && rangingData.getRangingMeasuresType()
+                    != UwbUciConstants.RANGING_MEASUREMENT_TYPE_DL_TDOA) {
             return null;
         }
         boolean isAoaAzimuthEnabled = true;
@@ -416,7 +440,7 @@ public class UwbSessionNotificationManager {
                 default:
                     throw new IllegalArgumentException("Invalid AOA result req");
             }
-            if (openSessionParams.hasResultReportPhase()) {
+            if (openSessionParams.hasRangingResultReportMessage()) {
                 if (openSessionParams.hasAngleOfArrivalAzimuthReport()) {
                     isDestAoaAzimuthEnabled = true;
                 }
@@ -441,7 +465,7 @@ public class UwbSessionNotificationManager {
             List<RangingMeasurement> rangingMeasurements = new ArrayList<>();
             UwbTwoWayMeasurement[] uwbTwoWayMeasurement = rangingData.getRangingTwoWayMeasures();
             for (int i = 0; i < rangingData.getNoOfRangingMeasures(); ++i) {
-                int rangingStatus = uwbTwoWayMeasurement[i].getRangingStatus();
+                int rangingStatus = uwbTwoWayMeasurement[i].convertStatusCode();
 
                 RangingMeasurement.Builder rangingMeasurementBuilder = buildRangingMeasurement(
                         uwbTwoWayMeasurement[i].getMacAddress(), rangingStatus,
@@ -451,7 +475,7 @@ public class UwbSessionNotificationManager {
                     rangingMeasurementBuilder.setRssiDbm(rssi);
                 }
 
-                if (rangingStatus == FiraParams.STATUS_CODE_OK) {
+                if (uwbTwoWayMeasurement[i].isStatusCodeOk()) {
                     // Distance measurement is mandatory
                     rangingMeasurementBuilder.setDistanceMeasurement(
                             buildDistanceMeasurement(uwbTwoWayMeasurement[i].getDistance()));
@@ -487,6 +511,14 @@ public class UwbSessionNotificationManager {
                 PersistableBundle rangingMeasurementMetadata = new PersistableBundle();
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(rangingMeasurementMetadata);
 
+                // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
+                UwbAddress addr = UwbAddress.fromBytes(
+                        TlvUtil.getReverseBytes(uwbTwoWayMeasurement[i].getMacAddress()));
+                UwbControlee controlee = uwbSession.getControlee(addr);
+                if (controlee != null) {
+                    controlee.filterMeasurement(rangingMeasurementBuilder);
+                }
+
                 rangingMeasurements.add(rangingMeasurementBuilder.build());
             }
 
@@ -513,6 +545,14 @@ public class UwbSessionNotificationManager {
                     rangingMeasurementBuilder.setAngleOfArrivalMeasurement(
                             angleOfArrivalMeasurement);
                 }
+            }
+
+            // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
+            UwbAddress addr = UwbAddress.fromBytes(
+                    TlvUtil.getReverseBytes(uwbOwrAoaMeasurement.getMacAddress()));
+            UwbControlee controlee = uwbSession.getControlee(addr);
+            if (controlee != null) {
+                controlee.filterMeasurement(rangingMeasurementBuilder);
             }
 
             rangingReportBuilder.addMeasurement(rangingMeasurementBuilder.build());
@@ -558,10 +598,19 @@ public class UwbSessionNotificationManager {
                                 .getInitiatorResponderTof())
                         .setAnchorLocation(uwbDlTDoAMeasurements[i].getAnchorLocation())
                         .setActiveRangingRounds(uwbDlTDoAMeasurements[i].getActiveRangingRounds())
+                        .setRoundIndex(uwbDlTDoAMeasurements[i].getRoundIndex())
                         .build();
 
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(
                         dlTDoAMeasurement.toBundle());
+
+                // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
+                UwbAddress addr = UwbAddress.fromBytes(
+                        TlvUtil.getReverseBytes(uwbDlTDoAMeasurements[i].getMacAddress()));
+                UwbControlee controlee = uwbSession.getControlee(addr);
+                if (controlee != null) {
+                    controlee.filterMeasurement(rangingMeasurementBuilder);
+                }
 
                 rangingMeasurements.add(rangingMeasurementBuilder.build());
             }
@@ -598,6 +647,7 @@ public class UwbSessionNotificationManager {
 
     private static RangingMeasurement.Builder buildRangingMeasurement(
             byte[] macAddress, int rangingStatus, long elapsedRealtimeNanos, int los) {
+        // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
         return new RangingMeasurement.Builder()
                 .setRemoteDeviceAddress(UwbAddress.fromBytes(TlvUtil.getReverseBytes(macAddress)))
                 .setStatus(rangingStatus)

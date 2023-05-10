@@ -15,11 +15,10 @@
 //! Implementation of JNI functions.
 
 use crate::dispatcher::Dispatcher;
-use crate::error::{Error, Result};
 use crate::helper::{boolean_result_helper, byte_result_helper, option_result_helper};
 use crate::jclass_name::{
-    CONFIG_STATUS_DATA_CLASS, POWER_STATS_CLASS, TLV_DATA_CLASS, UWB_RANGING_DATA_CLASS,
-    VENDOR_RESPONSE_CLASS,
+    CONFIG_STATUS_DATA_CLASS, DT_RANGING_ROUNDS_STATUS_CLASS, POWER_STATS_CLASS, TLV_DATA_CLASS,
+    UWB_RANGING_DATA_CLASS, VENDOR_RESPONSE_CLASS,
 };
 use crate::unique_jvm;
 
@@ -28,21 +27,22 @@ use std::iter::zip;
 
 use jni::errors::Error as JNIError;
 use jni::objects::{GlobalRef, JObject, JString, JValue};
-use jni::signature::JavaType;
+use jni::signature::ReturnType;
 use jni::sys::{
-    jboolean, jbyte, jbyteArray, jint, jintArray, jlong, jobject, jobjectArray, jshortArray,
+    jboolean, jbyte, jbyteArray, jint, jintArray, jlong, jobject, jobjectArray, jshort,
+    jshortArray, jvalue,
 };
 use jni::JNIEnv;
 use log::{debug, error};
-use num_traits::cast::FromPrimitive;
-use uwb_core::error::Error as UwbCoreError;
+use uwb_core::error::{Error, Result};
 use uwb_core::params::{
-    AppConfigTlv, CountryCode, RawAppConfigTlv, RawVendorMessage, SetAppConfigResponse,
+    AppConfigTlv, CountryCode, RawAppConfigTlv, RawUciMessage,
+    SessionUpdateDtTagRangingRoundsResponse, SetAppConfigResponse,
 };
-use uwb_core::uci::uci_manager_sync::UciManagerSync;
 use uwb_uci_packets::{
-    AppConfigTlvType, CapTlv, Controlee, PowerStats, ResetConfig, SessionState, SessionType,
-    StatusCode, UpdateMulticastListAction,
+    AppConfigTlvType, CapTlv, Controlee, Controlee_V2_0_16_Byte_Version,
+    Controlee_V2_0_32_Byte_Version, Controlees, FiraComponent, PowerStats, ResetConfig,
+    SessionState, SessionType, StatusCode, UpdateMulticastListAction,
 };
 
 /// Macro capturing the name of the function calling this macro.
@@ -84,51 +84,8 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeIn
 }
 
 fn native_init(env: JNIEnv) -> Result<()> {
-    let jvm = env.get_java_vm()?;
-    unique_jvm::set_once(jvm).map_err(|e| e.into())
-}
-
-/// Get max session number
-#[no_mangle]
-pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGetMaxSessionNumber(
-    _env: JNIEnv,
-    _obj: JObject,
-) -> jint {
-    debug!("{}: enter", function_name!());
-    5
-}
-
-/// get mutable reference to Dispatcher.
-///
-/// # Safety
-/// Must be called from a Java object holding a valid or null mDispatcherPointer, and remains valid
-/// until env and obj goes out of scope.
-unsafe fn get_dispatcher<'a>(env: JNIEnv<'a>, obj: JObject<'a>) -> Result<&'a mut Dispatcher> {
-    let dispatcher_ptr_value = env.get_field(obj, "mDispatcherPointer", "J")?.j()?;
-    if dispatcher_ptr_value == 0 {
-        return Err(Error::UwbCoreError(UwbCoreError::BadParameters));
-    }
-    let dispatcher_ptr = dispatcher_ptr_value as *mut Dispatcher;
-    Ok(&mut *dispatcher_ptr)
-}
-
-/// get mutable reference to UciManagerSync with chip_id.
-///
-/// # Safety
-/// Must be called from a Java object holding a valid or null mDispatcherPointer, and remains valid
-/// until env and obj goes out of scope.
-unsafe fn get_uci_manager<'a>(
-    env: JNIEnv<'a>,
-    obj: JObject<'a>,
-    chip_id: JString,
-) -> Result<&'a mut UciManagerSync> {
-    // Safety: get_dispatcher and get_uci_manager has the same assumption.
-    let dispatcher_ref = get_dispatcher(env, obj)?;
-    let chip_id_str = String::from(env.get_string(chip_id)?);
-    match dispatcher_ref.manager_map.get_mut(&chip_id_str) {
-        Some(m) => Ok(m),
-        None => Err(Error::UwbCoreError(UwbCoreError::BadParameters)),
-    }
+    let jvm = env.get_java_vm().map_err(|_| Error::ForeignFunctionInterface)?;
+    unique_jvm::set_once(jvm)
 }
 
 /// Turn on Single UWB chip.
@@ -143,10 +100,8 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeDo
 }
 
 fn native_do_initialize(env: JNIEnv, obj: JObject, chip_id: JString) -> Result<()> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.open_hal().map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.open_hal()
 }
 
 /// Turn off single UWB chip.
@@ -161,10 +116,8 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeDo
 }
 
 fn native_do_deinitialize(env: JNIEnv, obj: JObject, chip_id: JString) -> Result<()> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.close_hal(true).map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.close_hal(true)
 }
 
 /// Get nanos. Not currently used and returns placeholder value.
@@ -191,10 +144,8 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeDe
 }
 
 fn native_device_reset(env: JNIEnv, obj: JObject, chip_id: JString) -> Result<()> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.device_reset(ResetConfig::UwbsReset).map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.device_reset(ResetConfig::UwbsReset)
 }
 
 /// Init the session on a single UWB device. Return value defined by uci_packets.pdl
@@ -221,11 +172,9 @@ fn native_session_init(
     chip_id: JString,
 ) -> Result<()> {
     let session_type =
-        SessionType::from_u8(session_type as u8).ok_or(UwbCoreError::BadParameters)?;
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.session_init(session_id as u32, session_type).map_err(|e| e.into())
+        SessionType::try_from(session_type as u8).map_err(|_| Error::BadParameters)?;
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.session_init(session_id as u32, session_type)
 }
 
 /// DeInit the session on a single UWB device. Return value defined by uci_packets.pdl
@@ -246,10 +195,8 @@ fn native_session_deinit(
     session_id: jint,
     chip_id: JString,
 ) -> Result<()> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.session_deinit(session_id as u32).map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.session_deinit(session_id as u32)
 }
 
 /// Get session count on a single UWB device. return -1 if failed
@@ -268,10 +215,8 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGe
 }
 
 fn native_get_session_count(env: JNIEnv, obj: JObject, chip_id: JString) -> Result<u8> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.session_get_count().map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.session_get_count()
 }
 
 /// Start ranging on a single UWB device. Return value defined by uci_packets.pdl
@@ -292,10 +237,8 @@ fn native_ranging_start(
     session_id: jint,
     chip_id: JString,
 ) -> Result<()> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.range_start(session_id as u32).map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.range_start(session_id as u32)
 }
 
 /// Stop ranging on a single UWB device. Return value defined by uci_packets.pdl
@@ -316,10 +259,8 @@ fn native_ranging_stop(
     session_id: jint,
     chip_id: JString,
 ) -> Result<()> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.range_stop(session_id as u32).map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.range_stop(session_id as u32)
 }
 
 /// Get session stateon a single UWB device. Return -1 if failed
@@ -347,10 +288,8 @@ fn native_get_session_state(
     session_id: jint,
     chip_id: JString,
 ) -> Result<SessionState> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.session_get_state(session_id as u32).map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.session_get_state(session_id as u32)
 }
 
 fn parse_app_config_tlv_vec(no_of_params: i32, mut byte_array: &[u8]) -> Result<Vec<AppConfigTlv>> {
@@ -361,35 +300,41 @@ fn parse_app_config_tlv_vec(no_of_params: i32, mut byte_array: &[u8]) -> Result<
         // The tlv consists of the type of payload in 1 byte, the length of payload as u8
         // in 1 byte, and the payload.
         const TLV_HEADER_SIZE: usize = 2;
-        let tlv = RawAppConfigTlv::parse(byte_array).map_err(|_| UwbCoreError::BadParameters)?;
-        byte_array =
-            byte_array.get(tlv.v.len() + TLV_HEADER_SIZE..).ok_or(UwbCoreError::BadParameters)?;
+        let tlv = RawAppConfigTlv::parse(byte_array).map_err(|_| Error::BadParameters)?;
+        byte_array = byte_array.get(tlv.v.len() + TLV_HEADER_SIZE..).ok_or(Error::BadParameters)?;
         parsed_tlvs_len += tlv.v.len() + TLV_HEADER_SIZE;
         tlvs.push(tlv.into());
     }
     if parsed_tlvs_len != received_tlvs_len {
-        return Err(Error::UwbCoreError(UwbCoreError::BadParameters));
+        return Err(Error::BadParameters);
     };
     Ok(tlvs)
 }
 
 fn create_set_config_response(response: SetAppConfigResponse, env: JNIEnv) -> Result<jbyteArray> {
-    let uwb_config_status_class = env.find_class(CONFIG_STATUS_DATA_CLASS)?;
+    let uwb_config_status_class =
+        env.find_class(CONFIG_STATUS_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
     let mut buf = Vec::<u8>::new();
     for config_status in &response.config_status {
-        buf.push(config_status.cfg_id as u8);
-        buf.push(config_status.status as u8);
+        buf.push(u8::from(config_status.cfg_id));
+        buf.push(u8::from(config_status.status));
     }
-    let config_status_jbytearray = env.byte_array_from_slice(&buf)?;
-    let config_status_jobject = env.new_object(
-        uwb_config_status_class,
-        "(II[B)V",
-        &[
-            JValue::Int(response.status as i32),
-            JValue::Int(response.config_status.len() as i32),
-            JValue::Object(JObject::from(config_status_jbytearray)),
-        ],
-    )?;
+    let config_status_jbytearray =
+        env.byte_array_from_slice(&buf).map_err(|_| Error::ForeignFunctionInterface)?;
+
+    // Safety: config_status_jbytearray is safely instantiated above.
+    let config_status_jobject = unsafe { JObject::from_raw(config_status_jbytearray) };
+    let config_status_jobject = env
+        .new_object(
+            uwb_config_status_class,
+            "(II[B)V",
+            &[
+                JValue::Int(i32::from(response.status)),
+                JValue::Int(response.config_status.len() as i32),
+                JValue::Object(config_status_jobject),
+            ],
+        )
+        .map_err(|_| Error::ForeignFunctionInterface)?;
     Ok(*config_status_jobject)
 }
 
@@ -434,35 +379,41 @@ fn native_set_app_configurations(
     app_config_params: jbyteArray,
     chip_id: JString,
 ) -> Result<SetAppConfigResponse> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    let config_byte_array = env.convert_byte_array(app_config_params)?;
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    let config_byte_array =
+        env.convert_byte_array(app_config_params).map_err(|_| Error::ForeignFunctionInterface)?;
     let tlvs = parse_app_config_tlv_vec(no_of_params, &config_byte_array)?;
-    uci_manager.session_set_app_config(session_id as u32, tlvs).map_err(|e| e.into())
+    uci_manager.session_set_app_config(session_id as u32, tlvs)
 }
 
 fn create_get_config_response(tlvs: Vec<AppConfigTlv>, env: JNIEnv) -> Result<jbyteArray> {
-    let tlv_data_class = env.find_class(TLV_DATA_CLASS)?;
+    let tlv_data_class =
+        env.find_class(TLV_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
     let tlvs_len = tlvs.len();
     let mut buf = Vec::<u8>::new();
     for tlv in tlvs.into_iter() {
         let tlv = tlv.into_inner();
-        buf.push(tlv.cfg_id as u8);
+        buf.push(u8::from(tlv.cfg_id));
         buf.push(tlv.v.len() as u8);
         buf.extend(&tlv.v);
     }
-    let tlvs_jbytearray = env.byte_array_from_slice(&buf)?;
-    let tlvs_jobject = env.new_object(
-        tlv_data_class,
-        "(II[B)V",
-        &[
-            JValue::Int(StatusCode::UciStatusOk as i32),
-            JValue::Int(tlvs_len as i32),
-            JValue::Object(JObject::from(tlvs_jbytearray)),
-        ],
-    )?;
-    Ok(*tlvs_jobject)
+    let tlvs_jbytearray =
+        env.byte_array_from_slice(&buf).map_err(|_| Error::ForeignFunctionInterface)?;
+
+    // Safety: tlvs_jbytearray is safely instantiated above.
+    let tlvs_jobject = unsafe { JObject::from_raw(tlvs_jbytearray) };
+    let tlvs_jobject_env = env
+        .new_object(
+            tlv_data_class,
+            "(II[B)V",
+            &[
+                JValue::Int(i32::from(StatusCode::UciStatusOk)),
+                JValue::Int(tlvs_len as i32),
+                JValue::Object(tlvs_jobject),
+            ],
+        )
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    Ok(*tlvs_jobject_env)
 }
 
 /// Get app configurations on a single UWB device. Return null JObject if failed.
@@ -498,41 +449,47 @@ fn native_get_app_configurations(
     app_config_params: jbyteArray,
     chip_id: JString,
 ) -> Result<Vec<AppConfigTlv>> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    let app_config_bytearray = env.convert_byte_array(app_config_params)?;
-    uci_manager
-        .session_get_app_config(
-            session_id as u32,
-            app_config_bytearray
-                .into_iter()
-                .map(AppConfigTlvType::from_u8)
-                .collect::<Option<Vec<_>>>()
-                .ok_or(UwbCoreError::BadParameters)?,
-        )
-        .map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    let app_config_bytearray =
+        env.convert_byte_array(app_config_params).map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.session_get_app_config(
+        session_id as u32,
+        app_config_bytearray
+            .into_iter()
+            .map(AppConfigTlvType::try_from)
+            .map(std::result::Result::ok)
+            .collect::<Option<Vec<_>>>()
+            .ok_or(Error::BadParameters)?,
+    )
 }
 
 fn create_cap_response(tlvs: Vec<CapTlv>, env: JNIEnv) -> Result<jbyteArray> {
-    let tlv_data_class = env.find_class(TLV_DATA_CLASS)?;
+    let tlv_data_class =
+        env.find_class(TLV_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
     let mut buf = Vec::<u8>::new();
     for tlv in &tlvs {
-        buf.push(tlv.t as u8);
+        buf.push(u8::from(tlv.t));
         buf.push(tlv.v.len() as u8);
         buf.extend(&tlv.v);
     }
-    let tlvs_jbytearray = env.byte_array_from_slice(&buf)?;
-    let tlvs_jobject = env.new_object(
-        tlv_data_class,
-        "(II[B)V",
-        &[
-            JValue::Int(StatusCode::UciStatusOk as i32),
-            JValue::Int(tlvs.len() as i32),
-            JValue::Object(JObject::from(tlvs_jbytearray)),
-        ],
-    )?;
-    Ok(*tlvs_jobject)
+    let tlvs_jbytearray =
+        env.byte_array_from_slice(&buf).map_err(|_| Error::ForeignFunctionInterface)?;
+
+    // Safety: tlvs_jbytearray is safely instantiated above.
+    let tlvs_jobject = unsafe { JObject::from_raw(tlvs_jbytearray) };
+    let tlvs_jobject_env = env
+        .new_object(
+            tlv_data_class,
+            "(II[B)V",
+            &[
+                JValue::Int(i32::from(StatusCode::UciStatusOk)),
+                JValue::Int(tlvs.len() as i32),
+                JValue::Object(tlvs_jobject),
+            ],
+        )
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    Ok(*tlvs_jobject_env)
 }
 
 /// Get capability info on a single UWB device. Return null JObject if failed.
@@ -555,15 +512,13 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGe
 }
 
 fn native_get_caps_info(env: JNIEnv, obj: JObject, chip_id: JString) -> Result<Vec<CapTlv>> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.core_get_caps_info().map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.core_get_caps_info()
 }
 
 /// Update multicast list on a single UWB device. Return value defined by uci_packets.pdl
 #[no_mangle]
-pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeControllerMulticastListUpdateV1(
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeControllerMulticastListUpdate(
     env: JNIEnv,
     obj: JObject,
     session_id: jint,
@@ -571,6 +526,7 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeCo
     no_of_controlee: jbyte,
     addresses: jshortArray,
     sub_session_ids: jintArray,
+    sub_session_keys: jbyteArray,
     chip_id: JString,
 ) -> jbyte {
     debug!("{}: enter", function_name!());
@@ -583,6 +539,7 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeCo
             no_of_controlee,
             addresses,
             sub_session_ids,
+            sub_session_keys,
             chip_id,
         ),
         function_name!(),
@@ -599,41 +556,83 @@ fn native_controller_multicast_list_update(
     no_of_controlee: jbyte,
     addresses: jshortArray,
     sub_session_ids: jintArray,
+    sub_session_keys: jbyteArray,
     chip_id: JString,
 ) -> Result<()> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it goes
-    // out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
     let mut address_list = vec![
         0i16;
-        env.get_array_length(addresses)?.try_into().map_err(|_| {
-            Error::UwbCoreError(UwbCoreError::BadParameters)
-        })?
+        env.get_array_length(addresses)
+            .map_err(|_| Error::ForeignFunctionInterface)?
+            .try_into()
+            .map_err(|_| { Error::BadParameters })?
     ];
-    env.get_short_array_region(addresses, 0, &mut address_list)?;
+    env.get_short_array_region(addresses, 0, &mut address_list)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
     let mut sub_session_id_list = vec![
         0i32;
-        env.get_array_length(sub_session_ids)?.try_into().map_err(
-            |_| Error::UwbCoreError(UwbCoreError::BadParameters)
-        )?
+        env.get_array_length(sub_session_ids)
+            .map_err(|_| Error::ForeignFunctionInterface)?
+            .try_into()
+            .map_err(|_| Error::BadParameters)?
     ];
-    env.get_int_array_region(sub_session_ids, 0, &mut sub_session_id_list)?;
+    env.get_int_array_region(sub_session_ids, 0, &mut sub_session_id_list)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
     if address_list.len() != sub_session_id_list.len()
         || address_list.len() != no_of_controlee as usize
     {
-        return Err(Error::UwbCoreError(UwbCoreError::BadParameters));
+        return Err(Error::BadParameters);
     }
-    let controlee_list = zip(address_list, sub_session_id_list)
-        .map(|(a, s)| Controlee { short_address: a as u16, subsession_id: s as u32 })
-        .collect::<Vec<Controlee>>();
-    uci_manager
-        .session_update_controller_multicast_list(
-            session_id as u32,
-            UpdateMulticastListAction::from_u8(action as u8)
-                .ok_or(Error::UwbCoreError(UwbCoreError::BadParameters))?,
-            controlee_list,
-        )
-        .map_err(|e| e.into())
+    let controlee_list = match UpdateMulticastListAction::try_from(action as u8)
+        .map_err(|_| Error::BadParameters)?
+    {
+        UpdateMulticastListAction::AddControlee | UpdateMulticastListAction::RemoveControlee => {
+            Controlees::NoSessionKey(
+                zip(address_list, sub_session_id_list)
+                    .map(|(a, s)| Controlee { short_address: a as u16, subsession_id: s as u32 })
+                    .collect::<Vec<Controlee>>(),
+            )
+        }
+        UpdateMulticastListAction::AddControleeWithShortSubSessionKey => {
+            Controlees::ShortSessionKey(
+                zip(
+                    zip(address_list, sub_session_id_list),
+                    env.convert_byte_array(sub_session_keys)
+                        .map_err(|_| Error::ForeignFunctionInterface)?
+                        .chunks(16),
+                )
+                .map(|((address, id), key)| {
+                    Ok(Controlee_V2_0_16_Byte_Version {
+                        short_address: address as u16,
+                        subsession_id: id as u32,
+                        subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
+                    })
+                })
+                .collect::<Result<Vec<Controlee_V2_0_16_Byte_Version>>>()?,
+            )
+        }
+        UpdateMulticastListAction::AddControleeWithLongSubSessionKey => Controlees::LongSessionKey(
+            zip(
+                zip(address_list, sub_session_id_list),
+                env.convert_byte_array(sub_session_keys)
+                    .map_err(|_| Error::ForeignFunctionInterface)?
+                    .chunks(32),
+            )
+            .map(|((address, id), key)| {
+                Ok(Controlee_V2_0_32_Byte_Version {
+                    short_address: address as u16,
+                    subsession_id: id as u32,
+                    subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
+                })
+            })
+            .collect::<Result<Vec<Controlee_V2_0_32_Byte_Version>>>()?,
+        ),
+    };
+    uci_manager.session_update_controller_multicast_list(
+        session_id as u32,
+        UpdateMulticastListAction::try_from(action as u8).map_err(|_| Error::BadParameters)?,
+        controlee_list,
+    )
 }
 
 /// Set country code on a single UWB device. Return value defined by uci_packets.pdl
@@ -654,20 +653,16 @@ fn native_set_country_code(
     country_code: jbyteArray,
     chip_id: JString,
 ) -> Result<()> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it goes
-    // out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    let country_code = env.convert_byte_array(country_code)?;
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    let country_code =
+        env.convert_byte_array(country_code).map_err(|_| Error::ForeignFunctionInterface)?;
     debug!("Country code: {:?}", country_code);
     if country_code.len() != 2 {
-        return Err(Error::UwbCoreError(UwbCoreError::BadParameters));
+        return Err(Error::BadParameters);
     }
-    uci_manager
-        .android_set_country_code(
-            CountryCode::new(&[country_code[0], country_code[1]])
-                .ok_or(Error::UwbCoreError(UwbCoreError::BadParameters))?,
-        )
-        .map_err(|e| e.into())
+    uci_manager.android_set_country_code(
+        CountryCode::new(&[country_code[0], country_code[1]]).ok_or(Error::BadParameters)?,
+    )
 }
 
 /// Set log mode.
@@ -682,46 +677,88 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
 }
 
 fn native_set_log_mode(env: JNIEnv, obj: JObject, log_mode_jstring: JString) -> Result<()> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it goes
-    // out of scope.
-    let dispatcher = unsafe { get_dispatcher(env, obj) }?;
-    let logger_mode_str = String::from(env.get_string(log_mode_jstring)?);
+    let dispatcher = Dispatcher::get_dispatcher(env, obj)?;
+    let logger_mode_str = String::from(
+        env.get_string(log_mode_jstring).map_err(|_| Error::ForeignFunctionInterface)?,
+    );
     debug!("UCI log: log started in {} mode", &logger_mode_str);
     let logger_mode = logger_mode_str.try_into()?;
-    dispatcher.set_logger_mode(logger_mode).map_err(|e| e.into())
+    dispatcher.set_logger_mode(logger_mode)
 }
 
-fn create_vendor_response(msg: RawVendorMessage, env: JNIEnv) -> Result<jobject> {
-    let vendor_response_class = env.find_class(VENDOR_RESPONSE_CLASS)?;
+// # Safety
+//
+// For this to be safe, the validity of msg should be checked before calling.
+unsafe fn create_vendor_response(msg: RawUciMessage, env: JNIEnv) -> Result<jobject> {
+    let vendor_response_class =
+        env.find_class(VENDOR_RESPONSE_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
+
+    // Unsafe from_raw call
+    let payload_jobject = JObject::from_raw(
+        env.byte_array_from_slice(&msg.payload).map_err(|_| Error::ForeignFunctionInterface)?,
+    );
+
     match env.new_object(
         vendor_response_class,
         "(BII[B)V",
         &[
-            JValue::Byte(StatusCode::UciStatusOk as i8),
+            JValue::Byte(u8::from(StatusCode::UciStatusOk) as i8),
             JValue::Int(msg.gid as i32),
             JValue::Int(msg.oid as i32),
-            JValue::Object(JObject::from(env.byte_array_from_slice(&msg.payload)?)),
+            JValue::Object(payload_jobject),
         ],
     ) {
         Ok(obj) => Ok(*obj),
-        Err(e) => Err(e.into()),
+        Err(_) => Err(Error::ForeignFunctionInterface),
     }
 }
 
 fn create_invalid_vendor_response(env: JNIEnv) -> Result<jobject> {
-    let vendor_response_class = env.find_class(VENDOR_RESPONSE_CLASS)?;
+    let vendor_response_class =
+        env.find_class(VENDOR_RESPONSE_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
     match env.new_object(
         vendor_response_class,
         "(BII[B)V",
         &[
-            JValue::Byte(StatusCode::UciStatusFailed as i8),
+            JValue::Byte(u8::from(StatusCode::UciStatusFailed) as i8),
             JValue::Int(-1),
             JValue::Int(-1),
             JValue::Object(JObject::null()),
         ],
     ) {
         Ok(obj) => Ok(*obj),
-        Err(e) => Err(e.into()),
+        Err(_) => Err(Error::ForeignFunctionInterface),
+    }
+}
+
+/// Safety:
+///
+/// response should be checked before calling to ensure safety.
+unsafe fn create_ranging_round_status(
+    response: SessionUpdateDtTagRangingRoundsResponse,
+    env: JNIEnv,
+) -> Result<jobject> {
+    let dt_ranging_rounds_update_status_class = env
+        .find_class(DT_RANGING_ROUNDS_STATUS_CLASS)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    let indexes = response.ranging_round_indexes;
+
+    // Unsafe from_raw call
+    let indexes_jobject = JObject::from_raw(
+        env.byte_array_from_slice(indexes.as_ref()).map_err(|_| Error::ForeignFunctionInterface)?,
+    );
+
+    match env.new_object(
+        dt_ranging_rounds_update_status_class,
+        "(II[B)V",
+        &[
+            JValue::Int(i32::from(response.status)),
+            JValue::Int(indexes.len() as i32),
+            JValue::Object(indexes_jobject),
+        ],
+    ) {
+        Ok(o) => Ok(*o),
+        Err(_) => Err(Error::ForeignFunctionInterface),
     }
 }
 
@@ -730,6 +767,7 @@ fn create_invalid_vendor_response(env: JNIEnv) -> Result<jobject> {
 pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSendRawVendorCmd(
     env: JNIEnv,
     obj: JObject,
+    mt: jint,
     gid: jint,
     oid: jint,
     payload_jarray: jbyteArray,
@@ -737,17 +775,22 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
 ) -> jobject {
     debug!("{}: enter", function_name!());
     match option_result_helper(
-        native_send_raw_vendor_cmd(env, obj, gid, oid, payload_jarray, chip_id),
+        native_send_raw_vendor_cmd(env, obj, mt, gid, oid, payload_jarray, chip_id),
         function_name!(),
     ) {
         // Note: unwrap() here is not desirable, but unavoidable given non-null object is returned
         // even for failing cases.
-        Some(msg) => create_vendor_response(msg, env)
-            .map_err(|e| {
-                error!("{} failed with {:?}", function_name!(), &e);
-                e
-            })
-            .unwrap_or_else(|_| create_invalid_vendor_response(env).unwrap()),
+
+        // Safety: create_vendor_response is unsafe, however msg is safely returned from
+        // native_send_raw_vendor_cmd.
+        Some(msg) => unsafe {
+            create_vendor_response(msg, env)
+                .map_err(|e| {
+                    error!("{} failed with {:?}", function_name!(), &e);
+                    e
+                })
+                .unwrap_or_else(|_| create_invalid_vendor_response(env).unwrap())
+        },
         None => create_invalid_vendor_response(env).unwrap(),
     }
 }
@@ -755,20 +798,21 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
 fn native_send_raw_vendor_cmd(
     env: JNIEnv,
     obj: JObject,
+    mt: jint,
     gid: jint,
     oid: jint,
     payload_jarray: jbyteArray,
     chip_id: JString,
-) -> Result<RawVendorMessage> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    let payload = env.convert_byte_array(payload_jarray)?;
-    uci_manager.raw_vendor_cmd(gid as u32, oid as u32, payload).map_err(|e| e.into())
+) -> Result<RawUciMessage> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    let payload =
+        env.convert_byte_array(payload_jarray).map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.raw_uci_cmd(mt as u32, gid as u32, oid as u32, payload)
 }
 
 fn create_power_stats(power_stats: PowerStats, env: JNIEnv) -> Result<jobject> {
-    let power_stats_class = env.find_class(POWER_STATS_CLASS)?;
+    let power_stats_class =
+        env.find_class(POWER_STATS_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
     match env.new_object(
         power_stats_class,
         "(IIII)V",
@@ -780,7 +824,7 @@ fn create_power_stats(power_stats: PowerStats, env: JNIEnv) -> Result<jobject> {
         ],
     ) {
         Ok(o) => Ok(*o),
-        Err(e) => Err(e.into()),
+        Err(_) => Err(Error::ForeignFunctionInterface),
     }
 }
 
@@ -804,28 +848,164 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGe
 }
 
 fn native_get_power_stats(env: JNIEnv, obj: JObject, chip_id: JString) -> Result<PowerStats> {
-    // Safety: Java side owns Dispatcher by pointer, and borrows to this function until it
-    // goes out of scope.
-    let uci_manager = unsafe { get_uci_manager(env, obj, chip_id) }?;
-    uci_manager.android_get_power_stats().map_err(|e| e.into())
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    uci_manager.android_get_power_stats()
+}
+
+/// Update ranging rounds for DT-TAG
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSessionUpdateDtTagRangingRounds(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    _ranging_rounds: jint,
+    ranging_round_indexes: jbyteArray,
+    chip_id: JString,
+) -> jobject {
+    debug!("{}: enter", function_name!());
+    match option_result_helper(
+        native_set_ranging_rounds_dt_tag(
+            env,
+            obj,
+            session_id as u32,
+            ranging_round_indexes,
+            chip_id,
+        ),
+        function_name!(),
+    ) {
+        // Safety: rr is safely returned from native_set_ranging_rounds_dt_tag
+        Some(rr) => unsafe {
+            create_ranging_round_status(rr, env)
+                .map_err(|e| {
+                    error!("{} failed with {:?}", function_name!(), &e);
+                    e
+                })
+                .unwrap_or(*JObject::null())
+        },
+        None => *JObject::null(),
+    }
+}
+
+fn native_set_ranging_rounds_dt_tag(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: u32,
+    ranging_round_indexes: jbyteArray,
+    chip_id: JString,
+) -> Result<SessionUpdateDtTagRangingRoundsResponse> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    let indexes = env
+        .convert_byte_array(ranging_round_indexes)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.session_update_dt_tag_ranging_rounds(session_id, indexes)
+}
+
+/// Send a data packet to the remote device.
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSendData(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    address: jbyteArray,
+    dest_fira_component: jbyte,
+    uci_sequence_number: jbyte,
+    app_payload_data: jbyteArray,
+    chip_id: JString,
+) -> jbyte {
+    debug!("{}: enter", function_name!());
+    byte_result_helper(
+        native_send_data(
+            env,
+            obj,
+            session_id,
+            address,
+            dest_fira_component,
+            uci_sequence_number,
+            app_payload_data,
+            chip_id,
+        ),
+        function_name!(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn native_send_data(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    address: jbyteArray,
+    dest_fira_component: jbyte,
+    uci_sequence_number: jbyte,
+    app_payload_data: jbyteArray,
+    chip_id: JString,
+) -> Result<()> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    let address_bytearray =
+        env.convert_byte_array(address).map_err(|_| Error::ForeignFunctionInterface)?;
+    let app_payload_data_bytearray =
+        env.convert_byte_array(app_payload_data).map_err(|_| Error::ForeignFunctionInterface)?;
+    let destination_fira_component =
+        FiraComponent::try_from(dest_fira_component as u8).map_err(|_| Error::BadParameters)?;
+    uci_manager.send_data_packet(
+        session_id as u32,
+        address_bytearray,
+        destination_fira_component,
+        uci_sequence_number as u8,
+        app_payload_data_bytearray,
+    )
+}
+
+/// Get max application data size, that can be sent by the UWBS. Return 0 if failed.
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeQueryDataSize(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    chip_id: JString,
+) -> jshort {
+    debug!("{}: enter", function_name!());
+    match option_result_helper(
+        native_query_data_size(env, obj, session_id, chip_id),
+        function_name!(),
+    ) {
+        Some(s) => s.try_into().unwrap(),
+        None => 0,
+    }
+}
+
+fn native_query_data_size(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    chip_id: JString,
+) -> Result<u16> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.session_query_max_data_size(session_id as u32)
 }
 
 /// Get the class loader object. Has to be called from a JNIEnv where the local java classes are
 /// loaded. Results in a global reference to the class loader object that can be used to look for
 /// classes in other native thread.
 fn get_class_loader_obj(env: &JNIEnv) -> Result<GlobalRef> {
-    let ranging_data_class = env.find_class(&UWB_RANGING_DATA_CLASS)?;
-    let ranging_data_class_class = env.get_object_class(ranging_data_class)?;
-    let get_class_loader_method =
-        env.get_method_id(ranging_data_class_class, "getClassLoader", "()Ljava/lang/ClassLoader;")?;
-    let class_loader = env.call_method_unchecked(
-        ranging_data_class,
-        get_class_loader_method,
-        JavaType::Object("java/lang/ClassLoader".into()),
-        &[JValue::Void],
-    )?;
-    let class_loader_jobject = class_loader.l()?;
-    Ok(env.new_global_ref(class_loader_jobject)?)
+    let ranging_data_class =
+        env.find_class(UWB_RANGING_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
+    let ranging_data_class_class =
+        env.get_object_class(ranging_data_class).map_err(|_| Error::ForeignFunctionInterface)?;
+    let get_class_loader_method = env
+        .get_method_id(ranging_data_class_class, "getClassLoader", "()Ljava/lang/ClassLoader;")
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    let class_loader = env
+        .call_method_unchecked(
+            ranging_data_class,
+            get_class_loader_method,
+            ReturnType::Object,
+            &[jvalue::from(JValue::Void)],
+        )
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    let class_loader_jobject = class_loader.l().map_err(|_| Error::ForeignFunctionInterface)?;
+    env.new_global_ref(class_loader_jobject).map_err(|_| Error::ForeignFunctionInterface)
 }
 
 /// Create the dispatcher. Returns pointer to Dispatcher casted as jlong that owns the dispatcher.
@@ -846,20 +1026,22 @@ fn native_dispatcher_new(
     env: JNIEnv,
     obj: JObject,
     chip_ids_jarray: jobjectArray,
-) -> Result<*mut Dispatcher> {
-    let chip_ids_len: i32 = env.get_array_length(chip_ids_jarray)?;
+) -> Result<*const Dispatcher> {
+    let chip_ids_len: i32 =
+        env.get_array_length(chip_ids_jarray).map_err(|_| Error::ForeignFunctionInterface)?;
     let chip_ids = (0..chip_ids_len)
         .map(|i| env.get_string(env.get_object_array_element(chip_ids_jarray, i)?.into()))
-        .collect::<std::result::Result<Vec<_>, JNIError>>()?;
+        .collect::<std::result::Result<Vec<_>, JNIError>>()
+        .map_err(|_| Error::ForeignFunctionInterface)?;
     let chip_ids = chip_ids.into_iter().map(String::from).collect::<Vec<String>>();
     let class_loader_obj = get_class_loader_obj(&env)?;
-    Dispatcher::new_as_ptr(
-        unique_jvm::get_static_ref().ok_or(UwbCoreError::Unknown)?,
+    Dispatcher::new_dispatcher(
+        unique_jvm::get_static_ref().ok_or(Error::Unknown)?,
         class_loader_obj,
-        env.new_global_ref(obj)?,
+        env.new_global_ref(obj).map_err(|_| Error::ForeignFunctionInterface)?,
         &chip_ids,
-    )
-    .map_err(|e| e.into())
+    )?;
+    Dispatcher::get_dispatcher_ptr()
 }
 
 /// Destroys the dispatcher.
@@ -875,10 +1057,97 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeDi
 }
 
 fn native_dispatcher_destroy(env: JNIEnv, obj: JObject) -> Result<()> {
-    let dispatcher_ptr_long = env.get_field(obj, "mDispatcherPointer", "J")?.j()?;
-    // Safety: Java side owns Dispatcher through the pointer, and asks it to be destroyed
-    unsafe {
-        Dispatcher::destroy_ptr(dispatcher_ptr_long as *mut Dispatcher);
+    let dispatcher_ptr_long = env
+        .get_field(obj, "mDispatcherPointer", "J")
+        .map_err(|_| Error::ForeignFunctionInterface)?
+        .j()
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    if Dispatcher::get_dispatcher_ptr()? as jlong == dispatcher_ptr_long {
+        Dispatcher::destroy_dispatcher()
+    } else {
+        Err(Error::BadParameters)
     }
-    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use tokio::runtime::Builder;
+    use uwb_core::uci::mock_uci_manager::MockUciManager;
+    use uwb_core::uci::uci_manager_sync::{
+        NotificationManager, NotificationManagerBuilder, UciManagerSync,
+    };
+    use uwb_core::uci::{CoreNotification, DataRcvNotification, SessionNotification};
+
+    struct NullNotificationManager {}
+    impl NotificationManager for NullNotificationManager {
+        fn on_core_notification(&mut self, _core_notification: CoreNotification) -> Result<()> {
+            Ok(())
+        }
+        fn on_session_notification(
+            &mut self,
+            _session_notification: SessionNotification,
+        ) -> Result<()> {
+            Ok(())
+        }
+        fn on_vendor_notification(&mut self, _vendor_notification: RawUciMessage) -> Result<()> {
+            Ok(())
+        }
+        fn on_data_rcv_notification(&mut self, _data_rcv_notf: DataRcvNotification) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    struct NullNotificationManagerBuilder {}
+
+    impl NullNotificationManagerBuilder {
+        fn new() -> Self {
+            Self {}
+        }
+    }
+
+    impl NotificationManagerBuilder for NullNotificationManagerBuilder {
+        type NotificationManager = NullNotificationManager;
+
+        fn build(self) -> Option<Self::NotificationManager> {
+            Some(NullNotificationManager {})
+        }
+    }
+
+    /// Checks validity of the function_name! macro.
+    #[test]
+    fn test_function_name() {
+        assert_eq!(function_name!(), "test_function_name");
+    }
+
+    /// Checks native_set_app_configurations by mocking non-jni logic.
+    #[test]
+    fn test_native_set_app_configurations() {
+        // Constructs mock UciManagerSync.
+        let test_rt = Builder::new_multi_thread().enable_all().build().unwrap();
+        let mut uci_manager_impl = MockUciManager::new();
+        uci_manager_impl.expect_session_set_app_config(
+            42, // Session id
+            vec![
+                AppConfigTlv::new(AppConfigTlvType::DeviceType, vec![1]),
+                AppConfigTlv::new(AppConfigTlvType::RangingRoundUsage, vec![1]),
+            ],
+            vec![],
+            Ok(SetAppConfigResponse { status: StatusCode::UciStatusOk, config_status: vec![] }),
+        );
+        let uci_manager_sync = UciManagerSync::new_mock(
+            uci_manager_impl,
+            test_rt.handle().to_owned(),
+            NullNotificationManagerBuilder::new(),
+        )
+        .unwrap();
+
+        let app_config_byte_array: Vec<u8> = vec![
+            0, 1, 1, // DeviceType: controller
+            1, 1, 1, // RangingRoundUsage: DS_TWR
+        ];
+        let tlvs = parse_app_config_tlv_vec(2, &app_config_byte_array).unwrap();
+        assert!(uci_manager_sync.session_set_app_config(42, tlvs).is_ok());
+    }
 }
