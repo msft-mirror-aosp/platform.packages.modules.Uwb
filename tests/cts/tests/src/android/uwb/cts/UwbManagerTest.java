@@ -43,6 +43,7 @@ import android.content.ContextParams;
 import android.os.CancellationSignal;
 import android.os.PersistableBundle;
 import android.os.Process;
+import android.os.UserHandle;
 import android.permission.PermissionManager;
 import android.platform.test.annotations.AppModeFull;
 import android.util.Log;
@@ -880,8 +881,11 @@ public class UwbManagerTest {
     private AttributionSource getShellAttributionSourceWithRenouncedPermissions(
             @Nullable Set<String> renouncedPermissions) {
         try {
+            // Calculate the shellUid to account for running this from a secondary user.
+            int shellUid = UserHandle.getUid(
+                    Process.myUserHandle().getIdentifier(), UserHandle.getAppId(Process.SHELL_UID));
             AttributionSource shellAttributionSource =
-                    new AttributionSource.Builder(Process.SHELL_UID)
+                    new AttributionSource.Builder(shellUid)
                             .setPackageName("com.android.shell")
                             .setRenouncedPermissions(renouncedPermissions)
                             .build();
@@ -1118,7 +1122,7 @@ public class UwbManagerTest {
                     DlTDoARangingRoundsUpdate rangingRoundsUpdate =
                             new DlTDoARangingRoundsUpdate.Builder()
                                     .setSessionId(1)
-                                    .setNoOfActiveRangingRounds(1)
+                                    .setNoOfRangingRounds(1)
                                     .setRangingRoundIndexes(new byte[]{1})
                                     .build();
 
@@ -1356,8 +1360,8 @@ public class UwbManagerTest {
                     UwbAddress uwbAddress = UwbAddress.fromBytes(new byte[]{0x5, 0x5});
                     rangingSessionCallback.rangingSession.addControlee(
                             new FiraControleeParams.Builder()
+                                    .setAction(FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD)
                                     .setAddressList(new UwbAddress[]{uwbAddress})
-                                    .setSubSessionIdList(new int[]{1})
                                     .build().toBundle()
                     );
                     // Wait for the on reconfigured and controlee added callback.
@@ -1372,8 +1376,8 @@ public class UwbManagerTest {
                     rangingSessionCallback.replaceCtrlCountDownLatch(countDownLatch);
                     rangingSessionCallback.rangingSession.removeControlee(
                             new FiraControleeParams.Builder()
+                                    .setAction(FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE)
                                     .setAddressList(new UwbAddress[]{uwbAddress})
-                                    .setSubSessionIdList(new int[]{1})
                                     .build().toBundle()
                     );
                     // Wait for the on reconfigured and controlee added callback.
