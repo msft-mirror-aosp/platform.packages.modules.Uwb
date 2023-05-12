@@ -31,6 +31,7 @@ import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_INITIAT
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLEE;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE;
 import static com.google.uwb.support.fira.FiraParams.RFRAME_CONFIG_SP1;
+import static com.google.uwb.support.fira.FiraParams.SESSION_TYPE_RANGING;
 import static com.google.uwb.support.fira.FiraParams.SFD_ID_VALUE_3;
 import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY;
 import static com.google.uwb.support.fira.FiraParams.STS_LENGTH_128_SYMBOLS;
@@ -143,6 +144,7 @@ public class UwbConfigurationManagerTest {
     private FiraOpenSessionParams getFiraParams() {
         FiraProtocolVersion protocolVersion = FiraParams.PROTOCOL_VERSION_1_1;
         int sessionId = 10;
+        int sessionType = SESSION_TYPE_RANGING;
         int deviceType = RANGING_DEVICE_TYPE_CONTROLEE;
         int deviceRole = RANGING_DEVICE_ROLE_INITIATOR;
         int rangingRoundUsage = RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE;
@@ -162,7 +164,9 @@ public class UwbConfigurationManagerTest {
         int blockStrideLength = 2;
         int maxRangingRoundRetries = 3;
         int sessionPriority = 100;
-        boolean hasResultReportPhase = true;
+        boolean hasRangingResultReportMessage = true;
+        boolean hasControlMessage = true;
+        boolean hasRangingControlPhase = false;
         int measurementReportType = MEASUREMENT_REPORT_TYPE_INITIATOR_TO_RESPONDER;
         int inBandTerminationAttemptCount = 8;
         int channelNumber = 10;
@@ -204,6 +208,7 @@ public class UwbConfigurationManagerTest {
                 new FiraOpenSessionParams.Builder()
                         .setProtocolVersion(protocolVersion)
                         .setSessionId(sessionId)
+                        .setSessionType(sessionType)
                         .setDeviceType(deviceType)
                         .setDeviceRole(deviceRole)
                         .setRangingRoundUsage(rangingRoundUsage)
@@ -218,7 +223,9 @@ public class UwbConfigurationManagerTest {
                         .setMaxRangingRoundRetries(maxRangingRoundRetries)
                         .setSessionPriority(sessionPriority)
                         .setMacAddressMode(addressMode)
-                        .setHasResultReportPhase(hasResultReportPhase)
+                        .setHasRangingResultReportMessage(hasRangingResultReportMessage)
+                        .setHasControlMessage(hasControlMessage)
+                        .setHasRangingControlPhase(hasRangingControlPhase)
                         .setMeasurementReportType(measurementReportType)
                         .setInBandTerminationAttemptCount(inBandTerminationAttemptCount)
                         .setChannelNumber(channelNumber)

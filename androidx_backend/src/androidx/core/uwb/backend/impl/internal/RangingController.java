@@ -18,13 +18,13 @@ package androidx.core.uwb.backend.impl.internal;
 
 import static androidx.core.uwb.backend.impl.internal.RangingSessionCallback.REASON_FAILED_TO_START;
 import static androidx.core.uwb.backend.impl.internal.RangingSessionCallback.REASON_STOP_RANGING_CALLED;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR;
 import static androidx.core.uwb.backend.impl.internal.Utils.INVALID_API_CALL;
 import static androidx.core.uwb.backend.impl.internal.Utils.STATUS_OK;
 import static androidx.core.uwb.backend.impl.internal.Utils.SUPPORTED_BPRF_PREAMBLE_INDEX;
 import static androidx.core.uwb.backend.impl.internal.Utils.TAG;
 import static androidx.core.uwb.backend.impl.internal.Utils.UWB_SYSTEM_CALLBACK_FAILURE;
 
-import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY;
 import static com.google.uwb.support.fira.FiraParams.UWB_CHANNEL_9;
 
 import static java.util.Objects.requireNonNull;
@@ -54,8 +54,8 @@ public class RangingController extends RangingDevice {
 
     @Nullable private RangingSessionCallback mRangingSessionCallback;
 
-    RangingController(UwbManager manager, Executor executor,
-            OpAsyncCallbackRunner opAsyncCallbackRunner) {
+    RangingController(
+            UwbManager manager, Executor executor, OpAsyncCallbackRunner opAsyncCallbackRunner) {
         super(manager, executor, opAsyncCallbackRunner);
     }
 
@@ -67,7 +67,7 @@ public class RangingController extends RangingDevice {
     }
 
     /**
-     * get Complex channel. if it's the first time that this function is called, it will check the
+     * gets complex channel. if it's the first time that this function is called, it will check the
      * driver and try to get the best-available settings.
      */
     @SuppressLint("WrongConstant")
@@ -80,6 +80,11 @@ public class RangingController extends RangingDevice {
             mComplexChannel = getBestAvailableComplexChannel();
         }
         return mComplexChannel;
+    }
+
+    /** Sets complex channel. */
+    public void setComplexChannel(UwbComplexChannel complexChannel) {
+        mComplexChannel = complexChannel;
     }
 
     /**
@@ -96,6 +101,16 @@ public class RangingController extends RangingDevice {
         UwbComplexChannel availableChannel = new UwbComplexChannel(UWB_CHANNEL_9, preambleIndex);
         Log.i(TAG, String.format("set complexChannel to %s", availableChannel));
         return availableChannel;
+    }
+
+    @Override
+    protected int hashSessionId(RangingParameters rangingParameters) {
+        return calculateHashedSessionId(getLocalAddress(), getComplexChannel());
+    }
+
+    @Override
+    protected boolean isKnownPeer(UwbAddress address) {
+        return super.isKnownPeer(address) || mDynamicallyAddedPeers.contains(address);
     }
 
     @Override
@@ -153,11 +168,13 @@ public class RangingController extends RangingDevice {
         }
         // Reconfigure the session.
         int[] subSessionIdList = mRangingParameters.getUwbConfigId()
-                == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY
-                ? new int[] {mRangingParameters.getSubSessionId()} : null;
+                == CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR
+                        ? new int[] {mRangingParameters.getSubSessionId()}
+                        : null;
         byte[] subSessionKeyInfo = mRangingParameters.getUwbConfigId()
-                == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY
-                ? mRangingParameters.getSubSessionKeyInfo() : null;
+                == CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR
+                        ? mRangingParameters.getSubSessionKeyInfo()
+                        : null;
         boolean success =
                 reconfigureRanging(
                         ConfigurationManager.createReconfigureParams(
@@ -209,7 +226,7 @@ public class RangingController extends RangingDevice {
             Log.w(TAG, "Attempt to remove controlee while session is not active.");
             return INVALID_API_CALL;
         }
-        if (!mDynamicallyAddedPeers.contains(controleeAddress)) {
+        if (!isKnownPeer(controleeAddress)) {
             Log.w(TAG, "Attempt to remove non-existing controlee.");
             return INVALID_API_CALL;
         }
@@ -221,8 +238,8 @@ public class RangingController extends RangingDevice {
                                         mRangingParameters.getUwbConfigId(),
                                         FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE,
                                         new UwbAddress[] {controleeAddress},
-                                        /*subSessionIdList=*/ null,
-                                        /*subSessionKey=*/ null)
+                                        /* subSessionIdList= */ null,
+                                        /* subSessionKey= */ null)
                                 .toBundle());
         if (!success) {
             return UWB_SYSTEM_CALLBACK_FAILURE;

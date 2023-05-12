@@ -138,7 +138,7 @@ public class UwbSettingsStore {
         if (isStoreEmpty) {
             try {
                 boolean toggleEnabled =
-                        mUwbInjector.getSettingsInt(SETTINGS_TOGGLE_STATE_KEY_FOR_MIGRATION)
+                        mUwbInjector.getGlobalSettingsInt(SETTINGS_TOGGLE_STATE_KEY_FOR_MIGRATION)
                                 == STATE_ENABLED_ACTIVE;
                 Log.i(TAG, "Migrate settings toggle from older release: " + toggleEnabled);
                 put(SETTINGS_TOGGLE_STATE, toggleEnabled);
@@ -282,11 +282,11 @@ public class UwbSettingsStore {
      * Dump output for debugging.
      */
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
-        pw.println();
-        pw.println("Dump of " + TAG);
+        pw.println("---- Dump of UwbSettingsStore ----");
         synchronized (mLock) {
             pw.println("Settings: " + mSettings);
         }
+        pw.println("---- Dump of UwbSettingsStore ----");
     }
 
     /**

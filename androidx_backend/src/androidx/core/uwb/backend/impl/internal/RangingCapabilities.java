@@ -16,7 +16,14 @@
 
 package androidx.core.uwb.backend.impl.internal;
 
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_MULTICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_UNICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_UNICAST_DS_TWR_NO_AOA;
+import static androidx.core.uwb.backend.impl.internal.Utils.RANGE_DATA_NTF_ENABLE;
+
 import androidx.annotation.IntRange;
+
+import com.google.common.collect.ImmutableList;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,12 +34,18 @@ public class RangingCapabilities {
     public static final int FIRA_DEFAULT_RANGING_INTERVAL_MS = 200;
     /** Default supported channel if the system API doesn't provide it. */
     public static final int FIRA_DEFAULT_SUPPORTED_CHANNEL = 9;
+    /** Default supported config id if the system API doesn't provide it. */
+    public static final ImmutableList<Integer> FIRA_DEFAULT_SUPPORTED_CONFIG_IDS =
+            ImmutableList.of(CONFIG_UNICAST_DS_TWR, CONFIG_MULTICAST_DS_TWR,
+                    CONFIG_UNICAST_DS_TWR_NO_AOA);
 
     private final boolean mSupportsDistance;
     private final boolean mSupportsAzimuthalAngle;
     private final boolean mSupportsElevationAngle;
     private final int mMinRangingInterval;
     private final List<Integer> mSupportedChannels;
+    private final List<Integer> mSupportedNtfConfigs;
+    private final List<Integer> mSupportedConfigIds;
 
     public RangingCapabilities(
             boolean supportsDistance,
@@ -43,7 +56,9 @@ public class RangingCapabilities {
                 supportsAzimuthalAngle,
                 supportsElevationAngle,
                 FIRA_DEFAULT_RANGING_INTERVAL_MS,
-                new ArrayList<Integer>(FIRA_DEFAULT_SUPPORTED_CHANNEL));
+                new ArrayList<Integer>(FIRA_DEFAULT_SUPPORTED_CHANNEL),
+                new ArrayList<>(RANGE_DATA_NTF_ENABLE),
+                FIRA_DEFAULT_SUPPORTED_CONFIG_IDS);
     }
 
     public RangingCapabilities(
@@ -51,12 +66,16 @@ public class RangingCapabilities {
             boolean supportsAzimuthalAngle,
             boolean supportsElevationAngle,
             int minRangingInterval,
-            List<Integer> supportedChannels) {
+            List<Integer> supportedChannels,
+            List<Integer> supportedNtfConfigs,
+            List<Integer> supportedConfigIds) {
         this.mSupportsDistance = supportsDistance;
         this.mSupportsAzimuthalAngle = supportsAzimuthalAngle;
         this.mSupportsElevationAngle = supportsElevationAngle;
         this.mMinRangingInterval = minRangingInterval;
         this.mSupportedChannels = supportedChannels;
+        this.mSupportedNtfConfigs = supportedNtfConfigs;
+        this.mSupportedConfigIds = supportedConfigIds;
     }
 
     /** Whether distance ranging is supported. */
@@ -74,22 +93,28 @@ public class RangingCapabilities {
         return mSupportsElevationAngle;
     }
 
-    /**
-     * Gets the minimum supported ranging interval in milliseconds.
-     *
-     * @hide
-     */
+    /** Gets the minimum supported ranging interval in milliseconds. */
     @IntRange(from = 0)
     public int getMinRangingInterval() {
         return mMinRangingInterval;
     }
 
+    /** Gets the supported channel number. */
+    public List<Integer> getSupportedChannels() {
+        return mSupportedChannels;
+    }
+
     /**
-     * Gets the supported channel number.
+     * Gets the supported range data notification configs.
      *
      * @hide
      */
-    public List<Integer> getSupportedChannels() {
-        return mSupportedChannels;
+    public List<Integer> getSupportedNtfConfigs() {
+        return mSupportedNtfConfigs;
+    }
+
+    /** Gets the supported config ids. */
+    public List<Integer> getSupportedConfigIds() {
+        return mSupportedConfigIds;
     }
 }

@@ -32,14 +32,18 @@ import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABL
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_LEVEL_TRIG;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_INITIATOR;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLEE;
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLLER;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE;
 import static com.google.uwb.support.fira.FiraParams.RFRAME_CONFIG_SP1;
+import static com.google.uwb.support.fira.FiraParams.SESSION_TYPE_RANGING;
 import static com.google.uwb.support.fira.FiraParams.SFD_ID_VALUE_3;
 import static com.google.uwb.support.fira.FiraParams.STATE_CHANGE_REASON_CODE_ERROR_INVALID_RANGING_INTERVAL;
 import static com.google.uwb.support.fira.FiraParams.STATUS_CODE_ERROR_ADDRESS_ALREADY_PRESENT;
 import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY;
 import static com.google.uwb.support.fira.FiraParams.STS_LENGTH_128_SYMBOLS;
 import static com.google.uwb.support.fira.FiraParams.STS_SEGMENT_COUNT_VALUE_2;
+import static com.google.uwb.support.fira.FiraParams.TX_TIMESTAMP_40_BIT;
+import static com.google.uwb.support.fira.FiraParams.UL_TDOA_DEVICE_ID_16_BIT;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -76,6 +80,7 @@ public class FiraTests {
     public void testOpenSessionParams() {
         FiraProtocolVersion protocolVersion = FiraParams.PROTOCOL_VERSION_1_1;
         int sessionId = 10;
+        int sessionType = SESSION_TYPE_RANGING;
         int deviceType = RANGING_DEVICE_TYPE_CONTROLEE;
         int deviceRole = RANGING_DEVICE_ROLE_INITIATOR;
         int rangingRoundUsage = RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE;
@@ -95,7 +100,9 @@ public class FiraTests {
         int blockStrideLength = 2;
         int maxRangingRoundRetries = 3;
         int sessionPriority = 100;
-        boolean hasResultReportPhase = true;
+        boolean hasRangingResultReportMessage = true;
+        boolean hasControlMessage = true;
+        boolean hasRangingControlPhase = false;
         int measurementReportType = MEASUREMENT_REPORT_TYPE_INITIATOR_TO_RESPONDER;
         int inBandTerminationAttemptCount = 8;
         int channelNumber = 10;
@@ -127,7 +134,7 @@ public class FiraTests {
         double rangeDataNtfAoaAzimuthLower = -0.5;
         double rangeDataNtfAoaAzimuthUpper = +1.5;
         double rangeDataNtfAoaElevationLower = -1.5;
-        double rangeDataNtfAoaElevationUpper = +2.5;
+        double rangeDataNtfAoaElevationUpper = +1.2;
         boolean hasTimeOfFlightReport = true;
         boolean hasAngleOfArrivalAzimuthReport = true;
         boolean hasAngleOfArrivalElevationReport = true;
@@ -136,11 +143,18 @@ public class FiraTests {
         int numOfMsrmtFocusOnRange = 1;
         int numOfMsrmtFocusOnAoaAzimuth = 2;
         int numOfMsrmtFocusOnAoaElevation = 3;
+        int ulTdoaTxIntervalMs = 1_000;
+        int ulTdoaRandomWindowMS = 100;
+        int ulTdoaDeviceIdType = UL_TDOA_DEVICE_ID_16_BIT;
+        byte[] ulTdoaDeviceId = new byte[] {(byte) 0x0C, (byte) 0x0B};
+        int ulTdoaTxTimestampType = TX_TIMESTAMP_40_BIT;
+        int maxNumberOfMeasurements = 1;
 
         FiraOpenSessionParams params =
                 new FiraOpenSessionParams.Builder()
                         .setProtocolVersion(protocolVersion)
                         .setSessionId(sessionId)
+                        .setSessionType(sessionType)
                         .setDeviceType(deviceType)
                         .setDeviceRole(deviceRole)
                         .setRangingRoundUsage(rangingRoundUsage)
@@ -155,7 +169,9 @@ public class FiraTests {
                         .setMaxRangingRoundRetries(maxRangingRoundRetries)
                         .setSessionPriority(sessionPriority)
                         .setMacAddressMode(addressMode)
-                        .setHasResultReportPhase(hasResultReportPhase)
+                        .setHasRangingResultReportMessage(hasRangingResultReportMessage)
+                        .setHasControlMessage(hasControlMessage)
+                        .setHasRangingControlPhase(hasRangingControlPhase)
                         .setMeasurementReportType(measurementReportType)
                         .setInBandTerminationAttemptCount(inBandTerminationAttemptCount)
                         .setChannelNumber(channelNumber)
@@ -196,10 +212,17 @@ public class FiraTests {
                                 numOfMsrmtFocusOnRange,
                                 numOfMsrmtFocusOnAoaAzimuth,
                                 numOfMsrmtFocusOnAoaElevation)
+                        .setUlTdoaTxIntervalMs(ulTdoaTxIntervalMs)
+                        .setUlTdoaRandomWindowMs(ulTdoaRandomWindowMS)
+                        .setUlTdoaDeviceIdType(ulTdoaDeviceIdType)
+                        .setUlTdoaDeviceId(ulTdoaDeviceId)
+                        .setUlTdoaTxTimestampType(ulTdoaTxTimestampType)
+                        .setMaxNumberOfMeasurements(maxNumberOfMeasurements)
                         .build();
 
         assertEquals(params.getProtocolVersion(), protocolVersion);
         assertEquals(params.getSessionId(), sessionId);
+        assertEquals(params.getSessionType(), sessionType);
         assertEquals(params.getDeviceType(), deviceType);
         assertEquals(params.getDeviceRole(), deviceRole);
         assertEquals(params.getRangingRoundUsage(), rangingRoundUsage);
@@ -218,7 +241,9 @@ public class FiraTests {
         assertEquals(params.getMaxRangingRoundRetries(), maxRangingRoundRetries);
         assertEquals(params.getSessionPriority(), sessionPriority);
         assertEquals(params.getMacAddressMode(), addressMode);
-        assertEquals(params.hasResultReportPhase(), hasResultReportPhase);
+        assertEquals(params.hasRangingResultReportMessage(), hasRangingResultReportMessage);
+        assertEquals(params.hasControlMessage(), hasControlMessage);
+        assertEquals(params.hasRangingControlPhase(), hasRangingControlPhase);
         assertEquals(params.getMeasurementReportType(), measurementReportType);
         assertEquals(params.getInBandTerminationAttemptCount(), inBandTerminationAttemptCount);
         assertEquals(params.getChannelNumber(), channelNumber);
@@ -261,6 +286,12 @@ public class FiraTests {
         assertEquals(params.getNumOfMsrmtFocusOnRange(), numOfMsrmtFocusOnRange);
         assertEquals(params.getNumOfMsrmtFocusOnAoaAzimuth(), numOfMsrmtFocusOnAoaAzimuth);
         assertEquals(params.getNumOfMsrmtFocusOnAoaElevation(), numOfMsrmtFocusOnAoaElevation);
+        assertEquals(params.getUlTdoaTxIntervalMs(), ulTdoaTxIntervalMs);
+        assertEquals(params.getUlTdoaRandomWindowMs(), ulTdoaRandomWindowMS);
+        assertEquals(params.getUlTdoaDeviceIdType(), ulTdoaDeviceIdType);
+        assertArrayEquals(params.getUlTdoaDeviceId(), ulTdoaDeviceId);
+        assertEquals(params.getUlTdoaTxTimestampType(), ulTdoaTxTimestampType);
+        assertEquals(params.getMaxNumberOfMeasurements(), maxNumberOfMeasurements);
 
         FiraOpenSessionParams fromBundle = FiraOpenSessionParams.fromBundle(params.toBundle());
 
@@ -281,7 +312,9 @@ public class FiraTests {
         assertEquals(fromBundle.getMaxRangingRoundRetries(), maxRangingRoundRetries);
         assertEquals(fromBundle.getSessionPriority(), sessionPriority);
         assertEquals(fromBundle.getMacAddressMode(), addressMode);
-        assertEquals(fromBundle.hasResultReportPhase(), hasResultReportPhase);
+        assertEquals(fromBundle.hasRangingResultReportMessage(), hasRangingResultReportMessage);
+        assertEquals(fromBundle.hasControlMessage(), hasControlMessage);
+        assertEquals(fromBundle.hasRangingControlPhase(), hasRangingControlPhase);
         assertEquals(fromBundle.getMeasurementReportType(), measurementReportType);
         assertEquals(fromBundle.getInBandTerminationAttemptCount(), inBandTerminationAttemptCount);
         assertEquals(fromBundle.getChannelNumber(), channelNumber);
@@ -327,6 +360,12 @@ public class FiraTests {
         assertEquals(fromBundle.getNumOfMsrmtFocusOnRange(), numOfMsrmtFocusOnRange);
         assertEquals(fromBundle.getNumOfMsrmtFocusOnAoaAzimuth(), numOfMsrmtFocusOnAoaAzimuth);
         assertEquals(fromBundle.getNumOfMsrmtFocusOnAoaElevation(), numOfMsrmtFocusOnAoaElevation);
+        assertEquals(fromBundle.getUlTdoaTxIntervalMs(), ulTdoaTxIntervalMs);
+        assertEquals(fromBundle.getUlTdoaRandomWindowMs(), ulTdoaRandomWindowMS);
+        assertEquals(fromBundle.getUlTdoaDeviceIdType(), ulTdoaDeviceIdType);
+        assertArrayEquals(fromBundle.getUlTdoaDeviceId(), ulTdoaDeviceId);
+        assertEquals(fromBundle.getUlTdoaTxTimestampType(), ulTdoaTxTimestampType);
+        assertEquals(fromBundle.getMaxNumberOfMeasurements(), maxNumberOfMeasurements);
 
         verifyProtocolPresent(fromBundle);
         verifyBundlesEqual(params, fromBundle);
@@ -350,7 +389,9 @@ public class FiraTests {
         assertEquals(fromCopy.getMaxRangingRoundRetries(), maxRangingRoundRetries);
         assertEquals(fromCopy.getSessionPriority(), sessionPriority);
         assertEquals(fromCopy.getMacAddressMode(), addressMode);
-        assertEquals(fromCopy.hasResultReportPhase(), hasResultReportPhase);
+        assertEquals(fromCopy.hasRangingResultReportMessage(), hasRangingResultReportMessage);
+        assertEquals(fromCopy.hasControlMessage(), hasControlMessage);
+        assertEquals(fromCopy.hasRangingControlPhase(), hasRangingControlPhase);
         assertEquals(fromCopy.getMeasurementReportType(), measurementReportType);
         assertEquals(fromCopy.getInBandTerminationAttemptCount(), inBandTerminationAttemptCount);
         assertEquals(fromCopy.getChannelNumber(), channelNumber);
@@ -396,6 +437,12 @@ public class FiraTests {
         assertEquals(fromCopy.getNumOfMsrmtFocusOnRange(), numOfMsrmtFocusOnRange);
         assertEquals(fromCopy.getNumOfMsrmtFocusOnAoaAzimuth(), numOfMsrmtFocusOnAoaAzimuth);
         assertEquals(fromCopy.getNumOfMsrmtFocusOnAoaElevation(), numOfMsrmtFocusOnAoaElevation);
+        assertEquals(fromCopy.getUlTdoaTxIntervalMs(), ulTdoaTxIntervalMs);
+        assertEquals(fromCopy.getUlTdoaRandomWindowMs(), ulTdoaRandomWindowMS);
+        assertEquals(fromCopy.getUlTdoaDeviceIdType(), ulTdoaDeviceIdType);
+        assertArrayEquals(fromCopy.getUlTdoaDeviceId(), ulTdoaDeviceId);
+        assertEquals(fromCopy.getUlTdoaTxTimestampType(), ulTdoaTxTimestampType);
+        assertEquals(fromCopy.getMaxNumberOfMeasurements(), maxNumberOfMeasurements);
 
         verifyProtocolPresent(fromCopy);
         verifyBundlesEqual(params, fromCopy);
@@ -414,7 +461,7 @@ public class FiraTests {
         double rangeDataAoaAzimuthLower = -0.5;
         double rangeDataAoaAzimuthUpper = +1.5;
         double rangeDataAoaElevationLower = -1.5;
-        double rangeDataAoaElevationUpper = +2.5;
+        double rangeDataAoaElevationUpper = +1.2;
 
         int[] subSessionIdList = new int[] {3, 4};
         FiraRangingReconfigureParams params =
@@ -587,6 +634,9 @@ public class FiraTests {
                 EnumSet.allOf(FiraParams.HprfParameterSetCapabilityFlag.class);
         EnumSet<FiraParams.RangeDataNtfConfigCapabilityFlag> rangeDataNtfConfigCapabilities =
                 EnumSet.allOf(FiraParams.RangeDataNtfConfigCapabilityFlag.class);
+        int deviceType = RANGING_DEVICE_TYPE_CONTROLLER;
+        boolean suspendRangingSupport = true;
+        int sessionKeyLength = 1;
 
         FiraSpecificationParams params =
                 new FiraSpecificationParams.Builder()
@@ -611,6 +661,9 @@ public class FiraTests {
                         .setBprfParameterSetCapabilities(bprfCapabilities)
                         .setHprfParameterSetCapabilities(hprfCapabilities)
                         .setRangeDataNtfConfigCapabilities(rangeDataNtfConfigCapabilities)
+                        .setDeviceType(deviceType)
+                        .setSuspendRangingSupport(suspendRangingSupport)
+                        .setSessionKeyLength(sessionKeyLength)
                         .build();
         assertEquals(minPhyVersionSupported, params.getMinPhyVersionSupported());
         assertEquals(maxPhyVersionSupported, params.getMaxPhyVersionSupported());
@@ -633,6 +686,9 @@ public class FiraTests {
         assertEquals(bprfCapabilities, params.getBprfParameterSetCapabilities());
         assertEquals(hprfCapabilities, params.getHprfParameterSetCapabilities());
         assertEquals(rangeDataNtfConfigCapabilities, params.getRangeDataNtfConfigCapabilities());
+        assertEquals(deviceType, params.getDeviceType());
+        assertEquals(suspendRangingSupport, params.hasSuspendRangingSupport());
+        assertEquals(sessionKeyLength, params.getSessionKeyLength());
 
         FiraSpecificationParams fromBundle = FiraSpecificationParams.fromBundle(params.toBundle());
         assertEquals(minPhyVersionSupported, fromBundle.getMinPhyVersionSupported());
@@ -655,7 +711,21 @@ public class FiraTests {
         assertEquals(hprfCapabilities, fromBundle.getHprfParameterSetCapabilities());
         assertEquals(rangeDataNtfConfigCapabilities,
                 fromBundle.getRangeDataNtfConfigCapabilities());
+        assertEquals(deviceType, fromBundle.getDeviceType());
+        assertEquals(suspendRangingSupport, fromBundle.hasSuspendRangingSupport());
+        assertEquals(sessionKeyLength, fromBundle.getSessionKeyLength());
         verifyProtocolPresent(params);
         verifyBundlesEqual(params, fromBundle);
+    }
+
+    @Test
+    public void testSpecificationParams_whenNoChannelsSet() {
+        FiraSpecificationParams params =
+                new FiraSpecificationParams.Builder()
+                        .build();
+        assertEquals(List.of(), params.getSupportedChannels());
+
+        FiraSpecificationParams fromBundle = FiraSpecificationParams.fromBundle(params.toBundle());
+        assertEquals(List.of(), fromBundle.getSupportedChannels());
     }
 }
