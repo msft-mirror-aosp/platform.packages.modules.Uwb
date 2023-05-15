@@ -487,6 +487,9 @@ public class UwbManagerSnippet implements Snippet {
             return null;
         }
         FiraControleeParams.Builder builder = new FiraControleeParams.Builder();
+        if (j.has("action")) {
+            builder.setAction(j.getInt("action"));
+        }
         if (j.has("addressList")) {
             JSONArray jArray = j.getJSONArray("addressList");
             UwbAddress[] addressList = new UwbAddress[jArray.length()];
@@ -619,7 +622,7 @@ public class UwbManagerSnippet implements Snippet {
             builder.setDestAddressList(Arrays.asList(destinationUwbAddresses));
         }
         if (j.has("initiationTimeMs")) {
-            builder.setInitiationTimeMs(j.getInt("initiationTimeMs"));
+            builder.setInitiationTime(j.getInt("initiationTimeMs"));
         }
         if (j.has("slotDurationRstu")) {
             builder.setSlotDurationRstu(j.getInt("slotDurationRstu"));
@@ -823,11 +826,10 @@ public class UwbManagerSnippet implements Snippet {
     /** Close UWB ranging session. */
     @Rpc(description = "Close UWB ranging session")
     public void closeRangingSession(String key) {
-        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
-        if (rangingSessionCallback.rangingSession != null) {
+        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.remove(key);
+        if (rangingSessionCallback != null && rangingSessionCallback.rangingSession != null) {
             rangingSessionCallback.rangingSession.close();
         }
-        sRangingSessionCallbackMap.remove(key);
     }
 
     private JSONObject convertPersistableBundleToJson(PersistableBundle bundle)

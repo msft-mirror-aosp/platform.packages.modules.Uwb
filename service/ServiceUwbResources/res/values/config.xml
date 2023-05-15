@@ -158,4 +158,16 @@
     <!-- Max number of Rx data packets (for a UWB session) to be stored. This parameter defines the
     storage capacity for a UWB session, for incoming packets from a remote UWB device. -->
     <integer name = "rx_data_max_packets_to_store">10</integer>
+
+    <!-- Whether background ranging is enabled or not
+     If enabled:
+       * Background 3p apps are allowed to open new ranging sessions
+       * When previously foreground 3p apps moves to background, sessions are not terminated
+    -->
+    <bool name = "background_ranging_enabled">false</bool>
+
+    <!-- Whether ranging error streak timer is enabled or not.
+    If disabled, session would not be automatically stopped if there is no peer available.
+    -->
+    <bool name = "ranging_error_streak_timer_enabled">true</bool>
 </resources>

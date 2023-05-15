@@ -51,6 +51,7 @@ public class DeviceConfigFacade {
     // Cached values of fields updated via updateDeviceConfigFlags()
     private int mRangingResultLogIntervalMs;
     private boolean mDeviceErrorBugreportEnabled;
+    private boolean mSessionInitErrorBugreportEnabled;
     private int mBugReportMinIntervalMs;
     private boolean mEnableFilters;
     private int mFilterDistanceInliersPercent;
@@ -81,6 +82,10 @@ public class DeviceConfigFacade {
 
     // Config parameters related to Rx/Tx data packets.
     private int mRxDataMaxPacketsToStore;
+    // Flag to enable unlimited background ranging.
+    private boolean mBackgroundRangingEnabled;
+    // Flag to disable error streak timer when a session is ongoing.
+    private boolean mRangingErrorStreakTimerEnabled;
 
     public DeviceConfigFacade(Handler handler, Context context) {
         mContext = context;
@@ -100,6 +105,8 @@ public class DeviceConfigFacade {
                 "ranging_result_log_interval_ms", DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
         mDeviceErrorBugreportEnabled = DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_UWB,
                 "device_error_bugreport_enabled", false);
+        mSessionInitErrorBugreportEnabled = DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_UWB,
+                "session_init_error_bugreport_enabled", false);
         mBugReportMinIntervalMs = DeviceConfig.getInt(DeviceConfig.NAMESPACE_UWB,
                 "bug_report_min_interval_ms", DEFAULT_BUG_REPORT_MIN_INTERVAL_MS);
 
@@ -231,6 +238,18 @@ public class DeviceConfigFacade {
                 mContext.getResources().getInteger(R.integer.rx_data_max_packets_to_store)
         );
 
+        mBackgroundRangingEnabled = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "background_ranging_enabled",
+                mContext.getResources().getBoolean(R.bool.background_ranging_enabled)
+        );
+
+        mRangingErrorStreakTimerEnabled = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "ranging_error_streak_timer_enabled",
+                mContext.getResources().getBoolean(R.bool.ranging_error_streak_timer_enabled)
+        );
+
         // A little parsing and cleanup:
         mFrontAzimuthRadiansPerSecond = (float) Math.toRadians(frontAzimuthDegreesPerSecond);
         mBackAzimuthRadiansPerSecond = (float) Math.toRadians(backAzimuthDegreesPerSecond);
@@ -258,6 +277,13 @@ public class DeviceConfigFacade {
      */
     public boolean isDeviceErrorBugreportEnabled() {
         return mDeviceErrorBugreportEnabled;
+    }
+
+    /**
+     * Gets the feature flag for reporting session init error
+     */
+    public boolean isSessionInitErrorBugreportEnabled() {
+        return mSessionInitErrorBugreportEnabled;
     }
 
     /**
@@ -444,5 +470,23 @@ public class DeviceConfigFacade {
      */
     public int getRxDataMaxPacketsToStore() {
         return mRxDataMaxPacketsToStore;
+    }
+
+    /**
+     * Returns whether background ranging is enabled or not.
+     * If enabled:
+     *  * Background 3p apps are allowed to open new ranging sessions
+     *  * When previously foreground 3p apps moves to background, sessions are not terminated
+     */
+    public boolean isBackgroundRangingEnabled() {
+        return mBackgroundRangingEnabled;
+    }
+
+    /**
+     * Returns whether ranging error streak timer is enabled or not.
+     * If disabled, session would not be automatically stopped if there is no peer available.
+     */
+    public boolean isRangingErrorStreakTimerEnabled() {
+        return mRangingErrorStreakTimerEnabled;
     }
 }
