@@ -103,6 +103,8 @@ public class FiraSpecificationParams extends FiraParams {
 
     private final int mSessionKeyLength;
 
+    private final int mDtTagMaxActiveRr;
+
     private static final String KEY_MIN_PHY_VERSION = "min_phy_version";
     private static final String KEY_MAX_PHY_VERSION = "max_phy_version";
     private static final String KEY_MIN_MAC_VERSION = "min_mac_version";
@@ -147,6 +149,9 @@ public class FiraSpecificationParams extends FiraParams {
             "suspend_ranging_support";
     private static final String KEY_SESSION_KEY_LENGTH =
             "session_key_length";
+    public static final String DT_TAG_MAX_ACTIVE_RR = "dt_tag_max_active_rr";
+
+    public static final int DEFAULT_MAX_RANGING_SESSIONS_NUMBER = 5;
 
     private FiraSpecificationParams(
             FiraProtocolVersion minPhyVersionSupported,
@@ -180,7 +185,8 @@ public class FiraSpecificationParams extends FiraParams {
             Integer maxMessageSize,
             Integer maxDataPacketPayloadSize,
             EnumSet<RangeDataNtfConfigCapabilityFlag> rangeDataNtfConfigCapabilities,
-            int deviceType, boolean suspendRangingSupport, int sessionKeyLength) {
+            int deviceType, boolean suspendRangingSupport, int sessionKeyLength,
+            int dtTagMaxActiveRr) {
         mMinPhyVersionSupported = minPhyVersionSupported;
         mMaxPhyVersionSupported = maxPhyVersionSupported;
         mMinMacVersionSupported = minMacVersionSupported;
@@ -215,6 +221,7 @@ public class FiraSpecificationParams extends FiraParams {
         mDeviceType = deviceType;
         mSuspendRangingSupport = suspendRangingSupport;
         mSessionKeyLength = sessionKeyLength;
+        mDtTagMaxActiveRr = dtTagMaxActiveRr;
     }
 
     @Override
@@ -360,6 +367,10 @@ public class FiraSpecificationParams extends FiraParams {
         return mSessionKeyLength;
     }
 
+    public int getDtTagMaxActiveRr() {
+        return mDtTagMaxActiveRr;
+    }
+
     private static int[] toIntArray(List<Integer> data) {
         int[] res = new int[data.size()];
         for (int i = 0; i < data.size(); i++) {
@@ -411,6 +422,7 @@ public class FiraSpecificationParams extends FiraParams {
         bundle.putInt(KEY_DEVICE_TYPE, mDeviceType);
         bundle.putBoolean(KEY_SUSPEND_RANGING_SUPPORT, mSuspendRangingSupport);
         bundle.putInt(KEY_SESSION_KEY_LENGTH, mSessionKeyLength);
+        bundle.putInt(DT_TAG_MAX_ACTIVE_RR, mDtTagMaxActiveRr);
         return bundle;
     }
 
@@ -442,6 +454,7 @@ public class FiraSpecificationParams extends FiraParams {
         builder.setDeviceType(bundle.getInt(KEY_DEVICE_TYPE));
         builder.setSuspendRangingSupport(bundle.getBoolean(KEY_SUSPEND_RANGING_SUPPORT));
         builder.setSessionKeyLength(bundle.getInt(KEY_SESSION_KEY_LENGTH));
+        builder.setDtTagMaxActiveRr(bundle.getInt(DT_TAG_MAX_ACTIVE_RR, 0));
         return builder;
     }
 
@@ -471,7 +484,7 @@ public class FiraSpecificationParams extends FiraParams {
                 .hasNonDeferredModeSupport(bundle.getBoolean(KEY_NON_DEFERRED_MODE_SUPPORT))
                 .hasInitiationTimeSupport(bundle.getBoolean(KEY_INITIATION_TIME_SUPPORT))
                 .setMinRangingIntervalSupported(bundle.getInt(KEY_MIN_RANGING_INTERVAL, -1))
-                .setMinSlotDurationSupported(bundle.getInt(KEY_MIN_SLOT_DURATION, -1))
+                .setMinSlotDurationSupportedUs(bundle.getInt(KEY_MIN_SLOT_DURATION, -1))
                 .setMultiNodeCapabilities(
                         FlagEnum.toEnumSet(
                                 bundle.getInt(KEY_MULTI_NODE_CAPABILITIES),
@@ -577,7 +590,7 @@ public class FiraSpecificationParams extends FiraParams {
 
         private int mMinSlotDuration = -1;
 
-        private int mMaxRangingSessionNumber = -1;
+        private int mMaxRangingSessionNumber = DEFAULT_MAX_RANGING_SESSIONS_NUMBER;
 
         // Unicast support is mandatory
         private final EnumSet<MultiNodeCapabilityFlag> mMultiNodeCapabilities =
@@ -636,6 +649,9 @@ public class FiraSpecificationParams extends FiraParams {
 
         // Default to 256 bits key length not supported
         private int mSessionKeyLength = 0;
+
+        //Default to 0 i.e., DT tag role not supported.
+        private int mDtTagMaxActiveRr = 0;
 
         public FiraSpecificationParams.Builder setMinPhyVersionSupported(
                 FiraProtocolVersion version) {
@@ -727,11 +743,11 @@ public class FiraSpecificationParams extends FiraParams {
         }
 
         /**
-         * Set minimum supported slot duration
-         * @param value : minimum slot duration supported
+         * Set minimum supported slot duration in microsecond
+         * @param value : minimum slot duration supported in microsecond
          * @return FiraSpecificationParams builder
          */
-        public FiraSpecificationParams.Builder setMinSlotDurationSupported(int value) {
+        public FiraSpecificationParams.Builder setMinSlotDurationSupportedUs(int value) {
             mMinSlotDuration = value;
             return this;
         }
@@ -844,6 +860,11 @@ public class FiraSpecificationParams extends FiraParams {
             return this;
         }
 
+        public FiraSpecificationParams.Builder setDtTagMaxActiveRr(int value) {
+            mDtTagMaxActiveRr = value;
+            return this;
+        }
+
         public FiraSpecificationParams build() {
             return new FiraSpecificationParams(
                     mMinPhyVersionSupported,
@@ -879,7 +900,8 @@ public class FiraSpecificationParams extends FiraParams {
                     mRangeDataNtfConfigCapabilities,
                     mDeviceType,
                     mSuspendRangingSupport,
-                    mSessionKeyLength);
+                    mSessionKeyLength,
+                    mDtTagMaxActiveRr);
         }
     }
 }

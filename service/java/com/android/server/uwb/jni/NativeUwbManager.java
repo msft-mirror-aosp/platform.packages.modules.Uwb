@@ -162,17 +162,6 @@ public class NativeUwbManager {
     }
 
     /**
-     * Retrieves maximum number of UWB sessions concurrently
-     *
-     * @return : Retrieves maximum number of UWB sessions concurrently
-     */
-    public int getMaxSessionNumber() {
-        synchronized (mNativeLock) {
-            return nativeGetMaxSessionNumber();
-        }
-    }
-
-    /**
      * Retrieves power related stats
      */
     public UwbPowerStats getPowerStats(String chipId) {
@@ -337,7 +326,7 @@ public class NativeUwbManager {
      * in the Table 16: Control messages to set Application configurations
      */
     public byte controllerMulticastListUpdate(int sessionId, int action, int noOfControlee,
-            short[] addresses, int[] subSessionIds, byte[] subSessionKeyList,
+            byte[] addresses, int[] subSessionIds, byte[] subSessionKeyList,
             String chipId) {
         synchronized (mNativeLock) {
             return nativeControllerMulticastListUpdate(sessionId, (byte) action,
@@ -371,12 +360,8 @@ public class NativeUwbManager {
      * @return true if the log mode is set successfully, false otherwise.
      */
     public boolean setLogMode(String logModeStr) {
-        if (mUciLogModeStore.storeMode(logModeStr)) {
-            synchronized (mNativeLock) {
-                return nativeSetLogMode(mUciLogModeStore.getMode());
-            }
-        } else {
-            return false;
+        synchronized (mNativeLock) {
+            return nativeSetLogMode(mUciLogModeStore.getMode());
         }
     }
 
@@ -410,20 +395,27 @@ public class NativeUwbManager {
         }
     }
 
+    /**
+     * Receive the data transfer status for a UCI data packet earlier sent from Host to UWBS.
+     */
+    public void onDataSendStatus(long sessionId, int dataTransferStatus, long sequenceNum) {
+        Log.d(TAG, "onDataSendStatus ");
+        mSessionListener.onDataSendStatus(sessionId, dataTransferStatus, sequenceNum);
+    }
 
     /**
-     * Update active Ranging Rounds for DT Tag
+     * Update Ranging Rounds for DT Tag
      *
      * @param sessionId Session ID to which ranging round to be updated
-     * @param noOfActiveRangingRounds new active ranging round
+     * @param noOfRangingRounds new active ranging round
      * @param rangingRoundIndexes Indexes of ranging rounds
      * @return refer to SESSION_SET_APP_CONFIG_RSP
      * in the Table 16: Control messages to set Application configurations
      */
-    public DtTagUpdateRangingRoundsStatus sessionUpdateActiveRoundsDtTag(int sessionId,
-            int noOfActiveRangingRounds, byte[] rangingRoundIndexes, String chipId) {
+    public DtTagUpdateRangingRoundsStatus sessionUpdateDtTagRangingRounds(int sessionId,
+            int noOfRangingRounds, byte[] rangingRoundIndexes, String chipId) {
         synchronized (mNativeLock) {
-            return nativeSessionUpdateActiveRoundsDtTag(sessionId, noOfActiveRangingRounds,
+            return nativeSessionUpdateDtTagRangingRounds(sessionId, noOfRangingRounds,
                     rangingRoundIndexes, chipId);
         }
     }
@@ -438,6 +430,19 @@ public class NativeUwbManager {
     public int queryMaxDataSizeBytes(int sessionId, String chipId) {
         synchronized (mNativeLock) {
             return nativeQueryDataSize(sessionId, chipId);
+        }
+    }
+
+    /**
+     * Get session token from session id.
+     *
+     * @param sessionId : session id of uwb session
+     * @param chipId : Identifier of UWB chip for multi-HAL devices
+     * @return : session token generated for the session.
+     */
+    public int getSessionToken(int sessionId, String chipId) {
+        synchronized (mNativeLock) {
+            return nativeGetSessionToken(sessionId, chipId);
         }
     }
 
@@ -457,8 +462,6 @@ public class NativeUwbManager {
     private native long nativeGetTimestampResolutionNanos();
 
     private native UwbPowerStats nativeGetPowerStats(String chipId);
-
-    private native int nativeGetMaxSessionNumber();
 
     private native byte nativeDeviceReset(byte resetConfig, String chipId);
 
@@ -483,7 +486,7 @@ public class NativeUwbManager {
     private native UwbTlvData nativeGetCapsInfo(String chipId);
 
     private native byte nativeControllerMulticastListUpdate(int sessionId, byte action,
-            byte noOfControlee, short[] address, int[] subSessionId, byte[] subSessionKeyList,
+            byte noOfControlee, byte[] address, int[] subSessionId, byte[] subSessionKeyList,
             String chipId);
 
     private native byte nativeSetCountryCode(byte[] countryCode, String chipId);
@@ -493,8 +496,10 @@ public class NativeUwbManager {
     private native UwbVendorUciResponse nativeSendRawVendorCmd(int mt, int gid, int oid,
             byte[] payload, String chipId);
 
-    private native DtTagUpdateRangingRoundsStatus nativeSessionUpdateActiveRoundsDtTag(
+    private native DtTagUpdateRangingRoundsStatus nativeSessionUpdateDtTagRangingRounds(
             int sessionId, int noOfActiveRangingRounds, byte[] rangingRoundIndexes, String chipId);
 
     private native short nativeQueryDataSize(int sessionId, String chipId);
+
+    private native int nativeGetSessionToken(int sessionId, String chipId);
 }

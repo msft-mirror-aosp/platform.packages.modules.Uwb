@@ -523,7 +523,7 @@ impl<'a> TryFrom<SessionRangeDataWithEnv<'a>> for UwbRangingDataJni<'a> {
         ))?;
         let raw_notification_jbytearray =
             data_obj.env.byte_array_from_slice(&data_obj.session_range_data.raw_ranging_data)?;
-        // TODO(b/246678053): Check on using OwrAoa measurement class here.
+        // TODO(b/270443790): Check on using OwrAoa measurement class here.
 
         // Safety: raw_notification_jbytearray safely instantiated above.
         let raw_notification_jobject = unsafe { JObject::from_raw(raw_notification_jbytearray) };
@@ -532,7 +532,7 @@ impl<'a> TryFrom<SessionRangeDataWithEnv<'a>> for UwbRangingDataJni<'a> {
             "(JJIJIII[Lcom/android/server/uwb/data/UwbTwoWayMeasurement;[B)V",
             &[
                 JValue::Long(data_obj.session_range_data.sequence_number as i64),
-                JValue::Long(data_obj.session_range_data.session_id as i64),
+                JValue::Long(data_obj.session_range_data.session_token as i64),
                 JValue::Int(data_obj.session_range_data.rcr_indicator as i32),
                 JValue::Long(data_obj.session_range_data.current_ranging_interval_ms as i64),
                 JValue::Int(data_obj.session_range_data.ranging_measurement_type as i32),
@@ -653,7 +653,7 @@ impl<'a> TryFrom<RangingMeasurementsWithEnv<'a>> for UwbTwoWayMeasurementJni<'a>
                 EXTENDED_MAC_ADDRESS_LEN,
             ),
             // TODO(b/260495115): Re-work needed to handle DlTDoAShort and DlTDoAExtended.
-            // TODO(b/246678053): Handle OwrAoa (Short and Extended).
+            // TODO(b/270443790): Handle OwrAoa (Short and Extended).
             _ => todo!(),
         };
         let address_jbytearray = measurements_obj.env.new_byte_array(byte_arr_size)?;
@@ -704,7 +704,7 @@ impl<'a> TryFrom<RangingMeasurementsWithEnv<'a>> for UwbTwoWayMeasurementJni<'a>
                 "([BIIIIIIIIIIIII)V",
                 &[
                     JValue::Object(mac_address_bytes_jobject),
-                    JValue::Int(measurement.status as i32),
+                    JValue::Int(i32::from(measurement.status)),
                     JValue::Int(measurement.nlos as i32),
                     JValue::Int(measurement.distance as i32),
                     JValue::Int(measurement.aoa_azimuth as i32),

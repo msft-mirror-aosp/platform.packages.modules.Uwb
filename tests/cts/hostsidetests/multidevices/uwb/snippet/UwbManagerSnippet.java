@@ -18,6 +18,7 @@ package com.google.snippet.uwb;
 
 import android.app.UiAutomation;
 import android.content.Context;
+import android.net.ConnectivityManager;
 import android.os.PersistableBundle;
 import android.uwb.RangingMeasurement;
 import android.uwb.RangingReport;
@@ -37,6 +38,7 @@ import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccPulseShapeCombo;
 import com.google.uwb.support.ccc.CccRangingStartedParams;
+import com.google.uwb.support.fira.FiraControleeParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
@@ -68,6 +70,7 @@ public class UwbManagerSnippet implements Snippet {
 
     private static final String TAG = "UwbManagerSnippet: ";
     private final UwbManager mUwbManager;
+    private final ConnectivityManager mConnectivityManager;
     private final Context mContext;
     private final Executor mExecutor = Executors.newSingleThreadExecutor();
     private final EventCache mEventCache = EventCache.getInstance();
@@ -79,6 +82,7 @@ public class UwbManagerSnippet implements Snippet {
     public UwbManagerSnippet() throws Throwable {
         mContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
         mUwbManager = mContext.getSystemService(UwbManager.class);
+        mConnectivityManager = mContext.getSystemService(ConnectivityManager.class);
         adoptShellPermission();
     }
 
@@ -95,6 +99,21 @@ public class UwbManagerSnippet implements Snippet {
         StopFailed(1 << 8),
         CloseFailed(1 << 9),
         ReportReceived(1 << 10),
+        ControleeAdded(1 << 11),
+        ControleeAddFailed(1 << 12),
+        ControleeRemoved(1 << 13),
+        ControleeRemoveFailed(1 << 14),
+        Paused(1 << 15),
+        PauseFailed(1 << 16),
+        Resumed(1 << 17),
+        ResumeFailed(1 << 18),
+        DataSent(1 << 19),
+        DataSendFailed(1 << 20),
+        DataReceived(1 << 21),
+        DataReceiveFailed(1 << 22),
+        ServiceDiscovered(1 << 23),
+        ServiceConnected(1 << 24),
+        RangingRoundsUpdateDtTagStatus(1 << 25),
         EventAll(
                 1 << 0
                 | 1 << 1
@@ -106,7 +125,23 @@ public class UwbManagerSnippet implements Snippet {
                 | 1 << 7
                 | 1 << 8
                 | 1 << 9
-                | 1 << 10);
+                | 1 << 10
+                | 1 << 11
+                | 1 << 12
+                | 1 << 13
+                | 1 << 14
+                | 1 << 15
+                | 1 << 16
+                | 1 << 17
+                | 1 << 18
+                | 1 << 19
+                | 1 << 20
+                | 1 << 21
+                | 1 << 22
+                | 1 << 23
+                | 1 << 24
+                | 1 << 25
+        );
 
         private final int mType;
         Event(int type) {
@@ -136,7 +171,8 @@ public class UwbManagerSnippet implements Snippet {
         @Override
         public void onStateChanged(int state, int reason) {
             Log.d(TAG + "UwbAdapterStateCallback#onStateChanged() called");
-            Log.d(TAG + "Adapter state changed reason " + String.valueOf(reason));
+            Log.d(TAG + "Adapter state " + String.valueOf(state)
+                    + ", state changed reason " + String.valueOf(reason));
             SnippetEvent event = new SnippetEvent(mId, "UwbAdapterStateCallback");
             event.getData().putString("uwbAdapterStateEvent", toString(state));
             mEventCache.postEvent(event);
@@ -150,6 +186,8 @@ public class UwbManagerSnippet implements Snippet {
         public PersistableBundle sessionInfo;
         public RangingReport rangingReport;
         public String mId;
+        public UwbAddress uwbAddress;
+        public byte[] dataReceived;
 
         RangingSessionCallback(String id, int events) {
             mId = id;
@@ -238,6 +276,129 @@ public class UwbManagerSnippet implements Snippet {
             handleEvent(Event.ReportReceived);
         }
 
+        @Override
+        public void onControleeAdded(PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onControleeAdded() called");
+            persistableBundle = params;
+            handleEvent(Event.ControleeAdded);
+
+        }
+
+        @Override
+        public void onControleeAddFailed(
+                int reason, PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onControleeAddFailed() called");
+            Log.d(TAG + "ControleeAddFailed reason " + String.valueOf(reason));
+            persistableBundle = params;
+            handleEvent(Event.ControleeAddFailed);
+
+        }
+
+        @Override
+        public void onControleeRemoved(PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onControleeRemoved() called");
+            persistableBundle = params;
+            handleEvent(Event.ControleeRemoved);
+        }
+
+        @Override
+        public void onControleeRemoveFailed(
+                int reason, PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onControleeRemoveFailed() called");
+            Log.d(TAG + "ControleeRemoveFailed reason " + String.valueOf(reason));
+            persistableBundle = params;
+            handleEvent(Event.ControleeRemoveFailed);
+        }
+
+        @Override
+        public void onPaused(PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onPaused() called");
+            persistableBundle = params;
+            handleEvent(Event.Paused);
+        }
+
+        @Override
+        public void onPauseFailed(int reason, PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onPauseFailed() called");
+            Log.d(TAG + "PauseFailed reason " + String.valueOf(reason));
+            persistableBundle = params;
+            handleEvent(Event.PauseFailed);
+        }
+
+        @Override
+        public void onResumed(PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onResumed() called");
+            persistableBundle = params;
+            handleEvent(Event.Resumed);
+        }
+
+        @Override
+        public void onResumeFailed(int reason, PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onResumeFailed() called");
+            Log.d(TAG + "ResumeFailed reason " + String.valueOf(reason));
+            persistableBundle = params;
+            handleEvent(Event.ResumeFailed);
+        }
+
+        @Override
+        public void onDataSent(UwbAddress remoteDeviceAddress,
+                PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onDataSent() called");
+            uwbAddress = remoteDeviceAddress;
+            persistableBundle = params;
+            handleEvent(Event.DataSent);
+        }
+
+        @Override
+        public void onDataSendFailed(UwbAddress remoteDeviceAddress,
+                int reason, PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onDataSendFailed() called");
+            Log.d(TAG + "DataSendFailed reason " + String.valueOf(reason));
+            uwbAddress = remoteDeviceAddress;
+            persistableBundle = params;
+            handleEvent(Event.DataSendFailed);
+        }
+
+        @Override
+        public void onDataReceived(UwbAddress remoteDeviceAddress,
+                PersistableBundle params, byte[] data) {
+            Log.d(TAG + "RangingSessionCallback#onDataReceived() called");
+            uwbAddress = remoteDeviceAddress;
+            dataReceived = data;
+            persistableBundle = params;
+            handleEvent(Event.DataReceived);
+        }
+
+        @Override
+        public void onDataReceiveFailed(UwbAddress remoteDeviceAddress,
+                int reason, PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onDataReceiveFailed() called");
+            Log.d(TAG + "DataReceiveFailed reason " + String.valueOf(reason));
+            uwbAddress = remoteDeviceAddress;
+            persistableBundle = params;
+            handleEvent(Event.DataReceiveFailed);
+        }
+
+        @Override
+        public void onServiceDiscovered(PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onServiceDiscovered() called");
+            persistableBundle = params;
+            handleEvent(Event.ServiceDiscovered);
+        }
+
+        @Override
+        public void onServiceConnected(PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onServiceConnected() called");
+            persistableBundle = params;
+            handleEvent(Event.ServiceConnected);
+        }
+
+        // TODO: This is only available in Android U SDK. So, expose it there only.
+        public void onRangingRoundsUpdateDtTagStatus(PersistableBundle params) {
+            Log.d(TAG + "RangingSessionCallback#onRangingRoundsUpdateDtTagStatus() called");
+            persistableBundle = params;
+            handleEvent(Event.RangingRoundsUpdateDtTagStatus);
+        }
     }
 
     /** Register uwb adapter state callback. */
@@ -303,8 +464,52 @@ public class UwbManagerSnippet implements Snippet {
             }
             builder.setAddressList(addressList);
         }
+        if (j.has("subSessionIdList")) {
+            JSONArray jArray = j.getJSONArray("subSessionIdList");
+            int[] subSessionIdList = new int[jArray.length()];
+            for (int i = 0; i < jArray.length(); i++) {
+                subSessionIdList[i] = jArray.getInt(i);
+            }
+            builder.setSubSessionIdList(subSessionIdList);
+        }
+        if (j.has("subSessionKeyList")) {
+            JSONArray jSubSessionKeyListArray = j.getJSONArray("subSessionKeyList");
+            builder.setSubSessionKeyList(convertJSONArrayToByteArray(jSubSessionKeyListArray));
+        }
         if (j.has("blockStrideLength")) {
             builder.setBlockStrideLength(j.getInt("blockStrideLength"));
+        }
+        return builder.build();
+    }
+
+    private FiraControleeParams generateFiraControleeParams(JSONObject j) throws JSONException {
+        if (j == null) {
+            return null;
+        }
+        FiraControleeParams.Builder builder = new FiraControleeParams.Builder();
+        if (j.has("action")) {
+            builder.setAction(j.getInt("action"));
+        }
+        if (j.has("addressList")) {
+            JSONArray jArray = j.getJSONArray("addressList");
+            UwbAddress[] addressList = new UwbAddress[jArray.length()];
+            for (int i = 0; i < jArray.length(); i++) {
+                addressList[i] = UwbAddress.fromBytes(
+                        convertJSONArrayToByteArray(jArray.getJSONArray(i)));
+            }
+            builder.setAddressList(addressList);
+        }
+        if (j.has("subSessionIdList")) {
+            JSONArray jArray = j.getJSONArray("subSessionIdList");
+            int[] subSessionIdList = new int[jArray.length()];
+            for (int i = 0; i < jArray.length(); i++) {
+                subSessionIdList[i] = jArray.getInt(i);
+            }
+            builder.setSubSessionIdList(subSessionIdList);
+        }
+        if (j.has("subSessionKeyList")) {
+            JSONArray jSubSessionKeyListArray = j.getJSONArray("subSessionKeyList");
+            builder.setSubSessionKeyList(convertJSONArrayToByteArray(jSubSessionKeyListArray));
         }
         return builder.build();
     }
@@ -417,7 +622,7 @@ public class UwbManagerSnippet implements Snippet {
             builder.setDestAddressList(Arrays.asList(destinationUwbAddresses));
         }
         if (j.has("initiationTimeMs")) {
-            builder.setInitiationTimeMs(j.getInt("initiationTimeMs"));
+            builder.setInitiationTime(j.getInt("initiationTimeMs"));
         }
         if (j.has("slotDurationRstu")) {
             builder.setSlotDurationRstu(j.getInt("slotDurationRstu"));
@@ -466,9 +671,11 @@ public class UwbManagerSnippet implements Snippet {
             builder.setStsConfig(j.getInt("stsConfig"));
             JSONArray jSessionKeyArray = j.getJSONArray("sessionKey");
             builder.setSessionKey(convertJSONArrayToByteArray(jSessionKeyArray));
-            JSONArray jSubSessionKeyArray = j.getJSONArray("subSessionKey");
-            builder.setSubsessionKey(convertJSONArrayToByteArray(jSubSessionKeyArray));
-            builder.setSubSessionId(j.getInt("subSessionId"));
+            if (j.getInt("deviceType") == FiraParams.RANGING_DEVICE_TYPE_CONTROLEE) {
+                JSONArray jSubSessionKeyArray = j.getJSONArray("subSessionKey");
+                builder.setSubsessionKey(convertJSONArrayToByteArray(jSubSessionKeyArray));
+                builder.setSubSessionId(j.getInt("subSessionId"));
+            }
         }
         if (j.has("aoaResultRequest")) {
             builder.setAoaResultRequest(j.getInt("aoaResultRequest"));
@@ -540,6 +747,23 @@ public class UwbManagerSnippet implements Snippet {
         rangingSessionCallback.rangingSession.reconfigure(params.toBundle());
     }
 
+    /** Reconfigures FIRA UWB ranging session to add controlee. */
+    @Rpc(description = "Reconfigure FIRA UWB ranging session to add controlee")
+    public void addControleeFiraRangingSession(String key, JSONObject config) throws JSONException {
+        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
+        FiraControleeParams params = generateFiraControleeParams(config);
+        rangingSessionCallback.rangingSession.addControlee(params.toBundle());
+    }
+
+    /** Reconfigures FIRA UWB ranging session to remove controlee. */
+    @Rpc(description = "Reconfigure FIRA UWB ranging session to remove controlee")
+    public void removeControleeFiraRangingSession(String key, JSONObject config)
+            throws JSONException {
+        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
+        FiraControleeParams params = generateFiraControleeParams(config);
+        rangingSessionCallback.rangingSession.removeControlee(params.toBundle());
+    }
+
     /**
      * Find if UWB peer is found.
      */
@@ -602,9 +826,10 @@ public class UwbManagerSnippet implements Snippet {
     /** Close UWB ranging session. */
     @Rpc(description = "Close UWB ranging session")
     public void closeRangingSession(String key) {
-        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
-        rangingSessionCallback.rangingSession.close();
-        sRangingSessionCallbackMap.remove(key);
+        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.remove(key);
+        if (rangingSessionCallback != null && rangingSessionCallback.rangingSession != null) {
+            rangingSessionCallback.rangingSession.close();
+        }
     }
 
     private JSONObject convertPersistableBundleToJson(PersistableBundle bundle)
@@ -626,6 +851,17 @@ public class UwbManagerSnippet implements Snippet {
     @Rpc(description = "Get Uwb specification info")
     public JSONObject getSpecificationInfo() throws JSONException {
         return convertPersistableBundleToJson(mUwbManager.getSpecificationInfo());
+    }
+
+    /** Set airplane mode to True or False */
+    @Rpc(description = "Set airplane mode")
+    public void setAirplaneMode(Boolean enabled) {
+        mConnectivityManager.setAirplaneMode(enabled);
+    }
+
+    @Rpc(description = "Log info level message to device logcat")
+    public void logInfo(String message) throws JSONException {
+        Log.i(TAG + message);
     }
 
     @Override

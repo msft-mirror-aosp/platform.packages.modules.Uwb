@@ -29,26 +29,25 @@ import com.android.server.uwb.correction.pose.IPoseSource.Capabilities;
  * provide a more understandable UWB location guess to the user.
  * Recommended for hardware that does not support elevation. This should execute before the
  * AoAPrimer in the primer execution order.
+ * This will replace any existing elevation value, as it assumes that the hardware's elevation is
+ * invalid or zero.
  */
 public class ElevationPrimer implements IPrimer {
     /**
      * Applies a default pose-based elevation to a UWB reading that doesn't have one.
      *
      * @param input     The original UWB reading.
-     * @param prediction A prediction of where the signal probably came from.
+     * @param prediction The previous filtered UWB result adjusted by the pose change since then.
      * @param poseSource A pose source that may indicate phone orientation.
+     * @param timeMs When the input occurred, in ms since boot.
      * @return A replacement value for the UWB vector that has been corrected for the situation.
      */
     @Override
     public SphericalVector.Sparse prime(
             @NonNull SphericalVector.Sparse input,
             @Nullable SphericalVector prediction,
-            @Nullable IPoseSource poseSource) {
-        // Early exit: If there is already an elevation, we won't try to fill it in.
-        if (input.hasElevation) {
-            return input;
-        }
-
+            @Nullable IPoseSource poseSource,
+            long timeMs) {
         SphericalVector.Sparse position = input;
         if (poseSource != null
                 && poseSource.getCapabilities().contains(Capabilities.UPRIGHT)
