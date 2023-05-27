@@ -62,14 +62,14 @@ final class Conversions {
         RangingMeasurement altitude = null;
         if (aoaMeasurement != null) {
             AngleMeasurement azimuthMeasurement = aoaMeasurement.getAzimuth();
-            if (azimuthMeasurement != null) {
+            if (azimuthMeasurement != null && !isMeasurementAllZero(azimuthMeasurement)) {
                 azimuth =
                         createMeasurement(
                                 Math.toDegrees(azimuthMeasurement.getRadians()),
                                 azimuthMeasurement.getConfidenceLevel());
             }
             AngleMeasurement altitudeMeasurement = aoaMeasurement.getAltitude();
-            if (altitudeMeasurement != null) {
+            if (altitudeMeasurement != null && !isMeasurementAllZero(altitudeMeasurement)) {
                 altitude =
                         createMeasurement(
                                 Math.toDegrees(altitudeMeasurement.getRadians()),
@@ -86,6 +86,12 @@ final class Conversions {
         }
         return new RangingPosition(
                 distance, azimuth, altitude, measurement.getElapsedRealtimeNanos());
+    }
+
+    private static boolean isMeasurementAllZero(AngleMeasurement measurement) {
+        return measurement.getRadians() == 0
+                && measurement.getErrorRadians() == 0
+                && measurement.getConfidenceLevel() == 0;
     }
 
     @RangingSessionCallback.RangingSuspendedReason
@@ -117,16 +123,27 @@ final class Conversions {
         return RangingSessionCallback.REASON_UNKNOWN;
     }
 
-    static android.uwb.UwbAddress convertUwbAddress(UwbAddress address) {
-        return android.uwb.UwbAddress.fromBytes(address.toBytes());
+    static android.uwb.UwbAddress convertUwbAddress(UwbAddress address, boolean reverseMacAddress) {
+        return reverseMacAddress
+                ? android.uwb.UwbAddress.fromBytes(getReverseBytes(address.toBytes()))
+                : android.uwb.UwbAddress.fromBytes(address.toBytes());
     }
 
-    static List<android.uwb.UwbAddress> convertUwbAddressList(UwbAddress[] addressList) {
+    static List<android.uwb.UwbAddress> convertUwbAddressList(
+            UwbAddress[] addressList, boolean reverseMacAddress) {
         List<android.uwb.UwbAddress> list = new ArrayList<>();
         for (UwbAddress address : addressList) {
-            list.add(convertUwbAddress(address));
+            list.add(convertUwbAddress(address, reverseMacAddress));
         }
         return list;
+    }
+
+    static byte[] getReverseBytes(byte[] data) {
+        byte[] buffer = new byte[data.length];
+        for (int i = 0; i < data.length; i++) {
+            buffer[i] = data[data.length - 1 - i];
+        }
+        return buffer;
     }
 
     private Conversions() {}

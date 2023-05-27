@@ -18,6 +18,7 @@ package androidx.core.uwb.backend.impl.internal;
 
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_DL_TDOA_DT_TAG;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_MULTICAST_DS_TWR;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_MULTICAST_DS_TWR_NO_AOA;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_MULTICAST_DS_TWR;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_UNICAST_DS_TWR;
@@ -350,15 +351,53 @@ public final class ConfigurationManager {
                         return RANGING_ROUND_USAGE_DL_TDOA;
                     }
                 });
+
+        // ID_1000 properties.
+        sConfigs.put(
+                CONFIG_MULTICAST_DS_TWR_NO_AOA,
+                new UwbConfiguration() {
+
+                    @Override
+                    public int getConfigId() {
+                        return CONFIG_UNICAST_DS_TWR_NO_AOA;
+                    }
+
+                    @Override
+                    public int getMultiNodeMode() {
+                        return MULTI_NODE_MODE_ONE_TO_MANY;
+                    }
+
+                    @Override
+                    public int getStsConfig() {
+                        return FiraParams.STS_CONFIG_STATIC;
+                    }
+
+                    @Override
+                    public int getAoaResultRequestMode() {
+                        return FiraParams.AOA_RESULT_REQUEST_MODE_NO_AOA_REPORT;
+                    }
+
+                    @Override
+                    public boolean isControllerTheInitiator() {
+                        return true;
+                    }
+
+                    @Override
+                    public int getRangingRoundUsage() {
+                        return RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
+                    }
+                });
     }
 
-    private ConfigurationManager() {}
+    private ConfigurationManager() {
+    }
 
     /** Creates a {@link FiraOpenSessionParams}. */
     public static FiraOpenSessionParams createOpenSessionParams(
             @FiraParams.RangingDeviceType int deviceType,
             UwbAddress localAddress,
-            RangingParameters rangingParameters) {
+            RangingParameters rangingParameters,
+            UwbFeatureFlags featureFlags) {
         RangingTimingParams timingParams =
                 getRangingTimingParams(rangingParameters.getUwbConfigId());
         UwbConfiguration configuration = sConfigs.get(rangingParameters.getUwbConfigId());
@@ -393,17 +432,19 @@ public final class ConfigurationManager {
                         .setDeviceType(deviceType)
                         .setDeviceRole(deviceRole)
                         .setSessionId(rangingParameters.getSessionId())
-                        .setDeviceAddress(Conversions.convertUwbAddress(localAddress))
+                        .setDeviceAddress(Conversions.convertUwbAddress(localAddress,
+                                featureFlags.isReversedByteOrderFiraParams()))
                         .setDestAddressList(
                                 Conversions.convertUwbAddressList(
                                         rangingParameters
                                                 .getPeerAddresses()
-                                                .toArray(new UwbAddress[0])))
+                                                .toArray(new UwbAddress[0]),
+                                        featureFlags.isReversedByteOrderFiraParams()))
                         .setAoaResultRequest(configuration.getAoaResultRequestMode())
                         .setChannelNumber(rangingParameters.getComplexChannel().getChannel())
                         .setPreambleCodeIndex(
                                 rangingParameters.getComplexChannel().getPreambleIndex())
-                        .setInitiationTimeMs(timingParams.getInitiationTimeMs())
+                        .setInitiationTime(timingParams.getInitiationTimeMs())
                         .setSlotDurationRstu(timingParams.getSlotDurationRstu())
                         .setSlotsPerRangingRound(timingParams.getSlotPerRangingRound())
                         .setRangingIntervalMs(
@@ -419,7 +460,8 @@ public final class ConfigurationManager {
                         .setRangeDataNtfProximityFar(
                                 rangingParameters.getUwbRangeDataNtfConfig().getNtfProximityFar())
                         .setInBandTerminationAttemptCount(3)
-                        .setStsConfig(configuration.getStsConfig());
+                        .setStsConfig(configuration.getStsConfig())
+                        .setRangingErrorStreakTimeoutMs(10_000L);
 
         if (configuration.getStsConfig() == FiraParams.STS_CONFIG_STATIC) {
             byte[] staticStsIv =
@@ -428,7 +470,12 @@ public final class ConfigurationManager {
                             VENDOR_ID_SIZE,
                             STATIC_STS_SESSION_KEY_INFO_SIZE);
             builder.setVendorId(
-                            Arrays.copyOf(rangingParameters.getSessionKeyInfo(), VENDOR_ID_SIZE))
+                            featureFlags.isReversedByteOrderFiraParams()
+                                    ? Conversions.getReverseBytes(
+                                    Arrays.copyOf(rangingParameters.getSessionKeyInfo(),
+                                            VENDOR_ID_SIZE)) :
+                                    Arrays.copyOf(rangingParameters.getSessionKeyInfo(),
+                                            VENDOR_ID_SIZE))
                     .setStaticStsIV(staticStsIv);
         } else if (configuration.getStsConfig() == STS_CONFIG_PROVISIONED) {
             builder.setSessionKey(rangingParameters.getSessionKeyInfo())
@@ -455,13 +502,15 @@ public final class ConfigurationManager {
             @FiraParams.MulticastListUpdateAction int action,
             UwbAddress[] peerAddresses,
             @Nullable int[] subSessionIdList,
-            @Nullable byte[] subSessionKey) {
+            @Nullable byte[] subSessionKey,
+            UwbFeatureFlags uwbFeatureFlags) {
         UwbConfiguration configuration = sConfigs.get(configId);
         FiraRangingReconfigureParams.Builder builder =
                 new FiraRangingReconfigureParams.Builder()
                         .setAction(action)
                         .setAddressList(
-                                Conversions.convertUwbAddressList(peerAddresses)
+                                Conversions.convertUwbAddressList(peerAddresses,
+                                                uwbFeatureFlags.isReversedByteOrderFiraParams())
                                         .toArray(new android.uwb.UwbAddress[0]));
         if (configuration.getStsConfig()
                 == FiraParams.STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY) {

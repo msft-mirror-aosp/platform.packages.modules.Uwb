@@ -260,6 +260,16 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         return mUwbServiceCore.getSpecificationInfo(chipId);
     }
 
+
+    @Override
+    public long queryUwbsTimestampMicros() throws RemoteException {
+        if (!SdkLevel.isAtLeastV()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        return mUwbServiceCore.queryUwbsTimestampMicros();
+    }
+
     @Override
     public void openRanging(AttributionSource attributionSource,
             SessionHandle sessionHandle,
@@ -565,23 +575,23 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     private void registerSatelliteModeReceiver() {
-        if (isSatelliteModeSensitive()) {
-            Uri uri = Settings.Global.getUriFor(SETTINGS_SATELLITE_MODE_ENABLED);
-            if (uri == null) {
-                Log.e(TAG, "satellite mode key does not exist in Settings");
-                return;
-            }
-            mUwbInjector.registerContentObserver(
-                    uri,
-                    false,
-                    new ContentObserver(mUwbServiceCore.getHandler()) {
-                        @Override
-                        public void onChange(boolean selfChange) {
+        Uri uri = Settings.Global.getUriFor(SETTINGS_SATELLITE_MODE_ENABLED);
+        if (uri == null) {
+            Log.e(TAG, "satellite mode key does not exist in Settings");
+            return;
+        }
+        mUwbInjector.registerContentObserver(
+                uri,
+                false,
+                new ContentObserver(mUwbServiceCore.getHandler()) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        if (isSatelliteModeSensitive()) {
                             Log.i(TAG, "Satellite mode change detected");
                             handleAirplaneOrSatelliteModeEvent();
                         }
-                    });
-        }
+                    }
+                });
     }
 
     private void registerUserRestrictionsReceiver() {

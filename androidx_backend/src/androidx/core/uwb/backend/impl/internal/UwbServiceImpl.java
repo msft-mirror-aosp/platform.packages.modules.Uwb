@@ -57,8 +57,10 @@ public class UwbServiceImpl {
 
     private int mAdapterState = STATE_DISABLED;
     private final boolean mHasUwbFeature;
-    @Nullable private final UwbManager mUwbManager;
-    @NonNull private final UwbFeatureFlags mUwbFeatureFlags;
+    @Nullable
+    private final UwbManager mUwbManager;
+    @NonNull
+    private final UwbFeatureFlags mUwbFeatureFlags;
 
     /** Adapter State callback used to update adapterState field */
     private final UwbManager.AdapterStateCallback mAdapterStateCallback =
@@ -73,7 +75,10 @@ public class UwbServiceImpl {
         if (mHasUwbFeature) {
             mUwbManager = context.getSystemService(UwbManager.class);
             requireNonNull(mUwbManager);
-            mAdapterState = mUwbManager.getAdapterState();
+            // getAdapterState was added in Android T.
+            if (VERSION.SDK_INT >= VERSION_CODES.TIRAMISU) {
+                mAdapterState = mUwbManager.getAdapterState();
+            }
             mUwbManager.registerAdapterStateCallback(mSerialExecutor, mAdapterStateCallback);
         } else {
             mUwbManager = null;
@@ -84,14 +89,16 @@ public class UwbServiceImpl {
     public RangingController getController(Context context) {
         UwbManager uwbManagerWithContext = context.getSystemService(UwbManager.class);
         return new RangingController(
-                uwbManagerWithContext, mSerialExecutor, new OpAsyncCallbackRunner());
+                uwbManagerWithContext, mSerialExecutor, new OpAsyncCallbackRunner<>(),
+                        mUwbFeatureFlags);
     }
 
     /** Gets a Ranging Controlee session with given context. */
     public RangingControlee getControlee(Context context) {
         UwbManager uwbManagerWithContext = context.getSystemService(UwbManager.class);
         return new RangingControlee(
-                uwbManagerWithContext, mSerialExecutor, new OpAsyncCallbackRunner());
+                uwbManagerWithContext, mSerialExecutor, new OpAsyncCallbackRunner<>(),
+                        mUwbFeatureFlags);
     }
 
     /** Returns multi-chip information. */
@@ -156,7 +163,7 @@ public class UwbServiceImpl {
         }
         if (supportedChannels == null || supportedChannels.isEmpty()) {
             supportedChannels =
-                    new ArrayList<Integer>(RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CHANNEL);
+                    new ArrayList<>(RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CHANNEL);
         }
 
         Set<Integer> supportedNtfConfigsSet = new TreeSet<>();
@@ -175,7 +182,7 @@ public class UwbServiceImpl {
             supportedConfigIds.add(CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA);
         }
         if (stsCapabilityFlags.contains(FiraParams.StsCapabilityFlag
-                        .HAS_PROVISIONED_STS_INDIVIDUAL_CONTROLEE_KEY_SUPPORT)) {
+                .HAS_PROVISIONED_STS_INDIVIDUAL_CONTROLEE_KEY_SUPPORT)) {
             supportedConfigIds.add(CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR);
         }
         EnumSet<FiraParams.RangingRoundCapabilityFlag> rangingRoundCapabilityFlags =
@@ -193,5 +200,14 @@ public class UwbServiceImpl {
                 supportedChannels,
                 supportedNtfConfigs,
                 supportedConfigIds);
+    }
+
+    /**
+     * Update the callback executor of the given ranging device.
+     *
+     * <p>If previous service is shut down, the ranging device may hold a stale serial executor.
+     */
+    public void updateRangingDevice(RangingDevice device) {
+        device.setSystemCallbackExecutor(mSerialExecutor);
     }
 }

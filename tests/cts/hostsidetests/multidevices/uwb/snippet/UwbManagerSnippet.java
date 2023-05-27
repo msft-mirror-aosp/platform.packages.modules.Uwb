@@ -38,6 +38,7 @@ import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccPulseShapeCombo;
 import com.google.uwb.support.ccc.CccRangingStartedParams;
+import com.google.uwb.support.fira.FiraControleeParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
@@ -463,8 +464,52 @@ public class UwbManagerSnippet implements Snippet {
             }
             builder.setAddressList(addressList);
         }
+        if (j.has("subSessionIdList")) {
+            JSONArray jArray = j.getJSONArray("subSessionIdList");
+            int[] subSessionIdList = new int[jArray.length()];
+            for (int i = 0; i < jArray.length(); i++) {
+                subSessionIdList[i] = jArray.getInt(i);
+            }
+            builder.setSubSessionIdList(subSessionIdList);
+        }
+        if (j.has("subSessionKeyList")) {
+            JSONArray jSubSessionKeyListArray = j.getJSONArray("subSessionKeyList");
+            builder.setSubSessionKeyList(convertJSONArrayToByteArray(jSubSessionKeyListArray));
+        }
         if (j.has("blockStrideLength")) {
             builder.setBlockStrideLength(j.getInt("blockStrideLength"));
+        }
+        return builder.build();
+    }
+
+    private FiraControleeParams generateFiraControleeParams(JSONObject j) throws JSONException {
+        if (j == null) {
+            return null;
+        }
+        FiraControleeParams.Builder builder = new FiraControleeParams.Builder();
+        if (j.has("action")) {
+            builder.setAction(j.getInt("action"));
+        }
+        if (j.has("addressList")) {
+            JSONArray jArray = j.getJSONArray("addressList");
+            UwbAddress[] addressList = new UwbAddress[jArray.length()];
+            for (int i = 0; i < jArray.length(); i++) {
+                addressList[i] = UwbAddress.fromBytes(
+                        convertJSONArrayToByteArray(jArray.getJSONArray(i)));
+            }
+            builder.setAddressList(addressList);
+        }
+        if (j.has("subSessionIdList")) {
+            JSONArray jArray = j.getJSONArray("subSessionIdList");
+            int[] subSessionIdList = new int[jArray.length()];
+            for (int i = 0; i < jArray.length(); i++) {
+                subSessionIdList[i] = jArray.getInt(i);
+            }
+            builder.setSubSessionIdList(subSessionIdList);
+        }
+        if (j.has("subSessionKeyList")) {
+            JSONArray jSubSessionKeyListArray = j.getJSONArray("subSessionKeyList");
+            builder.setSubSessionKeyList(convertJSONArrayToByteArray(jSubSessionKeyListArray));
         }
         return builder.build();
     }
@@ -577,7 +622,7 @@ public class UwbManagerSnippet implements Snippet {
             builder.setDestAddressList(Arrays.asList(destinationUwbAddresses));
         }
         if (j.has("initiationTimeMs")) {
-            builder.setInitiationTimeMs(j.getInt("initiationTimeMs"));
+            builder.setInitiationTime(j.getInt("initiationTimeMs"));
         }
         if (j.has("slotDurationRstu")) {
             builder.setSlotDurationRstu(j.getInt("slotDurationRstu"));
@@ -626,9 +671,11 @@ public class UwbManagerSnippet implements Snippet {
             builder.setStsConfig(j.getInt("stsConfig"));
             JSONArray jSessionKeyArray = j.getJSONArray("sessionKey");
             builder.setSessionKey(convertJSONArrayToByteArray(jSessionKeyArray));
-            JSONArray jSubSessionKeyArray = j.getJSONArray("subSessionKey");
-            builder.setSubsessionKey(convertJSONArrayToByteArray(jSubSessionKeyArray));
-            builder.setSubSessionId(j.getInt("subSessionId"));
+            if (j.getInt("deviceType") == FiraParams.RANGING_DEVICE_TYPE_CONTROLEE) {
+                JSONArray jSubSessionKeyArray = j.getJSONArray("subSessionKey");
+                builder.setSubsessionKey(convertJSONArrayToByteArray(jSubSessionKeyArray));
+                builder.setSubSessionId(j.getInt("subSessionId"));
+            }
         }
         if (j.has("aoaResultRequest")) {
             builder.setAoaResultRequest(j.getInt("aoaResultRequest"));
@@ -700,6 +747,23 @@ public class UwbManagerSnippet implements Snippet {
         rangingSessionCallback.rangingSession.reconfigure(params.toBundle());
     }
 
+    /** Reconfigures FIRA UWB ranging session to add controlee. */
+    @Rpc(description = "Reconfigure FIRA UWB ranging session to add controlee")
+    public void addControleeFiraRangingSession(String key, JSONObject config) throws JSONException {
+        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
+        FiraControleeParams params = generateFiraControleeParams(config);
+        rangingSessionCallback.rangingSession.addControlee(params.toBundle());
+    }
+
+    /** Reconfigures FIRA UWB ranging session to remove controlee. */
+    @Rpc(description = "Reconfigure FIRA UWB ranging session to remove controlee")
+    public void removeControleeFiraRangingSession(String key, JSONObject config)
+            throws JSONException {
+        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
+        FiraControleeParams params = generateFiraControleeParams(config);
+        rangingSessionCallback.rangingSession.removeControlee(params.toBundle());
+    }
+
     /**
      * Find if UWB peer is found.
      */
@@ -762,11 +826,10 @@ public class UwbManagerSnippet implements Snippet {
     /** Close UWB ranging session. */
     @Rpc(description = "Close UWB ranging session")
     public void closeRangingSession(String key) {
-        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
-        if (rangingSessionCallback.rangingSession != null) {
+        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.remove(key);
+        if (rangingSessionCallback != null && rangingSessionCallback.rangingSession != null) {
             rangingSessionCallback.rangingSession.close();
         }
-        sRangingSessionCallbackMap.remove(key);
     }
 
     private JSONObject convertPersistableBundleToJson(PersistableBundle bundle)

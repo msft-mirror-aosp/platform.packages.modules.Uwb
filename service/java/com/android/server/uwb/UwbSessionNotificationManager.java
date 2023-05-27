@@ -35,7 +35,6 @@ import com.android.server.uwb.data.UwbOwrAoaMeasurement;
 import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbTwoWayMeasurement;
 import com.android.server.uwb.data.UwbUciConstants;
-import com.android.server.uwb.params.TlvUtil;
 import com.android.server.uwb.util.UwbUtil;
 
 import com.google.uwb.support.base.Params;
@@ -75,6 +74,16 @@ public class UwbSessionNotificationManager {
                     uwbSession.getParams(), mUwbInjector.getElapsedSinceBootNanos(), uwbSession);
         } catch (Exception e) {
             Log.e(TAG, "getRangingReport Failed.");
+            e.printStackTrace();
+        }
+
+        try {
+            RangingMeasurement filteredRangingMeasurement = rangingReport != null
+                    ? rangingReport.getMeasurements().get(0) : null;
+            mUwbInjector.getUwbMetrics().logRangingResult(uwbSession.getProfileType(), rangingData,
+                    filteredRangingMeasurement);
+        } catch (Exception e) {
+            Log.e(TAG, "logRangingResult Failed.");
             e.printStackTrace();
         }
 
@@ -440,7 +449,7 @@ public class UwbSessionNotificationManager {
                 default:
                     throw new IllegalArgumentException("Invalid AOA result req");
             }
-            if (openSessionParams.hasResultReportPhase()) {
+            if (openSessionParams.hasRangingResultReportMessage()) {
                 if (openSessionParams.hasAngleOfArrivalAzimuthReport()) {
                     isDestAoaAzimuthEnabled = true;
                 }
@@ -511,9 +520,7 @@ public class UwbSessionNotificationManager {
                 PersistableBundle rangingMeasurementMetadata = new PersistableBundle();
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(rangingMeasurementMetadata);
 
-                // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
-                UwbAddress addr = UwbAddress.fromBytes(
-                        TlvUtil.getReverseBytes(uwbTwoWayMeasurement[i].getMacAddress()));
+                UwbAddress addr = UwbAddress.fromBytes(uwbTwoWayMeasurement[i].getMacAddress());
                 UwbControlee controlee = uwbSession.getControlee(addr);
                 if (controlee != null) {
                     controlee.filterMeasurement(rangingMeasurementBuilder);
@@ -547,9 +554,7 @@ public class UwbSessionNotificationManager {
                 }
             }
 
-            // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
-            UwbAddress addr = UwbAddress.fromBytes(
-                    TlvUtil.getReverseBytes(uwbOwrAoaMeasurement.getMacAddress()));
+            UwbAddress addr = UwbAddress.fromBytes(uwbOwrAoaMeasurement.getMacAddress());
             UwbControlee controlee = uwbSession.getControlee(addr);
             if (controlee != null) {
                 controlee.filterMeasurement(rangingMeasurementBuilder);
@@ -604,9 +609,7 @@ public class UwbSessionNotificationManager {
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(
                         dlTDoAMeasurement.toBundle());
 
-                // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
-                UwbAddress addr = UwbAddress.fromBytes(
-                        TlvUtil.getReverseBytes(uwbDlTDoAMeasurements[i].getMacAddress()));
+                UwbAddress addr = UwbAddress.fromBytes(uwbDlTDoAMeasurements[i].getMacAddress());
                 UwbControlee controlee = uwbSession.getControlee(addr);
                 if (controlee != null) {
                     controlee.filterMeasurement(rangingMeasurementBuilder);
@@ -647,9 +650,8 @@ public class UwbSessionNotificationManager {
 
     private static RangingMeasurement.Builder buildRangingMeasurement(
             byte[] macAddress, int rangingStatus, long elapsedRealtimeNanos, int los) {
-        // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
         return new RangingMeasurement.Builder()
-                .setRemoteDeviceAddress(UwbAddress.fromBytes(TlvUtil.getReverseBytes(macAddress)))
+                .setRemoteDeviceAddress(UwbAddress.fromBytes(macAddress))
                 .setStatus(rangingStatus)
                 .setElapsedRealtimeNanos(elapsedRealtimeNanos)
                 .setLineOfSight(los);
