@@ -21,9 +21,6 @@ import static android.uwb.UwbManager.MESSAGE_TYPE_COMMAND;
 import static com.android.server.uwb.data.UwbUciConstants.FIRA_VERSION_MAJOR_2;
 import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_OK;
 
-import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
-import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
-
 import android.content.AttributionSource;
 import android.content.Context;
 import android.os.Handler;
@@ -103,7 +100,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     private static final int SEND_VENDOR_CMD_TIMEOUT_MS = 10000;
 
     private boolean mIsDiagnosticsEnabled = false;
-    private int mDiagramsFrameReportsFieldsFlags = 0;
+    private byte mDiagramsFrameReportsFieldsFlags = 0;
 
     private final PowerManager.WakeLock mUwbWakeLock;
     private final Context mContext;
@@ -416,12 +413,20 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         return specificationParams.second.toBundle();
     }
 
+    /**
+     * Get the UWBS time
+     */
+    public long queryUwbsTimestampMicros() {
+        String chipId = mUwbInjector.getMultichipData().getDefaultChipId();
+        return mNativeUwbManager.queryUwbsTimestamp(chipId);
+    }
+
     public long getTimestampResolutionNanos() {
         return mNativeUwbManager.getTimestampResolutionNanos();
     }
 
     /** Set whether diagnostics is enabled and set enabled fields */
-    public void enableDiagnostics(boolean enabled, int flags) {
+    public void enableDiagnostics(boolean enabled, byte flags) {
         this.mIsDiagnosticsEnabled = enabled;
         this.mDiagramsFrameReportsFieldsFlags = flags;
     }
@@ -541,9 +546,10 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         if (FiraParams.isCorrectProtocol(params)) {
             FiraControleeParams controleeParams = FiraControleeParams.fromBundle(params);
             reconfigureRangingParams = new FiraRangingReconfigureParams.Builder()
-                    .setAction(MULTICAST_LIST_UPDATE_ACTION_ADD)
+                    .setAction(controleeParams.getAction())
                     .setAddressList(controleeParams.getAddressList())
                     .setSubSessionIdList(controleeParams.getSubSessionIdList())
+                    .setSubSessionKeyList(controleeParams.getSubSessionKeyList())
                     .build();
         }
         mSessionManager.reconfigure(sessionHandle, reconfigureRangingParams);
@@ -557,9 +563,10 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         if (FiraParams.isCorrectProtocol(params)) {
             FiraControleeParams controleeParams = FiraControleeParams.fromBundle(params);
             reconfigureRangingParams = new FiraRangingReconfigureParams.Builder()
-                    .setAction(MULTICAST_LIST_UPDATE_ACTION_DELETE)
+                    .setAction(controleeParams.getAction())
                     .setAddressList(controleeParams.getAddressList())
                     .setSubSessionIdList(controleeParams.getSubSessionIdList())
+                    .setSubSessionKeyList(controleeParams.getSubSessionKeyList())
                     .build();
         }
         mSessionManager.reconfigure(sessionHandle, reconfigureRangingParams);

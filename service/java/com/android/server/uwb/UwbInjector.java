@@ -57,6 +57,7 @@ import com.android.server.uwb.correction.pose.IntegPoseSource;
 import com.android.server.uwb.correction.pose.RotationPoseSource;
 import com.android.server.uwb.correction.pose.SixDofPoseSource;
 import com.android.server.uwb.correction.primers.AoaPrimer;
+import com.android.server.uwb.correction.primers.BackAzimuthPrimer;
 import com.android.server.uwb.correction.primers.ElevationPrimer;
 import com.android.server.uwb.correction.primers.FovPrimer;
 import com.android.server.uwb.data.ServiceProfileData;
@@ -434,6 +435,9 @@ public class UwbInjector {
     public void setOverridePackageImportance(String packageName, int importance) {
         sOverridePackageImportance.put(packageName, importance);
     }
+    public void resetOverridePackageImportance(String packageName) {
+        sOverridePackageImportance.remove(packageName);
+    }
 
     /** Helper method to retrieve app importance. */
     private int getPackageImportance(int uid, @NonNull String packageName) {
@@ -594,6 +598,17 @@ public class UwbInjector {
             // Fov requires an elevation and a spherical coord.
             if (cfg.isEnablePrimerFov()) {
                 builder.addPrimer(new FovPrimer(cfg.getPrimerFovDegree()));
+            }
+
+            // Back azimuth detection requires true spherical.
+            if (cfg.isEnableBackAzimuth()) {
+                builder.addPrimer(new BackAzimuthPrimer(
+                        cfg.getFrontAzimuthRadiansPerSecond(),
+                        cfg.getBackAzimuthRadiansPerSecond(),
+                        cfg.getBackAzimuthWindow(),
+                        cfg.isEnableBackAzimuthMasking(),
+                        cfg.getMirrorScoreStdRadians(),
+                        cfg.getBackNoiseInfluenceCoeff()));
             }
 
             return builder.build();

@@ -68,7 +68,6 @@ public class ConfigParam {
     public static final int TX_ADAPTIVE_PAYLOAD_POWER = 0x1C;
     // TODO: Ensure this value is correct in the final 2.0 specification.
     public static final int RANGE_DATA_NTF_AOA_BOUND = 0x1D;
-    public static final int RESPONDER_SLOT_INDEX = 0x1E;
     public static final int PRF_MODE = 0x1F;
     public static final int CAP_SIZE_RANGE = 0x20;
     public static final int SCHEDULED_MODE = 0x22;
@@ -98,6 +97,7 @@ public class ConfigParam {
     public static final int INTER_FRAME_INTERVAL = 0x3C;
     public static final int SESSION_KEY = 0x45;
     public static final int SUBSESSION_KEY = 0x46;
+    public static final int APPLICATION_DATA_ENDPOINT = 0x4C;
 
     // Android specific params.
     public static final int NUM_RANGE_MEASUREMENTS = NB_OF_RANGE_MEASUREMENTS;

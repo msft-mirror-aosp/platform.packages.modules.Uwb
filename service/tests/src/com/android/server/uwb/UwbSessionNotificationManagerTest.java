@@ -26,6 +26,7 @@ import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TY
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY;
 import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_FAILED;
 
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
@@ -83,6 +84,7 @@ public class UwbSessionNotificationManagerTest {
     @Mock private IUwbRangingCallbacks mIUwbRangingCallbacks;
     @Mock private FiraOpenSessionParams mFiraParams;
     @Mock private UwbServiceCore mUwbServiceCore;
+    @Mock private UwbMetrics mUwbMetrics;
 
     private UwbSessionNotificationManager mUwbSessionNotificationManager;
 
@@ -96,10 +98,13 @@ public class UwbSessionNotificationManagerTest {
         when(mUwbSession.getAttributionSource()).thenReturn(ATTRIBUTION_SOURCE);
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(false);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(false);
+        when(mFiraParams.hasControlMessage()).thenReturn(false);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(true);
         when(mUwbInjector.checkUwbRangingPermissionForDataDelivery(any(), any())).thenReturn(true);
         when(mUwbInjector.getElapsedSinceBootNanos()).thenReturn(TEST_ELAPSED_NANOS);
         when(mUwbInjector.getUwbServiceCore()).thenReturn(mUwbServiceCore);
+        when(mUwbInjector.getUwbMetrics()).thenReturn(mUwbMetrics);
         mUwbSessionNotificationManager = new UwbSessionNotificationManager(mUwbInjector);
     }
 
@@ -124,6 +129,7 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
 
         verify(mIUwbRangingCallbacks, never()).onRangingResult(any(), any());
+        verify(mUwbMetrics, never()).logRangingResult(anyInt(), any(), any());
     }
 
     @Test
@@ -137,6 +143,8 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
@@ -152,6 +160,8 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
@@ -167,6 +177,8 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
@@ -182,13 +194,17 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
     public void testOnRangingResult_forTwoWay_WithAoaAndDestAoa() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(true);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(true);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -200,13 +216,17 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
     public void testOnRangingResult_forTwoWay_WithAoaAndNoDestAzimuth() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(true);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -218,13 +238,17 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
     public void testOnRangingResult_forTwoWay_WithAoaAndNoDestElevation() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(true);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(false);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -236,13 +260,17 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
     public void testOnRangingResult_forTwoWay_WithNoAoaAndDestAoa() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_NO_AOA_REPORT);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(true);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(true);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -254,13 +282,17 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
     public void testOnRangingResult_forTwoWay_WithNoAoaAzimuthAndDestAoa() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_ELEVATION_ONLY);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(true);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(true);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -272,13 +304,17 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
     public void testOnRangingResult_forTwoWay_WithNoAoaElevationAndDestAoa() throws Exception {
         when(mFiraParams.getAoaResultRequest()).thenReturn(
                 FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_AZIMUTH_ONLY);
-        when(mFiraParams.hasResultReportPhase()).thenReturn(true);
+        when(mFiraParams.hasRangingResultReportMessage()).thenReturn(true);
+        when(mFiraParams.hasControlMessage()).thenReturn(true);
+        when(mFiraParams.hasRangingControlPhase()).thenReturn(false);
         when(mFiraParams.hasAngleOfArrivalAzimuthReport()).thenReturn(true);
         when(mFiraParams.hasAngleOfArrivalElevationReport()).thenReturn(true);
         Pair<UwbRangingData, RangingReport> testRangingDataAndRangingReport =
@@ -290,6 +326,8 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
@@ -303,6 +341,8 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
@@ -316,6 +356,8 @@ public class UwbSessionNotificationManagerTest {
                 mUwbSession, testRangingDataAndRangingReport.first);
         verify(mIUwbRangingCallbacks).onRangingResult(
                 mSessionHandle, testRangingDataAndRangingReport.second);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingDataAndRangingReport.first),
+                eq(testRangingDataAndRangingReport.second.getMeasurements().get(0)));
     }
 
     @Test
@@ -324,6 +366,7 @@ public class UwbSessionNotificationManagerTest {
                 MAC_ADDRESSING_MODE_SHORT, PEER_SHORT_MAC_ADDRESS);
         mUwbSessionNotificationManager.onRangingResult(mUwbSession, testRangingData);
         verify(mIUwbRangingCallbacks).onRangingResult(mSessionHandle, null);
+        verify(mUwbMetrics).logRangingResult(anyInt(), eq(testRangingData), eq(null));
     }
 
     @Test

@@ -46,6 +46,7 @@ public abstract class FiraParams extends Params {
     }
 
     public static final FiraProtocolVersion PROTOCOL_VERSION_1_1 = new FiraProtocolVersion(1, 1);
+    public static final FiraProtocolVersion PROTOCOL_VERSION_2_0 = new FiraProtocolVersion(2, 0);
 
     /** Service ID for FiRa profile */
     @IntDef(
@@ -183,6 +184,7 @@ public abstract class FiraParams extends Params {
                 RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE,
                 RANGING_ROUND_USAGE_OWR_AOA_MEASUREMENT,
                 RANGING_ROUND_USAGE_DL_TDOA,
+                RANGING_ROUND_USAGE_DATA_TRANSFER_MODE,
             })
     public @interface RangingRoundUsage {}
 
@@ -206,6 +208,9 @@ public abstract class FiraParams extends Params {
 
     /** OWR for AoA measurement */
     public static final int RANGING_ROUND_USAGE_OWR_AOA_MEASUREMENT = 6;
+
+    /** Data transfer mode */
+    public static final int RANGING_ROUND_USAGE_DATA_TRANSFER_MODE = 9;
 
     /** Multi-Node mode */
     @IntDef(
@@ -575,6 +580,29 @@ public abstract class FiraParams extends Params {
     public static final int STATUS_CODE_ERROR_ROUND_INDEX_NOT_SET_AS_INITIATOR = 0X2A;
     public static final int
             STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST = 0X2B;
+
+    /**
+     * Table 28: Status codes in the DATA_TRANSFER_STATUS_NTF.
+     */
+    @IntDef(
+            value = {
+                    STATUS_CODE_DATA_TRANSFER_NTF_REPETITION_OK,
+                    STATUS_CODE_DATA_TRANSFER_NTF_OK,
+                    STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER,
+                    STATUS_CODE_DATA_TRANSFER_NTF_ERROR_NO_CREDIT_AVAILABLE,
+                    STATUS_CODE_DATA_TRANSFER_NTF_ERROR_REJECTED,
+                    STATUS_CODE_DATA_TRANSFER_NTF_SESSION_TYPE_NOT_SUPPORTED,
+                    STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER_IS_ONGOING
+            })
+    public @interface DataTransferStatusNtfCode {}
+
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_REPETITION_OK = 0;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_OK = 1;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER = 2;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_NO_CREDIT_AVAILABLE = 3;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_REJECTED = 4;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_SESSION_TYPE_NOT_SUPPORTED = 5;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER_IS_ONGOING = 6;
 
     /** State change reason codes defined in UCI table-15 */
     @IntDef(
@@ -1036,6 +1064,12 @@ public abstract class FiraParams extends Params {
     public static final int FILTER_TYPE_NONE = 0;
     public static final int FILTER_TYPE_DEFAULT = 1;
     public static final int FILTER_TYPE_APPLICATION = 2;
+
+    // Default value (Unlimited)
+    public static final int MAX_NUMBER_OF_MEASUREMENTS_DEFAULT = 0;
+
+    // Default value (Host as the both secure & non-secure endpoint).
+    public static final int APPLICATION_DATA_ENDPOINT_DEFAULT = 0;
 
     // Helper functions
     protected static UwbAddress longToUwbAddress(long value, int length) {

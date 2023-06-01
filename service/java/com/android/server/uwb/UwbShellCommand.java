@@ -132,6 +132,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             "get-log-mode",
             "enable-uwb",
             "disable-uwb",
+            "simulate-app-state-change",
             "start-fira-ranging-session",
             "start-ccc-ranging-session",
             "reconfigure-fira-ranging-session",
@@ -559,8 +560,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 builder.setSlotDurationRstu(slotDurationRstu);
             }
             if (option.equals("-w")) {
-                boolean hasResultReportPhase = getNextArgRequiredTrueOrFalse("enabled", "disabled");
-                builder.setHasResultReportPhase(hasResultReportPhase);
+                boolean hasRangingResultReportMessage =
+                        getNextArgRequiredTrueOrFalse("enabled", "disabled");
+                builder.setHasRangingResultReportMessage(hasRangingResultReportMessage);
             }
             if (option.equals("-y")) {
                 boolean hoppingEnabled = getNextArgRequiredTrueOrFalse("enabled", "disabled");
@@ -588,7 +590,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     throw new IllegalArgumentException("sessionKey expecting 16 or 32 bytes");
                 }
             }
-            if (option.equals("-u")) {
+            if (option.equals("-k")) {
                 String subSessionKey = getNextArgRequired();
                 if (subSessionKey.length() == 32 || subSessionKey.length() == 64) {
                     builder.setSubsessionKey(BaseEncoding.base16().decode(subSessionKey));
@@ -599,6 +601,15 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             if (option.equals("-j")) {
                 int errorStreakTimeoutMs = Integer.parseInt(getNextArgRequired());
                 builder.setRangingErrorStreakTimeoutMs(errorStreakTimeoutMs);
+            }
+            if (option.equals("-q")) {
+                int sessionPriority = Integer.parseInt(getNextArgRequired());
+                if (sessionPriority < 1 || sessionPriority > 100 || sessionPriority == 50) {
+                    throw new IllegalArgumentException(
+                            "sessionPriority expecting value between 1-49 or 51-100. 50 is "
+                                    + "reserved for default and has no effect.");
+                }
+                builder.setSessionPriority(sessionPriority);
             }
             option = getNextOption();
         }
@@ -704,6 +715,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         CccStartRangingParams cccStartRangingParams = new CccStartRangingParams.Builder()
                 .setSessionId(cccOpenRangingParams.getSessionId())
                 .setRanMultiplier(cccOpenRangingParams.getRanMultiplier())
+                .setInitiationTimeMs(cccOpenRangingParams.getInitiationTimeMs())
                 .build();
         startRangingSession(
                 cccOpenRangingParams, cccStartRangingParams, cccOpenRangingParams.getSessionId(),
@@ -944,18 +956,23 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     return 0;
                 case "simulate-app-state-change": {
                     String appPackageName = getNextArgRequired();
-                    boolean isFg = getNextArgRequiredTrueOrFalse("foreground", "background");
-                    int uid = 0;
-                    try {
-                        uid = mContext.getPackageManager().getApplicationInfo(
-                                appPackageName, 0).uid;
-                    } catch (PackageManager.NameNotFoundException e) {
-                        pw.println("Unable to find package name: " + appPackageName);
-                        return -1;
+                    String nextArg = getNextArg();
+                    if (nextArg != null) {
+                        boolean isFg = argTrueOrFalse(nextArg, "foreground", "background");
+                        int importance = isFg ? IMPORTANCE_FOREGROUND : IMPORTANCE_BACKGROUND;
+                        int uid = 0;
+                        try {
+                            uid = mContext.getPackageManager().getApplicationInfo(
+                                    appPackageName, 0).uid;
+                        } catch (PackageManager.NameNotFoundException e) {
+                            pw.println("Unable to find package name: " + appPackageName);
+                            return -1;
+                        }
+                        mUwbInjector.setOverridePackageImportance(appPackageName, importance);
+                        mUwbInjector.getUwbSessionManager().onUidImportance(uid, importance);
+                    } else {
+                        mUwbInjector.resetOverridePackageImportance(appPackageName);
                     }
-                    int importance = isFg ? IMPORTANCE_FOREGROUND : IMPORTANCE_BACKGROUND;
-                    mUwbInjector.setOverridePackageImportance(appPackageName, importance);
-                    mUwbInjector.getUwbSessionManager().onUidImportance(uid, importance);
                     return 0;
                 }
                 case "set-log-mode": {
@@ -967,6 +984,11 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                         return -1;
                     }
                     mUciLogModeStore.storeMode(logMode);
+                    if (!mNativeUwbManager.setLogMode(logMode)) {
+                        pw.println("Failed to set log mode. " + logMode
+                                + " log mode will be set on next UWB restart");
+                        return -1;
+                    }
                     return 0;
                 }
                 case "get-log-mode":
@@ -1043,7 +1065,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     return 0;
                 }
                 case "enable-diagnostics-notification": {
-                    int diagramFrameReportsFlags = 0;
+                    byte diagramFrameReportsFlags = 0;
                     String option = getNextOption();
                     while (option != null) {
                         if (option.equals("-r")) {
@@ -1061,7 +1083,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     return 0;
                 }
                 case "disable-diagnostics-notification": {
-                    mUwbServiceCore.enableDiagnostics(false, 0);
+                    mUwbServiceCore.enableDiagnostics(false, (byte) 0);
                     return 0;
                 }
                 case "take-bugreport": {
@@ -1086,17 +1108,22 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         }
     }
 
-    private boolean getNextArgRequiredTrueOrFalse(String trueString, String falseString)
-            throws IllegalArgumentException {
-        String nextArg = getNextArgRequired();
-        if (trueString.equals(nextArg)) {
+    private static boolean argTrueOrFalse(String arg, String trueString, String falseString) {
+        if (trueString.equals(arg)) {
             return true;
-        } else if (falseString.equals(nextArg)) {
+        } else if (falseString.equals(arg)) {
             return false;
         } else {
             throw new IllegalArgumentException("Expected '" + trueString + "' or '" + falseString
-                    + "' as next arg but got '" + nextArg + "'");
+                    + "' as next arg but got '" + arg + "'");
         }
+
+    }
+
+    private boolean getNextArgRequiredTrueOrFalse(String trueString, String falseString)
+            throws IllegalArgumentException {
+        String nextArg = getNextArgRequired();
+        return argTrueOrFalse(nextArg, trueString, falseString);
     }
 
     private void printStatus(PrintWriter pw) throws RemoteException {
@@ -1141,8 +1168,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-h <slot-duration-rstu>(slot-duration-rstu, default=2400)"
                 + " [-o static|provisioned](sts-config-type)"
                 + " [-n <sessionKey>](sessionKey 16 or 32 bytes)"
-                + " [-u <subSessionKey>](subSessionKey 16 or 32 bytes)"
-                + " [-j <errorStreakTimeoutMs>](error streak timeout in millis, default=30000)");
+                + " [-k <subSessionKey>](subSessionKey 16 or 32 bytes)"
+                + " [-j <errorStreakTimeoutMs>](error streak timeout in millis, default=30000)"
+                + " [-q <sessionPriority>](sessionPriority 1-49 or 51-100)");
         pw.println("    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
