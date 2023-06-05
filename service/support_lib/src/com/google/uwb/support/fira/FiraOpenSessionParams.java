@@ -973,7 +973,7 @@ public class FiraOpenSessionParams extends FiraParams {
                         bundle.getInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_AZIMUTH),
                         bundle.getInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_ELEVATION))
                 .setRangingErrorStreakTimeoutMs(bundle
-                        .getLong(RANGING_ERROR_STREAK_TIMEOUT_MS, 30_000L))
+                        .getLong(RANGING_ERROR_STREAK_TIMEOUT_MS, 10_000L))
                 .setLinkLayerMode(bundle.getInt(KEY_LINK_LAYER_MODE, 0))
                 .setMinFramePerRr(bundle.getInt(KEY_MIN_FRAMES_PER_RR, 1))
                 .setMtuSize(bundle.getInt(KEY_MTU_SIZE, 1048))
@@ -1185,7 +1185,7 @@ public class FiraOpenSessionParams extends FiraParams {
         private int mNumOfMsrmtFocusOnAoaElevation = 0;
 
         /** Ranging result error streak timeout in Milliseconds*/
-        private long mRangingErrorStreakTimeoutMs = 30_000L;
+        private long mRangingErrorStreakTimeoutMs = 10_000L;
 
         /** UCI spec default: 0 */
         private int mLinkLayerMode = 0;
@@ -1943,6 +1943,13 @@ public class FiraOpenSessionParams extends FiraParams {
                             != RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT);
             }
         }
+        private void checkDlTdoaParameters() {
+            if (mDeviceRole.get() == RANGING_DEVICE_DT_TAG) {
+                checkArgument(mStsConfig == STS_CONFIG_STATIC
+                            && mMultiNodeMode.get() == MULTI_NODE_MODE_ONE_TO_MANY
+                            && mRframeConfig == RFRAME_CONFIG_SP1);
+            }
+        }
 
         /** Sets the type of filtering used by the session. Defaults to FILTER_TYPE_DEFAULT */
         public FiraOpenSessionParams.Builder setFilterType(@FilterType int filterType) {
@@ -1955,6 +1962,7 @@ public class FiraOpenSessionParams extends FiraParams {
             checkStsConfig();
             checkInterleavingRatio();
             checkRangeDataNtfConfig();
+            checkDlTdoaParameters();
             return new FiraOpenSessionParams(
                     mProtocolVersion.get(),
                     mSessionId.get(),
