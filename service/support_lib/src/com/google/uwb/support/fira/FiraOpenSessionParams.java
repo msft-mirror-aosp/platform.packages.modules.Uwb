@@ -141,6 +141,7 @@ public class FiraOpenSessionParams extends FiraParams {
     @UlTdoaTxTimestampType private final int mUlTdoaTxTimestampType;
     @FilterType private final int mFilterType;
     private final int mMaxNumberOfMeasurements;
+    private final int mApplicationDataEndpoint;
 
     private static final int BUNDLE_VERSION_1 = 1;
     private static final int BUNDLE_VERSION_CURRENT = BUNDLE_VERSION_1;
@@ -240,6 +241,7 @@ public class FiraOpenSessionParams extends FiraParams {
     private static final String UL_TDOA_TX_TIMESTAMP_TYPE = "ul_tdoa_tx_timestamp_type";
     private static final String KEY_FILTER_TYPE = "filter_type";
     private static final String KEY_MAX_NUMBER_OF_MEASUREMENTS = "max_number_of_measurements";
+    private static final String KEY_APPLICATION_DATA_ENDPOINT = "application_data_endpoint";
 
     private FiraOpenSessionParams(
             FiraProtocolVersion protocolVersion,
@@ -317,7 +319,8 @@ public class FiraOpenSessionParams extends FiraParams {
             @Nullable byte[] ulTdoaDeviceId,
             int ulTdoaTxTimestampType,
             int filterType,
-            int maxNumberOfMeasurements) {
+            int maxNumberOfMeasurements,
+            int applicationDataEndpoint) {
         mProtocolVersion = protocolVersion;
         mSessionId = sessionId;
         mSessionType = sessionType;
@@ -394,6 +397,7 @@ public class FiraOpenSessionParams extends FiraParams {
         mUlTdoaTxTimestampType = ulTdoaTxTimestampType;
         mFilterType = filterType;
         mMaxNumberOfMeasurements = maxNumberOfMeasurements;
+        mApplicationDataEndpoint = applicationDataEndpoint;
     }
 
     @Override
@@ -435,7 +439,7 @@ public class FiraOpenSessionParams extends FiraParams {
     }
 
     public List<UwbAddress> getDestAddressList() {
-        return Collections.unmodifiableList(mDestAddressList);
+        return mDestAddressList != null ? Collections.unmodifiableList(mDestAddressList) : null;
     }
 
     public long getInitiationTime() {
@@ -729,6 +733,10 @@ public class FiraOpenSessionParams extends FiraParams {
 
     public int getMaxNumberOfMeasurements() { return mMaxNumberOfMeasurements; }
 
+    public int getApplicationDataEndpoint() {
+        return mApplicationDataEndpoint;
+    }
+
     @Nullable
     private static int[] byteArrayToIntArray(@Nullable byte[] bytes) {
         if (bytes == null) {
@@ -767,13 +775,15 @@ public class FiraOpenSessionParams extends FiraParams {
         // Always store address as long in bundle.
         bundle.putLong(KEY_DEVICE_ADDRESS, uwbAddressToLong(mDeviceAddress));
 
-        // Dest Address list needs to be converted to long array.
-        long[] destAddressList = new long[mDestAddressList.size()];
-        int i = 0;
-        for (UwbAddress destAddress : mDestAddressList) {
-            destAddressList[i++] = uwbAddressToLong(destAddress);
+        if (mDeviceRole != RANGING_DEVICE_DT_TAG) {
+            // Dest Address list needs to be converted to long array.
+            long[] destAddressList = new long[mDestAddressList.size()];
+            int i = 0;
+            for (UwbAddress destAddress : mDestAddressList) {
+                destAddressList[i++] = uwbAddressToLong(destAddress);
+            }
+            bundle.putLongArray(KEY_DEST_ADDRESS_LIST, destAddressList);
         }
-        bundle.putLongArray(KEY_DEST_ADDRESS_LIST, destAddressList);
 
         bundle.putLong(KEY_INITIATION_TIME_MS, mInitiationTime);
         bundle.putInt(KEY_SLOT_DURATION_RSTU, mSlotDurationRstu);
@@ -853,6 +863,7 @@ public class FiraOpenSessionParams extends FiraParams {
         bundle.putInt(UL_TDOA_TX_TIMESTAMP_TYPE, mUlTdoaTxTimestampType);
         bundle.putInt(KEY_FILTER_TYPE, mFilterType);
         bundle.putInt(KEY_MAX_NUMBER_OF_MEASUREMENTS, mMaxNumberOfMeasurements);
+        bundle.putInt(KEY_APPLICATION_DATA_ENDPOINT, mApplicationDataEndpoint);
         return bundle;
     }
 
@@ -879,12 +890,6 @@ public class FiraOpenSessionParams extends FiraParams {
         UwbAddress deviceAddress =
                 longToUwbAddress(bundle.getLong(KEY_DEVICE_ADDRESS), addressByteLength);
 
-        long[] destAddresses = bundle.getLongArray(KEY_DEST_ADDRESS_LIST);
-        List<UwbAddress> destAddressList = new ArrayList<>();
-        for (long address : destAddresses) {
-            destAddressList.add(longToUwbAddress(address, addressByteLength));
-        }
-
         FiraOpenSessionParams.Builder builder = new FiraOpenSessionParams.Builder()
                 .setProtocolVersion(
                         FiraProtocolVersion.fromString(
@@ -896,7 +901,6 @@ public class FiraOpenSessionParams extends FiraParams {
                 .setRangingRoundUsage(bundle.getInt(KEY_RANGING_ROUND_USAGE))
                 .setMultiNodeMode(bundle.getInt(KEY_MULTI_NODE_MODE))
                 .setDeviceAddress(deviceAddress)
-                .setDestAddressList(destAddressList)
                 // Changed from int to long. Look for int value, if long value not found to
                 // maintain backwards compatibility.
                 .setInitiationTime(bundle.getLong(KEY_INITIATION_TIME_MS))
@@ -985,7 +989,18 @@ public class FiraOpenSessionParams extends FiraParams {
                 .setUlTdoaTxTimestampType(bundle.getInt(UL_TDOA_TX_TIMESTAMP_TYPE))
                 .setFilterType(bundle.getInt(KEY_FILTER_TYPE, FILTER_TYPE_DEFAULT))
                 .setMaxNumberOfMeasurements(bundle.getInt(
-                        KEY_MAX_NUMBER_OF_MEASUREMENTS, MAX_NUMBER_OF_MEASUREMENTS_DEFAULT));
+                        KEY_MAX_NUMBER_OF_MEASUREMENTS, MAX_NUMBER_OF_MEASUREMENTS_DEFAULT))
+                .setApplicationDataEndpoint(bundle.getInt(
+                        KEY_APPLICATION_DATA_ENDPOINT, APPLICATION_DATA_ENDPOINT_DEFAULT));
+
+        if (builder.mDeviceRole.get() != RANGING_DEVICE_DT_TAG) {
+            long[] destAddresses = bundle.getLongArray(KEY_DEST_ADDRESS_LIST);
+            List<UwbAddress> destAddressList = new ArrayList<>();
+            for (long address : destAddresses) {
+                destAddressList.add(longToUwbAddress(address, addressByteLength));
+            }
+            builder.setDestAddressList(destAddressList);
+        }
         return builder.build();
     }
 
@@ -1219,6 +1234,8 @@ public class FiraOpenSessionParams extends FiraParams {
 
         private int mMaxNumberOfMeasurements = MAX_NUMBER_OF_MEASUREMENTS_DEFAULT;
 
+        private int mApplicationDataEndpoint = APPLICATION_DATA_ENDPOINT_DEFAULT;
+
         public Builder() {}
 
         public Builder(@NonNull Builder builder) {
@@ -1299,6 +1316,7 @@ public class FiraOpenSessionParams extends FiraParams {
             mUlTdoaDeviceId = builder.mUlTdoaDeviceId;
             mUlTdoaTxTimestampType = builder.mUlTdoaTxTimestampType;
             mMaxNumberOfMeasurements = builder.mMaxNumberOfMeasurements;
+            mApplicationDataEndpoint = builder.mApplicationDataEndpoint;
         }
 
         public Builder(@NonNull FiraOpenSessionParams params) {
@@ -1380,6 +1398,7 @@ public class FiraOpenSessionParams extends FiraParams {
             mUlTdoaTxTimestampType = params.mUlTdoaTxTimestampType;
             mFilterType = params.mFilterType;
             mMaxNumberOfMeasurements = params.mMaxNumberOfMeasurements;
+            mApplicationDataEndpoint = params.mApplicationDataEndpoint;
         }
 
         public FiraOpenSessionParams.Builder setProtocolVersion(FiraProtocolVersion version) {
@@ -1824,6 +1843,12 @@ public class FiraOpenSessionParams extends FiraParams {
             return this;
         }
 
+        public FiraOpenSessionParams.Builder setApplicationDataEndpoint(
+                int applicationDataEndpoint) {
+            mApplicationDataEndpoint = applicationDataEndpoint;
+            return this;
+        }
+
         private void checkAddress() {
             checkArgument(
                     mMacAddressMode == MAC_ADDRESS_MODE_2_BYTES
@@ -1835,9 +1860,12 @@ public class FiraOpenSessionParams extends FiraParams {
 
             // Make sure address length matches the address mode
             checkArgument(mDeviceAddress != null && mDeviceAddress.size() == addressByteLength);
-            checkNotNull(mDestAddressList);
-            for (UwbAddress destAddress : mDestAddressList) {
-                checkArgument(destAddress != null && destAddress.size() == addressByteLength);
+            if (mDeviceRole.get() != RANGING_DEVICE_DT_TAG) {
+                checkNotNull(mDestAddressList);
+                for (UwbAddress destAddress : mDestAddressList) {
+                    checkArgument(destAddress != null
+                            && destAddress.size() == addressByteLength);
+                }
             }
         }
 
@@ -1943,6 +1971,13 @@ public class FiraOpenSessionParams extends FiraParams {
                             != RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT);
             }
         }
+        private void checkDlTdoaParameters() {
+            if (mDeviceRole.get() == RANGING_DEVICE_DT_TAG) {
+                checkArgument(mStsConfig == STS_CONFIG_STATIC
+                            && mMultiNodeMode.get() == MULTI_NODE_MODE_ONE_TO_MANY
+                            && mRframeConfig == RFRAME_CONFIG_SP1);
+            }
+        }
 
         /** Sets the type of filtering used by the session. Defaults to FILTER_TYPE_DEFAULT */
         public FiraOpenSessionParams.Builder setFilterType(@FilterType int filterType) {
@@ -1955,6 +1990,7 @@ public class FiraOpenSessionParams extends FiraParams {
             checkStsConfig();
             checkInterleavingRatio();
             checkRangeDataNtfConfig();
+            checkDlTdoaParameters();
             return new FiraOpenSessionParams(
                     mProtocolVersion.get(),
                     mSessionId.get(),
@@ -2031,7 +2067,8 @@ public class FiraOpenSessionParams extends FiraParams {
                     mUlTdoaDeviceId,
                     mUlTdoaTxTimestampType,
                     mFilterType,
-                    mMaxNumberOfMeasurements);
+                    mMaxNumberOfMeasurements,
+                    mApplicationDataEndpoint);
         }
     }
 }
