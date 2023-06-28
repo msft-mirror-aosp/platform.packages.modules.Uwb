@@ -32,10 +32,12 @@ import android.uwb.RangingMeasurement;
 import android.uwb.RangingReport;
 import android.uwb.UwbAddress;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.uwb.data.UwbDlTDoAMeasurement;
 import com.android.server.uwb.data.UwbOwrAoaMeasurement;
 import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbTwoWayMeasurement;
+import com.android.server.uwb.params.TlvUtil;
 
 import com.google.uwb.support.dltdoa.DlTDoAMeasurement;
 import com.google.uwb.support.fira.FiraParams;
@@ -63,6 +65,9 @@ public class UwbTestUtils {
             PEER_EXTENDED_MAC_ADDRESS_2);
     public static final UwbAddress PEER_SHORT_UWB_ADDRESS = UwbAddress.fromBytes(
             PEER_SHORT_MAC_ADDRESS);
+    public static final UwbAddress PEER_EXTENDED_SHORT_UWB_ADDRESS = UwbAddress.fromBytes(
+            PEER_EXTENDED_SHORT_MAC_ADDRESS);
+
     public static final PersistableBundle PERSISTABLE_BUNDLE = new PersistableBundle();
     public static final byte[] DATA_PAYLOAD = new byte[] {0x13, 0x15, 0x18};
     public static final int RANGING_MEASUREMENT_TYPE_UNDEFINED = 0; // RFU in spec
@@ -276,6 +281,13 @@ public class UwbTestUtils {
         return Pair.create(uwbRangingData, rangingReport);
     }
 
+    private static UwbAddress getComputedMacAddress(byte[] address) {
+        if (!SdkLevel.isAtLeastU()) {
+            return UwbAddress.fromBytes(TlvUtil.getReverseBytes(address));
+        }
+        return UwbAddress.fromBytes(address);
+    }
+
     private static RangingReport buildRangingReport(byte[] macAddress, int rangingMeasurementType,
             AngleOfArrivalMeasurement aoaMeasurement, AngleOfArrivalMeasurement aoaDestMeasurement,
             long elapsedRealtimeNanos, PersistableBundle rangingReportMetadata) {
@@ -283,7 +295,7 @@ public class UwbTestUtils {
         PersistableBundle rangingMeasurementMetadata = new PersistableBundle();
 
         RangingMeasurement.Builder rangingMeasurementBuilder = new RangingMeasurement.Builder()
-                .setRemoteDeviceAddress(UwbAddress.fromBytes(macAddress))
+                .setRemoteDeviceAddress(getComputedMacAddress(macAddress))
                 .setStatus(TEST_STATUS)
                 .setElapsedRealtimeNanos(elapsedRealtimeNanos)
                 .setAngleOfArrivalMeasurement(aoaMeasurement)
@@ -295,7 +307,7 @@ public class UwbTestUtils {
                             new DistanceMeasurement.Builder()
                                     .setMeters(TEST_DISTANCE / (double) 100)
                                     .setErrorMeters(0)
-                                    .setConfidenceLevel(0)
+                                    .setConfidenceLevel(1.0)
                                     .build())
                     .setDestinationAngleOfArrivalMeasurement(aoaDestMeasurement)
                     .setRssiDbm(-TEST_RSSI / 2)

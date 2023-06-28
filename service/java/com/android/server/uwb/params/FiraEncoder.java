@@ -137,6 +137,10 @@ public class FiraEncoder extends TlvEncoder {
                         params.getInitiationTime());
             }
             tlvBufferBuilder.putByte(ConfigParam.LINK_LAYER_MODE, (byte) params.getLinkLayerMode())
+                    .putByte(ConfigParam.DATA_REPETITION_COUNT,
+                            (byte) params.getDataRepetitionCount())
+                    .putByte(ConfigParam.SESSION_DATA_TRANSFER_STATUS_NTF_CONFIG,
+                            params.getSessionDataTransferStatusNtfConfig() ? (byte) 1 : (byte) 0)
                     .putByte(ConfigParam.APPLICATION_DATA_ENDPOINT,
                             (byte) params.getApplicationDataEndpoint());
         } else {
@@ -342,14 +346,14 @@ public class FiraEncoder extends TlvEncoder {
         return rangingRoundControl;
     }
 
-    private byte[] getComputedMacAddress(UwbAddress address) {
+    private static byte[] getComputedMacAddress(UwbAddress address) {
         if (!SdkLevel.isAtLeastU()) {
             return TlvUtil.getReverseBytes(address.toBytes());
         }
         return address.toBytes();
     }
 
-    private byte[] getComputedVendorId(byte[] data) {
+    private static byte[] getComputedVendorId(byte[] data) {
         if (!SdkLevel.isAtLeastU()) {
             return TlvUtil.getReverseBytes(data);
         }

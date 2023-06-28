@@ -23,7 +23,10 @@ import static androidx.core.uwb.backend.impl.internal.Utils.INVALID_API_CALL;
 import static androidx.core.uwb.backend.impl.internal.Utils.RANGING_ALREADY_STARTED;
 import static androidx.core.uwb.backend.impl.internal.Utils.STATUS_OK;
 import static androidx.core.uwb.backend.impl.internal.Utils.TAG;
+import static androidx.core.uwb.backend.impl.internal.Utils.UWB_RECONFIGURATION_FAILURE;
 import static androidx.core.uwb.backend.impl.internal.Utils.UWB_SYSTEM_CALLBACK_FAILURE;
+
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_DT_TAG;
 
 import static java.util.Objects.requireNonNull;
 
@@ -39,6 +42,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.common.hash.Hashing;
+import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 
 import java.util.Arrays;
@@ -205,7 +209,7 @@ public abstract class RangingDevice {
 
 
             UwbAddress peerAddress = UwbAddress.fromBytes(remoteAddressBytes);
-            if (!isKnownPeer(peerAddress)) {
+            if (!isKnownPeer(peerAddress) && !Conversions.isDlTdoaMeasurement(measurement)) {
                 Log.w(TAG,
                         String.format("Received ranging data from unknown peer %s.", peerAddress));
                 continue;
@@ -340,6 +344,13 @@ public abstract class RangingDevice {
                             () -> onRangingDataReceived(rangingReport, callback));
                 }
             }
+
+            @WorkerThread
+            @Override
+            public void onRangingRoundsUpdateDtTagStatus(PersistableBundle params) {
+                // Failure to set ranging rounds is not handled.
+                mOpAsyncCallbackRunner.complete(true);
+            }
         };
     }
 
@@ -387,21 +398,21 @@ public abstract class RangingDevice {
             return INVALID_API_CALL;
         }
 
-        PersistableBundle parameters = getOpenSessionParams().toBundle();
-        printStartRangingParameters(parameters);
+        FiraOpenSessionParams openSessionParams = getOpenSessionParams();
+        printStartRangingParameters(openSessionParams.toBundle());
         mBackendCallbackExecutor = backendCallbackExecutor;
         boolean success =
                 mOpAsyncCallbackRunner.execOperation(
                         () -> {
                             if (mChipId != null) {
                                 mUwbManager.openRangingSession(
-                                        parameters,
+                                        openSessionParams.toBundle(),
                                         mSystemCallbackExecutor,
                                         convertCallback(callback),
                                         mChipId);
                             } else {
                                 mUwbManager.openRangingSession(
-                                        parameters,
+                                        openSessionParams.toBundle(),
                                         mSystemCallbackExecutor,
                                         convertCallback(callback));
                             }
@@ -415,6 +426,21 @@ public abstract class RangingDevice {
             mBackendCallbackExecutor = null;
             // onRangingSuspended should have been called in the callback.
             return STATUS_OK;
+        }
+
+        if (openSessionParams.getDeviceRole() == RANGING_DEVICE_DT_TAG) {
+            // Setting default ranging rounds value.
+            DlTDoARangingRoundsUpdate rangingRounds =
+                    new DlTDoARangingRoundsUpdate.Builder()
+                            .setSessionId(openSessionParams.getSessionId())
+                            .setNoOfRangingRounds(1)
+                            .setRangingRoundIndexes(new byte[]{0})
+                            .build();
+            success =
+                    mOpAsyncCallbackRunner.execOperation(
+                            () -> mRangingSession.updateRangingRoundsDtTag(
+                                    rangingRounds.toBundle()),
+                            "Update ranging rounds for Dt Tag");
         }
 
         success =
@@ -475,6 +501,32 @@ public abstract class RangingDevice {
                         () -> mRangingSession.reconfigure(bundle), "Reconfigure Ranging");
         Boolean result = mOpAsyncCallbackRunner.getResult();
         return success && result != null && result;
+    }
+
+
+    /**
+     * Reconfigures range data notification for an ongoing session.
+     *
+     * @return STATUS_OK if reconfigure was successful.
+     * @return UWB_RECONFIGURATION_FAILURE if reconfigure failed.
+     * @return INVALID_API_CALL if ranging session is not active.
+     */
+    public synchronized int reconfigureRangeDataNtfConfig(UwbRangeDataNtfConfig config) {
+        if (!isAlive()) {
+            Log.w(TAG, "Attempt to set range data notification while session is not active.");
+            return INVALID_API_CALL;
+        }
+
+        boolean success =
+                reconfigureRanging(
+                        ConfigurationManager.createReconfigureParamsRangeDataNtf(
+                                config).toBundle());
+
+        if (!success) {
+            Log.w(TAG, "Reconfiguring range data notification config failed.");
+            return UWB_RECONFIGURATION_FAILURE;
+        }
+        return STATUS_OK;
     }
 
     /** Notifies that a ranging round failed. We collect this info for Analytics only. */
