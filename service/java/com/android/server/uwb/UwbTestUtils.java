@@ -32,6 +32,7 @@ import android.uwb.RangingMeasurement;
 import android.uwb.RangingReport;
 import android.uwb.UwbAddress;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.uwb.data.UwbDlTDoAMeasurement;
 import com.android.server.uwb.data.UwbOwrAoaMeasurement;
 import com.android.server.uwb.data.UwbRangingData;
@@ -64,6 +65,9 @@ public class UwbTestUtils {
             PEER_EXTENDED_MAC_ADDRESS_2);
     public static final UwbAddress PEER_SHORT_UWB_ADDRESS = UwbAddress.fromBytes(
             PEER_SHORT_MAC_ADDRESS);
+    public static final UwbAddress PEER_EXTENDED_SHORT_UWB_ADDRESS = UwbAddress.fromBytes(
+            PEER_EXTENDED_SHORT_MAC_ADDRESS);
+
     public static final PersistableBundle PERSISTABLE_BUNDLE = new PersistableBundle();
     public static final byte[] DATA_PAYLOAD = new byte[] {0x13, 0x15, 0x18};
     public static final int RANGING_MEASUREMENT_TYPE_UNDEFINED = 0; // RFU in spec
@@ -95,8 +99,8 @@ public class UwbTestUtils {
     private static final int TEST_BLOCK_INDEX = 5;
     private static final int TEST_ROUND_INDEX = 1;
     private static final long TEST_TIMESTAMP = 500_000L;
-    private static final float TEST_ANCHOR_CFO = 100.0f;
-    private static final float TEST_CFO = 200.50f;
+    private static final float TEST_ANCHOR_CFO = 12.50f;
+    private static final float TEST_CFO = 15.50f;
     private static final long TEST_INTIATOR_REPLY_TIME = 500_000L;
     private static final long TEST_RESPONDER_REPLY_TIME = 300_000L;
     private static final int TEST_INITIATOR_RESPONDER_TOF = 500;
@@ -190,8 +194,8 @@ public class UwbTestUtils {
                 TEST_LOS, convertFloatToQFormat(TEST_AOA_AZIMUTH, 9, 7),
                 TEST_AOA_AZIMUTH_FOM, convertFloatToQFormat(TEST_AOA_ELEVATION, 9, 7),
                 TEST_AOA_ELEVATION_FOM, TEST_RSSI, TEST_TIMESTAMP, TEST_TIMESTAMP,
-                convertFloatToQFormat(TEST_ANCHOR_CFO, 5, 11),
-                convertFloatToQFormat(TEST_CFO, 5, 11), TEST_INTIATOR_REPLY_TIME,
+                convertFloatToQFormat(TEST_ANCHOR_CFO, 6, 10),
+                convertFloatToQFormat(TEST_CFO, 6, 10), TEST_INTIATOR_REPLY_TIME,
                 TEST_RESPONDER_REPLY_TIME, TEST_INITIATOR_RESPONDER_TOF, TEST_ANCHOR_LOCATION,
                 TEST_ACTIVE_RANGING_ROUNDS);
 
@@ -277,6 +281,13 @@ public class UwbTestUtils {
         return Pair.create(uwbRangingData, rangingReport);
     }
 
+    private static UwbAddress getComputedMacAddress(byte[] address) {
+        if (!SdkLevel.isAtLeastU()) {
+            return UwbAddress.fromBytes(TlvUtil.getReverseBytes(address));
+        }
+        return UwbAddress.fromBytes(address);
+    }
+
     private static RangingReport buildRangingReport(byte[] macAddress, int rangingMeasurementType,
             AngleOfArrivalMeasurement aoaMeasurement, AngleOfArrivalMeasurement aoaDestMeasurement,
             long elapsedRealtimeNanos, PersistableBundle rangingReportMetadata) {
@@ -284,8 +295,7 @@ public class UwbTestUtils {
         PersistableBundle rangingMeasurementMetadata = new PersistableBundle();
 
         RangingMeasurement.Builder rangingMeasurementBuilder = new RangingMeasurement.Builder()
-                .setRemoteDeviceAddress(UwbAddress.fromBytes(
-                        TlvUtil.getReverseBytes(macAddress)))
+                .setRemoteDeviceAddress(getComputedMacAddress(macAddress))
                 .setStatus(TEST_STATUS)
                 .setElapsedRealtimeNanos(elapsedRealtimeNanos)
                 .setAngleOfArrivalMeasurement(aoaMeasurement)
@@ -297,7 +307,7 @@ public class UwbTestUtils {
                             new DistanceMeasurement.Builder()
                                     .setMeters(TEST_DISTANCE / (double) 100)
                                     .setErrorMeters(0)
-                                    .setConfidenceLevel(0)
+                                    .setConfidenceLevel(1.0)
                                     .build())
                     .setDestinationAngleOfArrivalMeasurement(aoaDestMeasurement)
                     .setRssiDbm(-TEST_RSSI / 2)

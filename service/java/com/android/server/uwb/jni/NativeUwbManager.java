@@ -326,7 +326,7 @@ public class NativeUwbManager {
      * in the Table 16: Control messages to set Application configurations
      */
     public byte controllerMulticastListUpdate(int sessionId, int action, int noOfControlee,
-            short[] addresses, int[] subSessionIds, byte[] subSessionKeyList,
+            byte[] addresses, int[] subSessionIds, byte[] subSessionKeyList,
             String chipId) {
         synchronized (mNativeLock) {
             return nativeControllerMulticastListUpdate(sessionId, (byte) action,
@@ -377,30 +377,28 @@ public class NativeUwbManager {
      * Receive payload data from a remote device in a UWB ranging session.
      */
     public void onDataReceived(
-            long sessionID, int status, long sequenceNum, byte[] address,
-            int sourceEndPoint, int destEndPoint, byte[] data) {
+            long sessionID, int status, long sequenceNum, byte[] address, byte[] data) {
         Log.d(TAG, "onDataReceived ");
-        mSessionListener.onDataReceived(
-                sessionID, status, sequenceNum, address, sourceEndPoint, destEndPoint, data);
+        mSessionListener.onDataReceived(sessionID, status, sequenceNum, address, data);
     }
 
     /**
      * Send payload data to a remote device in a UWB ranging session.
      */
     public byte sendData(
-            int sessionId, byte[] address, byte destEndPoint, byte sequenceNum, byte[] appData,
-            String chipId) {
+            int sessionId, byte[] address, short sequenceNum, byte[] appData, String chipId) {
         synchronized (mNativeLock) {
-            return nativeSendData(sessionId, address, destEndPoint, sequenceNum, appData, chipId);
+            return nativeSendData(sessionId, address, sequenceNum, appData, chipId);
         }
     }
 
     /**
      * Receive the data transfer status for a UCI data packet earlier sent from Host to UWBS.
      */
-    public void onDataSendStatus(long sessionId, int dataTransferStatus, long sequenceNum) {
+    public void onDataSendStatus(long sessionId, int dataTransferStatus, long sequenceNum,
+            int txCount) {
         Log.d(TAG, "onDataSendStatus ");
-        mSessionListener.onDataSendStatus(sessionId, dataTransferStatus, sequenceNum);
+        mSessionListener.onDataSendStatus(sessionId, dataTransferStatus, sequenceNum, txCount);
     }
 
     /**
@@ -433,8 +431,32 @@ public class NativeUwbManager {
         }
     }
 
-    private native byte nativeSendData(int sessionId, byte[] address, byte destEndPoint,
-            byte sequenceNum, byte[] appData, String chipId);
+    /**
+     * query device timestamp
+     *
+     * @return :  uwb device timestamp
+     */
+    public long queryUwbsTimestamp(String chipId) {
+        synchronized (mNativeLock) {
+            return nativeQueryUwbTimestamp(chipId);
+        }
+    }
+
+    /**
+     * Get session token from session id.
+     *
+     * @param sessionId : session id of uwb session
+     * @param chipId : Identifier of UWB chip for multi-HAL devices
+     * @return : session token generated for the session.
+     */
+    public int getSessionToken(int sessionId, String chipId) {
+        synchronized (mNativeLock) {
+            return nativeGetSessionToken(sessionId, chipId);
+        }
+    }
+
+    private native byte nativeSendData(int sessionId, byte[] address,
+            short sequenceNum, byte[] appData, String chipId);
 
     private native long nativeDispatcherNew(Object[] chipIds);
 
@@ -473,7 +495,7 @@ public class NativeUwbManager {
     private native UwbTlvData nativeGetCapsInfo(String chipId);
 
     private native byte nativeControllerMulticastListUpdate(int sessionId, byte action,
-            byte noOfControlee, short[] address, int[] subSessionId, byte[] subSessionKeyList,
+            byte noOfControlee, byte[] address, int[] subSessionId, byte[] subSessionKeyList,
             String chipId);
 
     private native byte nativeSetCountryCode(byte[] countryCode, String chipId);
@@ -487,4 +509,8 @@ public class NativeUwbManager {
             int sessionId, int noOfActiveRangingRounds, byte[] rangingRoundIndexes, String chipId);
 
     private native short nativeQueryDataSize(int sessionId, String chipId);
+
+    private native long nativeQueryUwbTimestamp(String chipId);
+
+    private native int nativeGetSessionToken(int sessionId, String chipId);
 }

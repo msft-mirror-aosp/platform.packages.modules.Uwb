@@ -20,10 +20,10 @@ import androidx.annotation.Nullable;
 
 import com.android.server.uwb.correction.math.Pose;
 import com.android.server.uwb.correction.math.SphericalVector;
+import com.android.server.uwb.correction.math.SphericalVector.Annotated;
 import com.android.server.uwb.correction.math.Vector3;
 import com.android.server.uwb.correction.pose.IPoseSource;
 
-import java.time.Instant;
 import java.util.Objects;
 
 /**
@@ -54,36 +54,47 @@ public class PositionFilterImpl implements IPositionFilter {
      * Adds a value to the filter.
      *
      * @param value   The value to add to the filter.
-     * @param instant When the value occurred, used to determine the latency introduced by
-     *                the filter. Note that this has no effect on the order in which the filter
-     *                operates
+     * @param timeMs The time at which the UWB value was received, in ms since boot. This is
+     * used to determine the latency introduced by the filter. Note that this has no effect on the
+     * order in which the filter operates on values.
      */
     @Override
-    public void add(@NonNull SphericalVector value, @NonNull Instant instant) {
+    public void add(@NonNull SphericalVector.Annotated value, long timeMs) {
         Objects.requireNonNull(value);
-        Objects.requireNonNull(instant);
-        mAzimuthFilter.add(value.azimuth, instant);
-        mElevationFilter.add(value.elevation, instant);
-        mDistanceFilter.add(value.distance, instant);
+        if (value.hasAzimuth && value.azimuthFom != 0.0) {
+            mAzimuthFilter.add(value.azimuth, timeMs, value.azimuthFom);
+        }
+        if (value.hasElevation && value.elevationFom != 0.0) {
+            mElevationFilter.add(value.elevation, timeMs, value.elevationFom);
+        }
+        if (value.hasDistance && value.distanceFom != 0.0) {
+            mDistanceFilter.add(value.distance, timeMs, value.distanceFom);
+        }
     }
 
     /**
      * Computes a predicted UWB position based on the new pose.
      *
-     * @param instant The instant for which the UWB prediction should be computed.
+     * @param timeMs The time for which the UWB prediction should be computed, in ms since boot.
      */
     @Override
-    public SphericalVector compute(@NonNull Instant instant) {
-        Objects.requireNonNull(instant);
+    public SphericalVector.Annotated compute(long timeMs) {
         // Cartesian extrapolation would happen here, such as target movement.
         // Spherical extrapolation can happen in the filter because it operates on
         // spherical values.
 
-        return SphericalVector.fromRadians(
-                mAzimuthFilter.getResult(instant).value,
-                mElevationFilter.getResult(instant).value,
-                mDistanceFilter.getResult(instant).value
-        );
+        Sample azimuth = mAzimuthFilter.getResult(timeMs);
+        Sample elevation = mElevationFilter.getResult(timeMs);
+        Sample distance = mDistanceFilter.getResult(timeMs);
+        Annotated result = SphericalVector.fromRadians(
+                azimuth.value,
+                elevation.value,
+                distance.value
+        ).toAnnotated();
+        result.azimuthFom = azimuth.fom;
+        result.elevationFom = elevation.fom;
+        result.distanceFom = distance.fom;
+        return result;
     }
 
     /**
@@ -94,14 +105,14 @@ public class PositionFilterImpl implements IPositionFilter {
      * @param poseSource The pose source that has the new pose.
      */
     @Override
-    public void updatePose(@Nullable IPoseSource poseSource, @NonNull Instant instant) {
+    public void updatePose(@Nullable IPoseSource poseSource, long timeMs) {
         if (poseSource == null) {
             return;
         }
         Pose newPose = poseSource.getPose();
         if (mLastPose != null && newPose != null && newPose != mLastPose) {
             Pose deltaPose = Pose.compose(newPose.inverted(), mLastPose);
-            updatePoseFromDelta(deltaPose, compute(instant));
+            updatePoseFromDelta(deltaPose, compute(timeMs));
         }
         mLastPose = newPose;
     }

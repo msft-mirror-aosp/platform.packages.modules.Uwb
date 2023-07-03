@@ -29,6 +29,7 @@ import android.uwb.RangingReport;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.uwb.UwbSessionManager.UwbSession;
 import com.android.server.uwb.data.UwbDlTDoAMeasurement;
 import com.android.server.uwb.data.UwbOwrAoaMeasurement;
@@ -75,6 +76,16 @@ public class UwbSessionNotificationManager {
                     uwbSession.getParams(), mUwbInjector.getElapsedSinceBootNanos(), uwbSession);
         } catch (Exception e) {
             Log.e(TAG, "getRangingReport Failed.");
+            e.printStackTrace();
+        }
+
+        try {
+            RangingMeasurement filteredRangingMeasurement = rangingReport != null
+                    ? rangingReport.getMeasurements().get(0) : null;
+            mUwbInjector.getUwbMetrics().logRangingResult(uwbSession.getProfileType(), rangingData,
+                    filteredRangingMeasurement);
+        } catch (Exception e) {
+            Log.e(TAG, "logRangingResult Failed.");
             e.printStackTrace();
         }
 
@@ -511,9 +522,7 @@ public class UwbSessionNotificationManager {
                 PersistableBundle rangingMeasurementMetadata = new PersistableBundle();
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(rangingMeasurementMetadata);
 
-                // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
-                UwbAddress addr = UwbAddress.fromBytes(
-                        TlvUtil.getReverseBytes(uwbTwoWayMeasurement[i].getMacAddress()));
+                UwbAddress addr = getComputedMacAddress(uwbTwoWayMeasurement[i].getMacAddress());
                 UwbControlee controlee = uwbSession.getControlee(addr);
                 if (controlee != null) {
                     controlee.filterMeasurement(rangingMeasurementBuilder);
@@ -545,14 +554,6 @@ public class UwbSessionNotificationManager {
                     rangingMeasurementBuilder.setAngleOfArrivalMeasurement(
                             angleOfArrivalMeasurement);
                 }
-            }
-
-            // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
-            UwbAddress addr = UwbAddress.fromBytes(
-                    TlvUtil.getReverseBytes(uwbOwrAoaMeasurement.getMacAddress()));
-            UwbControlee controlee = uwbSession.getControlee(addr);
-            if (controlee != null) {
-                controlee.filterMeasurement(rangingMeasurementBuilder);
             }
 
             rangingReportBuilder.addMeasurement(rangingMeasurementBuilder.build());
@@ -604,14 +605,6 @@ public class UwbSessionNotificationManager {
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(
                         dlTDoAMeasurement.toBundle());
 
-                // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
-                UwbAddress addr = UwbAddress.fromBytes(
-                        TlvUtil.getReverseBytes(uwbDlTDoAMeasurements[i].getMacAddress()));
-                UwbControlee controlee = uwbSession.getControlee(addr);
-                if (controlee != null) {
-                    controlee.filterMeasurement(rangingMeasurementBuilder);
-                }
-
                 rangingMeasurements.add(rangingMeasurementBuilder.build());
             }
 
@@ -647,9 +640,8 @@ public class UwbSessionNotificationManager {
 
     private static RangingMeasurement.Builder buildRangingMeasurement(
             byte[] macAddress, int rangingStatus, long elapsedRealtimeNanos, int los) {
-        // TODO(b/271898436): Possibly part of the larger MAC byte order problem.
         return new RangingMeasurement.Builder()
-                .setRemoteDeviceAddress(UwbAddress.fromBytes(TlvUtil.getReverseBytes(macAddress)))
+                .setRemoteDeviceAddress(getComputedMacAddress(macAddress))
                 .setStatus(rangingStatus)
                 .setElapsedRealtimeNanos(elapsedRealtimeNanos)
                 .setLineOfSight(los);
@@ -660,7 +652,14 @@ public class UwbSessionNotificationManager {
                 .setMeters(distance / (double) 100)
                 .setErrorMeters(0)
                 // TODO: Need to fetch distance FOM once it is added to UCI spec.
-                .setConfidenceLevel(0)
+                .setConfidenceLevel(1)
                 .build();
+    }
+
+    private static UwbAddress getComputedMacAddress(byte[] address) {
+        if (!SdkLevel.isAtLeastU()) {
+            return UwbAddress.fromBytes(TlvUtil.getReverseBytes(address));
+        }
+        return UwbAddress.fromBytes(address);
     }
 }
