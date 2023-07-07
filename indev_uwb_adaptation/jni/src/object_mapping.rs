@@ -14,7 +14,7 @@
 
 //! This module contains structures and methods for converting
 //! Java objects into native rust objects and vice versa.
-use jni::objects::{JObject, JValue};
+use jni::objects::{JClass, JObject, JValue};
 use jni::sys::{jbyteArray, jint};
 use jni::JNIEnv;
 use num_traits::FromPrimitive;
@@ -28,7 +28,11 @@ use uwb_core::params::{
     RangeDataNtfConfig, RangingRoundUsage, RframeConfig, StsConfig, StsLength,
     TxAdaptivePayloadPower, UwbAddress, UwbChannel,
 };
-use uwb_uci_packets::{Controlee, PowerStats};
+use uwb_core::uci::{RangingMeasurements, SessionRangeData};
+use uwb_uci_packets::{
+    Controlee, ExtendedAddressTwoWayRangingMeasurement, MacAddressIndicator, PowerStats,
+    ShortAddressTwoWayRangingMeasurement, StatusCode,
+};
 
 use crate::context::JniContext;
 use crate::error::{Error, Result};
@@ -366,10 +370,10 @@ impl<'a> FiraControleeParamsJni<'a> {
         let env = self.jni_context.env;
         let addr_arr =
             self.jni_context.object_getter("getAddressList", "[android/uwb/UwbAddress;")?;
-        let addr_len = env.get_array_length(addr_arr.into_inner())?;
+        let addr_len = env.get_array_length(addr_arr.into_raw())?;
 
         let subs_arr = self.jni_context.object_getter("getSubSessionIdList", "[I")?;
-        let subs_len = env.get_array_length(subs_arr.into_inner())?;
+        let subs_len = env.get_array_length(subs_arr.into_raw())?;
 
         if addr_len != subs_len {
             return Err(Error::Parse(format!(
@@ -382,10 +386,10 @@ impl<'a> FiraControleeParamsJni<'a> {
 
         let size: usize = addr_len.try_into().unwrap();
         let mut subs_arr_vec = vec![0i32; size];
-        env.get_int_array_region(subs_arr.into_inner(), 0, &mut subs_arr_vec)?;
+        env.get_int_array_region(subs_arr.into_raw(), 0, &mut subs_arr_vec)?;
 
         for (i, sub_session) in subs_arr_vec.iter().enumerate() {
-            let uwb_address_obj = env.get_object_array_element(addr_arr.into_inner(), i as i32)?;
+            let uwb_address_obj = env.get_object_array_element(addr_arr.into_raw(), i as i32)?;
             let uwb_address: u16 = UwbAddressJni::new(env, uwb_address_obj).try_into()?;
             controlees
                 .push(Controlee { short_address: uwb_address, subsession_id: *sub_session as u32 });
@@ -464,6 +468,269 @@ impl<'a> TryFrom<PowerStatsWithEnv<'a>> for PowerStatsJni<'a> {
         let new_obj = pse.env.new_object(cls, "(IIII)V", vals.as_slice())?;
 
         Ok(Self { jni_context: JniContext { env: pse.env, obj: new_obj } })
+    }
+}
+
+pub struct SessionRangeDataWithEnv<'a> {
+    env: JNIEnv<'a>,
+    uwb_ranging_data_jclass: JClass<'a>,
+    uwb_two_way_measurement_jclass: JClass<'a>,
+    session_range_data: SessionRangeData,
+}
+
+impl<'a> SessionRangeDataWithEnv<'a> {
+    pub fn new(
+        env: JNIEnv<'a>,
+        uwb_ranging_data_jclass: JClass<'a>,
+        uwb_two_way_measurement_jclass: JClass<'a>,
+        session_range_data: SessionRangeData,
+    ) -> Self {
+        Self { env, uwb_ranging_data_jclass, uwb_two_way_measurement_jclass, session_range_data }
+    }
+}
+pub struct UwbRangingDataJni<'a> {
+    pub jni_context: JniContext<'a>,
+}
+
+impl<'a> TryFrom<SessionRangeDataWithEnv<'a>> for UwbRangingDataJni<'a> {
+    type Error = Error;
+    fn try_from(data_obj: SessionRangeDataWithEnv<'a>) -> Result<Self> {
+        let (mac_address_indicator, measurements_size) =
+            match data_obj.session_range_data.ranging_measurements {
+                RangingMeasurements::ShortAddressTwoWay(ref m) => {
+                    (MacAddressIndicator::ShortAddress, m.len())
+                }
+                RangingMeasurements::ExtendedAddressTwoWay(ref m) => {
+                    (MacAddressIndicator::ExtendedAddress, m.len())
+                }
+                RangingMeasurements::ShortAddressDltdoa(ref m) => {
+                    (MacAddressIndicator::ShortAddress, m.len())
+                }
+                RangingMeasurements::ExtendedAddressDltdoa(ref m) => {
+                    (MacAddressIndicator::ExtendedAddress, m.len())
+                }
+                RangingMeasurements::ShortAddressOwrAoa(ref m) => {
+                    (MacAddressIndicator::ShortAddress, 1)
+                }
+                RangingMeasurements::ExtendedAddressOwrAoa(ref m) => {
+                    (MacAddressIndicator::ExtendedAddress, 1)
+                }
+            };
+        let measurements_jni = UwbTwoWayMeasurementJni::try_from(RangingMeasurementsWithEnv::new(
+            data_obj.env,
+            data_obj.uwb_two_way_measurement_jclass,
+            data_obj.session_range_data.ranging_measurements,
+        ))?;
+        let raw_notification_jbytearray =
+            data_obj.env.byte_array_from_slice(&data_obj.session_range_data.raw_ranging_data)?;
+        // TODO(b/270443790): Check on using OwrAoa measurement class here.
+
+        // Safety: raw_notification_jbytearray safely instantiated above.
+        let raw_notification_jobject = unsafe { JObject::from_raw(raw_notification_jbytearray) };
+        let ranging_data_jni = data_obj.env.new_object(
+            data_obj.uwb_ranging_data_jclass,
+            "(JJIJIII[Lcom/android/server/uwb/data/UwbTwoWayMeasurement;[B)V",
+            &[
+                JValue::Long(data_obj.session_range_data.sequence_number as i64),
+                JValue::Long(data_obj.session_range_data.session_token as i64),
+                JValue::Int(data_obj.session_range_data.rcr_indicator as i32),
+                JValue::Long(data_obj.session_range_data.current_ranging_interval_ms as i64),
+                JValue::Int(data_obj.session_range_data.ranging_measurement_type as i32),
+                JValue::Int(mac_address_indicator as i32),
+                JValue::Int(measurements_size as i32),
+                JValue::Object(measurements_jni.jni_context.obj),
+                JValue::Object(raw_notification_jobject),
+            ],
+        )?;
+
+        Ok(UwbRangingDataJni { jni_context: JniContext::new(data_obj.env, ranging_data_jni) })
+    }
+}
+
+// Byte size of mac address length:
+const SHORT_MAC_ADDRESS_LEN: i32 = 2;
+const EXTENDED_MAC_ADDRESS_LEN: i32 = 8;
+
+enum MacAddress {
+    Short(u16),
+    Extended(u64),
+}
+impl MacAddress {
+    fn into_ne_bytes_i8(self) -> Vec<i8> {
+        match self {
+            MacAddress::Short(val) => val.to_ne_bytes().into_iter().map(|b| b as i8).collect(),
+            MacAddress::Extended(val) => val.to_ne_bytes().into_iter().map(|b| b as i8).collect(),
+        }
+    }
+}
+struct TwoWayRangingMeasurement {
+    mac_address: MacAddress,
+    status: StatusCode,
+    nlos: u8,
+    distance: u16,
+    aoa_azimuth: u16,
+    aoa_azimuth_fom: u8,
+    aoa_elevation: u16,
+    aoa_elevation_fom: u8,
+    aoa_destination_azimuth: u16,
+    aoa_destination_azimuth_fom: u8,
+    aoa_destination_elevation: u16,
+    aoa_destination_elevation_fom: u8,
+    slot_index: u8,
+    rssi: u8,
+}
+
+impl From<ShortAddressTwoWayRangingMeasurement> for TwoWayRangingMeasurement {
+    fn from(measurement: ShortAddressTwoWayRangingMeasurement) -> Self {
+        TwoWayRangingMeasurement {
+            mac_address: MacAddress::Short(measurement.mac_address),
+            status: (measurement.status),
+            nlos: (measurement.nlos),
+            distance: (measurement.distance),
+            aoa_azimuth: (measurement.aoa_azimuth),
+            aoa_azimuth_fom: (measurement.aoa_azimuth_fom),
+            aoa_elevation: (measurement.aoa_elevation),
+            aoa_elevation_fom: (measurement.aoa_elevation_fom),
+            aoa_destination_azimuth: (measurement.aoa_destination_azimuth),
+            aoa_destination_azimuth_fom: (measurement.aoa_destination_azimuth_fom),
+            aoa_destination_elevation: (measurement.aoa_destination_elevation),
+            aoa_destination_elevation_fom: (measurement.aoa_destination_elevation_fom),
+            slot_index: (measurement.slot_index),
+            rssi: (measurement.rssi),
+        }
+    }
+}
+
+impl From<ExtendedAddressTwoWayRangingMeasurement> for TwoWayRangingMeasurement {
+    fn from(measurement: ExtendedAddressTwoWayRangingMeasurement) -> Self {
+        TwoWayRangingMeasurement {
+            mac_address: MacAddress::Extended(measurement.mac_address),
+            status: (measurement.status),
+            nlos: (measurement.nlos),
+            distance: (measurement.distance),
+            aoa_azimuth: (measurement.aoa_azimuth),
+            aoa_azimuth_fom: (measurement.aoa_azimuth_fom),
+            aoa_elevation: (measurement.aoa_elevation),
+            aoa_elevation_fom: (measurement.aoa_elevation_fom),
+            aoa_destination_azimuth: (measurement.aoa_destination_azimuth),
+            aoa_destination_azimuth_fom: (measurement.aoa_destination_azimuth_fom),
+            aoa_destination_elevation: (measurement.aoa_destination_elevation),
+            aoa_destination_elevation_fom: (measurement.aoa_destination_elevation_fom),
+            slot_index: (measurement.slot_index),
+            rssi: (measurement.rssi),
+        }
+    }
+}
+
+pub struct RangingMeasurementsWithEnv<'a> {
+    env: JNIEnv<'a>,
+    uwb_two_way_measurement_jclass: JClass<'a>,
+    ranging_measurements: RangingMeasurements,
+}
+impl<'a> RangingMeasurementsWithEnv<'a> {
+    pub fn new(
+        env: JNIEnv<'a>,
+        uwb_two_way_measurement_jclass: JClass<'a>,
+        ranging_measurements: RangingMeasurements,
+    ) -> Self {
+        Self { env, uwb_two_way_measurement_jclass, ranging_measurements }
+    }
+}
+pub struct UwbTwoWayMeasurementJni<'a> {
+    pub jni_context: JniContext<'a>,
+}
+
+impl<'a> TryFrom<RangingMeasurementsWithEnv<'a>> for UwbTwoWayMeasurementJni<'a> {
+    type Error = Error;
+    fn try_from(measurements_obj: RangingMeasurementsWithEnv<'a>) -> Result<Self> {
+        let (measurements_vec, byte_arr_size) = match measurements_obj.ranging_measurements {
+            RangingMeasurements::ShortAddressTwoWay(m) => (
+                m.into_iter().map(TwoWayRangingMeasurement::from).collect::<Vec<_>>(),
+                SHORT_MAC_ADDRESS_LEN,
+            ),
+            RangingMeasurements::ExtendedAddressTwoWay(m) => (
+                m.into_iter().map(TwoWayRangingMeasurement::from).collect::<Vec<_>>(),
+                EXTENDED_MAC_ADDRESS_LEN,
+            ),
+            // TODO(b/260495115): Re-work needed to handle DlTDoAShort and DlTDoAExtended.
+            // TODO(b/270443790): Handle OwrAoa (Short and Extended).
+            _ => todo!(),
+        };
+        let address_jbytearray = measurements_obj.env.new_byte_array(byte_arr_size)?;
+
+        // Safety: address_jbytearray safely instantiated above.
+        let address_jobject = unsafe { JObject::from_raw(address_jbytearray) };
+        let zero_initiated_measurement_jobject = measurements_obj.env.new_object(
+            measurements_obj.uwb_two_way_measurement_jclass,
+            "([BIIIIIIIIIIIII)V",
+            &[
+                JValue::Object(address_jobject),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+                JValue::Int(0),
+            ],
+        )?;
+        let measurements_array_jobject = measurements_obj.env.new_object_array(
+            measurements_vec.len() as i32,
+            measurements_obj.uwb_two_way_measurement_jclass,
+            zero_initiated_measurement_jobject,
+        )?;
+        for (i, measurement) in measurements_vec.into_iter().enumerate() {
+            let mac_address_bytes = measurement.mac_address.into_ne_bytes_i8();
+            let mac_address_bytes_jbytearray =
+                measurements_obj.env.new_byte_array(byte_arr_size)?;
+            measurements_obj.env.set_byte_array_region(
+                mac_address_bytes_jbytearray,
+                0,
+                mac_address_bytes.as_slice(),
+            )?;
+
+            // Safety: mac_address_bytes_jbytearray safely instantiated above.
+            let mac_address_bytes_jobject =
+                unsafe { JObject::from_raw(mac_address_bytes_jbytearray) };
+
+            let measurement_jobject = measurements_obj.env.new_object(
+                measurements_obj.uwb_two_way_measurement_jclass,
+                "([BIIIIIIIIIIIII)V",
+                &[
+                    JValue::Object(mac_address_bytes_jobject),
+                    JValue::Int(i32::from(measurement.status)),
+                    JValue::Int(measurement.nlos as i32),
+                    JValue::Int(measurement.distance as i32),
+                    JValue::Int(measurement.aoa_azimuth as i32),
+                    JValue::Int(measurement.aoa_azimuth_fom as i32),
+                    JValue::Int(measurement.aoa_elevation as i32),
+                    JValue::Int(measurement.aoa_elevation_fom as i32),
+                    JValue::Int(measurement.aoa_destination_azimuth as i32),
+                    JValue::Int(measurement.aoa_destination_azimuth_fom as i32),
+                    JValue::Int(measurement.aoa_destination_elevation as i32),
+                    JValue::Int(measurement.aoa_destination_elevation_fom as i32),
+                    JValue::Int(measurement.slot_index as i32),
+                    JValue::Int(measurement.rssi as i32),
+                ],
+            )?;
+            measurements_obj.env.set_object_array_element(
+                measurements_array_jobject,
+                i as i32,
+                measurement_jobject,
+            )?;
+        }
+
+        // Safety: measurements_array_jobject safely instantiated above.
+        let measurements_jobject = unsafe { JObject::from_raw(measurements_array_jobject) };
+        Ok(UwbTwoWayMeasurementJni {
+            jni_context: JniContext::new(measurements_obj.env, measurements_jobject),
+        })
     }
 }
 

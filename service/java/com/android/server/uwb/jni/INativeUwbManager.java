@@ -16,7 +16,9 @@
 package com.android.server.uwb.jni;
 
 import com.android.server.uwb.data.UwbMulticastListUpdateStatus;
+import com.android.server.uwb.data.UwbRadarData;
 import com.android.server.uwb.data.UwbRangingData;
+
 /*import com.android.server.uwb.test.UwbTestLoopBackTestResult;
 import com.android.server.uwb.test.UwbTestPeriodicTxResult;
 import com.android.server.uwb.test.UwbTestRxPacketErrorRateResult;
@@ -52,6 +54,39 @@ public interface INativeUwbManager {
          */
         void onMulticastListUpdateNotificationReceived(
                 UwbMulticastListUpdateStatus multicastListUpdateData);
+
+        /**
+         * Interface for receiving data from remote device
+         *
+         * @param sessionID   : Session ID
+         * @param status      : Status
+         * @param sequenceNum : Sequence Number
+         * @param address     : Address of remote address
+         * @param data        : Data received from remote address
+         */
+        // TODO(b/261762781): Change the type of sessionID & sequenceNum parameters to int (to match
+        // their 4-octet size in the UCI spec).
+        void onDataReceived(
+                long sessionID, int status, long sequenceNum, byte[] address, byte[] data);
+
+        /**
+         * Interface for receiving the data transfer status, corresponding to a Data packet
+         * earlier sent from the host to UWBS.
+         *
+         * @param sessionId          : Session ID
+         * @param dataTransferStatus : Status codes in the DATA_TRANSFER_STATUS_NTF packet
+         * @param sequenceNum        : Sequence Number
+         * @param txCount            : Transmission count
+         */
+        void onDataSendStatus(long sessionId, int dataTransferStatus, long sequenceNum,
+                int txCount);
+
+        /**
+         * Interface for receiving Radar Data Notification
+         *
+         * @param radarData : refer to Android UWB Radar UCI Specification: radar Data Notification
+         */
+        void onRadarDataNotificationReceived(UwbRadarData radarData);
     }
 
     interface DeviceNotification {

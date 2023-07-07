@@ -16,29 +16,31 @@
 //!
 //! Internally after the UWB core service is instantiated, the pointer to the service is saved
 //! on the calling Java side.
-use jni::objects::JObject;
-use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject};
+use jni::objects::{GlobalRef, JObject, JValue};
+use jni::signature::ReturnType;
+use jni::sys::{jboolean, jbyte, jbyteArray, jint, jlong, jobject, jvalue};
 use jni::JNIEnv;
 use log::{debug, error};
-use num_traits::FromPrimitive;
+use tokio::runtime::Runtime;
 
 use uci_hal_android::uci_hal_android::UciHalAndroid;
 use uwb_core::params::{AppConfigParams, CountryCode};
-use uwb_core::service::{UwbService, UwbServiceBuilder};
-use uwb_core::uci::uci_logger::UciLoggerNull;
+use uwb_core::service::{default_runtime, UwbService, UwbServiceBuilder};
+use uwb_core::uci::pcapng_uci_logger_factory::PcapngUciLoggerFactoryBuilder;
 use uwb_uci_packets::{SessionType, UpdateMulticastListAction};
 
-use crate::callback::UwbServiceCallbackImpl;
+use crate::callback::UwbServiceCallbackBuilderImpl;
 use crate::context::JniContext;
 use crate::error::{Error, Result};
 use crate::object_mapping::{
     CccOpenRangingParamsJni, CountryCodeJni, FiraControleeParamsJni, FiraOpenSessionParamsJni,
     PowerStatsJni, PowerStatsWithEnv,
 };
+use crate::unique_jvm;
 
-/// Initialize native logging
+/// Initialize native logging and capture static JavaVM ref
 #[no_mangle]
-pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeInitLogging(
+pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeInit(
     env: JNIEnv,
     obj: JObject,
 ) {
@@ -48,6 +50,15 @@ pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeIn
             .with_min_level(log::Level::Trace)
             .with_filter("trace,jni=info"),
     );
+
+    match env.get_java_vm() {
+        Ok(vm) => {
+            unique_jvm::set_once(vm);
+        }
+        Err(err) => {
+            error!("Couldn't get a JavaVM from JNIEnv: {:?}", err);
+        }
+    };
 }
 
 /// Create a new UWB service and return the pointer
@@ -57,13 +68,55 @@ pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeUw
     obj: JObject,
 ) -> jlong {
     debug!("Java_com_android_server_uwb_indev_UwbServiceCore_nativeUwbServiceNew : enter");
-    if let Some(uwb_service) = UwbServiceBuilder::new()
-        .callback(UwbServiceCallbackImpl {})
-        .uci_hal(UciHalAndroid::new("default"))
-        .uci_logger(UciLoggerNull::default())
+    let vm = match unique_jvm::get_static_ref() {
+        Some(vm_ref) => vm_ref,
+        None => {
+            error!("Failed to get JavaVM reference");
+            return *JObject::null() as jlong;
+        }
+    };
+    let callback_obj = match env.new_global_ref(obj) {
+        Ok(cb) => cb,
+        Err(err) => {
+            error!("Couldn't create global ref for callback obj: {:?}", err);
+            return *JObject::null() as jlong;
+        }
+    };
+    let class_loader_obj = match get_class_loader_obj(&env) {
+        Ok(cl) => cl,
+        Err(err) => {
+            error!("Couldn't get class loader obj: {:?}", err);
+            return *JObject::null() as jlong;
+        }
+    };
+    let runtime = match default_runtime() {
+        Some(r) => r,
+        None => {
+            error!("Couldn't build tokio Runtime.");
+            return *JObject::null() as jlong;
+        }
+    };
+    let uci_logger_factory = match PcapngUciLoggerFactoryBuilder::new()
+        .log_path("/data/misc/apexdata/com.android.uwb/log".into())
+        .filename_prefix("uwb_uci".to_owned())
+        .runtime_handle(runtime.handle().to_owned())
         .build()
     {
-        return Box::into_raw(Box::new(uwb_service)) as jlong;
+        Some(m) => m,
+        None => {
+            error!("Couldn't build uci_logger_factory.");
+            return *JObject::null() as jlong;
+        }
+    };
+    if let Some(uwb_service) = UwbServiceBuilder::new()
+        .runtime_handle(runtime.handle().to_owned())
+        .callback_builder(UwbServiceCallbackBuilderImpl::new(vm, callback_obj, class_loader_obj))
+        .uci_hal(UciHalAndroid::new("default"))
+        .uci_logger_factory(uci_logger_factory)
+        .build()
+    {
+        let service_wrapper = UwbServiceWrapper::new(uwb_service, runtime);
+        return Box::into_raw(Box::new(service_wrapper)) as jlong;
     }
 
     error!("Failed to create Uwb Service");
@@ -87,7 +140,7 @@ pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeUw
     };
 
     unsafe {
-        Box::from_raw(uwb_service_ptr as *mut UwbService);
+        drop(Box::from_raw(uwb_service_ptr as *mut UwbServiceWrapper));
     }
     debug!("Uwb Service successfully destroyed.");
 }
@@ -226,13 +279,14 @@ pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeSe
 pub extern "system" fn Java_com_android_server_uwb_indev_UwbServiceCore_nativeSendRawVendorCmd(
     env: JNIEnv,
     obj: JObject,
+    mt: jint,
     gid: jint,
     oid: jint,
     payload: jbyteArray,
 ) -> jobject {
     debug!("Java_com_android_server_uwb_indev_UwbServiceCore_nativeSendRawVendorCmd: enter");
     object_result_helper(
-        send_raw_vendor_cmd(JniContext::new(env, obj), gid, oid, payload),
+        send_raw_vendor_cmd(JniContext::new(env, obj), mt, gid, oid, payload),
         "send_raw_vendor_cmd",
     )
 }
@@ -267,10 +321,8 @@ fn init_session(
 
     let session_id = session_id as u32;
     let session_type = session_type as u8;
-    let session_type = match SessionType::from_u8(session_type) {
-        Some(val) => val,
-        _ => return Err(Error::Parse(format!("Invalid session type. Received {}", session_type))),
-    };
+    let session_type = SessionType::try_from(session_type)
+        .map_err(|_| Error::Parse(format!("Invalid session type. Received {}", session_type)))?;
     let params = match session_type {
         SessionType::Ccc => {
             AppConfigParams::try_from(CccOpenRangingParamsJni::new(ctx.env, app_config_params))
@@ -312,15 +364,9 @@ fn update_controller_multicast_list(
 
     let session_id = session_id as u32;
     let action = update_multicast_list_action as u8;
-    let action = match UpdateMulticastListAction::from_u8(action) {
-        Some(val) => val,
-        _ => {
-            return Err(Error::Parse(format!(
-                "Invalid value for UpdateMulticastListAction. Received {}",
-                action
-            )));
-        }
-    };
+    let action = UpdateMulticastListAction::try_from(action).map_err(|_| {
+        Error::Parse(format!("Invalid value for UpdateMulticastListAction. Received {}", action))
+    })?;
     let controlees = match FiraControleeParamsJni::new(ctx.env, controlees).as_vec() {
         Ok(val) => val,
         Err(err) => {
@@ -344,12 +390,14 @@ fn set_country_code(ctx: JniContext, country_code: jbyteArray) -> Result<()> {
 
 fn send_raw_vendor_cmd(
     ctx: JniContext,
+    mt: jint,
     gid: jint,
     oid: jint,
     payload: jbyteArray,
 ) -> Result<jobject> {
     let uwb_service = get_uwb_service(ctx)?;
 
+    let mt = mt as u32;
     let gid = gid as u32;
     let oid = oid as u32;
     let payload = match ctx.env.convert_byte_array(payload) {
@@ -358,8 +406,8 @@ fn send_raw_vendor_cmd(
             return Err(Error::Parse(format!("Failed to convert payload {:?}", err)));
         }
     };
-    let vendor_message = uwb_service.send_vendor_cmd(gid, oid, payload);
-    // TODO(cante): figure out if we send RawVendorMessage back in a callback
+    let vendor_message = uwb_service.raw_uci_cmd(mt, gid, oid, payload);
+    // TODO(cante): figure out if we send RawUciMessage back in a callback
     todo!();
 }
 
@@ -368,10 +416,10 @@ fn get_power_stats(ctx: JniContext) -> Result<jobject> {
 
     let power_stats = uwb_service.android_get_power_stats()?;
     let ps_jni = PowerStatsJni::try_from(PowerStatsWithEnv::new(ctx.env, power_stats))?;
-    Ok(ps_jni.jni_context.obj.into_inner())
+    Ok(ps_jni.jni_context.obj.into_raw())
 }
 
-fn get_uwb_service(ctx: JniContext) -> Result<&mut UwbService> {
+fn get_uwb_service(ctx: JniContext) -> Result<&mut UwbServiceWrapper> {
     let uwb_service_ptr = ctx.long_getter("getUwbServicePtr")?;
     if uwb_service_ptr == 0i64 {
         return Err(Error::Jni(jni::errors::Error::NullPtr("Uwb Service is not initialized")));
@@ -380,7 +428,7 @@ fn get_uwb_service(ctx: JniContext) -> Result<&mut UwbService> {
     // and it must point to a valid Uwb Service object.
     // This can be ensured because the Uwb Service is created in an earlier stage and
     // won't be deleted before calling doDeinitialize.
-    unsafe { Ok(&mut *(uwb_service_ptr as *mut UwbService)) }
+    unsafe { Ok(&mut *(uwb_service_ptr as *mut UwbServiceWrapper)) }
 }
 
 fn boolean_result_helper<T>(result: Result<T>, function_name: &str) -> jboolean {
@@ -400,5 +448,58 @@ fn object_result_helper(result: Result<jobject>, function_name: &str) -> jobject
             error!("{} failed with {:?}", function_name, err);
             *JObject::null()
         }
+    }
+}
+
+/// Get the class loader object. Has to be called from a JNIEnv where the local java classes are
+/// loaded. Results in a global reference to the class loader object that can be used to look for
+/// classes in other native thread.
+fn get_class_loader_obj(env: &JNIEnv) -> Result<GlobalRef> {
+    let uwb_service_core_class = env.find_class("com/android/server/uwb/indev/UwbServiceCore")?;
+    let uwb_service_core_obj = env.get_object_class(uwb_service_core_class)?;
+    let get_class_loader_method =
+        env.get_method_id(uwb_service_core_obj, "getClassLoader", "()Ljava/lang/ClassLoader;")?;
+    let class_loader = env.call_method_unchecked(
+        uwb_service_core_class,
+        get_class_loader_method,
+        ReturnType::Object,
+        &[jvalue::from(JValue::Void)],
+    )?;
+    let class_loader_jobject = class_loader.l()?;
+    Ok(env.new_global_ref(class_loader_jobject)?)
+}
+
+/// The wrapper of UwbService that is used to keep the outlived tokio runtime.
+///
+/// This wrapper implements Deref and DerefMut for UwbService target, so we could get the reference
+/// of inner UwbService easily.
+struct UwbServiceWrapper {
+    /// The wrapped UwbService.
+    service: UwbService,
+
+    /// The working runtime, which should outlives the UwbService.
+    ///
+    /// Because the fields of a struct are dropped in declaration order, this field is guaranteed
+    /// to be dropped after UwbService.
+    _runtime: Runtime,
+}
+
+impl UwbServiceWrapper {
+    pub fn new(service: UwbService, runtime: Runtime) -> Self {
+        Self { service, _runtime: runtime }
+    }
+}
+
+impl std::ops::Deref for UwbServiceWrapper {
+    type Target = UwbService;
+
+    fn deref(&self) -> &Self::Target {
+        &self.service
+    }
+}
+
+impl std::ops::DerefMut for UwbServiceWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.service
     }
 }

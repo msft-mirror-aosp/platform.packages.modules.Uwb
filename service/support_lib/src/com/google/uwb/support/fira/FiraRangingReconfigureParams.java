@@ -16,7 +16,7 @@
 
 package com.google.uwb.support.fira;
 
-import static com.android.internal.util.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkArgument;
 
 import static java.util.Objects.requireNonNull;
 
@@ -39,6 +39,7 @@ public class FiraRangingReconfigureParams extends FiraParams {
     @Nullable @MulticastListUpdateAction private final Integer mAction;
     @Nullable private final UwbAddress[] mAddressList;
     @Nullable private final int[] mSubSessionIdList;
+    @Nullable private final byte[] mSubSessionKeyList;
 
     @Nullable private final Integer mBlockStrideLength;
 
@@ -54,6 +55,7 @@ public class FiraRangingReconfigureParams extends FiraParams {
     private static final String KEY_MAC_ADDRESS_MODE = "mac_address_mode";
     private static final String KEY_ADDRESS_LIST = "address_list";
     private static final String KEY_SUB_SESSION_ID_LIST = "sub_session_id_list";
+    private static final String KEY_SUB_SESSION_KEY_LIST = "sub_session_key_list";
     private static final String KEY_UPDATE_BLOCK_STRIDE_LENGTH = "update_block_stride_length";
     private static final String KEY_UPDATE_RANGE_DATA_NTF_CONFIG = "update_range_data_ntf_config";
     private static final String KEY_UPDATE_RANGE_DATA_NTF_PROXIMITY_NEAR =
@@ -73,6 +75,7 @@ public class FiraRangingReconfigureParams extends FiraParams {
             @Nullable @MulticastListUpdateAction Integer action,
             @Nullable UwbAddress[] addressList,
             @Nullable int[] subSessionIdList,
+            @Nullable byte[] subSessionKeyList,
             @Nullable Integer blockStrideLength,
             @Nullable Integer rangeDataNtfConfig,
             @Nullable Integer rangeDataProximityNear,
@@ -84,6 +87,7 @@ public class FiraRangingReconfigureParams extends FiraParams {
         mAction = action;
         mAddressList = addressList;
         mSubSessionIdList = subSessionIdList;
+        mSubSessionKeyList = subSessionKeyList;
         mBlockStrideLength = blockStrideLength;
         mRangeDataNtfConfig = rangeDataNtfConfig;
         mRangeDataProximityNear = rangeDataProximityNear;
@@ -113,6 +117,11 @@ public class FiraRangingReconfigureParams extends FiraParams {
     @Nullable
     public int[] getSubSessionIdList() {
         return mSubSessionIdList;
+    }
+
+    @Nullable
+    public byte[] getSubSessionKeyList() {
+        return mSubSessionKeyList;
     }
 
     @Nullable
@@ -155,6 +164,31 @@ public class FiraRangingReconfigureParams extends FiraParams {
         return mRangeDataAoaElevationUpper;
     }
 
+    @Nullable
+    private static int[] byteArrayToIntArray(@Nullable byte[] bytes) {
+        if (bytes == null) {
+            return null;
+        }
+
+        int[] values = new int[bytes.length];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = bytes[i];
+        }
+        return values;
+    }
+
+    @Nullable
+    private static byte[] intArrayToByteArray(@Nullable int[] values) {
+        if (values == null) {
+            return null;
+        }
+        byte[] bytes = new byte[values.length];
+        for (int i = 0; i < values.length; i++) {
+            bytes[i] = (byte) values[i];
+        }
+        return bytes;
+    }
+
     @Override
     public PersistableBundle toBundle() {
         PersistableBundle bundle = super.toBundle();
@@ -173,6 +207,7 @@ public class FiraRangingReconfigureParams extends FiraParams {
             }
             bundle.putInt(KEY_MAC_ADDRESS_MODE, macAddressMode);
             bundle.putLongArray(KEY_ADDRESS_LIST, addressList);
+            bundle.putIntArray(KEY_SUB_SESSION_KEY_LIST, byteArrayToIntArray(mSubSessionKeyList));
             bundle.putIntArray(KEY_SUB_SESSION_ID_LIST, mSubSessionIdList);
         }
 
@@ -245,7 +280,9 @@ public class FiraRangingReconfigureParams extends FiraParams {
             }
             builder.setAction(bundle.getInt(KEY_ACTION))
                     .setAddressList(addressList)
-                    .setSubSessionIdList(bundle.getIntArray(KEY_SUB_SESSION_ID_LIST));
+                    .setSubSessionIdList(bundle.getIntArray(KEY_SUB_SESSION_ID_LIST))
+                    .setSubSessionKeyList(
+                            intArrayToByteArray(bundle.getIntArray(KEY_SUB_SESSION_KEY_LIST)));
         }
 
         if (bundle.containsKey(KEY_UPDATE_BLOCK_STRIDE_LENGTH)) {
@@ -293,6 +330,7 @@ public class FiraRangingReconfigureParams extends FiraParams {
         @Nullable private Integer mAction = null;
         @Nullable private UwbAddress[] mAddressList = null;
         @Nullable private int[] mSubSessionIdList = null;
+        @Nullable private byte[] mSubSessionKeyList = null;
 
         @Nullable private Integer mBlockStrideLength = null;
 
@@ -317,6 +355,12 @@ public class FiraRangingReconfigureParams extends FiraParams {
 
         public FiraRangingReconfigureParams.Builder setSubSessionIdList(int[] subSessionIdList) {
             mSubSessionIdList = subSessionIdList;
+            return this;
+        }
+
+        /** Sub Session Key List setter. This is a 2D array of keys represented as 1D array */
+        public FiraRangingReconfigureParams.Builder setSubSessionKeyList(byte[] subSessionKeyList) {
+            mSubSessionKeyList = subSessionKeyList;
             return this;
         }
 
@@ -381,8 +425,14 @@ public class FiraRangingReconfigureParams extends FiraParams {
                 checkArgument(uwbAddress.size() == UwbAddress.SHORT_ADDRESS_BYTE_LENGTH);
             }
 
-            checkArgument(
-                    mSubSessionIdList == null || mSubSessionIdList.length == mAddressList.length);
+            if (mAction == P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_16_BYTE) {
+                checkArgument(mSubSessionKeyList != null
+                        && mSubSessionKeyList.length == 16 * mSubSessionIdList.length);
+            }
+            if (mAction == P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_32_BYTE) {
+                checkArgument(mSubSessionKeyList != null
+                        && mSubSessionKeyList.length == 32 * mSubSessionIdList.length);
+            }
         }
 
         private void checkRangeDataNtfConfig() {
@@ -454,6 +504,7 @@ public class FiraRangingReconfigureParams extends FiraParams {
                     mAction,
                     mAddressList,
                     mSubSessionIdList,
+                    mSubSessionKeyList,
                     mBlockStrideLength,
                     mRangeDataNtfConfig,
                     mRangeDataProximityNear,

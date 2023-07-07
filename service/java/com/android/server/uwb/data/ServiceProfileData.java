@@ -25,21 +25,27 @@ import androidx.annotation.Nullable;
 
 import com.android.proto.uwb.UwbConfigProto;
 import com.android.server.uwb.UwbConfigStore;
+import com.android.server.uwb.util.ObjectIdentifier;
+
+import com.google.protobuf.ByteString;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 public class ServiceProfileData implements UwbConfigStore.StoreData {
-
-    private static String TAG = "ServiceProfileData";
+    private static final String LOG_TAG = "ServiceProfileData";
 
     public ServiceProfileData(DataSource dataSource) {
         this.mDataSource = dataSource;
     }
 
     public static class ServiceProfileInfo {
+        public static final int ADF_STATUS_NOT_PROVISIONED = 0;
+        public static final int ADF_STATUS_CREATED = 1;
+        public static final int ADF_STATUS_PROVISIONED = 2;
         /**
          * Unique 128-bit service instance ID
          */
@@ -59,15 +65,22 @@ public class ServiceProfileData implements UwbConfigStore.StoreData {
         /**
          * Applet ID for dynamic STS
          */
-        private int serviceAppletID;
+        private int mServiceAppletId;
+
+        private int mAdfStatus = ADF_STATUS_NOT_PROVISIONED;
         /**
          * ADF OID
          */
-        private int serviceAdfID;
+        private Optional<ObjectIdentifier> mServiceAdfOid = Optional.empty();
+
+        /**
+         * secure blob for ADF.
+         */
+        private Optional<byte[]> mSecureBlob = Optional.empty();
 
         /**
          *
-         * serviceAppletID and serviceAdfID will be set after provisioning.
+         * serviceAppletID and serviceAdfOid will be set after provisioning.
          */
         public ServiceProfileInfo(UUID serviceInstanceID, int uid,
                 String packageName, int serviceID) {
@@ -77,20 +90,36 @@ public class ServiceProfileData implements UwbConfigStore.StoreData {
             this.serviceID = serviceID;
         }
 
-        public void setServiceAppletID(int serviceAppletID) {
-            this.serviceAppletID = serviceAppletID;
+        public void setServiceAppletId(int serviceAppletId) {
+            this.mServiceAppletId = serviceAppletId;
         }
 
-        public void setServiceAdfID(int serviceAdfID) {
-            this.serviceAdfID = serviceAdfID;
+        public void setServiceAdfOid(@Nullable ObjectIdentifier serviceAdfOid) {
+            this.mServiceAdfOid = Optional.ofNullable(serviceAdfOid);
         }
 
-        public int getServiceAppletID() {
-            return serviceAppletID;
+        public int getServiceAppletId() {
+            return mServiceAppletId;
         }
 
-        public int getServiceAdfID() {
-            return serviceAdfID;
+        public void setSecureBlob(@Nullable byte[] secureBlob) {
+            mSecureBlob = Optional.ofNullable(secureBlob);
+        }
+
+        public Optional<byte[]> getSecureBlob() {
+            return mSecureBlob;
+        }
+
+        public Optional<ObjectIdentifier> getServiceAdfOid() {
+            return mServiceAdfOid;
+        }
+
+        public void setAdfStatus(int status) {
+            mAdfStatus = status;
+        }
+
+        public int getAdfStatus() {
+            return mAdfStatus;
         }
 
     }
@@ -145,8 +174,14 @@ public class ServiceProfileData implements UwbConfigStore.StoreData {
             serviceConfigBuilder.setPackageName(serviceProfileInfo.packageName);
             serviceConfigBuilder.setUid(serviceProfileInfo.uid);
             serviceConfigBuilder.setServiceId(serviceProfileInfo.serviceID);
-            serviceConfigBuilder.setServiceAppletId(serviceProfileInfo.getServiceAppletID());
-            serviceConfigBuilder.setServiceAdfId(serviceProfileInfo.getServiceAdfID());
+            serviceConfigBuilder.setServiceAppletId(serviceProfileInfo.getServiceAppletId());
+            serviceConfigBuilder.setAdfStatus(serviceProfileInfo.getAdfStatus());
+            serviceProfileInfo.getServiceAdfOid().ifPresent(
+                    adfOid -> serviceConfigBuilder.setServiceAdfOid(
+                            ByteString.copyFrom(adfOid.value)));
+            serviceProfileInfo.getSecureBlob().ifPresent(
+                    secureBlob -> serviceConfigBuilder.setSecureBlob(
+                            ByteString.copyFrom(secureBlob)));
             builder.addServiceConfig(serviceConfigBuilder.build());
         }
     }
@@ -158,7 +193,7 @@ public class ServiceProfileData implements UwbConfigStore.StoreData {
     @Override
     public void deserializeData(@Nullable UwbConfigProto.UwbConfig uwbConfig) {
         if (uwbConfig == null || !uwbConfig.hasVersion()) {
-            Log.i(TAG, "No data stored");
+            Log.i(LOG_TAG, "No data stored");
             return;
         }
 
@@ -183,8 +218,14 @@ public class ServiceProfileData implements UwbConfigStore.StoreData {
                     serviceConfig.getUid(),
                     serviceConfig.getPackageName(),
                     serviceConfig.getServiceId());
-            serviceProfileInfo.setServiceAppletID(serviceConfig.getServiceAppletId());
-            serviceProfileInfo.setServiceAdfID(serviceConfig.getServiceAdfId());
+            serviceProfileInfo.setServiceAppletId(serviceConfig.getServiceAppletId());
+            serviceProfileInfo.setAdfStatus(serviceConfig.getAdfStatus());
+
+            serviceProfileInfo.setServiceAdfOid(
+                    ObjectIdentifier.fromBytes(serviceConfig.getServiceAdfOid().toByteArray()));
+
+            serviceProfileInfo.setSecureBlob(
+                    serviceConfig.getSecureBlob().toByteArray());
             serviceProfileDataMap.put(serviceProfileInfo.serviceInstanceID, serviceProfileInfo);
         }
         mDataSource.fromDeserialized(serviceProfileDataMap);
@@ -202,7 +243,7 @@ public class ServiceProfileData implements UwbConfigStore.StoreData {
 
     @Override
     public String getName() {
-        return TAG;
+        return LOG_TAG;
     }
 
     @Override
