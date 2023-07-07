@@ -16,36 +16,65 @@
 
 package androidx.core.uwb.backend.impl.internal;
 
+import android.annotation.NonNull;
+
 import com.google.common.collect.ImmutableList;
 
 import java.util.List;
 
 /** Ranging parameters that exposed through public API. */
 public class RangingParameters {
-    @Utils.UwbConfigId private final int mUwbConfigId;
+    @Utils.UwbConfigId
+    private final int mUwbConfigId;
     private final int mSessionId;
+    private final int mSubSessionId;
     private final byte[] mSessionKeyInfo;
+    private final byte[] mSubSessionKeyInfo;
     private final UwbComplexChannel mComplexChannel;
     private final ImmutableList<UwbAddress> mPeerAddresses;
-    @Utils.RangingUpdateRate private final int mRangingUpdateRate;
+    @Utils.RangingUpdateRate
+    private final int mRangingUpdateRate;
+    @NonNull
+    private final UwbRangeDataNtfConfig mUwbRangeDataNtfConfig;
+    @Utils.SlotDuration
+    private final int mSlotDuration;
+    @Utils.RangingInterval
+    private final int mRangingInterval;
+    private final boolean mIsAoaDisabled;
 
     public RangingParameters(
             @Utils.UwbConfigId int uwbConfigId,
             int sessionId,
+            int subSessionId,
             byte[] sessionKeyInfo,
+            byte[] subSessionKeyInfo,
             UwbComplexChannel complexChannel,
             List<UwbAddress> peerAddresses,
-            @Utils.RangingUpdateRate int rangingUpdateRate) {
+            @Utils.RangingUpdateRate int rangingUpdateRate,
+            @NonNull UwbRangeDataNtfConfig uwbRangeDataNtfConfig,
+            @Utils.SlotDuration int slotDuration,
+            @Utils.RangingInterval int rangingInterval,
+            boolean isAoaDisabled) {
         mUwbConfigId = uwbConfigId;
         mSessionId = sessionId;
+        mSubSessionId = subSessionId;
         mSessionKeyInfo = sessionKeyInfo;
+        mSubSessionKeyInfo = subSessionKeyInfo;
         mComplexChannel = complexChannel;
         mPeerAddresses = ImmutableList.copyOf(peerAddresses);
         mRangingUpdateRate = rangingUpdateRate;
+        mUwbRangeDataNtfConfig = uwbRangeDataNtfConfig;
+        mSlotDuration = slotDuration;
+        mRangingInterval = rangingInterval;
+        mIsAoaDisabled = isAoaDisabled;
     }
 
     public int getSessionId() {
         return mSessionId;
+    }
+
+    public int getSubSessionId() {
+        return mSubSessionId;
     }
 
     @Utils.UwbConfigId
@@ -55,6 +84,10 @@ public class RangingParameters {
 
     public byte[] getSessionKeyInfo() {
         return mSessionKeyInfo;
+    }
+
+    public byte[] getSubSessionKeyInfo() {
+        return mSubSessionKeyInfo;
     }
 
     public UwbComplexChannel getComplexChannel() {
@@ -67,5 +100,23 @@ public class RangingParameters {
 
     public int getRangingUpdateRate() {
         return mRangingUpdateRate;
+    }
+
+    public UwbRangeDataNtfConfig getUwbRangeDataNtfConfig() {
+        return mUwbRangeDataNtfConfig;
+    }
+
+    @Utils.SlotDuration
+    public int getSlotDuration() {
+        return mSlotDuration;
+    }
+
+    @Utils.RangingInterval
+    public int getRangingInterval() {
+        return mRangingInterval;
+    }
+
+    public boolean isAoaDisabled() {
+        return mIsAoaDisabled;
     }
 }

@@ -81,6 +81,20 @@ public class TlvBuffer {
             return this;
         }
 
+        public TlvBuffer.Builder putShortArray(int tagType, short[] sArray) {
+            if (sArray == null) return this;
+            return putShortArray(tagType, sArray.length, sArray);
+        }
+
+        public TlvBuffer.Builder putShortArray(int tagType, int length, short[] sArray) {
+            addHeader(tagType, length * Short.BYTES);
+            for (int i = 0; i < length; i++) {
+                this.mBuffer.put(TlvUtil.getLeBytes(sArray[i]));
+            }
+            this.mNoOfParams++;
+            return this;
+        }
+
         public TlvBuffer.Builder putInt(int tagType, int data) {
             addHeader(tagType, Integer.BYTES);
             this.mBuffer.put(TlvUtil.getLeBytes(data));
@@ -91,7 +105,6 @@ public class TlvBuffer {
         public TlvBuffer.Builder putLong(int tagType, long data) {
             addHeader(tagType, Long.BYTES);
             this.mBuffer.put(TlvUtil.getLeBytes(data));
-
             this.mNoOfParams++;
             return this;
         }

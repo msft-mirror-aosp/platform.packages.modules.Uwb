@@ -19,8 +19,9 @@ package androidx.core.uwb.backend.impl.internal;
 import static java.util.Objects.requireNonNull;
 
 import android.os.Build.VERSION_CODES;
-import android.support.annotation.RequiresApi;
 import android.uwb.UwbManager;
+
+import androidx.annotation.RequiresApi;
 
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
@@ -31,14 +32,22 @@ import java.util.concurrent.Executor;
 @RequiresApi(api = VERSION_CODES.S)
 public class RangingControlee extends RangingDevice {
 
-    RangingControlee(UwbManager manager, Executor executor) {
-        super(manager, executor);
+    RangingControlee(UwbManager manager, Executor executor,
+            OpAsyncCallbackRunner<Boolean> opAsyncCallbackRunner, UwbFeatureFlags uwbFeatureFlags) {
+        super(manager, executor, opAsyncCallbackRunner, uwbFeatureFlags);
     }
 
     @Override
     protected FiraOpenSessionParams getOpenSessionParams() {
         requireNonNull(mRangingParameters);
         return ConfigurationManager.createOpenSessionParams(
-                FiraParams.RANGING_DEVICE_TYPE_CONTROLEE, getLocalAddress(), mRangingParameters);
+                FiraParams.RANGING_DEVICE_TYPE_CONTROLEE, getLocalAddress(), mRangingParameters,
+                mUwbFeatureFlags);
+    }
+
+    @Override
+    protected int hashSessionId(RangingParameters rangingParameters) {
+        UwbAddress controllerAddress = rangingParameters.getPeerAddresses().get(0);
+        return calculateHashedSessionId(controllerAddress, rangingParameters.getComplexChannel());
     }
 }

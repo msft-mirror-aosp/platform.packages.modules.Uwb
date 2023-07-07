@@ -16,6 +16,7 @@
 package com.android.server.uwb.secure;
 
 import static com.android.server.uwb.secure.csml.DispatchResponse.NOTIFICATION_EVENT_ID_ADF_SELECTED;
+import static com.android.server.uwb.secure.csml.DispatchResponse.NOTIFICATION_EVENT_ID_RDS_AVAILABLE;
 import static com.android.server.uwb.secure.csml.DispatchResponse.NOTIFICATION_EVENT_ID_SECURE_CHANNEL_ESTABLISHED;
 import static com.android.server.uwb.secure.csml.DispatchResponse.NOTIFICATION_EVENT_ID_SECURE_SESSION_ABORTED;
 import static com.android.server.uwb.secure.iso7816.StatusWord.SW_NO_ERROR;
@@ -30,10 +31,12 @@ import androidx.annotation.WorkerThread;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.uwb.discovery.Transport;
+import com.android.server.uwb.discovery.info.FiraConnectorMessage.MessageType;
 import com.android.server.uwb.pm.RunningProfileSessionInfo;
 import com.android.server.uwb.secure.csml.CsmlUtil;
 import com.android.server.uwb.secure.csml.DispatchCommand;
 import com.android.server.uwb.secure.csml.DispatchResponse;
+import com.android.server.uwb.secure.csml.FiRaCommand;
 import com.android.server.uwb.secure.csml.GetDoCommand;
 import com.android.server.uwb.secure.csml.GetDoResponse;
 import com.android.server.uwb.secure.csml.SwapInAdfCommand;
@@ -43,10 +46,12 @@ import com.android.server.uwb.secure.csml.SwapOutAdfResponse;
 import com.android.server.uwb.secure.iso7816.CommandApdu;
 import com.android.server.uwb.secure.iso7816.ResponseApdu;
 import com.android.server.uwb.secure.iso7816.TlvDatum;
+import com.android.server.uwb.secure.iso7816.TlvParser;
 import com.android.server.uwb.util.DataTypeConversionUtil;
 import com.android.server.uwb.util.ObjectIdentifier;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -70,6 +75,7 @@ public abstract class FiRaSecureChannel {
         INITIATE_TRANSACTION,
         OPEN_SE_CHANNEL,
         DISPATCH,
+        ADF_NOT_MATCHED,
     }
 
     enum Status {
@@ -89,6 +95,9 @@ public abstract class FiRaSecureChannel {
     static final int CMD_SEND_OOB_DATA = 4;
     static final int CMD_PROCESS_RECEIVED_OOB_DATA = 5;
     static final int CMD_CLEAN_UP_TERMINATED_OR_ABORTED_CHANNEL = 6;
+
+    static final int OOB_MSG_TYPE_APDU_COMMAND = 0;
+    static final int OOB_MSG_TYPE_APDU_RESPONSE = 1;
 
     protected Status mStatus = Status.UNINITIALIZED;
     private Optional<byte[]> mDynamicSlotIdentifier = Optional.empty();
@@ -136,7 +145,12 @@ public abstract class FiRaSecureChannel {
                 break;
             case CMD_SEND_OOB_DATA:
                 byte[] payload = (byte[]) msg.obj;
+                int msgType = msg.arg1;
+                MessageType firaMsgType =
+                        msgType == OOB_MSG_TYPE_APDU_COMMAND
+                                ? MessageType.COMMAND : MessageType.COMMAND_RESPOND;
                 mTransport.sendData(
+                        firaMsgType,
                         payload,
                         new Transport.SendingDataCallback() {
                             @Override
@@ -192,9 +206,9 @@ public abstract class FiRaSecureChannel {
     protected final boolean swapInAdf(
             @NonNull byte[] secureBlob,
             @NonNull ObjectIdentifier adfOid,
-            @NonNull byte[] uwbControlleeInfo) {
+            @NonNull byte[] uwbControleeInfo) {
         SwapInAdfCommand swapInAdfCmd =
-                SwapInAdfCommand.build(secureBlob, adfOid, uwbControlleeInfo);
+                SwapInAdfCommand.build(secureBlob, adfOid, uwbControleeInfo);
         try {
             SwapInAdfResponse response =
                     SwapInAdfResponse.fromResponseApdu(
@@ -289,16 +303,44 @@ public abstract class FiRaSecureChannel {
         for (DispatchResponse.Notification notification : dispatchResponse.notifications) {
             switch (notification.notificationEventId) {
                 case NOTIFICATION_EVENT_ID_ADF_SELECTED:
+                    logd("ADF selected");
                     DispatchResponse.AdfSelectedNotification adfSelected =
                             (DispatchResponse.AdfSelectedNotification) notification;
-                    // TODO: put controllee info for controllee if it is not dynamic slot
+                    ObjectIdentifier selectedAdfOid = adfSelected.adfOid;
+                    if (!mRunningProfileSessionInfo.oidOfProvisionedAdf
+                            .equals(adfSelected.adfOid)) {
+                        logw("The selected ADF doesn't match the provisioned ADF.");
+                        mSecureChannelCallback.onSetUpError(SetupError.ADF_NOT_MATCHED);
+                    } else {
+                        mStatus = Status.ADF_SELECTED;
+                    }
                     break;
                 case NOTIFICATION_EVENT_ID_SECURE_CHANNEL_ESTABLISHED:
+                    logd("SC established");
                     mStatus = Status.ESTABLISHED;
-                    mSecureChannelCallback.onEstablished();
+                    DispatchResponse.SecureChannelEstablishedNotification eNotification =
+                            (DispatchResponse.SecureChannelEstablishedNotification) notification;
+                    logd("defaultSessionId from notification: "
+                            + eNotification.defaultSessionId);
+                    Optional<Integer> defaultSessionId = Optional.empty();
+                    if (eNotification.defaultSessionId.isEmpty()) {
+                        defaultSessionId = readDefaultSessionId();
+                    }
+                    mSecureChannelCallback.onEstablished(defaultSessionId);
                     break;
                 case NOTIFICATION_EVENT_ID_SECURE_SESSION_ABORTED:
                     cleanUpTerminatedOrAbortedSession();
+                    break;
+                case NOTIFICATION_EVENT_ID_RDS_AVAILABLE:
+                    logd("RDS available and SC terminated automatically");
+                    // see CSML 8.2.2.7.1.8 Table 64 - ADF Extended Options
+                    // RDS available means the session is using the default session id and key
+                    // Also the secure channel is terminated automatically.
+                    DispatchResponse.RdsAvailableNotification rdsAvailableNotification =
+                            (DispatchResponse.RdsAvailableNotification) notification;
+                    mStatus = Status.TERMINATED;
+                    mSecureChannelCallback.onRdsAvailableAndTerminated(
+                            rdsAvailableNotification.sessionId);
                     break;
                 default:
                     logw(
@@ -306,6 +348,28 @@ public abstract class FiRaSecureChannel {
                                     + notification.notificationEventId);
             }
         }
+    }
+
+    private Optional<Integer> readDefaultSessionId() {
+        TlvDatum getSessionIdTlv = CsmlUtil.constructGetSessionIdGetDoTlv();
+        GetDoCommand getSessionIdCommand = GetDoCommand.build(getSessionIdTlv);
+        try {
+            ResponseApdu responseApdu =
+                    mSecureElementChannel.transmit(getSessionIdCommand);
+            if (responseApdu != null && responseApdu.getStatusWord() == SW_NO_ERROR.toInt()) {
+                TlvDatum sessionIdTlv = TlvParser.parseOneTlv(responseApdu.getResponseData());
+                if (sessionIdTlv != null
+                        && Objects.equals(sessionIdTlv.tag, CsmlUtil.SESSION_ID_TAG)) {
+                    return Optional.of(
+                            DataTypeConversionUtil.arbitraryByteArrayToI32(sessionIdTlv.value));
+                }
+            } else {
+                throw new IllegalStateException("no valid APDU response.");
+            }
+        } catch (IOException | IllegalStateException e) {
+            logw("error to getSessionId DO.");
+        }
+        return Optional.empty();
     }
 
     boolean isEstablished() {
@@ -319,6 +383,12 @@ public abstract class FiRaSecureChannel {
     void cleanUpTerminatedOrAbortedSession() {
         mWorkHandler.sendMessage(
                 mWorkHandler.obtainMessage(CMD_CLEAN_UP_TERMINATED_OR_ABORTED_CHANNEL));
+    }
+
+    void sendLocalFiRaCommand(
+            @NonNull FiRaCommand fiRaCommand,
+            @NonNull ExternalRequestCallback externalRequestCallback) {
+        sendLocalCommandApdu(fiRaCommand.getCommandApdu(), externalRequestCallback);
     }
 
     /**
@@ -336,7 +406,7 @@ public abstract class FiRaSecureChannel {
 
                         ResponseApdu responseApdu = mSecureElementChannel.transmit(commandApdu);
                         if (responseApdu.getStatusWord() == SW_NO_ERROR.toInt()) {
-                            externalRequestCallback.onSuccess();
+                            externalRequestCallback.onSuccess(responseApdu.getResponseData());
                         } else {
                             logw("Applet failed to handle the APDU: " + commandApdu);
                             externalRequestCallback.onFailure();
@@ -389,7 +459,7 @@ public abstract class FiRaSecureChannel {
         /**
          * The secure session is set up. Ready to handle secure message exchanging.
          */
-        void onEstablished();
+        void onEstablished(@NonNull Optional<Integer> defaultUniqueSessionId);
 
         /**
          * Error happens during the secure session set up.
@@ -417,13 +487,20 @@ public abstract class FiRaSecureChannel {
          * The secure element channel for the session  is closed.
          */
         void onSeChannelClosed(boolean withError);
+
+        /**
+         * The session is set up completed and terminated automatically.
+         *
+         * @param sessionId - the uwb session ID derived in the FiRa applet
+         */
+        void onRdsAvailableAndTerminated(int sessionId);
     }
 
     interface ExternalRequestCallback {
         /**
          * The request is handled correctly.
          */
-        void onSuccess();
+        void onSuccess(@NonNull byte[] responseData);
 
         /**
          * The request cannot be handled.
@@ -433,5 +510,8 @@ public abstract class FiRaSecureChannel {
 
     private void logw(@NonNull String dbgMsg) {
         Log.w(LOG_TAG, dbgMsg);
+    }
+    private void logd(@NonNull String dbgMsg) {
+        Log.d(LOG_TAG, dbgMsg);
     }
 }
