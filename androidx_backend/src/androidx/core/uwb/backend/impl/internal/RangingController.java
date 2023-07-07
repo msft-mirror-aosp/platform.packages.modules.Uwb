@@ -18,10 +18,12 @@ package androidx.core.uwb.backend.impl.internal;
 
 import static androidx.core.uwb.backend.impl.internal.RangingSessionCallback.REASON_FAILED_TO_START;
 import static androidx.core.uwb.backend.impl.internal.RangingSessionCallback.REASON_STOP_RANGING_CALLED;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR;
 import static androidx.core.uwb.backend.impl.internal.Utils.INVALID_API_CALL;
 import static androidx.core.uwb.backend.impl.internal.Utils.STATUS_OK;
 import static androidx.core.uwb.backend.impl.internal.Utils.SUPPORTED_BPRF_PREAMBLE_INDEX;
 import static androidx.core.uwb.backend.impl.internal.Utils.TAG;
+import static androidx.core.uwb.backend.impl.internal.Utils.UWB_RECONFIGURATION_FAILURE;
 import static androidx.core.uwb.backend.impl.internal.Utils.UWB_SYSTEM_CALLBACK_FAILURE;
 
 import static com.google.uwb.support.fira.FiraParams.UWB_CHANNEL_9;
@@ -51,22 +53,24 @@ public class RangingController extends RangingDevice {
 
     private final List<UwbAddress> mDynamicallyAddedPeers = new ArrayList<>();
 
-    @Nullable private RangingSessionCallback mRangingSessionCallback;
+    @Nullable
+    private RangingSessionCallback mRangingSessionCallback;
 
     RangingController(UwbManager manager, Executor executor,
-            OpAsyncCallbackRunner opAsyncCallbackRunner) {
-        super(manager, executor, opAsyncCallbackRunner);
+            OpAsyncCallbackRunner<Boolean> opAsyncCallbackRunner, UwbFeatureFlags uwbFeatureFlags) {
+        super(manager, executor, opAsyncCallbackRunner, uwbFeatureFlags);
     }
 
     @Override
     protected FiraOpenSessionParams getOpenSessionParams() {
         requireNonNull(mRangingParameters);
         return ConfigurationManager.createOpenSessionParams(
-                FiraParams.RANGING_DEVICE_TYPE_CONTROLLER, getLocalAddress(), mRangingParameters);
+                FiraParams.RANGING_DEVICE_TYPE_CONTROLLER, getLocalAddress(), mRangingParameters,
+                mUwbFeatureFlags);
     }
 
     /**
-     * get Complex channel. if it's the first time that this function is called, it will check the
+     * gets complex channel. if it's the first time that this function is called, it will check the
      * driver and try to get the best-available settings.
      */
     @SuppressLint("WrongConstant")
@@ -79,6 +83,11 @@ public class RangingController extends RangingDevice {
             mComplexChannel = getBestAvailableComplexChannel();
         }
         return mComplexChannel;
+    }
+
+    /** Sets complex channel. */
+    public void setComplexChannel(UwbComplexChannel complexChannel) {
+        mComplexChannel = complexChannel;
     }
 
     /**
@@ -95,6 +104,16 @@ public class RangingController extends RangingDevice {
         UwbComplexChannel availableChannel = new UwbComplexChannel(UWB_CHANNEL_9, preambleIndex);
         Log.i(TAG, String.format("set complexChannel to %s", availableChannel));
         return availableChannel;
+    }
+
+    @Override
+    protected int hashSessionId(RangingParameters rangingParameters) {
+        return calculateHashedSessionId(getLocalAddress(), getComplexChannel());
+    }
+
+    @Override
+    protected boolean isKnownPeer(UwbAddress address) {
+        return super.isKnownPeer(address) || mDynamicallyAddedPeers.contains(address);
     }
 
     @Override
@@ -137,7 +156,7 @@ public class RangingController extends RangingDevice {
      * called.
      *
      * @return {@link Utils#INVALID_API_CALL} if this is a unicast session but multiple peers are
-     *     configured.
+     * configured.
      */
     public synchronized int addControlee(UwbAddress controleeAddress) {
         Log.i(TAG, String.format("Add UWB peer: %s", controleeAddress));
@@ -151,34 +170,104 @@ public class RangingController extends RangingDevice {
             return STATUS_OK;
         }
         // Reconfigure the session.
+        int[] subSessionIdList = mRangingParameters.getUwbConfigId()
+                == CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR
+                ? new int[]{mRangingParameters.getSubSessionId()}
+                : null;
+        byte[] subSessionKeyInfo = mRangingParameters.getUwbConfigId()
+                == CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR
+                ? mRangingParameters.getSubSessionKeyInfo()
+                : null;
         boolean success =
                 reconfigureRanging(
                         ConfigurationManager.createReconfigureParams(
                                         mRangingParameters.getUwbConfigId(),
                                         FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD,
-                                        new UwbAddress[] {controleeAddress},
-                                        /*subSessionIdList=*/ null)
+                                        new UwbAddress[]{controleeAddress},
+                                        subSessionIdList,
+                                        subSessionKeyInfo,
+                                        mUwbFeatureFlags)
                                 .toBundle());
 
+        RangingSessionCallback callback = mRangingSessionCallback;
         if (success) {
-            if (mRangingSessionCallback != null) {
+            if (callback != null) {
                 runOnBackendCallbackThread(
-                        () -> {
-                            requireNonNull(mRangingSessionCallback);
-                            mRangingSessionCallback.onRangingInitialized(
-                                    UwbDevice.createForAddress(controleeAddress.toBytes()));
-                        });
+                        () ->
+                                callback.onRangingInitialized(
+                                        UwbDevice.createForAddress(controleeAddress.toBytes())));
             }
             mDynamicallyAddedPeers.add(controleeAddress);
         } else {
-            if (mRangingSessionCallback != null) {
+            if (callback != null) {
                 runOnBackendCallbackThread(
-                        () -> {
-                            requireNonNull(mRangingSessionCallback);
-                            mRangingSessionCallback.onRangingSuspended(
-                                    UwbDevice.createForAddress(controleeAddress.toBytes()),
-                                    REASON_FAILED_TO_START);
-                        });
+                        () ->
+                                callback.onRangingSuspended(
+                                        UwbDevice.createForAddress(controleeAddress.toBytes()),
+                                        REASON_FAILED_TO_START));
+            }
+        }
+
+        return STATUS_OK;
+    }
+
+    /**
+     * Add a new controlee to the controller. If the controlee is added successfully, {@link
+     * RangingSessionCallback#onRangingInitialized(UwbDevice)} will be called. If the adding
+     * operation failed, {@link RangingSessionCallback#onRangingSuspended(UwbDevice, int)} will be
+     * called.
+     *
+     * @return {@link Utils#INVALID_API_CALL} if this is a unicast session but multiple peers are
+     * configured.
+     */
+    public synchronized int addControleeWithSessionParams(RangingControleeParameters params) {
+        UwbAddress controleeAddress = params.getAddress();
+        Log.i(TAG, String.format("Add UWB peer: %s", controleeAddress));
+        if (!isAlive()) {
+            return INVALID_API_CALL;
+        }
+        if (ConfigurationManager.isUnicast(mRangingParameters.getUwbConfigId())) {
+            return INVALID_API_CALL;
+        }
+        if (isKnownPeer(controleeAddress) || mDynamicallyAddedPeers.contains(controleeAddress)) {
+            return STATUS_OK;
+        }
+        // Reconfigure the session.
+        int[] subSessionIdList = mRangingParameters.getUwbConfigId()
+                == CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR
+                ? new int[]{params.getSubSessionId()}
+                : null;
+        byte[] subSessionKeyInfo = mRangingParameters.getUwbConfigId()
+                == CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR
+                ? params.getSubSessionKey()
+                : null;
+        boolean success =
+                reconfigureRanging(
+                        ConfigurationManager.createReconfigureParams(
+                                        mRangingParameters.getUwbConfigId(),
+                                        FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD,
+                                        new UwbAddress[]{controleeAddress},
+                                        subSessionIdList,
+                                        subSessionKeyInfo,
+                                        mUwbFeatureFlags)
+                                .toBundle());
+
+        RangingSessionCallback callback = mRangingSessionCallback;
+        if (success) {
+            if (callback != null) {
+                runOnBackendCallbackThread(
+                        () ->
+                                callback.onRangingInitialized(
+                                        UwbDevice.createForAddress(controleeAddress.toBytes())));
+            }
+            mDynamicallyAddedPeers.add(controleeAddress);
+        } else {
+            if (callback != null) {
+                runOnBackendCallbackThread(
+                        () ->
+                                callback.onRangingSuspended(
+                                        UwbDevice.createForAddress(controleeAddress.toBytes()),
+                                        REASON_FAILED_TO_START));
             }
         }
 
@@ -189,11 +278,11 @@ public class RangingController extends RangingDevice {
      * Remove a controlee from current session.
      *
      * @return returns {@link Utils#STATUS_OK} if the controlee is removed successfully. returns
-     *     {@link Utils#INVALID_API_CALL} if:
-     *     <ul>
-     *       <li>Provided address is not in the controller's peer list
-     *       <li>The active profile is unicast
-     *     </ul>
+     * {@link Utils#INVALID_API_CALL} if:
+     * <ul>
+     *   <li>Provided address is not in the controller's peer list
+     *   <li>The active profile is unicast
+     * </ul>
      */
     public synchronized int removeControlee(UwbAddress controleeAddress) {
         Log.i(TAG, String.format("Remove UWB peer: %s", controleeAddress));
@@ -201,7 +290,7 @@ public class RangingController extends RangingDevice {
             Log.w(TAG, "Attempt to remove controlee while session is not active.");
             return INVALID_API_CALL;
         }
-        if (!mDynamicallyAddedPeers.contains(controleeAddress)) {
+        if (!isKnownPeer(controleeAddress)) {
             Log.w(TAG, "Attempt to remove non-existing controlee.");
             return INVALID_API_CALL;
         }
@@ -212,23 +301,50 @@ public class RangingController extends RangingDevice {
                         ConfigurationManager.createReconfigureParams(
                                         mRangingParameters.getUwbConfigId(),
                                         FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE,
-                                        new UwbAddress[] {controleeAddress},
-                                        /*subSessionIdList=*/ null)
+                                        new UwbAddress[]{controleeAddress},
+                                        /* subSessionIdList= */ null,
+                                        /* subSessionKey= */ null,
+                                        mUwbFeatureFlags)
                                 .toBundle());
         if (!success) {
             return UWB_SYSTEM_CALLBACK_FAILURE;
         }
 
-        if (mRangingSessionCallback != null) {
+        RangingSessionCallback callback = mRangingSessionCallback;
+        if (callback != null) {
             runOnBackendCallbackThread(
-                    () -> {
-                        requireNonNull(mRangingSessionCallback);
-                        mRangingSessionCallback.onRangingSuspended(
-                                UwbDevice.createForAddress(controleeAddress.toBytes()),
-                                REASON_STOP_RANGING_CALLED);
-                    });
+                    () ->
+                            callback.onRangingSuspended(
+                                    UwbDevice.createForAddress(controleeAddress.toBytes()),
+                                    REASON_STOP_RANGING_CALLED));
         }
         mDynamicallyAddedPeers.remove(controleeAddress);
+        return STATUS_OK;
+    }
+
+    /**
+     * Reconfigures ranging interval for an ongoing session
+     *
+     * @return STATUS_OK if reconfigure was successful.
+     * @return UWB_RECONFIGURATION_FAILURE if reconfigure failed.
+     * @return INVALID_API_CALL if ranging session is not active.
+     */
+    public synchronized int setBlockStriding(int blockStridingLength) {
+        if (!isAlive()) {
+            Log.w(TAG, "Attempt to set block striding while session is not active.");
+            return INVALID_API_CALL;
+        }
+
+        boolean success =
+                reconfigureRanging(
+                        ConfigurationManager.createReconfigureParamsBlockStriding(
+                                        blockStridingLength)
+                                .toBundle());
+
+        if (!success) {
+            Log.w(TAG, "Reconfiguring ranging interval failed");
+            return UWB_RECONFIGURATION_FAILURE;
+        }
         return STATUS_OK;
     }
 }

@@ -35,6 +35,8 @@ import android.os.RemoteException;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
+import com.android.modules.utils.build.SdkLevel;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -254,6 +256,13 @@ public class RangingManagerTest {
         rangingManager.onServiceConnected(handle, PARAMS);
         verify(callback, times(1)).onServiceConnected(eq(PARAMS));
 
+        // Test should only run on U+ devices.
+        if (SdkLevel.isAtLeastU()) {
+            rangingManager.onRangingRoundsUpdateDtTagStatus(handle, PARAMS);
+            verify(callback, times(1))
+                    .onRangingRoundsUpdateDtTagStatus(eq(PARAMS));
+        }
+
         rangingManager.onRangingClosed(handle, REASON, PARAMS);
         verify(callback, times(1)).onClosed(eq(REASON), eq(PARAMS));
     }
@@ -453,6 +462,10 @@ public class RangingManagerTest {
                 RangingChangeReason.REMOTE_REQUEST, RangingSession.Callback.REASON_REMOTE_REQUEST);
 
         runReason(RangingChangeReason.SYSTEM_POLICY, RangingSession.Callback.REASON_SYSTEM_POLICY);
+
+        runReason(
+                RangingChangeReason.SYSTEM_REGULATION,
+                RangingSession.Callback.REASON_SYSTEM_REGULATION);
 
         runReason(
                 RangingChangeReason.BAD_PARAMETERS, RangingSession.Callback.REASON_BAD_PARAMETERS);

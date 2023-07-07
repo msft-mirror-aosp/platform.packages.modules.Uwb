@@ -26,6 +26,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.PersistableBundle;
 import android.os.SystemClock;
+import android.uwb.util.PersistableBundleUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -282,8 +283,9 @@ public final class RangingMeasurement implements Parcelable {
                             other.getDestinationAngleOfArrivalMeasurement())
                     && mLineOfSight == other.getLineOfSight()
                     && mMeasurementFocus == other.getMeasurementFocus()
-                    && mRssiDbm == other.getRssiDbm();
-            // TODO: Equality for RangingMeasurementMetadata
+                    && mRssiDbm == other.getRssiDbm()
+                    && PersistableBundleUtils.isEqual(mRangingMeasurementMetadata,
+                    other.mRangingMeasurementMetadata);
         }
         return false;
     }
@@ -295,7 +297,8 @@ public final class RangingMeasurement implements Parcelable {
     public int hashCode() {
         return Objects.hash(mRemoteDeviceAddress, mStatus, mElapsedRealtimeNanos,
                 mDistanceMeasurement, mAngleOfArrivalMeasurement,
-                mDestinationAngleOfArrivalMeasurement, mLineOfSight, mMeasurementFocus, mRssiDbm);
+                mDestinationAngleOfArrivalMeasurement, mLineOfSight, mMeasurementFocus, mRssiDbm,
+                PersistableBundleUtils.getHashCode(mRangingMeasurementMetadata));
     }
 
     @Override
@@ -335,8 +338,9 @@ public final class RangingMeasurement implements Parcelable {
                     builder.setLineOfSight(in.readInt());
                     builder.setMeasurementFocus(in.readInt());
                     builder.setRssiDbm(in.readInt());
-                    builder.setRangingMeasurementMetadata(
-                            in.readPersistableBundle(getClass().getClassLoader()));
+                    PersistableBundle metadata =
+                            in.readPersistableBundle(getClass().getClassLoader());
+                    if (metadata != null) builder.setRangingMeasurementMetadata(metadata);
                     return builder.build();
                 }
 
@@ -350,12 +354,16 @@ public final class RangingMeasurement implements Parcelable {
     @Override
     public String toString() {
         return "RangingMeasurement["
-                + "distance measurement: " + mDistanceMeasurement
+                + "remote device address:" + mRemoteDeviceAddress
+                + ", distance measurement: " + mDistanceMeasurement
                 + ", aoa measurement: " + mAngleOfArrivalMeasurement
                 + ", dest aoa measurement: " + mDestinationAngleOfArrivalMeasurement
                 + ", lineOfSight: " + mLineOfSight
+                + ", measurementFocus: " + mMeasurementFocus
                 + ", rssiDbm: " + mRssiDbm
                 + ", ranging measurement metadata: " + mRangingMeasurementMetadata
+                + ", elapsed real time nanos: " + mElapsedRealtimeNanos
+                + ", status: " + mStatus
                 + "]";
     }
 

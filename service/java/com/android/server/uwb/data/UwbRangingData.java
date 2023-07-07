@@ -27,6 +27,8 @@ public class UwbRangingData {
     public int mNoOfRangingMeasures;
     public UwbTwoWayMeasurement[] mRangingTwoWayMeasures;
     public byte[] mRawNtfData;
+    public UwbOwrAoaMeasurement mRangingOwrAoaMeasure;
+    public UwbDlTDoAMeasurement[] mUwbDlTDoAMeasurements;
 
     public UwbRangingData(long seqCounter, long sessionId, int rcrIndication,
             long currRangingInterval, int rangingMeasuresType, int macAddressMode,
@@ -40,6 +42,36 @@ public class UwbRangingData {
         this.mMacAddressMode = macAddressMode;
         this.mNoOfRangingMeasures = noOfRangingMeasures;
         this.mRangingTwoWayMeasures = rangingTwoWayMeasures;
+        this.mRawNtfData = rawNtfData;
+    }
+
+    public UwbRangingData(long seqCounter, long sessionId, int rcrIndication,
+            long currRangingInterval, int rangingMeasuresType, int macAddressMode,
+            int noOfRangingMeasures, UwbOwrAoaMeasurement rangingOwrAoaMeasure,
+            byte[] rawNtfData) {
+        this.mSeqCounter = seqCounter;
+        this.mSessionId = sessionId;
+        this.mRcrIndication = rcrIndication;
+        this.mCurrRangingInterval = currRangingInterval;
+        this.mRangingMeasuresType = rangingMeasuresType;
+        this.mMacAddressMode = macAddressMode;
+        this.mNoOfRangingMeasures = noOfRangingMeasures;
+        this.mRangingOwrAoaMeasure = rangingOwrAoaMeasure;
+        this.mRawNtfData = rawNtfData;
+    }
+
+    public UwbRangingData(long seqCounter, long sessionId, int rcrIndication,
+            long currRangingInterval, int rangingMeasuresType, int macAddressMode,
+            int noOfRangingMeasures, UwbDlTDoAMeasurement[] uwbDlTDoAMeasurements,
+            byte[] rawNtfData) {
+        this.mSeqCounter = seqCounter;
+        this.mSessionId = sessionId;
+        this.mRcrIndication = rcrIndication;
+        this.mCurrRangingInterval = currRangingInterval;
+        this.mRangingMeasuresType = rangingMeasuresType;
+        this.mMacAddressMode = macAddressMode;
+        this.mNoOfRangingMeasures = noOfRangingMeasures;
+        this.mUwbDlTDoAMeasurements = uwbDlTDoAMeasurements;
         this.mRawNtfData = rawNtfData;
     }
 
@@ -79,6 +111,14 @@ public class UwbRangingData {
         return mRawNtfData;
     }
 
+    public UwbOwrAoaMeasurement getRangingOwrAoaMeasure() {
+        return mRangingOwrAoaMeasure;
+    }
+
+    public UwbDlTDoAMeasurement[] getUwbDlTDoAMeasurements() {
+        return mUwbDlTDoAMeasurements;
+    }
+
     public String toString() {
         if (mRangingMeasuresType == UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY) {
             return "UwbRangingData { "
@@ -90,6 +130,30 @@ public class UwbRangingData {
                     + ", MacAddressMode = " + mMacAddressMode
                     + ", NoOfRangingMeasures = " + mNoOfRangingMeasures
                     + ", RangingTwoWayMeasures = " + Arrays.toString(mRangingTwoWayMeasures)
+                    + ", RawNotificationData = " + Arrays.toString(mRawNtfData)
+                    + '}';
+        } else if (mRangingMeasuresType == UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA) {
+            return "UwbRangingData { "
+                    + " SeqCounter = " + mSeqCounter
+                    + ", SessionId = " + mSessionId
+                    + ", RcrIndication = " + mRcrIndication
+                    + ", CurrRangingInterval = " + mCurrRangingInterval
+                    + ", RangingMeasuresType = " + mRangingMeasuresType
+                    + ", MacAddressMode = " + mMacAddressMode
+                    + ", NoOfRangingMeasures = " + mNoOfRangingMeasures
+                    + ", RangingOwrAoaMeasure = " + mRangingOwrAoaMeasure.toString()
+                    + ", RawNotificationData = " + Arrays.toString(mRawNtfData)
+                    + '}';
+        } else if (mRangingMeasuresType == UwbUciConstants.RANGING_MEASUREMENT_TYPE_DL_TDOA) {
+            return "UwbRangingData { "
+                    + " SeqCounter = " + mSeqCounter
+                    + ", SessionId = " + mSessionId
+                    + ", RcrIndication = " + mRcrIndication
+                    + ", CurrRangingInterval = " + mCurrRangingInterval
+                    + ", RangingMeasuresType = " + mRangingMeasuresType
+                    + ", MacAddressMode = " + mMacAddressMode
+                    + ", NoOfRangingMeasures = " + mNoOfRangingMeasures
+                    + ", RangingDlTDoAMeasure = " + Arrays.toString(mUwbDlTDoAMeasurements)
                     + ", RawNotificationData = " + Arrays.toString(mRawNtfData)
                     + '}';
         } else {
