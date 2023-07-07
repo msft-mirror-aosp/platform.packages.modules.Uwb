@@ -34,6 +34,7 @@ import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_CHANNE
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_CHAPS_PER_SLOT;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_HOPPING_CONFIG_MODES_AND_SEQUENCES;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_MAX_RANGING_SESSION_NUMBER;
+import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_MIN_UWB_INITIATION_TIME_MS;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_PULSE_SHAPE_COMBOS;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_RAN_MULTIPLIER;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_SYNC_CODES;
@@ -93,12 +94,21 @@ public class CccDecoder extends TlvDecoder {
     private CccRangingStartedParams getCccRangingStartedParamsFromTlvBuffer(TlvDecoderBuffer tlvs) {
         byte[] hopModeKey = tlvs.getByteArray(ConfigParam.HOP_MODE_KEY);
         int hopModeKeyInt = ByteBuffer.wrap(hopModeKey).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        long uwbTime0;
+        // Backwards compatibility with vendors who were using Google defined
+        // UWB_TIME0 TLV param.
+        try {
+            uwbTime0 = tlvs.getLong(ConfigParam.UWB_TIME0);
+        } catch (IllegalArgumentException e) {
+            uwbTime0 = tlvs.getLong(ConfigParam.UWB_INITIATION_TIME);
+        }
+
         return new CccRangingStartedParams.Builder()
                 // STS_Index0  0 - 0x3FFFFFFFF
                 .setStartingStsIndex(tlvs.getInt(ConfigParam.STS_INDEX))
                 .setHopModeKey(hopModeKeyInt)
                 //  UWB_Time0 0 - 0xFFFFFFFFFFFFFFFF  UWB_INITIATION_TIME
-                .setUwbTime0(tlvs.getLong(ConfigParam.UWB_TIME0))
+                .setUwbTime0(uwbTime0)
                 // RANGING_INTERVAL = RAN_Multiplier * 96
                 .setRanMultiplier(tlvs.getInt(ConfigParam.RANGING_INTERVAL) / 96)
                 .setSyncCodeIndex(tlvs.getByte(ConfigParam.PREAMBLE_CODE_INDEX))
@@ -183,6 +193,13 @@ public class CccDecoder extends TlvDecoder {
             builder.setMaxRangingSessionNumber(maxRangingSessionNumber);
         } catch (IllegalArgumentException e) {
             Log.w(TAG, "SUPPORTED_MAX_RANGING_SESSION_NUMBER not found");
+        }
+
+        try {
+            int minUwbInitiationTimeMs = tlvs.getInt(CCC_SUPPORTED_MIN_UWB_INITIATION_TIME_MS);
+            builder.setMinUwbInitiationTimeMs(minUwbInitiationTimeMs);
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "SUPPORTED_MIN_UWB_INITIATION_TIME_MS not found");
         }
         return builder.build();
     }
