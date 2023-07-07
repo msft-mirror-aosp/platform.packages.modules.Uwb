@@ -39,20 +39,20 @@ import org.mockito.Mock;
 
 public class UwbControleeTest {
     public static final UwbAddress UWB_ADDRESS = UwbAddress.fromBytes(new byte[] {1, 2});
-    @Mock
-    UwbSessionManager.UwbSession mSession;
-    UwbFilterEngine mEngine;
     UwbControlee mControlee;
+    @Mock
+    UwbInjector mUwbInjector;
 
     @Before
     public void setUp() {
         UwbFilterEngine.Builder builder = new UwbFilterEngine.Builder();
-        mEngine = builder.build();
-        mSession = mock(UwbSessionManager.UwbSession.class);
-        when(mSession.createFilterEngine()).thenReturn(mEngine);
+        UwbFilterEngine engine = builder.build();
+        mUwbInjector = mock(UwbInjector.class);
+        when(mUwbInjector.getElapsedSinceBootMillis()).thenReturn(10L);
         mControlee = new UwbControlee(
                 UWB_ADDRESS,
-                mSession);
+                engine,
+                mUwbInjector);
     }
 
     @After
@@ -63,11 +63,6 @@ public class UwbControleeTest {
     @Test
     public void testGetUwbAddress() {
         assertThat(mControlee.getUwbAddress()).isEqualTo(UWB_ADDRESS);
-    }
-
-    @Test
-    public void testGetSession() {
-        assertThat(mControlee.getSession()).isEqualTo(mSession);
     }
 
     @Test
@@ -95,5 +90,27 @@ public class UwbControleeTest {
         RangingMeasurement newMeasure = rm.build();
         TestHelpers.assertClose(newMeasure.getAngleOfArrivalMeasurement().getAzimuth()
                 .getRadians(), testRads);
+    }
+
+    @Test
+    public void testNonAoaMeasurement() {
+        final double testDist = 2;
+        DistanceMeasurement dm = new DistanceMeasurement.Builder()
+                .setMeters(testDist)
+                .setErrorMeters(0.0)
+                .setConfidenceLevel(1.0)
+                .build();
+
+        RangingMeasurement.Builder rm = new RangingMeasurement.Builder()
+                .setDistanceMeasurement(dm)
+                .setStatus(RANGING_STATUS_SUCCESS)
+                .setRemoteDeviceAddress(UWB_ADDRESS)
+                .setElapsedRealtimeNanos(100);
+
+        // Filtering a single measurement value should just yield that same value.
+        mControlee.filterMeasurement(rm);
+
+        RangingMeasurement newMeasure = rm.build();
+        assertThat(newMeasure.getAngleOfArrivalMeasurement()).isNull();
     }
 }

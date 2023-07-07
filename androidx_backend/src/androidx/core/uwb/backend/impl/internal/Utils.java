@@ -16,10 +16,16 @@
 
 package androidx.core.uwb.backend.impl.internal;
 
+import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_DISABLE;
+import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE;
+import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_EDGE_TRIG;
+import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
+
 import android.annotation.IntDef;
 import android.util.ArrayMap;
 
 import com.google.common.collect.ImmutableList;
+import com.google.uwb.support.fira.FiraParams;
 
 import java.util.Map;
 
@@ -31,13 +37,14 @@ public final class Utils {
     /** Supported Ranging configurations. */
     @IntDef({
         CONFIG_UNICAST_DS_TWR,
-        CONFIG_ID_2,
-        CONFIG_ID_3,
-        CONFIG_ID_4,
-        CONFIG_ID_5,
-        CONFIG_ID_6,
-        CONFIG_ID_7,
-        CONFIG_ID_8,
+        CONFIG_MULTICAST_DS_TWR,
+        CONFIG_UNICAST_DS_TWR_NO_AOA,
+        CONFIG_PROVISIONED_UNICAST_DS_TWR,
+        CONFIG_PROVISIONED_MULTICAST_DS_TWR,
+        CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA,
+        CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
+        CONFIG_MULTICAST_DS_TWR_NO_AOA,
+        CONFIG_DL_TDOA_DT_TAG,
     })
     public @interface UwbConfigId {}
 
@@ -49,25 +56,28 @@ public final class Utils {
      */
     public static final int CONFIG_UNICAST_DS_TWR = 1;
 
-    public static final int CONFIG_ID_2 = 2;
+    public static final int CONFIG_MULTICAST_DS_TWR = 2;
 
     /** Same as {@code CONFIG_ID_1}, except Angle-of-arrival (AoA) data is not reported. */
-    public static final int CONFIG_ID_3 = 3;
+    public static final int CONFIG_UNICAST_DS_TWR_NO_AOA = 3;
 
     /** Same as {@code CONFIG_ID_1}, except P-STS security mode is enabled. */
-    public static final int CONFIG_ID_4 = 4;
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR = 4;
 
     /** Same as {@code CONFIG_ID_2}, except P-STS security mode is enabled. */
-    public static final int CONFIG_ID_5 = 5;
+    public static final int CONFIG_PROVISIONED_MULTICAST_DS_TWR = 5;
 
     /** Same as {@code CONFIG_ID_3}, except P-STS security mode is enabled. */
-    public static final int CONFIG_ID_6 = 6;
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA = 6;
 
     /** Same as {@code CONFIG_ID_2}, except P-STS individual controlee key mode is enabled. */
-    public static final int CONFIG_ID_7 = 7;
+    public static final int CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 7;
+
+    /** Same as {@code CONFIG_ID_3}, except not unicast @Hide */
+    public static final int CONFIG_MULTICAST_DS_TWR_NO_AOA = 1000;
 
     /** FiRa- defined Downlink-TDoA for DT-Tag ranging */
-    public static final int CONFIG_ID_8 = 8;
+    public static final int CONFIG_DL_TDOA_DT_TAG = 1001;
 
     @IntDef({
         INFREQUENT,
@@ -76,14 +86,14 @@ public final class Utils {
     })
     public @interface RangingUpdateRate {}
 
-    /** Reports ranging data in a couple of seconds (default to 4 seconds). */
-    public static final int INFREQUENT = 1;
-
     /**
      * Reports ranging data in hundreds of milliseconds (depending on the ranging interval setting
      * of the config)
      */
-    public static final int NORMAL = 2;
+    public static final int NORMAL = 1;
+
+    /** Reports ranging data in a couple of seconds (default to 4 seconds). */
+    public static final int INFREQUENT = 2;
 
     /** Reports ranging data as fast as possible (depending on the device's capability). */
     public static final int FAST = 3;
@@ -103,13 +113,13 @@ public final class Utils {
     private static final Map<Integer, RangingTimingParams> CONFIG_RANGING_INTERVAL_MAP =
             new ArrayMap<>();
 
-    /** Sets the dafault {@link RangingTimingParams} for given config ID. */
+    /** Sets the default {@link RangingTimingParams} for given config ID. */
     public static void setRangingTimingParams(
             @UwbConfigId int configId, RangingTimingParams params) {
         CONFIG_RANGING_INTERVAL_MAP.put(configId, params);
     }
 
-    /** Gets the dafault {@link RangingTimingParams} of given config ID. */
+    /** Gets the default {@link RangingTimingParams} of given config ID. */
     public static RangingTimingParams getRangingTimingParams(@UwbConfigId int configId) {
         return CONFIG_RANGING_INTERVAL_MAP.get(configId);
     }
@@ -145,96 +155,185 @@ public final class Utils {
     /** Can't start ranging because the UWB_RANGING permission is not granted. */
     public static final int MISSING_PERMISSION_UWB_RANGING = 4;
 
+    /** Supported Range Data Notification Config */
+    @androidx.annotation.IntDef(
+            value = {
+                    RANGE_DATA_NTF_DISABLE,
+                    RANGE_DATA_NTF_ENABLE,
+                    RANGE_DATA_NTF_ENABLE_PROXIMITY_LEVEL_TRIG,
+                    RANGE_DATA_NTF_ENABLE_PROXIMITY_EDGE_TRIG,
+            })
+    public @interface RangeDataNtfConfig {}
+
+    public static final int RANGE_DATA_NTF_DISABLE = 0;
+    public static final int RANGE_DATA_NTF_ENABLE = 1;
+    public static final int RANGE_DATA_NTF_ENABLE_PROXIMITY_LEVEL_TRIG = 2;
+    public static final int RANGE_DATA_NTF_ENABLE_PROXIMITY_EDGE_TRIG = 3;
+
+    public static final ImmutableList<Integer> SUPPORTED_NTF_CONFIG =
+            ImmutableList.of(0, 1, 2, 3);
+
+    /** Convert Fira range data Ntf config to Utils range data ntf config.*/
+    public static @Utils.RangeDataNtfConfig int convertFromFiraNtfConfig(
+            @FiraParams.RangeDataNtfConfig int rangeDataConfig) {
+        switch (rangeDataConfig) {
+            case RANGE_DATA_NTF_CONFIG_DISABLE:
+                return RANGE_DATA_NTF_DISABLE;
+            case RANGE_DATA_NTF_CONFIG_ENABLE:
+                return RANGE_DATA_NTF_ENABLE;
+            case RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG:
+                return RANGE_DATA_NTF_ENABLE_PROXIMITY_LEVEL_TRIG;
+            case RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_EDGE_TRIG :
+                return RANGE_DATA_NTF_ENABLE_PROXIMITY_EDGE_TRIG;
+            default:
+                return RANGE_DATA_NTF_ENABLE;
+        }
+    }
+    /** Convert Utils range data Ntf config to Fira range data ntf config.*/
+    public static @FiraParams.RangeDataNtfConfig int convertToFiraNtfConfig(
+            @Utils.RangeDataNtfConfig int rangeDataConfig) {
+        switch (rangeDataConfig) {
+            case RANGE_DATA_NTF_DISABLE:
+                return RANGE_DATA_NTF_CONFIG_DISABLE;
+            case RANGE_DATA_NTF_ENABLE:
+                return RANGE_DATA_NTF_CONFIG_ENABLE;
+            case RANGE_DATA_NTF_ENABLE_PROXIMITY_LEVEL_TRIG:
+                return RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
+            case RANGE_DATA_NTF_ENABLE_PROXIMITY_EDGE_TRIG :
+                return RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_EDGE_TRIG;
+            default:
+                return RANGE_DATA_NTF_CONFIG_ENABLE;
+        }
+    }
+
+    @IntDef(
+            value = {
+                    FREQUENT_RANGING_INTERVAL,
+                    AUTOMATIC,
+                    INFREQUENT_RANGING_INTERVAL,
+            }
+    )
+    public @interface RangingInterval {}
+
+    public static final int FREQUENT_RANGING_INTERVAL = 100;
+    public static final int AUTOMATIC = 200;
+    public static final int INFREQUENT_RANGING_INTERVAL = 600;
+
+    @IntDef(
+            value = {
+                    DURATION_1_MS,
+                    DURATION_2_MS,
+            }
+    )
+    public @interface SlotDuration {}
+
+    public static final int DURATION_1_MS = 1;
+    public static final int DURATION_2_MS = 2;
+
     /**
      * Unusual failures happened in UWB system callback, such as stopping ranging or removing a
      * known controlee failed.
      */
-    public static final int UWB_SYSTEM_CALLBACK_FAILURE = 42005;
+    public static final int UWB_SYSTEM_CALLBACK_FAILURE = 5;
+
+    /** Failed to reconfigure an existing ranging session. */
+    public static final int UWB_RECONFIGURATION_FAILURE = 6;
 
     static {
         setRangingTimingParams(
                 CONFIG_UNICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 240,
-                        /* rangingIntervalFast= */ 48,
-                        /* rangingIntervalInfrequent= */ 2400,
+                        /* rangingIntervalFast= */ 240,
+                        /* rangingIntervalInfrequent= */ 4000,
                         /* slotPerRangingRound= */ 6,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
                         /* hoppingEnabled= */ true));
 
         setRangingTimingParams(
-                CONFIG_ID_2,
+                CONFIG_MULTICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 40,
-                        /* rangingIntervalInfrequent= */ 2000,
+                        /* rangingIntervalFast= */ 200,
+                        /* rangingIntervalInfrequent= */ 4000,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
                         /* hoppingEnabled= */ true));
 
         setRangingTimingParams(
-                CONFIG_ID_3,
+                CONFIG_UNICAST_DS_TWR_NO_AOA,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 40,
-                        /* rangingIntervalInfrequent= */ 2000,
+                        /* rangingIntervalFast= */ 200,
+                        /* rangingIntervalInfrequent= */4000,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
                         /* hoppingEnabled= */ true));
 
         setRangingTimingParams(
-                CONFIG_ID_4,
+                CONFIG_PROVISIONED_UNICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 240,
-                        /* rangingIntervalFast= */ 48,
-                        /* rangingIntervalInfrequent= */ 2400,
+                        /* rangingIntervalFast= */ 240,
+                        /* rangingIntervalInfrequent= */ 4000,
                         /* slotPerRangingRound= */ 6,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
                         /* hoppingEnabled= */ true));
 
         setRangingTimingParams(
-                CONFIG_ID_5,
+                CONFIG_PROVISIONED_MULTICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 40,
-                        /* rangingIntervalInfrequent= */ 2000,
+                        /* rangingIntervalFast= */ 200,
+                        /* rangingIntervalInfrequent= */ 4000,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
                         /* hoppingEnabled= */ true));
 
         setRangingTimingParams(
-                CONFIG_ID_6,
+                CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 40,
-                        /* rangingIntervalInfrequent= */ 2000,
+                        /* rangingIntervalFast= */ 200,
+                        /* rangingIntervalInfrequent= */ 4000,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
                         /* hoppingEnabled= */ true));
 
         setRangingTimingParams(
-                CONFIG_ID_7,
+                CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 40,
-                        /* rangingIntervalInfrequent= */ 2000,
+                        /* rangingIntervalFast= */ 200,
+                        /* rangingIntervalInfrequent= */ 4000,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
                         /* hoppingEnabled= */ true));
 
         setRangingTimingParams(
-                CONFIG_ID_8,
+                CONFIG_DL_TDOA_DT_TAG,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 40,
-                        /* rangingIntervalInfrequent= */ 2000,
+                        /* rangingIntervalFast= */ 200,
+                        /* rangingIntervalInfrequent= */ 4000,
+                        /* slotPerRangingRound= */ 20,
+                        /* slotDurationRstu= */ 2400,
+                        /* initiationTimeMs= */ 0,
+                        /* hoppingEnabled= */ true));
+
+        setRangingTimingParams(
+                CONFIG_MULTICAST_DS_TWR_NO_AOA,
+                new RangingTimingParams(
+                        /* rangingIntervalNormal= */ 200,
+                        /* rangingIntervalFast= */ 200,
+                        /* rangingIntervalInfrequent= */ 4000,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
@@ -253,6 +352,11 @@ public final class Utils {
     // frequency) support will be added.
     public static final ImmutableList<Integer> SUPPORTED_BPRF_PREAMBLE_INDEX =
             ImmutableList.of(9, 10, 11, 12);
+
+    /** Converts millisecond to RSTU. */
+    public static int convertMsToRstu(int value) {
+        return (int) (value * 499.2 * 1000 / 416);
+    }
 
     private Utils() {}
 }

@@ -29,27 +29,31 @@ import com.android.server.uwb.correction.pose.IPoseSource.Capabilities;
  * provide a more understandable UWB location guess to the user.
  * Recommended for hardware that does not support elevation. This should execute before the
  * AoAPrimer in the primer execution order.
+ * This will replace any existing elevation value, as it assumes that the hardware's elevation is
+ * invalid or zero.
  */
 public class ElevationPrimer implements IPrimer {
+    /**
+     * The FOM to apply to estimated elevations. This should not be 0 because that is equivalent to
+     * a reading that should be discarded. */
+    public static double ELEVATION_FOM = 0.3;
+
     /**
      * Applies a default pose-based elevation to a UWB reading that doesn't have one.
      *
      * @param input     The original UWB reading.
-     * @param prediction A prediction of where the signal probably came from.
+     * @param prediction The previous filtered UWB result adjusted by the pose change since then.
      * @param poseSource A pose source that may indicate phone orientation.
+     * @param timeMs When the input occurred, in ms since boot.
      * @return A replacement value for the UWB vector that has been corrected for the situation.
      */
     @Override
-    public SphericalVector.Sparse prime(
-            @NonNull SphericalVector.Sparse input,
+    public SphericalVector.Annotated prime(
+            @NonNull SphericalVector.Annotated input,
             @Nullable SphericalVector prediction,
-            @Nullable IPoseSource poseSource) {
-        // Early exit: If there is already an elevation, we won't try to fill it in.
-        if (input.hasElevation) {
-            return input;
-        }
-
-        SphericalVector.Sparse position = input;
+            @Nullable IPoseSource poseSource,
+            long timeMs) {
+        SphericalVector.Annotated position = input;
         if (poseSource != null
                 && poseSource.getCapabilities().contains(Capabilities.UPRIGHT)
         ) {
@@ -59,16 +63,18 @@ public class ElevationPrimer implements IPrimer {
                 // an AoA elevation, we'll assume that elevation is level with the phone.
                 // i.e. If the phone pitches down, the elevation would appear up.
 
-                position = new SphericalVector.Sparse(
+                position = new SphericalVector.Annotated(
                     SphericalVector.fromRadians(
-                        input.vector.azimuth,
+                        input.azimuth,
                         -pose.rotation.toYawPitchRoll().y, // -Pitch becomes our assumed elevation
-                        input.vector.distance
+                        input.distance
                     ),
                     input.hasAzimuth,
                     true,
                     input.hasDistance
-                );
+                ).copyFomFrom(input);
+
+                position.elevationFom *= ELEVATION_FOM;
             }
         }
         return position;

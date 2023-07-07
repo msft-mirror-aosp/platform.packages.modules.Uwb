@@ -45,6 +45,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 
 /**
  * This class provides a way to perform Ultra Wideband (UWB) operations such as querying the
@@ -544,6 +545,22 @@ public final class UwbManager {
     }
 
     /**
+     * @hide
+     * Get uwbs timestamp in micros.
+     *
+     * @return uwb device timestamp in micros.
+     */
+    @NonNull
+    @RequiresPermission(permission.UWB_PRIVILEGED)
+    public long queryUwbsTimestampMicros() {
+        try {
+            return mUwbAdapter.queryUwbsTimestampMicros();
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
      * Get the timestamp resolution for events in nanoseconds
      * <p>This value defines the maximum error of all timestamps for events reported to
      * {@link RangingSession.Callback}.
@@ -1018,6 +1035,7 @@ public final class UwbManager {
     @RequiresPermission(permission.UWB_PRIVILEGED)
     public @SendVendorUciStatus int sendVendorUciMessage(
             @IntRange(from = 0, to = 15) int gid, int oid, @NonNull byte[] payload) {
+        Objects.requireNonNull(payload, "Payload must not be null");
         try {
             return mUwbAdapter.sendVendorUciMessage(MESSAGE_TYPE_COMMAND, gid, oid, payload);
         } catch (RemoteException e) {
@@ -1053,29 +1071,14 @@ public final class UwbManager {
         }
     }
 
-    /**
-     * Interface for UWB activity energy info listener. Should be implemented by applications and
-     * set when calling {@link UwbManager#getUwbActivityEnergyInfoAsync}.
-     */
-    public interface OnUwbActivityEnergyInfoListener {
-        /**
-         * Called when Uwb activity energy info is available.
-         * Note: this listener is triggered at most once for each call to
-         * {@link #getUwbActivityEnergyInfoAsync}.
-         *
-         * @param info the latest {@link UwbActivityEnergyInfo}, or null if unavailable.
-         */
-        void onUwbActivityEnergyInfo(@Nullable UwbActivityEnergyInfo info);
-    }
-
     private static class OnUwbActivityEnergyInfoProxy
             extends IOnUwbActivityEnergyInfoListener.Stub {
         private final Object mLock = new Object();
         @Nullable @GuardedBy("mLock") private Executor mExecutor;
-        @Nullable @GuardedBy("mLock") private OnUwbActivityEnergyInfoListener mListener;
+        @Nullable @GuardedBy("mLock") private Consumer<UwbActivityEnergyInfo> mListener;
 
         OnUwbActivityEnergyInfoProxy(Executor executor,
-                OnUwbActivityEnergyInfoListener listener) {
+                Consumer<UwbActivityEnergyInfo> listener) {
             mExecutor = executor;
             mListener = listener;
         }
@@ -1083,7 +1086,7 @@ public final class UwbManager {
         @Override
         public void onUwbActivityEnergyInfo(UwbActivityEnergyInfo info) {
             Executor executor;
-            OnUwbActivityEnergyInfoListener listener;
+            Consumer<UwbActivityEnergyInfo> listener;
             synchronized (mLock) {
                 if (mExecutor == null || mListener == null) {
                     return;
@@ -1095,7 +1098,7 @@ public final class UwbManager {
                 mListener = null;
             }
             Binder.clearCallingIdentity();
-            executor.execute(() -> listener.onUwbActivityEnergyInfo(info));
+            executor.execute(() -> listener.accept(info));
         }
     }
 
@@ -1110,7 +1113,7 @@ public final class UwbManager {
     @RequiresPermission(permission.UWB_PRIVILEGED)
     public void getUwbActivityEnergyInfoAsync(
             @NonNull @CallbackExecutor Executor executor,
-            @NonNull OnUwbActivityEnergyInfoListener listener) {
+            @NonNull Consumer<UwbActivityEnergyInfo> listener) {
         Objects.requireNonNull(executor, "executor cannot be null");
         Objects.requireNonNull(listener, "listener cannot be null");
         try {
