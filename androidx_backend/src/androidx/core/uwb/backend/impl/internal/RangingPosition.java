@@ -30,6 +30,7 @@ public class RangingPosition {
     private final RangingMeasurement mDistance;
     @Nullable private final RangingMeasurement mAzimuth;
     @Nullable private final RangingMeasurement mElevation;
+    @Nullable private final DlTdoaMeasurement mDlTdoaMeasurement;
     private final long mElapsedRealtimeNanos;
     private final int mRssi;
 
@@ -38,18 +39,25 @@ public class RangingPosition {
             @Nullable RangingMeasurement azimuth,
             @Nullable RangingMeasurement elevation,
             long elapsedRealtimeNanos) {
-        this(distance, azimuth, elevation, elapsedRealtimeNanos, RSSI_UNKNOWN);
+        this(distance,
+                azimuth,
+                elevation,
+                null, // DlTdoaMeasurement
+                elapsedRealtimeNanos,
+                RSSI_UNKNOWN);
     }
 
     public RangingPosition(
             RangingMeasurement distance,
             @Nullable RangingMeasurement azimuth,
             @Nullable RangingMeasurement elevation,
+            @Nullable DlTdoaMeasurement dlTdoaMeasurement,
             long elapsedRealtimeNanos,
             int rssi) {
         this.mDistance = distance;
         this.mAzimuth = azimuth;
         this.mElevation = elevation;
+        this.mDlTdoaMeasurement = dlTdoaMeasurement;
         this.mElapsedRealtimeNanos = elapsedRealtimeNanos;
         this.mRssi = rssi;
     }
@@ -88,6 +96,14 @@ public class RangingPosition {
         return mRssi;
     }
 
+    /**
+     * Gets {@link DlTdoaMeasurement} related to Dl-TDoA, or null if not available
+     */
+    @Nullable
+    public DlTdoaMeasurement getDlTdoaMeasurement() {
+        return mDlTdoaMeasurement;
+    }
+
     @Override
     public String toString() {
         String formatted =
@@ -103,6 +119,9 @@ public class RangingPosition {
             formatted += String.format(Locale.US, " | elevation: %f", mElevation.getValue());
         }
         formatted += String.format(Locale.US, " | rssi: %d", mRssi);
+        if (mDlTdoaMeasurement != null) {
+            formatted += String.format(Locale.US, " | dlTdoa: %s", mDlTdoaMeasurement);
+        }
         return formatted;
     }
 }

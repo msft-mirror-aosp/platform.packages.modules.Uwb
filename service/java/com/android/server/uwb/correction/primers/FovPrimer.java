@@ -24,6 +24,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.server.uwb.correction.math.SphericalVector;
+import com.android.server.uwb.correction.math.SphericalVector.Annotated;
 import com.android.server.uwb.correction.pose.IPoseSource;
 
 /**
@@ -38,6 +39,7 @@ import com.android.server.uwb.correction.pose.IPoseSource;
  * necessary.
  */
 public class FovPrimer implements IPrimer {
+    private double mLastGoodReferenceTimeMs;
     private final double mCosFov;
 
     /**
@@ -54,21 +56,23 @@ public class FovPrimer implements IPrimer {
     /**
      * Applies corrections to a raw position.
      * @param input      The original UWB reading.
-     * @param prediction A prediction of where the signal probably came from.
+     * @param prediction The previous filtered UWB result adjusted by the pose change since then.
      * @param poseSource A pose source that may indicate phone orientation.
+     * @param timeMs When the input occurred, in ms since boot.
      * @return A replacement value for the UWB input that has been corrected for the situation.
      */
     @Override
-    public SphericalVector.Sparse prime(
-            @NonNull SphericalVector.Sparse input,
+    public SphericalVector.Annotated prime(
+            @NonNull SphericalVector.Annotated input,
             @Nullable SphericalVector prediction,
-            @Nullable IPoseSource poseSource) {
+            @Nullable IPoseSource poseSource,
+            long timeMs) {
         if (prediction == null) {
             return input;
         }
 
-        float azimuth = input.hasAzimuth ? input.vector.azimuth : prediction.azimuth;
-        float elevation = input.hasElevation ? input.vector.elevation : prediction.elevation;
+        float azimuth = input.hasAzimuth ? input.azimuth : prediction.azimuth;
+        float elevation = input.hasElevation ? input.elevation : prediction.elevation;
 
         // Compute the absolute cartesian Z-value of the az/el vector, ignoring distance,
         // as an indicator of the position's relation to the FOV.
@@ -76,11 +80,21 @@ public class FovPrimer implements IPrimer {
 
         // Faster equivalent to acos(zValue) < mFov
         if (zValue < mCosFov) {
-            return SphericalVector.fromRadians(
+            Annotated result = new Annotated(SphericalVector.fromRadians(
                     prediction.azimuth,
                     prediction.elevation,
-                    input.vector.distance
-            ).toSparse(true, true, input.hasDistance);
+                    input.distance),
+                    true, true, input.hasDistance);
+            result.copyFomFrom(input);
+
+            // Tweak the FOM based on how fresh our data is.
+            double elapsedMs = timeMs - mLastGoodReferenceTimeMs;
+            double fom = Math.max(1 - elapsedMs / 1000 * FALLOFF_FOM_PER_SEC, MINIMUM_FOM);
+            result.azimuthFom *= fom;
+
+            return result;
+        } else {
+            mLastGoodReferenceTimeMs = timeMs;
         }
 
         return input;
