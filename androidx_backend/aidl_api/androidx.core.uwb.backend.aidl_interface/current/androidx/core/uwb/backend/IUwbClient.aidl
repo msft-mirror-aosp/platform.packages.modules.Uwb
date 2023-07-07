@@ -40,5 +40,6 @@ interface IUwbClient {
   void startRanging(in androidx.core.uwb.backend.RangingParameters parameters, in androidx.core.uwb.backend.IRangingSessionCallback callback);
   void stopRanging(in androidx.core.uwb.backend.IRangingSessionCallback callback);
   void addControlee(in androidx.core.uwb.backend.UwbAddress address);
+  void addControleeWithSessionParams(in androidx.core.uwb.backend.RangingControleeParameters params);
   void removeControlee(in androidx.core.uwb.backend.UwbAddress address);
 }
