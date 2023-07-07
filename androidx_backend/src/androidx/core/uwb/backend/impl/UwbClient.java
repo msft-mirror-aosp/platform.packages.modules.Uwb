@@ -27,6 +27,7 @@ import androidx.core.uwb.backend.UwbAddress;
 import androidx.core.uwb.backend.impl.internal.RangingDevice;
 import androidx.core.uwb.backend.impl.internal.RangingPosition;
 import androidx.core.uwb.backend.impl.internal.RangingSessionCallback;
+import androidx.core.uwb.backend.impl.internal.Utils;
 import androidx.core.uwb.backend.impl.internal.UwbDevice;
 import androidx.core.uwb.backend.impl.internal.UwbRangeDataNtfConfig;
 import androidx.core.uwb.backend.impl.internal.UwbServiceImpl;
@@ -57,6 +58,13 @@ public abstract class UwbClient extends IUwbClient.Stub {
         rangingCapabilities.supportsAzimuthalAngle = cap.supportsAzimuthalAngle();
         rangingCapabilities.supportsDistance = cap.supportsDistance();
         rangingCapabilities.supportsElevationAngle = cap.supportsElevationAngle();
+        rangingCapabilities.minRangingInterval = cap.getMinRangingInterval();
+        rangingCapabilities.supportedChannels = cap.getSupportedChannels()
+                .stream().mapToInt(Integer::intValue).toArray();
+        rangingCapabilities.supportedNtfConfigs = cap.getSupportedNtfConfigs()
+                .stream().mapToInt(Integer::intValue).toArray();
+        rangingCapabilities.supportedConfigIds = cap.getSupportedConfigIds()
+                .stream().mapToInt(Integer::intValue).toArray();
         return rangingCapabilities;
     }
 
@@ -78,12 +86,14 @@ public abstract class UwbClient extends IUwbClient.Stub {
                     .fromBytes(device.address.address));
         }
         //TODO(b/272558796) : Add UwbRangeDataConfig from parameters after aidl changes
+        //TODO(b/261045570) : Get slotDuration and rangingInterval after aidl changes
         UwbRangeDataNtfConfig uwbRangeDataNtfConfig = new UwbRangeDataNtfConfig.Builder().build();
         mDevice.setRangingParameters(
                 new androidx.core.uwb.backend.impl.internal.RangingParameters(
                         parameters.uwbConfigId, parameters.sessionId, parameters.subSessionId,
                         parameters.sessionKeyInfo, parameters.subSessionKeyInfo,
-                        channel, addresses, parameters.rangingUpdateRate, uwbRangeDataNtfConfig));
+                        channel, addresses, parameters.rangingUpdateRate, uwbRangeDataNtfConfig,
+                        Utils.DURATION_2_MS, Utils.AUTOMATIC, false));
     }
 
     protected androidx.core.uwb.backend.impl.internal.RangingSessionCallback convertCallback(

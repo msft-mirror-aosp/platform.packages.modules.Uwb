@@ -157,14 +157,16 @@ public class UwbConfigurationManagerTest {
         List<UwbAddress> destAddressList = new ArrayList<>();
         destAddressList.add(destAddress1);
         destAddressList.add(destAddress2);
-        int initiationTimeMs = 100;
+        int initiationTime = 100;
         int slotDurationRstu = 2400;
         int slotsPerRangingRound = 10;
         int rangingIntervalMs = 100;
         int blockStrideLength = 2;
         int maxRangingRoundRetries = 3;
         int sessionPriority = 100;
-        boolean hasResultReportPhase = true;
+        boolean hasRangingResultReportMessage = true;
+        boolean hasControlMessage = true;
+        boolean hasRangingControlPhase = false;
         int measurementReportType = MEASUREMENT_REPORT_TYPE_INITIATOR_TO_RESPONDER;
         int inBandTerminationAttemptCount = 8;
         int channelNumber = 10;
@@ -213,7 +215,7 @@ public class UwbConfigurationManagerTest {
                         .setMultiNodeMode(multiNodeMode)
                         .setDeviceAddress(deviceAddress)
                         .setDestAddressList(destAddressList)
-                        .setInitiationTimeMs(initiationTimeMs)
+                        .setInitiationTime(initiationTime)
                         .setSlotDurationRstu(slotDurationRstu)
                         .setSlotsPerRangingRound(slotsPerRangingRound)
                         .setRangingIntervalMs(rangingIntervalMs)
@@ -221,7 +223,9 @@ public class UwbConfigurationManagerTest {
                         .setMaxRangingRoundRetries(maxRangingRoundRetries)
                         .setSessionPriority(sessionPriority)
                         .setMacAddressMode(addressMode)
-                        .setHasResultReportPhase(hasResultReportPhase)
+                        .setHasRangingResultReportMessage(hasRangingResultReportMessage)
+                        .setHasControlMessage(hasControlMessage)
+                        .setHasRangingControlPhase(hasRangingControlPhase)
                         .setMeasurementReportType(measurementReportType)
                         .setInBandTerminationAttemptCount(inBandTerminationAttemptCount)
                         .setChannelNumber(channelNumber)

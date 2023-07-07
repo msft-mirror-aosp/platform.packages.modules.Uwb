@@ -20,9 +20,11 @@ import static androidx.core.uwb.backend.impl.internal.RangingSessionCallback.REA
 import static androidx.core.uwb.backend.impl.internal.RangingSessionCallback.REASON_STOP_RANGING_CALLED;
 import static androidx.core.uwb.backend.impl.internal.RangingSessionCallback.REASON_UNKNOWN;
 import static androidx.core.uwb.backend.impl.internal.RangingSessionCallback.REASON_WRONG_PARAMETERS;
-import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_ID_2;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_MULTICAST_DS_TWR;
 import static androidx.core.uwb.backend.impl.internal.Utils.INFREQUENT;
+import static androidx.core.uwb.backend.impl.internal.Utils.INVALID_API_CALL;
 import static androidx.core.uwb.backend.impl.internal.Utils.RANGE_DATA_NTF_DISABLE;
+import static androidx.core.uwb.backend.impl.internal.Utils.RANGE_DATA_NTF_ENABLE_PROXIMITY_EDGE_TRIG;
 import static androidx.core.uwb.backend.impl.internal.Utils.RANGE_DATA_NTF_ENABLE_PROXIMITY_LEVEL_TRIG;
 import static androidx.core.uwb.backend.impl.internal.Utils.STATUS_OK;
 
@@ -77,6 +79,7 @@ public class RangingControllerTest {
     private ArgumentCaptor<PersistableBundle> mBundleArgumentCaptor;
 
     private RangingController mRangingController;
+    private UwbAddress mRangingParamsKnownPeerAddress;
 
     private static Executor getExecutor() {
         return new Executor() {
@@ -108,19 +111,24 @@ public class RangingControllerTest {
                         .setNtfProximityNear(100)
                         .setNtfProximityFar(300)
                         .build();
+        mRangingParamsKnownPeerAddress = UwbAddress.getRandomizedShortAddress();
         RangingParameters rangingParameters =
                 new RangingParameters(
-                        CONFIG_ID_2,
+                        CONFIG_MULTICAST_DS_TWR,
                         1,
                         0,
                         new byte[]{1, 2},
                         new byte[]{1, 2},
                         mComplexChannel,
-                        new ArrayList<>(List.of(UwbAddress.getRandomizedShortAddress())),
+                        new ArrayList<>(List.of(mRangingParamsKnownPeerAddress)),
                         INFREQUENT,
-                        uwbRangeDataNtfConfig);
+                        uwbRangeDataNtfConfig,
+                        Utils.DURATION_2_MS,
+                        Utils.AUTOMATIC,
+                        false);
         mRangingController =
-                new RangingController(mUwbManager, getExecutor(), mOpAsyncCallbackRunner);
+                new RangingController(mUwbManager, getExecutor(), mOpAsyncCallbackRunner,
+                        new UwbFeatureFlags.Builder().build());
         mRangingController.setRangingParameters(rangingParameters);
         mRangingController.setForTesting(true);
     }
@@ -156,7 +164,7 @@ public class RangingControllerTest {
                         .build();
         RangingParameters rangingParameters =
                 new RangingParameters(
-                        CONFIG_ID_2,
+                        CONFIG_MULTICAST_DS_TWR,
                         0,
                         0,
                         new byte[]{1, 2},
@@ -164,7 +172,10 @@ public class RangingControllerTest {
                         mComplexChannel,
                         List.of(UwbAddress.fromBytes(new byte[]{3, 4})),
                         INFREQUENT,
-                        uwbRangeDataNtfConfig);
+                        uwbRangeDataNtfConfig,
+                        Utils.DURATION_2_MS,
+                        Utils.AUTOMATIC,
+                        false);
 
         mRangingController.setRangingParameters(rangingParameters);
 
@@ -389,7 +400,9 @@ public class RangingControllerTest {
                 .reconfigure(any(PersistableBundle.class));
 
         mRangingController.startRanging(rangingSessionCallback, mBackendCallbackExecutor);
-        assertEquals(mRangingController.addControlee(peerAddress), STATUS_OK);
+        assertEquals(mRangingController.addControleeWithSessionParams(
+                new RangingControleeParameters(
+                        peerAddress, 0, null)), STATUS_OK);
         verify(pfRangingSession).reconfigure(any(PersistableBundle.class));
         verify(rangingSessionCallback)
                 .onRangingInitialized(UwbDevice.createForAddress(peerAddress.toBytes()));
@@ -434,12 +447,107 @@ public class RangingControllerTest {
                 .reconfigure(any(PersistableBundle.class));
 
         mRangingController.startRanging(rangingSessionCallback, mBackendCallbackExecutor);
-        mRangingController.addControlee(peerAddress);
+        mRangingController.addControleeWithSessionParams(
+                new RangingControleeParameters(peerAddress, 0, null));
         assertEquals(mRangingController.removeControlee(peerAddress), STATUS_OK);
-        verify(pfRangingSession, times(2)).reconfigure(any(PersistableBundle.class));
+        assertEquals(mRangingController.removeControlee(mRangingParamsKnownPeerAddress), STATUS_OK);
+        assertEquals(mRangingController.removeControlee(UwbAddress.getRandomizedShortAddress()),
+                INVALID_API_CALL);
+        verify(pfRangingSession, times(3)).reconfigure(any(PersistableBundle.class));
         verify(rangingSessionCallback)
                 .onRangingSuspended(
                         UwbDevice.createForAddress(peerAddress.toBytes()),
                         REASON_STOP_RANGING_CALLED);
+    }
+
+    @Test
+    public void testReconfigureRangingInterval() {
+        UwbAddress deviceAddress = mRangingController.getLocalAddress();
+        mRangingController.getComplexChannel();
+
+        final RangingSessionCallback rangingSessionCallback = mock(RangingSessionCallback.class);
+        final RangingSession pfRangingSession = mock(RangingSession.class);
+        final Mutable<RangingSession.Callback> pfRangingSessionCallback = new Mutable<>();
+
+        doAnswer(
+                invocation -> {
+                    pfRangingSessionCallback.value = invocation.getArgument(2);
+                    pfRangingSessionCallback.value.onOpened(pfRangingSession);
+                    return new CancellationSignal();
+                })
+                .when(mUwbManager)
+                .openRangingSession(
+                        any(PersistableBundle.class),
+                        any(Executor.class),
+                        any(RangingSession.Callback.class));
+
+        doAnswer(
+                invocation -> {
+                    pfRangingSessionCallback.value.onStarted(new PersistableBundle());
+                    return true;
+                })
+                .when(pfRangingSession)
+                .start(any(PersistableBundle.class));
+
+        doAnswer(
+                invocation -> {
+                    pfRangingSessionCallback.value.onReconfigured(new PersistableBundle());
+                    return true;
+                })
+                .when(pfRangingSession)
+                .reconfigure(any(PersistableBundle.class));
+
+        mRangingController.startRanging(rangingSessionCallback, mBackendCallbackExecutor);
+        assertEquals(mRangingController.setBlockStriding(5), STATUS_OK);
+
+        verify(pfRangingSession, times(1)).reconfigure(any(PersistableBundle.class));
+    }
+
+    @Test
+    public void testReconfigureRangeDataNtf() {
+        UwbAddress deviceAddress = mRangingController.getLocalAddress();
+        mRangingController.getComplexChannel();
+
+        final RangingSessionCallback rangingSessionCallback = mock(RangingSessionCallback.class);
+        final RangingSession pfRangingSession = mock(RangingSession.class);
+        final Mutable<RangingSession.Callback> pfRangingSessionCallback = new Mutable<>();
+
+        doAnswer(
+                invocation -> {
+                    pfRangingSessionCallback.value = invocation.getArgument(2);
+                    pfRangingSessionCallback.value.onOpened(pfRangingSession);
+                    return new CancellationSignal();
+                })
+                .when(mUwbManager)
+                .openRangingSession(
+                        any(PersistableBundle.class),
+                        any(Executor.class),
+                        any(RangingSession.Callback.class));
+
+        doAnswer(
+                invocation -> {
+                    pfRangingSessionCallback.value.onStarted(new PersistableBundle());
+                    return true;
+                })
+                .when(pfRangingSession)
+                .start(any(PersistableBundle.class));
+
+        doAnswer(
+                invocation -> {
+                    pfRangingSessionCallback.value.onReconfigured(new PersistableBundle());
+                    return true;
+                })
+                .when(pfRangingSession)
+                .reconfigure(any(PersistableBundle.class));
+
+        mRangingController.startRanging(rangingSessionCallback, mBackendCallbackExecutor);
+        UwbRangeDataNtfConfig params = new UwbRangeDataNtfConfig.Builder()
+                .setRangeDataConfigType(RANGE_DATA_NTF_ENABLE_PROXIMITY_EDGE_TRIG)
+                .setNtfProximityNear(50)
+                .setNtfProximityFar(100)
+                .build();
+        assertEquals(mRangingController.reconfigureRangeDataNtfConfig(params), STATUS_OK);
+
+        verify(pfRangingSession, times(1)).reconfigure(any(PersistableBundle.class));
     }
 }

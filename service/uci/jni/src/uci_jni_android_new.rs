@@ -29,20 +29,19 @@ use jni::errors::Error as JNIError;
 use jni::objects::{GlobalRef, JObject, JString, JValue};
 use jni::signature::ReturnType;
 use jni::sys::{
-    jboolean, jbyte, jbyteArray, jint, jintArray, jlong, jobject, jobjectArray, jshort,
-    jshortArray, jvalue,
+    jboolean, jbyte, jbyteArray, jint, jintArray, jlong, jobject, jobjectArray, jshort, jvalue,
 };
 use jni::JNIEnv;
 use log::{debug, error};
 use uwb_core::error::{Error, Result};
 use uwb_core::params::{
     AppConfigTlv, CountryCode, RawAppConfigTlv, RawUciMessage,
-    SessionUpdateActiveRoundsDtTagResponse, SetAppConfigResponse,
+    SessionUpdateDtTagRangingRoundsResponse, SetAppConfigResponse,
 };
 use uwb_uci_packets::{
     AppConfigTlvType, CapTlv, Controlee, Controlee_V2_0_16_Byte_Version,
-    Controlee_V2_0_32_Byte_Version, Controlees, FiraComponent, PowerStats, ResetConfig,
-    SessionState, SessionType, StatusCode, UpdateMulticastListAction,
+    Controlee_V2_0_32_Byte_Version, Controlees, PowerStats, ResetConfig, SessionState, SessionType,
+    StatusCode, UpdateMulticastListAction,
 };
 
 /// Macro capturing the name of the function calling this macro.
@@ -86,16 +85,6 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeIn
 fn native_init(env: JNIEnv) -> Result<()> {
     let jvm = env.get_java_vm().map_err(|_| Error::ForeignFunctionInterface)?;
     unique_jvm::set_once(jvm)
-}
-
-/// Get max session number
-#[no_mangle]
-pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGetMaxSessionNumber(
-    _env: JNIEnv,
-    _obj: JObject,
-) -> jint {
-    debug!("{}: enter", function_name!());
-    5
 }
 
 /// Turn on Single UWB chip.
@@ -326,8 +315,8 @@ fn create_set_config_response(response: SetAppConfigResponse, env: JNIEnv) -> Re
         env.find_class(CONFIG_STATUS_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
     let mut buf = Vec::<u8>::new();
     for config_status in &response.config_status {
-        buf.push(config_status.cfg_id as u8);
-        buf.push(config_status.status as u8);
+        buf.push(u8::from(config_status.cfg_id));
+        buf.push(u8::from(config_status.status));
     }
     let config_status_jbytearray =
         env.byte_array_from_slice(&buf).map_err(|_| Error::ForeignFunctionInterface)?;
@@ -339,7 +328,7 @@ fn create_set_config_response(response: SetAppConfigResponse, env: JNIEnv) -> Re
             uwb_config_status_class,
             "(II[B)V",
             &[
-                JValue::Int(response.status as i32),
+                JValue::Int(i32::from(response.status)),
                 JValue::Int(response.config_status.len() as i32),
                 JValue::Object(config_status_jobject),
             ],
@@ -403,7 +392,7 @@ fn create_get_config_response(tlvs: Vec<AppConfigTlv>, env: JNIEnv) -> Result<jb
     let mut buf = Vec::<u8>::new();
     for tlv in tlvs.into_iter() {
         let tlv = tlv.into_inner();
-        buf.push(tlv.cfg_id as u8);
+        buf.push(u8::from(tlv.cfg_id));
         buf.push(tlv.v.len() as u8);
         buf.extend(&tlv.v);
     }
@@ -417,7 +406,7 @@ fn create_get_config_response(tlvs: Vec<AppConfigTlv>, env: JNIEnv) -> Result<jb
             tlv_data_class,
             "(II[B)V",
             &[
-                JValue::Int(StatusCode::UciStatusOk as i32),
+                JValue::Int(i32::from(StatusCode::UciStatusOk)),
                 JValue::Int(tlvs_len as i32),
                 JValue::Object(tlvs_jobject),
             ],
@@ -479,7 +468,7 @@ fn create_cap_response(tlvs: Vec<CapTlv>, env: JNIEnv) -> Result<jbyteArray> {
         env.find_class(TLV_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
     let mut buf = Vec::<u8>::new();
     for tlv in &tlvs {
-        buf.push(tlv.t as u8);
+        buf.push(u8::from(tlv.t));
         buf.push(tlv.v.len() as u8);
         buf.extend(&tlv.v);
     }
@@ -493,7 +482,7 @@ fn create_cap_response(tlvs: Vec<CapTlv>, env: JNIEnv) -> Result<jbyteArray> {
             tlv_data_class,
             "(II[B)V",
             &[
-                JValue::Int(StatusCode::UciStatusOk as i32),
+                JValue::Int(i32::from(StatusCode::UciStatusOk)),
                 JValue::Int(tlvs.len() as i32),
                 JValue::Object(tlvs_jobject),
             ],
@@ -534,7 +523,7 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeCo
     session_id: jint,
     action: jbyte,
     no_of_controlee: jbyte,
-    addresses: jshortArray,
+    addresses: jbyteArray,
     sub_session_ids: jintArray,
     sub_session_keys: jbyteArray,
     chip_id: JString,
@@ -564,21 +553,19 @@ fn native_controller_multicast_list_update(
     session_id: jint,
     action: jbyte,
     no_of_controlee: jbyte,
-    addresses: jshortArray,
+    addresses: jbyteArray,
     sub_session_ids: jintArray,
     sub_session_keys: jbyteArray,
     chip_id: JString,
 ) -> Result<()> {
     let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
-    let mut address_list = vec![
-        0i16;
-        env.get_array_length(addresses)
-            .map_err(|_| Error::ForeignFunctionInterface)?
-            .try_into()
-            .map_err(|_| { Error::BadParameters })?
-    ];
-    env.get_short_array_region(addresses, 0, &mut address_list)
-        .map_err(|_| Error::ForeignFunctionInterface)?;
+
+    let addresses_bytes =
+        env.convert_byte_array(addresses).map_err(|_| Error::ForeignFunctionInterface)?;
+
+    let address_list: Vec<[u8; 2]> =
+        addresses_bytes.chunks_exact(2).map(|chunk| [chunk[0], chunk[1]]).collect();
+
     let mut sub_session_id_list = vec![
         0i32;
         env.get_array_length(sub_session_ids)
@@ -599,7 +586,7 @@ fn native_controller_multicast_list_update(
         UpdateMulticastListAction::AddControlee | UpdateMulticastListAction::RemoveControlee => {
             Controlees::NoSessionKey(
                 zip(address_list, sub_session_id_list)
-                    .map(|(a, s)| Controlee { short_address: a as u16, subsession_id: s as u32 })
+                    .map(|(a, s)| Controlee { short_address: a, subsession_id: s as u32 })
                     .collect::<Vec<Controlee>>(),
             )
         }
@@ -613,7 +600,7 @@ fn native_controller_multicast_list_update(
                 )
                 .map(|((address, id), key)| {
                     Ok(Controlee_V2_0_16_Byte_Version {
-                        short_address: address as u16,
+                        short_address: address,
                         subsession_id: id as u32,
                         subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
                     })
@@ -630,7 +617,7 @@ fn native_controller_multicast_list_update(
             )
             .map(|((address, id), key)| {
                 Ok(Controlee_V2_0_32_Byte_Version {
-                    short_address: address as u16,
+                    short_address: address,
                     subsession_id: id as u32,
                     subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
                 })
@@ -712,7 +699,7 @@ unsafe fn create_vendor_response(msg: RawUciMessage, env: JNIEnv) -> Result<jobj
         vendor_response_class,
         "(BII[B)V",
         &[
-            JValue::Byte(StatusCode::UciStatusOk as i8),
+            JValue::Byte(u8::from(StatusCode::UciStatusOk) as i8),
             JValue::Int(msg.gid as i32),
             JValue::Int(msg.oid as i32),
             JValue::Object(payload_jobject),
@@ -730,7 +717,7 @@ fn create_invalid_vendor_response(env: JNIEnv) -> Result<jobject> {
         vendor_response_class,
         "(BII[B)V",
         &[
-            JValue::Byte(StatusCode::UciStatusFailed as i8),
+            JValue::Byte(u8::from(StatusCode::UciStatusFailed) as i8),
             JValue::Int(-1),
             JValue::Int(-1),
             JValue::Object(JObject::null()),
@@ -745,7 +732,7 @@ fn create_invalid_vendor_response(env: JNIEnv) -> Result<jobject> {
 ///
 /// response should be checked before calling to ensure safety.
 unsafe fn create_ranging_round_status(
-    response: SessionUpdateActiveRoundsDtTagResponse,
+    response: SessionUpdateDtTagRangingRoundsResponse,
     env: JNIEnv,
 ) -> Result<jobject> {
     let dt_ranging_rounds_update_status_class = env
@@ -762,7 +749,7 @@ unsafe fn create_ranging_round_status(
         dt_ranging_rounds_update_status_class,
         "(II[B)V",
         &[
-            JValue::Int(response.status as i32),
+            JValue::Int(i32::from(response.status)),
             JValue::Int(indexes.len() as i32),
             JValue::Object(indexes_jobject),
         ],
@@ -862,9 +849,9 @@ fn native_get_power_stats(env: JNIEnv, obj: JObject, chip_id: JString) -> Result
     uci_manager.android_get_power_stats()
 }
 
-/// Update active ranging rounds for DT-TAG
+/// Update ranging rounds for DT-TAG
 #[no_mangle]
-pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSessionUpdateActiveRoundsDtTag(
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSessionUpdateDtTagRangingRounds(
     env: JNIEnv,
     obj: JObject,
     session_id: jint,
@@ -902,12 +889,12 @@ fn native_set_ranging_rounds_dt_tag(
     session_id: u32,
     ranging_round_indexes: jbyteArray,
     chip_id: JString,
-) -> Result<SessionUpdateActiveRoundsDtTagResponse> {
+) -> Result<SessionUpdateDtTagRangingRoundsResponse> {
     let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
     let indexes = env
         .convert_byte_array(ranging_round_indexes)
         .map_err(|_| Error::ForeignFunctionInterface)?;
-    uci_manager.session_update_active_rounds_dt_tag(session_id, indexes)
+    uci_manager.session_update_dt_tag_ranging_rounds(session_id, indexes)
 }
 
 /// Send a data packet to the remote device.
@@ -917,8 +904,7 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
     obj: JObject,
     session_id: jint,
     address: jbyteArray,
-    dest_fira_component: jbyte,
-    uci_sequence_number: jbyte,
+    uci_sequence_number: jshort,
     app_payload_data: jbyteArray,
     chip_id: JString,
 ) -> jbyte {
@@ -929,7 +915,6 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
             obj,
             session_id,
             address,
-            dest_fira_component,
             uci_sequence_number,
             app_payload_data,
             chip_id,
@@ -944,8 +929,7 @@ fn native_send_data(
     obj: JObject,
     session_id: jint,
     address: jbyteArray,
-    dest_fira_component: jbyte,
-    uci_sequence_number: jbyte,
+    uci_sequence_number: jshort,
     app_payload_data: jbyteArray,
     chip_id: JString,
 ) -> Result<()> {
@@ -955,13 +939,10 @@ fn native_send_data(
         env.convert_byte_array(address).map_err(|_| Error::ForeignFunctionInterface)?;
     let app_payload_data_bytearray =
         env.convert_byte_array(app_payload_data).map_err(|_| Error::ForeignFunctionInterface)?;
-    let destination_fira_component =
-        FiraComponent::try_from(dest_fira_component as u8).map_err(|_| Error::BadParameters)?;
     uci_manager.send_data_packet(
         session_id as u32,
         address_bytearray,
-        destination_fira_component,
-        uci_sequence_number as u8,
+        uci_sequence_number as u16,
         app_payload_data_bytearray,
     )
 }
@@ -985,13 +966,63 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeQu
 }
 
 fn native_query_data_size(
-    _env: JNIEnv,
-    _obj: JObject,
-    _session_id: jint,
-    _chip_id: JString,
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    chip_id: JString,
 ) -> Result<u16> {
-    // TODO(b/251477752): Implement the Rust command (in UciManager) to support this.
-    Ok(0)
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.session_query_max_data_size(session_id as u32)
+}
+
+/// Get UWBS timestamp, Return 0 if failed.
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeQueryUwbTimestamp(
+    env: JNIEnv,
+    obj: JObject,
+    chip_id: JString,
+) -> jlong {
+    debug!("{}: enter", function_name!());
+    match option_result_helper(native_query_time_stamp(env, obj, chip_id), function_name!()) {
+        Some(s) => s.try_into().unwrap(),
+        None => 0,
+    }
+}
+
+fn native_query_time_stamp(env: JNIEnv, obj: JObject, chip_id: JString) -> Result<u64> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.core_query_uwb_timestamp()
+}
+
+/// Get session token for the UWB session.
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGetSessionToken(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    chip_id: JString,
+) -> jlong {
+    debug!("{}: enter", function_name!());
+    match option_result_helper(
+        native_get_session_token(env, obj, session_id, chip_id),
+        function_name!(),
+    ) {
+        Some(s) => s.try_into().unwrap(),
+        None => 0,
+    }
+}
+
+fn native_get_session_token(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    chip_id: JString,
+) -> Result<u32> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.get_session_token(session_id as u32)
 }
 
 /// Get the class loader object. Has to be called from a JNIEnv where the local java classes are
