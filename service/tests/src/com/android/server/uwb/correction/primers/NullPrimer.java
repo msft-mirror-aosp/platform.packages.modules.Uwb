@@ -19,7 +19,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.server.uwb.correction.math.SphericalVector;
-import com.android.server.uwb.correction.math.SphericalVector.Sparse;
+import com.android.server.uwb.correction.math.SphericalVector.Annotated;
 import com.android.server.uwb.correction.pose.IPoseSource;
 
 public class NullPrimer implements IPrimer {
@@ -30,16 +30,18 @@ public class NullPrimer implements IPrimer {
      * @param input The original UWB reading.
      * @param prediction A prediction of where the signal probably came from.
      * @param poseSource A pose source that may indicate phone orientation.
+     * @param timeMs When the input occurred. This is in milliseconds, relative to any consistent
+     * epoch.
      * @return A replacement value for the UWB input that has been corrected for  the situation.
      */
     @Override
-    public Sparse prime(@NonNull Sparse input, @Nullable SphericalVector prediction,
-            @Nullable IPoseSource poseSource) {
+    public Annotated prime(@NonNull Annotated input, @Nullable SphericalVector prediction,
+            @Nullable IPoseSource poseSource, long timeMs) {
         // This test primer will just turn any negative azimuth values to positive ones,
         // and use the prediction for any missing values.
-        float azimuth = input.vector.azimuth;
-        float elevation = input.vector.elevation;
-        float distance = input.vector.distance;
+        float azimuth = input.azimuth;
+        float elevation = input.elevation;
+        float distance = input.distance;
         if (!input.hasAzimuth) {
             azimuth = prediction.azimuth;
         }
@@ -49,6 +51,6 @@ public class NullPrimer implements IPrimer {
         if (!input.hasDistance) {
             distance = prediction.distance;
         }
-        return SphericalVector.fromRadians(Math.abs(azimuth), elevation, distance).toSparse();
+        return new Annotated(SphericalVector.fromRadians(Math.abs(azimuth), elevation, distance));
     }
 }

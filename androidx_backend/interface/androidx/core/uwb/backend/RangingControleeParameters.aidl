@@ -1,6 +1,6 @@
+
 /*
- * Copyright (C) 2012 The Android Open Source Project
- * Copyright 2018 NXP.
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package androidx.core.uwb.backend;
 
-/*
- *  Asynchronous interval timer.
- */
+import androidx.core.uwb.backend.UwbAddress;
 
-#include <time.h>
-
-class IntervalTimer {
-public:
-  typedef void (*TIMER_FUNC)(union sigval);
-
-  IntervalTimer();
-  ~IntervalTimer();
-  bool set(int ms, TIMER_FUNC cb);
-  void kill();
-  bool create(TIMER_FUNC);
-
-private:
-  timer_t mTimerId;
-  TIMER_FUNC mCb;
-};
+/** Gms Reference: com.google.android.gms.nearby.uwb.RangingControleeParameters */
+parcelable RangingControleeParameters {
+    UwbAddress address;
+    int subSessionId;
+    byte[] subSessionKey;
+}
