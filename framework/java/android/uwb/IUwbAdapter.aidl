@@ -355,20 +355,22 @@ interface IUwbAdapter {
 
   int sendVendorUciMessage(int mt, int gid, int oid, in byte[] payload);
 
-  void onRangingRoundsUpdateDtTag(in SessionHandle sessionHandle, in PersistableBundle parameters);
+  void updateRangingRoundsDtTag(in SessionHandle sessionHandle, in PersistableBundle parameters);
 
-  /**
-   * @hide
-   */
   void getUwbActivityEnergyInfoAsync(in IOnUwbActivityEnergyInfoListener listener);
 
   /**
-   * @hide
-   *
    * Returns the max Application Data payload size that can be sent by the UWBS in one ranging
    * round.
    */
   int queryMaxDataSizeBytes(in SessionHandle sessionHandle);
+
+  /**
+   * @hide
+   *
+   * @return timestamp in microseconds
+   */
+   long queryUwbsTimestampMicros();
 
   /**
    * The maximum allowed time to open a ranging session.
