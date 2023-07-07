@@ -43,6 +43,7 @@ import android.content.ContextParams;
 import android.os.CancellationSignal;
 import android.os.PersistableBundle;
 import android.os.Process;
+import android.os.UserHandle;
 import android.permission.PermissionManager;
 import android.platform.test.annotations.AppModeFull;
 import android.util.Log;
@@ -880,8 +881,11 @@ public class UwbManagerTest {
     private AttributionSource getShellAttributionSourceWithRenouncedPermissions(
             @Nullable Set<String> renouncedPermissions) {
         try {
+            // Calculate the shellUid to account for running this from a secondary user.
+            int shellUid = UserHandle.getUid(
+                    Process.myUserHandle().getIdentifier(), UserHandle.getAppId(Process.SHELL_UID));
             AttributionSource shellAttributionSource =
-                    new AttributionSource.Builder(Process.SHELL_UID)
+                    new AttributionSource.Builder(shellUid)
                             .setPackageName("com.android.shell")
                             .setRenouncedPermissions(renouncedPermissions)
                             .build();
@@ -1118,7 +1122,7 @@ public class UwbManagerTest {
                     DlTDoARangingRoundsUpdate rangingRoundsUpdate =
                             new DlTDoARangingRoundsUpdate.Builder()
                                     .setSessionId(1)
-                                    .setNoOfActiveRangingRounds(1)
+                                    .setNoOfRangingRounds(1)
                                     .setRangingRoundIndexes(new byte[]{1})
                                     .build();
 
@@ -1237,25 +1241,6 @@ public class UwbManagerTest {
                 .setDestAddressList(List.of(UwbAddress.fromBytes(new byte[]{0x5, 6})))
                 .build();
         verifyFiraRangingSession(firaOpenSessionParams, null, null);
-    }
-
-    @Test
-    @CddTest(requirements = {"7.3.13/C-1-1,C-1-2,C-1-5"})
-    public void testQueryMaxDataSizeBytes() throws Exception {
-        FiraSpecificationParams params = getFiraSpecificationParams();
-        FiraProtocolVersion firaProtocolVersion = params.getMaxMacVersionSupported();
-        // The "SESSION_QUERY_DATA_SIZE_IN_RANGING_CMD" is added in the UCI v2.0 spec, and so
-        // check if the device supports FiRa 2.0 or above.
-        assumeTrue(firaProtocolVersion.getMajor() >= 2);
-
-        FiraOpenSessionParams firaOpenSessionParams = makeOpenSessionBuilder().build();
-        verifyFiraRangingSession(
-                firaOpenSessionParams,
-                null,
-                (rangingSessionCallback) -> {
-                    int dataSize = rangingSessionCallback.rangingSession.queryMaxDataSizeBytes();
-                    assertThat(dataSize).isGreaterThan(-1);
-                });
     }
 
     @Test

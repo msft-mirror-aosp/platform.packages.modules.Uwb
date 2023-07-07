@@ -19,6 +19,7 @@ package com.google.snippet.uwb;
 import android.app.UiAutomation;
 import android.content.Context;
 import android.net.ConnectivityManager;
+import android.os.Build;
 import android.os.PersistableBundle;
 import android.uwb.RangingMeasurement;
 import android.uwb.RangingReport;
@@ -344,7 +345,7 @@ public class UwbManagerSnippet implements Snippet {
         public void onDataSent(UwbAddress remoteDeviceAddress,
                 PersistableBundle params) {
             Log.d(TAG + "RangingSessionCallback#onDataSent() called");
-            uwbAddress = remoteDeviceAddress;
+            uwbAddress = getComputedMacAddress(remoteDeviceAddress);
             persistableBundle = params;
             handleEvent(Event.DataSent);
         }
@@ -354,7 +355,7 @@ public class UwbManagerSnippet implements Snippet {
                 int reason, PersistableBundle params) {
             Log.d(TAG + "RangingSessionCallback#onDataSendFailed() called");
             Log.d(TAG + "DataSendFailed reason " + String.valueOf(reason));
-            uwbAddress = remoteDeviceAddress;
+            uwbAddress = getComputedMacAddress(remoteDeviceAddress);
             persistableBundle = params;
             handleEvent(Event.DataSendFailed);
         }
@@ -363,7 +364,7 @@ public class UwbManagerSnippet implements Snippet {
         public void onDataReceived(UwbAddress remoteDeviceAddress,
                 PersistableBundle params, byte[] data) {
             Log.d(TAG + "RangingSessionCallback#onDataReceived() called");
-            uwbAddress = remoteDeviceAddress;
+            uwbAddress = getComputedMacAddress(remoteDeviceAddress);
             dataReceived = data;
             persistableBundle = params;
             handleEvent(Event.DataReceived);
@@ -374,7 +375,7 @@ public class UwbManagerSnippet implements Snippet {
                 int reason, PersistableBundle params) {
             Log.d(TAG + "RangingSessionCallback#onDataReceiveFailed() called");
             Log.d(TAG + "DataReceiveFailed reason " + String.valueOf(reason));
-            uwbAddress = remoteDeviceAddress;
+            uwbAddress = getComputedMacAddress(remoteDeviceAddress);
             persistableBundle = params;
             handleEvent(Event.DataReceiveFailed);
         }
@@ -459,10 +460,22 @@ public class UwbManagerSnippet implements Snippet {
             JSONArray jArray = j.getJSONArray("addressList");
             UwbAddress[] addressList = new UwbAddress[jArray.length()];
             for (int i = 0; i < jArray.length(); i++) {
-                addressList[i] = UwbAddress.fromBytes(
-                        convertJSONArrayToByteArray(jArray.getJSONArray(i)));
+                addressList[i] = getComputedMacAddress(UwbAddress.fromBytes(
+                        convertJSONArrayToByteArray(jArray.getJSONArray(i))));
             }
             builder.setAddressList(addressList);
+        }
+        if (j.has("subSessionIdList")) {
+            JSONArray jArray = j.getJSONArray("subSessionIdList");
+            int[] subSessionIdList = new int[jArray.length()];
+            for (int i = 0; i < jArray.length(); i++) {
+                subSessionIdList[i] = jArray.getInt(i);
+            }
+            builder.setSubSessionIdList(subSessionIdList);
+        }
+        if (j.has("subSessionKeyList")) {
+            JSONArray jSubSessionKeyListArray = j.getJSONArray("subSessionKeyList");
+            builder.setSubSessionKeyList(convertJSONArrayToByteArray(jSubSessionKeyListArray));
         }
         if (j.has("blockStrideLength")) {
             builder.setBlockStrideLength(j.getInt("blockStrideLength"));
@@ -475,12 +488,15 @@ public class UwbManagerSnippet implements Snippet {
             return null;
         }
         FiraControleeParams.Builder builder = new FiraControleeParams.Builder();
+        if (j.has("action")) {
+            builder.setAction(j.getInt("action"));
+        }
         if (j.has("addressList")) {
             JSONArray jArray = j.getJSONArray("addressList");
             UwbAddress[] addressList = new UwbAddress[jArray.length()];
             for (int i = 0; i < jArray.length(); i++) {
-                addressList[i] = UwbAddress.fromBytes(
-                        convertJSONArrayToByteArray(jArray.getJSONArray(i)));
+                addressList[i] = getComputedMacAddress(UwbAddress.fromBytes(
+                        convertJSONArrayToByteArray(jArray.getJSONArray(i))));
             }
             builder.setAddressList(addressList);
         }
@@ -491,6 +507,10 @@ public class UwbManagerSnippet implements Snippet {
                 subSessionIdList[i] = jArray.getInt(i);
             }
             builder.setSubSessionIdList(subSessionIdList);
+        }
+        if (j.has("subSessionKeyList")) {
+            JSONArray jSubSessionKeyListArray = j.getJSONArray("subSessionKeyList");
+            builder.setSubSessionKeyList(convertJSONArrayToByteArray(jSubSessionKeyListArray));
         }
         return builder.build();
     }
@@ -590,20 +610,20 @@ public class UwbManagerSnippet implements Snippet {
         if (j.has("deviceAddress")) {
             JSONArray jArray = j.getJSONArray("deviceAddress");
             byte[] bArray = convertJSONArrayToByteArray(jArray);
-            UwbAddress deviceAddress = UwbAddress.fromBytes(bArray);
+            UwbAddress deviceAddress = getComputedMacAddress(UwbAddress.fromBytes(bArray));
             builder.setDeviceAddress(deviceAddress);
         }
         if (j.has("destinationAddresses")) {
             JSONArray jArray = j.getJSONArray("destinationAddresses");
             UwbAddress[] destinationUwbAddresses = new UwbAddress[jArray.length()];
             for (int i = 0; i < jArray.length(); i++) {
-                destinationUwbAddresses[i] = UwbAddress.fromBytes(
-                        convertJSONArrayToByteArray(jArray.getJSONArray(i)));
+                destinationUwbAddresses[i] = getComputedMacAddress(UwbAddress.fromBytes(
+                        convertJSONArrayToByteArray(jArray.getJSONArray(i))));
             }
             builder.setDestAddressList(Arrays.asList(destinationUwbAddresses));
         }
         if (j.has("initiationTimeMs")) {
-            builder.setInitiationTimeMs(j.getInt("initiationTimeMs"));
+            builder.setInitiationTime(j.getInt("initiationTimeMs"));
         }
         if (j.has("slotDurationRstu")) {
             builder.setSlotDurationRstu(j.getInt("slotDurationRstu"));
@@ -640,7 +660,7 @@ public class UwbManagerSnippet implements Snippet {
         }
         if (j.getInt("stsConfig") == FiraParams.STS_CONFIG_STATIC) {
             JSONArray jVendorIdArray = j.getJSONArray("vendorId");
-            builder.setVendorId(convertJSONArrayToByteArray(jVendorIdArray));
+            builder.setVendorId(getComputedVendorId(convertJSONArrayToByteArray(jVendorIdArray)));
             JSONArray jStatisStsIVArray = j.getJSONArray("staticStsIV");
             builder.setStaticStsIV(convertJSONArrayToByteArray(jStatisStsIVArray));
         } else if (j.getInt("stsConfig") == FiraParams.STS_CONFIG_PROVISIONED) {
@@ -652,12 +672,17 @@ public class UwbManagerSnippet implements Snippet {
             builder.setStsConfig(j.getInt("stsConfig"));
             JSONArray jSessionKeyArray = j.getJSONArray("sessionKey");
             builder.setSessionKey(convertJSONArrayToByteArray(jSessionKeyArray));
-            JSONArray jSubSessionKeyArray = j.getJSONArray("subSessionKey");
-            builder.setSubsessionKey(convertJSONArrayToByteArray(jSubSessionKeyArray));
-            builder.setSubSessionId(j.getInt("subSessionId"));
+            if (j.getInt("deviceType") == FiraParams.RANGING_DEVICE_TYPE_CONTROLEE) {
+                JSONArray jSubSessionKeyArray = j.getJSONArray("subSessionKey");
+                builder.setSubsessionKey(convertJSONArrayToByteArray(jSubSessionKeyArray));
+                builder.setSubSessionId(j.getInt("subSessionId"));
+            }
         }
         if (j.has("aoaResultRequest")) {
             builder.setAoaResultRequest(j.getInt("aoaResultRequest"));
+        }
+        if (j.has("filterType")) {
+            builder.setFilterType(j.getInt("filterType"));
         }
 
         return builder.build();
@@ -666,7 +691,7 @@ public class UwbManagerSnippet implements Snippet {
     private RangingMeasurement getRangingMeasurement(String key, JSONArray jArray)
             throws JSONException {
         byte[] bArray = convertJSONArrayToByteArray(jArray);
-        UwbAddress peerAddress = UwbAddress.fromBytes(bArray);
+        UwbAddress peerAddress = getComputedMacAddress(UwbAddress.fromBytes(bArray));
         RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
         List<RangingMeasurement> rangingMeasurements =
                 rangingSessionCallback.rangingReport.getMeasurements();
@@ -805,11 +830,10 @@ public class UwbManagerSnippet implements Snippet {
     /** Close UWB ranging session. */
     @Rpc(description = "Close UWB ranging session")
     public void closeRangingSession(String key) {
-        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
-        if (rangingSessionCallback.rangingSession != null) {
+        RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.remove(key);
+        if (rangingSessionCallback != null && rangingSessionCallback.rangingSession != null) {
             rangingSessionCallback.rangingSession.close();
         }
-        sRangingSessionCallbackMap.remove(key);
     }
 
     private JSONObject convertPersistableBundleToJson(PersistableBundle bundle)
@@ -857,5 +881,26 @@ public class UwbManagerSnippet implements Snippet {
         } catch (ReflectiveOperationException e) {
             throw new UwbManagerSnippetException("Failed to cleaup Ui Automation", e);
         }
+    }
+
+    private static byte[] getReverseBytes(byte[] data) {
+        byte[] buffer = new byte[data.length];
+        for (int i = 0; i < data.length; i++) {
+            buffer[i] = data[data.length - 1 - i];
+        }
+        return buffer;
+    }
+    private static UwbAddress getComputedMacAddress(UwbAddress address) {
+        if (android.os.Build.VERSION.SDK_INT <= Build.VERSION_CODES.TIRAMISU) {
+            return UwbAddress.fromBytes(getReverseBytes(address.toBytes()));
+        }
+        return address;
+    }
+
+    private static byte[] getComputedVendorId(byte[] data) {
+        if (android.os.Build.VERSION.SDK_INT <= Build.VERSION_CODES.TIRAMISU) {
+            return getReverseBytes(data);
+        }
+        return data;
     }
 }

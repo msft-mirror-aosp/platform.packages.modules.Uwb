@@ -84,6 +84,8 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
      */
     @VisibleForTesting
     public static final String SETTINGS_SATELLITE_MODE_ENABLED = "satellite_mode_enabled";
+    @VisibleForTesting
+    public static final int INITIALIZATION_RETRY_TIMEOUT_MS = 10_000;
 
     private final Context mContext;
     private final UwbInjector mUwbInjector;
@@ -92,12 +94,28 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
 
     private boolean mUwbUserRestricted;
 
+    private UwbServiceCore.InitializationFailureListener mInitializationFailureListener;
 
     UwbServiceImpl(@NonNull Context context, @NonNull UwbInjector uwbInjector) {
         mContext = context;
         mUwbInjector = uwbInjector;
         mUwbSettingsStore = uwbInjector.getUwbSettingsStore();
         mUwbServiceCore = uwbInjector.getUwbServiceCore();
+        mInitializationFailureListener = () -> {
+            Log.i(TAG, "Initialization failed, retry initialization after "
+                    + INITIALIZATION_RETRY_TIMEOUT_MS + "ms");
+            mUwbServiceCore.getHandler().postDelayed(() -> {
+                try {
+                    mUwbServiceCore.setEnabled(isUwbEnabled());
+                } catch (Exception e) {
+                    Log.e(TAG, "Unable to set UWB Adapter state.", e);
+                }
+            }, INITIALIZATION_RETRY_TIMEOUT_MS);
+            // Remove initialization failure listener after first retry attempt to avoid
+            // continuously retrying.
+            mUwbServiceCore.removeInitializationFailureListener(mInitializationFailureListener);
+        };
+        mUwbServiceCore.addInitializationFailureListener(mInitializationFailureListener);
         registerAirplaneModeReceiver();
         registerSatelliteModeReceiver();
         mUwbUserRestricted = isUwbUserRestricted();
@@ -258,6 +276,16 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         enforceUwbPrivilegedPermission();
         chipId = validateChipId(chipId);
         return mUwbServiceCore.getSpecificationInfo(chipId);
+    }
+
+
+    @Override
+    public long queryUwbsTimestampMicros() throws RemoteException {
+        if (!SdkLevel.isAtLeastV()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        return mUwbServiceCore.queryUwbsTimestampMicros();
     }
 
     @Override
@@ -564,23 +592,23 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     private void registerSatelliteModeReceiver() {
-        if (isSatelliteModeSensitive()) {
-            Uri uri = Settings.Global.getUriFor(SETTINGS_SATELLITE_MODE_ENABLED);
-            if (uri == null) {
-                Log.e(TAG, "satellite mode key does not exist in Settings");
-                return;
-            }
-            mUwbInjector.registerContentObserver(
-                    uri,
-                    false,
-                    new ContentObserver(mUwbServiceCore.getHandler()) {
-                        @Override
-                        public void onChange(boolean selfChange) {
+        Uri uri = Settings.Global.getUriFor(SETTINGS_SATELLITE_MODE_ENABLED);
+        if (uri == null) {
+            Log.e(TAG, "satellite mode key does not exist in Settings");
+            return;
+        }
+        mUwbInjector.registerContentObserver(
+                uri,
+                false,
+                new ContentObserver(mUwbServiceCore.getHandler()) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        if (isSatelliteModeSensitive()) {
                             Log.i(TAG, "Satellite mode change detected");
                             handleAirplaneOrSatelliteModeEvent();
                         }
-                    });
-        }
+                    }
+                });
     }
 
     private void registerUserRestrictionsReceiver() {

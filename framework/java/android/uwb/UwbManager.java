@@ -545,6 +545,22 @@ public final class UwbManager {
     }
 
     /**
+     * @hide
+     * Get uwbs timestamp in micros.
+     *
+     * @return uwb device timestamp in micros.
+     */
+    @NonNull
+    @RequiresPermission(permission.UWB_PRIVILEGED)
+    public long queryUwbsTimestampMicros() {
+        try {
+            return mUwbAdapter.queryUwbsTimestampMicros();
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
      * Get the timestamp resolution for events in nanoseconds
      * <p>This value defines the maximum error of all timestamps for events reported to
      * {@link RangingSession.Callback}.
@@ -1019,6 +1035,7 @@ public final class UwbManager {
     @RequiresPermission(permission.UWB_PRIVILEGED)
     public @SendVendorUciStatus int sendVendorUciMessage(
             @IntRange(from = 0, to = 15) int gid, int oid, @NonNull byte[] payload) {
+        Objects.requireNonNull(payload, "Payload must not be null");
         try {
             return mUwbAdapter.sendVendorUciMessage(MESSAGE_TYPE_COMMAND, gid, oid, payload);
         } catch (RemoteException e) {
