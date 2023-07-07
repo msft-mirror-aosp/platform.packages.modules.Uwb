@@ -21,12 +21,14 @@ public class UwbFeatureFlags {
     private final boolean mSkipRangingCapabilitiesCheck;
     private final boolean mAzimuthSupport;
     private final boolean mElevationSupport;
+    private final boolean mReversedByteOrderFiraParams;
 
     private UwbFeatureFlags(boolean skipRangingCapabilitiesCheck, boolean azimuthSupport,
-            boolean elevationSupport) {
+            boolean elevationSupport, boolean reversedByteOrderFiraParams) {
         mSkipRangingCapabilitiesCheck = skipRangingCapabilitiesCheck;
         mAzimuthSupport = azimuthSupport;
         mElevationSupport = elevationSupport;
+        mReversedByteOrderFiraParams = reversedByteOrderFiraParams;
     }
 
     public boolean skipRangingCapabilitiesCheck() {
@@ -41,11 +43,16 @@ public class UwbFeatureFlags {
         return mElevationSupport;
     }
 
+    public boolean isReversedByteOrderFiraParams() {
+        return mReversedByteOrderFiraParams;
+    }
+
     /** Builder */
     public static class Builder {
         private boolean mSkipRangingCapabilitiesCheck = false;
         private boolean mAzimuthSupport = false;
         private boolean mElevationSupport = false;
+        private boolean mReversedByteOrderFiraParams = false;
 
         public UwbFeatureFlags.Builder setSkipRangingCapabilitiesCheck(
                 boolean skipRangingCapabilitiesCheck) {
@@ -63,11 +70,18 @@ public class UwbFeatureFlags {
             return this;
         }
 
+        public UwbFeatureFlags.Builder setReversedByteOrderFiraParams(
+                boolean reversedByteOrderFiraParams) {
+            mReversedByteOrderFiraParams = reversedByteOrderFiraParams;
+            return this;
+        }
+
         public UwbFeatureFlags build() {
             return new UwbFeatureFlags(
                     mSkipRangingCapabilitiesCheck,
                     mAzimuthSupport,
-                    mElevationSupport);
+                    mElevationSupport,
+                    mReversedByteOrderFiraParams);
         }
     }
 }
