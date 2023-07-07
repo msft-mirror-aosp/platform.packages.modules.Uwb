@@ -25,6 +25,7 @@ import androidx.annotation.NonNull;
 
 import com.android.server.uwb.pm.RunningProfileSessionInfo;
 import com.android.server.uwb.secure.csml.DispatchResponse;
+import com.android.server.uwb.secure.iso7816.StatusWord;
 
 import java.util.Optional;
 
@@ -34,7 +35,8 @@ import java.util.Optional;
 public abstract class ResponderSession extends SecureSession {
     private static final String LOG_TAG = "ResponderSession";
 
-    ResponderSession(@NonNull Looper workLooper,
+    ResponderSession(
+            @NonNull Looper workLooper,
             @NonNull FiRaSecureChannel fiRaSecureChannel,
             @NonNull Callback sessionCallback,
             @NonNull RunningProfileSessionInfo runningProfileSessionInfo) {
@@ -58,6 +60,12 @@ public abstract class ResponderSession extends SecureSession {
 
     @Override
     protected final void handleDispatchResponse(@NonNull DispatchResponse dispatchResponse) {
+        if (!dispatchResponse.statusWord.equals(StatusWord.SW_NO_ERROR)) {
+            logw("Wrong DispatchResponse sw: " + dispatchResponse.statusWord);
+            terminateSession();
+            mSessionCallback.onSessionAborted();
+            return;
+        }
         // once session is aborted, nothing else in the response.
         for (DispatchResponse.Notification notification : dispatchResponse.notifications) {
             switch (notification.notificationEventId) {
@@ -66,7 +74,7 @@ public abstract class ResponderSession extends SecureSession {
                     mSessionCallback.onSessionAborted();
                     return;
                 default:
-                    logw("Unexpected notification from dispatch response: "
+                    logw("unhandled notification from dispatch response: "
                             + notification.notificationEventId);
                     break;
             }

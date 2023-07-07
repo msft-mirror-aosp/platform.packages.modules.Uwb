@@ -40,15 +40,15 @@ public abstract class InitiatorSession extends SecureSession {
     private static final String LOG_TAG = "InitiatorSession";
     private static final int TUNNEL_TIMEOUT_MILLIS = 2000;
 
-    protected static final int MSG_ID_GET_CONTROLLEE_INFO = 0;
-    protected static final int MSG_ID_PUT_CONTROLLEE_INFO = 1;
+    protected static final int MSG_ID_GET_CONTROLEE_INFO = 0;
+    protected static final int MSG_ID_PUT_CONTROLEE_INFO = 1;
     protected static final int MSG_ID_GET_SESSION_DATA = 2;
     protected static final int MSG_ID_PUT_SESSION_DATA = 3;
 
     private final Deque<TunnelMessageRequest> mPendingTunnelRequests = new ArrayDeque<>();
 
-
-    InitiatorSession(@NonNull Looper workLooper,
+    InitiatorSession(
+            @NonNull Looper workLooper,
             @NonNull FiRaSecureChannel fiRaSecureChannel,
             @NonNull Callback sessionCallback,
             @NonNull RunningProfileSessionInfo runningProfileSessionInfo) {
@@ -63,16 +63,15 @@ public abstract class InitiatorSession extends SecureSession {
     protected abstract boolean handleTunnelDataResponseReceived(
             int msgId, @NonNull DispatchResponse response);
 
-    protected abstract void handleTunnelDataFailure(int msgId,
-            @NonNull TunnelDataFailReason failReason);
+    protected abstract void handleTunnelDataFailure(
+            int msgId, @NonNull TunnelDataFailReason failReason);
 
     @Override
     protected void handleDispatchCommandFailure() {
         if (!mPendingTunnelRequests.isEmpty()) {
             // we assume the unhandled dispatch command is for the tunnel request.
             TunnelMessageRequest request = mPendingTunnelRequests.removeFirst();
-            logw("The response from peer device is not handled for request: "
-                    + request.mMsgId);
+            logw("The response from peer device is not handled for request: " + request.mMsgId);
             handleTunnelDataFailure(request.mMsgId, TunnelDataFailReason.REMOTE);
             mWorkHandler.removeCallbacks(request.mTimeoutRunnable);
         }
@@ -110,7 +109,6 @@ public abstract class InitiatorSession extends SecureSession {
                 onUnsolicitedDataToHostReceived(outboundData.get().data);
             }
         }
-
     }
 
     protected void onUnsolicitedDataToHostReceived(@NonNull byte[] data) {
@@ -123,13 +121,13 @@ public abstract class InitiatorSession extends SecureSession {
     private void terminateRemoteSession() {
         logd("send terminate session to remote device.");
         TlvDatum terminateSessionDo = CsmlUtil.constructTerminateSessionGetDoTlv();
-        GetDoCommand getDoCommand =
-                GetDoCommand.build(terminateSessionDo);
+        GetDoCommand getDoCommand = GetDoCommand.build(terminateSessionDo);
         // do not expect any response from the remote.
-        mFiRaSecureChannel.tunnelToRemoteDevice(getDoCommand.getCommandApdu().getEncoded(),
+        mFiRaSecureChannel.tunnelToRemoteDevice(
+                getDoCommand.getCommandApdu().getEncoded(),
                 new FiRaSecureChannel.ExternalRequestCallback() {
                     @Override
-                    public void onSuccess() {
+                    public void onSuccess(@NonNull byte[] responseData) {
                         // do nothing.
                     }
 
@@ -142,12 +140,12 @@ public abstract class InitiatorSession extends SecureSession {
     }
 
     protected final void tunnelData(int msgId, @NonNull byte[] data) {
-        mFiRaSecureChannel.tunnelToRemoteDevice(data,
+        mFiRaSecureChannel.tunnelToRemoteDevice(
+                data,
                 new FiRaSecureChannel.ExternalRequestCallback() {
                     @Override
-                    public void onSuccess() {
-                        TunnelMessageRequest tunnelMessageRequest =
-                                new TunnelMessageRequest(msgId);
+                    public void onSuccess(@NonNull byte[] responseData) {
+                        TunnelMessageRequest tunnelMessageRequest = new TunnelMessageRequest(msgId);
                         mPendingTunnelRequests.addLast(tunnelMessageRequest);
                         logd("message: " + msgId + " is send out, waiting for response.");
                         mWorkHandler.postDelayed(
@@ -159,17 +157,17 @@ public abstract class InitiatorSession extends SecureSession {
                         handleTunnelDataFailure(msgId, TunnelDataFailReason.LOCAL);
                     }
                 });
-
     }
 
     @Override
     public final void terminateSession() {
-        mWorkHandler.post(() -> {
-            if (mFiRaSecureChannel.isEstablished()) {
-                terminateRemoteSession();
-            }
-            mFiRaSecureChannel.terminateLocally();
-        });
+        mWorkHandler.post(
+                () -> {
+                    if (mFiRaSecureChannel.isEstablished()) {
+                        terminateRemoteSession();
+                    }
+                    mFiRaSecureChannel.terminateLocally();
+                });
     }
 
     private class TunnelMessageRequest {
@@ -178,14 +176,15 @@ public abstract class InitiatorSession extends SecureSession {
 
         TunnelMessageRequest(int msgId) {
             this.mMsgId = msgId;
-            mTimeoutRunnable = () -> {
-                logd("tunnel data timeout for msg: " + msgId);
-                if (mPendingTunnelRequests.isEmpty()) {
-                    return;
-                }
-                mPendingTunnelRequests.removeFirst();
-                handleTunnelDataFailure(this.mMsgId, TunnelDataFailReason.TIMEOUT);
-            };
+            mTimeoutRunnable =
+                    () -> {
+                        logd("tunnel data timeout for msg: " + msgId);
+                        if (mPendingTunnelRequests.isEmpty()) {
+                            return;
+                        }
+                        mPendingTunnelRequests.removeFirst();
+                        handleTunnelDataFailure(this.mMsgId, TunnelDataFailReason.TIMEOUT);
+                    };
         }
     }
 

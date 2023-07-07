@@ -29,13 +29,18 @@ import static org.mockito.Mockito.when;
 
 import android.os.test.TestLooper;
 
-import com.android.server.uwb.pm.ControlleeInfo;
+import com.android.server.uwb.discovery.Transport;
 import com.android.server.uwb.pm.RunningProfileSessionInfo;
+import com.android.server.uwb.secure.csml.ControleeInfo;
+import com.android.server.uwb.secure.csml.FiRaCommand;
+import com.android.server.uwb.secure.csml.SelectAdfCommand;
 import com.android.server.uwb.secure.csml.SwapInAdfCommand;
+import com.android.server.uwb.secure.csml.UwbCapability;
 import com.android.server.uwb.secure.iso7816.CommandApdu;
 import com.android.server.uwb.secure.iso7816.ResponseApdu;
+import com.android.server.uwb.secure.iso7816.StatusWord;
 import com.android.server.uwb.secure.omapi.OmapiConnection;
-import com.android.server.uwb.transport.Transport;
+import com.android.server.uwb.util.DataTypeConversionUtil;
 import com.android.server.uwb.util.ObjectIdentifier;
 
 import org.junit.Before;
@@ -46,15 +51,15 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
-import java.util.Optional;
 
 public class ResponderSecureChannelTest {
+    private static final ObjectIdentifier PROVISIONED_ADF_OID =
+            ObjectIdentifier.fromBytes(new byte[] {(byte) 0x01});
+
     @Mock
     private SecureElementChannel mSecureElementChannel;
     @Mock
     private Transport mTransport;
-    @Mock
-    RunningProfileSessionInfo mRunningProfileSessionInfo;
 
     private TestLooper mTestLooper = new TestLooper();
 
@@ -70,16 +75,13 @@ public class ResponderSecureChannelTest {
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
+    }
 
+    private void doInit(RunningProfileSessionInfo runningProfileSessionInfo) {
         mResponderSecureChannel = new ResponderSecureChannel(mSecureElementChannel,
                 mTransport,
                 mTestLooper.getLooper(),
-                mRunningProfileSessionInfo);
-
-        doInit();
-    }
-
-    private void doInit() {
+                runningProfileSessionInfo);
         doNothing().when(mSecureElementChannel).init(mInitCompletionCallbackCaptor.capture());
 
         mResponderSecureChannel.init(mSecureChannelCallback);
@@ -89,7 +91,7 @@ public class ResponderSecureChannelTest {
 
     @Test
     public void init() {
-        doInit();
+        doInit(mock(RunningProfileSessionInfo.class));
 
         assertThat(mTestLooper.nextMessage()).isNull();
         assertThat(mResponderSecureChannel.getStatus())
@@ -98,6 +100,11 @@ public class ResponderSecureChannelTest {
 
     @Test
     public void openChannelSuccess() throws IOException {
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), mock(ObjectIdentifier.class))
+                        .build();
+        doInit(runningProfileSessionInfo);
         when(mSecureElementChannel.openChannelWithResponse())
                 .thenReturn(ResponseApdu.SW_SUCCESS_APDU);
         // select command trigger
@@ -112,7 +119,68 @@ public class ResponderSecureChannelTest {
     }
 
     @Test
+    public void remoteSelectAdfWithMatchedAdfOid() throws IOException {
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), PROVISIONED_ADF_OID)
+                        .build();
+        doInit(runningProfileSessionInfo);
+        when(mSecureElementChannel.openChannelWithResponse())
+                .thenReturn(ResponseApdu.SW_SUCCESS_APDU);
+        // select command trigger
+        CommandApdu selectCommand = CommandApdu.builder(0x00, 0xA4, 0x04, 0x00).build();
+
+        mResponderSecureChannel.processRemoteCommandOrResponse(selectCommand.getEncoded());
+        mTestLooper.dispatchAll();
+
+        when(mSecureElementChannel.isOpened()).thenReturn(true);
+        SelectAdfCommand selectAdfCommand = SelectAdfCommand.build(PROVISIONED_ADF_OID);
+        byte[] responseData = DataTypeConversionUtil.hexStringToByteArray(
+                "711280018081029000E109800100810100820101"); // ADF SELECTED notification
+        when(mSecureElementChannel.transmit(any(FiRaCommand.class)))
+                .thenReturn(ResponseApdu.fromDataAndStatusWord(
+                        responseData, StatusWord.SW_NO_ERROR.toInt()));
+        mResponderSecureChannel.processRemoteCommandOrResponse(
+                selectAdfCommand.getCommandApdu().getEncoded());
+
+        assertThat(mResponderSecureChannel.getStatus()).isEqualTo(
+                FiRaSecureChannel.Status.ADF_SELECTED);
+    }
+
+    @Test
+    public void remoteSelectAdfWithMismatchedAdfOid() throws IOException {
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(
+                        mock(UwbCapability.class), PROVISIONED_ADF_OID)
+                        .build();
+        doInit(runningProfileSessionInfo);
+        when(mSecureElementChannel.openChannelWithResponse())
+                .thenReturn(ResponseApdu.SW_SUCCESS_APDU);
+        // select command trigger
+        CommandApdu selectCommand = CommandApdu.builder(0x00, 0xA4, 0x04, 0x00).build();
+
+        mResponderSecureChannel.processRemoteCommandOrResponse(selectCommand.getEncoded());
+        mTestLooper.dispatchNext();
+
+        when(mSecureElementChannel.isOpened()).thenReturn(true);
+        SelectAdfCommand selectAdfCommand = SelectAdfCommand.build(PROVISIONED_ADF_OID);
+        byte[] responseData = DataTypeConversionUtil.hexStringToByteArray(
+                "711280018081029000E109800100810100820102"); // ADF SELECTED notification
+        when(mSecureElementChannel.transmit(any(FiRaCommand.class)))
+                .thenReturn(ResponseApdu.fromDataAndStatusWord(
+                        responseData, StatusWord.SW_NO_ERROR.toInt()));
+        mResponderSecureChannel.processRemoteCommandOrResponse(
+                selectAdfCommand.getCommandApdu().getEncoded());
+
+        assertThat(mResponderSecureChannel.getStatus()).isEqualTo(
+                FiRaSecureChannel.Status.CHANNEL_OPENED);
+        verify(mSecureChannelCallback)
+                .onSetUpError(eq(FiRaSecureChannel.SetupError.ADF_NOT_MATCHED));
+    }
+
+    @Test
     public void openChannelFail() throws IOException {
+        doInit(mock(RunningProfileSessionInfo.class));
         when(mSecureElementChannel.openChannelWithResponse())
                 .thenReturn(ResponseApdu.SW_FILE_NOT_FOUND_APDU);
         // select command trigger
@@ -130,6 +198,7 @@ public class ResponderSecureChannelTest {
 
     @Test
     public void openChannelWithException() throws IOException {
+        doInit(mock(RunningProfileSessionInfo.class));
         when(mSecureElementChannel.openChannelWithResponse())
                 .thenThrow(new IOException());
         // select command trigger
@@ -147,14 +216,17 @@ public class ResponderSecureChannelTest {
 
     @Test
     public void openChannelSwapInAdfFailed() throws IOException {
+        ControleeInfo mockControleeInfo = mock(ControleeInfo.class);
+        when(mockControleeInfo.toBytes()).thenReturn(new byte[0]);
+        RunningProfileSessionInfo runningProfileSessionInfo =
+                new RunningProfileSessionInfo.Builder(mock(UwbCapability.class),
+                        ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 }))
+                        .setSecureBlob(new byte[0])
+                        .setControleeInfo(mockControleeInfo)
+                        .build();
+        doInit(runningProfileSessionInfo);
         when(mSecureElementChannel.openChannelWithResponse())
                 .thenReturn(ResponseApdu.SW_SUCCESS_APDU);
-        when(mRunningProfileSessionInfo.getSecureBlob()).thenReturn(Optional.of(new byte[0]));
-        ControlleeInfo mockControlleeInfo = mock(ControlleeInfo.class);
-        when(mRunningProfileSessionInfo.getControlleeInfo()).thenReturn(mockControlleeInfo);
-        when(mockControlleeInfo.toBytes()).thenReturn(new byte[0]);
-        when(mRunningProfileSessionInfo.getOidOfProvisionedAdf())
-                .thenReturn(ObjectIdentifier.fromBytes(new byte[] { (byte) 0x01 }));
         when(mSecureElementChannel.transmit(any(SwapInAdfCommand.class)))
                 .thenReturn(ResponseApdu.SW_CONDITIONS_NOT_SATISFIED_APDU);
         // select command trigger
@@ -173,6 +245,7 @@ public class ResponderSecureChannelTest {
 
     @Test(expected = IllegalStateException.class)
     public void tunnelDataToRemoteDevice() {
+        doInit(mock(RunningProfileSessionInfo.class));
         mResponderSecureChannel.tunnelToRemoteDevice(new byte[0], mock(
                 FiRaSecureChannel.ExternalRequestCallback.class));
     }

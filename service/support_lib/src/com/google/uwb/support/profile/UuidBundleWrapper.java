@@ -47,10 +47,14 @@ public class UuidBundleWrapper {
     public PersistableBundle toBundle() {
         PersistableBundle bundle = new PersistableBundle();
         bundle.putInt(KEY_BUNDLE_VERSION, getBundleVersion());
-        if (!mServiceInstanceID.isEmpty()) {
+        if (mServiceInstanceID.isPresent()) {
             bundle.putString(SERVICE_INSTANCE_ID, mServiceInstanceID.get().toString());
         }
         return bundle;
+    }
+
+    public static boolean isUuidBundle(PersistableBundle bundle) {
+        return bundle.containsKey(SERVICE_INSTANCE_ID);
     }
 
     public static UuidBundleWrapper fromBundle(PersistableBundle bundle) {

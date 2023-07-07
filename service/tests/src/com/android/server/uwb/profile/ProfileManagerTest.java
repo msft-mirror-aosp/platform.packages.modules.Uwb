@@ -37,6 +37,7 @@ import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.data.ServiceProfileData.ServiceProfileInfo;
 import com.android.server.uwb.pm.ProfileManager;
 import com.android.server.uwb.pm.RangingSessionController;
+import com.android.server.uwb.util.ObjectIdentifier;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -61,6 +62,7 @@ public class ProfileManagerTest {
     @Mock private AttributionSource mAttributionSource;
     @Mock private IUwbRangingCallbacks mIUwbRangingCallbacks;
     @Mock private Looper mLooper;
+    private static final String TEST_CHIP_ID = "testChipId";
 
     private com.android.server.uwb.pm.ProfileManager mProfileManager;
 
@@ -105,8 +107,8 @@ public class ProfileManagerTest {
         UUID serviceInstanceID = new UUID(100, 50);
         ServiceProfileInfo serviceProfileInfo = new ServiceProfileInfo(serviceInstanceID,
                 0, "test", 1);
-        serviceProfileInfo.setServiceAdfID(0);
-        serviceProfileInfo.setServiceAppletID(1);
+        serviceProfileInfo.setServiceAdfOid(ObjectIdentifier.fromBytes(new byte[] {(byte) 1}));
+        serviceProfileInfo.setServiceAppletId(1);
         Map<UUID, ServiceProfileInfo> testMap = new HashMap<>();
         testMap.put(serviceProfileInfo.serviceInstanceID, serviceProfileInfo);
 
@@ -125,7 +127,7 @@ public class ProfileManagerTest {
         assertEquals(mProfileManager.mRangingSessionTable.size(), 0);
 
         mProfileManager.activateProfile(mAttributionSource, mSessionHandle, uuid1.get(),
-                mIUwbRangingCallbacks);
+                mIUwbRangingCallbacks, TEST_CHIP_ID);
 
         assertEquals(mProfileManager.mRangingSessionTable.size(), 1);
     }
@@ -138,7 +140,7 @@ public class ProfileManagerTest {
         assertEquals(mProfileManager.mRangingSessionTable.size(), 0);
 
         mProfileManager.activateProfile(mAttributionSource, mSessionHandle, uuid1.get(),
-                mIUwbRangingCallbacks);
+                mIUwbRangingCallbacks, TEST_CHIP_ID);
 
         mProfileManager.startRanging(mSessionHandle);
 
@@ -155,7 +157,7 @@ public class ProfileManagerTest {
         assertEquals(mProfileManager.mRangingSessionTable.size(), 0);
 
         mProfileManager.activateProfile(mAttributionSource, mSessionHandle, uuid1.get(),
-                mIUwbRangingCallbacks);
+                mIUwbRangingCallbacks, TEST_CHIP_ID);
 
         mProfileManager.startRanging(mSessionHandle);
         mProfileManager.stopRanging(mSessionHandle);
@@ -175,7 +177,7 @@ public class ProfileManagerTest {
         assertEquals(mProfileManager.mRangingSessionTable.size(), 0);
 
         mProfileManager.activateProfile(mAttributionSource, mSessionHandle, uuid1.get(),
-                mIUwbRangingCallbacks);
+                mIUwbRangingCallbacks, TEST_CHIP_ID);
 
         assertEquals(mProfileManager.mRangingSessionTable.size(), 1);
 

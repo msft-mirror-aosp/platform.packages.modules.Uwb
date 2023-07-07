@@ -21,7 +21,6 @@ import static com.android.server.uwb.data.UwbConfig.CONTROLEE_AND_RESPONDER;
 import static com.android.server.uwb.data.UwbConfig.CONTROLLER_AND_INITIATOR;
 import static com.android.server.uwb.data.UwbConfig.OOB_TYPE_BLE;
 import static com.android.server.uwb.data.UwbConfig.PERIPHERAL;
-import static com.android.server.uwb.data.UwbConfig.TIME_BASED;
 
 import static com.google.uwb.support.fira.FiraParams.HOPPING_MODE_DISABLE;
 import static com.google.uwb.support.fira.FiraParams.MAC_FCS_TYPE_CRC_16;
@@ -32,11 +31,13 @@ import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROL
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
 import static com.google.uwb.support.fira.FiraParams.RFRAME_CONFIG_SP3;
 import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_DYNAMIC;
+import static com.google.uwb.support.fira.FiraParams.TIME_SCHEDULED_RANGING;
 import static com.google.uwb.support.fira.FiraParams.UWB_CHANNEL_9;
 import static com.google.uwb.support.fira.FiraParams.UWB_PREAMBLE_CODE_INDEX_10;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import android.content.AttributionSource;
@@ -57,6 +58,7 @@ import com.android.server.uwb.pm.PacsControllerSession;
 import com.android.server.uwb.pm.PacsProfile;
 
 import com.google.uwb.support.fira.FiraOpenSessionParams;
+import com.google.uwb.support.fira.FiraParams;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -82,6 +84,7 @@ public class UwbConfigTest {
     private Handler mHandler;
     @Mock
     private Looper mLooper;
+    private static final String TEST_CHIP_ID = "testChipId";
 
     @Before
     public void setUp() {
@@ -99,7 +102,7 @@ public class UwbConfigTest {
         int rangingRoundUsage = RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
         int rframeConfig = RFRAME_CONFIG_SP3;
         int roundHopping = HOPPING_MODE_DISABLE;
-        int scheduledMode = TIME_BASED;
+        @FiraParams.SchedulingMode int scheduledMode = TIME_SCHEDULED_RANGING;
         int maxContentionPhaseLength = 0;
         boolean tofReport = true;
         boolean aoaAzimuthReport = false;
@@ -132,7 +135,7 @@ public class UwbConfigTest {
                 .setRangingRoundUsage(rangingRoundUsage)
                 .setRframeConfig(rframeConfig)
                 .setRoundHopping(roundHopping)
-                .setScheduledMode(scheduledMode)
+                .setScheduleMode(scheduledMode)
                 .setMaxContentionPhaseLength(maxContentionPhaseLength)
                 .setTofReport(tofReport)
                 .setAoaAzimuthReport(aoaAzimuthReport)
@@ -165,7 +168,7 @@ public class UwbConfigTest {
         assertEquals(uwbConfig.mRframeConfig, rframeConfig);
         assertEquals(uwbConfig.mStsConfig, stsConfig);
         assertEquals(uwbConfig.mRoundHopping, roundHopping);
-        assertEquals(uwbConfig.mScheduledMode, scheduledMode);
+        assertEquals(uwbConfig.mScheduleMode, scheduledMode);
         assertEquals(uwbConfig.mMaxContentionPhaseLength, maxContentionPhaseLength);
         assertEquals(uwbConfig.mTofReport, tofReport);
         assertEquals(uwbConfig.mAoaAzimuthReport, aoaAzimuthReport);
@@ -222,12 +225,12 @@ public class UwbConfigTest {
     @Test
     public void testGetOpenSessionParams() {
         UwbConfig controleeConfig = PacsProfile.getPacsControleeProfile();
-        SessionHandle sessionHandleControlee = new SessionHandle(10);
+        SessionHandle sessionHandleControlee = mock(SessionHandle.class);
 
         PacsControleeSession pacsControleeSession = new PacsControleeSession(
                 sessionHandleControlee, mAttributionSource, mContext, mUwbInjector,
                 mServiceProfileInfo,
-                mIUwbRangingCallbacks, mHandler);
+                mIUwbRangingCallbacks, mHandler, TEST_CHIP_ID);
 
         pacsControleeSession.mSessionInfo.setSessionId(10);
         pacsControleeSession.mSessionInfo.setSubSessionId(24);
@@ -245,12 +248,12 @@ public class UwbConfigTest {
         assertEquals(controleeParams.getDeviceType(), RANGING_DEVICE_TYPE_CONTROLEE);
 
         UwbConfig controllerConfig = PacsProfile.getPacsControleeProfile();
-        SessionHandle sessionHandleController = new SessionHandle(10);
+        SessionHandle sessionHandleController = mock(SessionHandle.class);
 
         PacsControllerSession pacsControllerSession = new PacsControllerSession(
                 sessionHandleController, mAttributionSource, mContext, mUwbInjector,
                 mServiceProfileInfo,
-                mIUwbRangingCallbacks, mHandler);
+                mIUwbRangingCallbacks, mHandler, TEST_CHIP_ID);
 
         pacsControllerSession.mSessionInfo.setSessionId(15);
         pacsControllerSession.mSessionInfo

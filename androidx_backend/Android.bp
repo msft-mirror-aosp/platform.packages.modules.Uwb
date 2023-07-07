@@ -18,6 +18,7 @@ package {
 
 aidl_interface {
     name: "androidx.core.uwb.backend.aidl_interface",
+    enabled: false,
     owner: "Google",
     local_include_dir: "interface",
     srcs: [
@@ -25,22 +26,44 @@ aidl_interface {
     ],
     backend: {
         java: {
-            platform_apis: true,
+            enabled: true,
+            min_sdk_version: "31",
         },
     },
     visibility: ["//visibility:public"],
 }
 
-android_app {
+java_library {
     name: "uwb_androidx_backend",
+    enabled: false,
+    installable: false,
     platform_apis: true,
-    certificate: "platform",
     srcs: [
         "src/**/*.java",
     ],
-    manifest: "AndroidManifest.xml",
+    libs: ["android-support-annotations"],
     static_libs: [
+        "androidx.concurrent_concurrent-futures",
         "androidx.core.uwb.backend.aidl_interface-V1-java",
         "com.uwb.support.fira",
+        "com.uwb.support.multichip",
+        "com.uwb.support.dltdoa",
+        "guava",
+    ],
+}
+
+android_app {
+    name: "uwb_androidx_backend_app",
+    enabled: false,
+    platform_apis: true,
+    certificate: "platform",
+    manifest: "AndroidManifest.xml",
+    libs: ["android-support-annotations"],
+    static_libs: [
+        "androidx.concurrent_concurrent-futures",
+        "androidx.core.uwb.backend.aidl_interface-V1-java",
+        "com.uwb.support.fira",
+        "guava",
+	"uwb_androidx_backend"
     ],
 }

@@ -21,10 +21,13 @@ import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import com.android.server.uwb.pm.RunningProfileSessionInfo;
+import com.android.server.uwb.secure.csml.CsmlUtil;
 import com.android.server.uwb.secure.csml.DispatchResponse;
+import com.android.server.uwb.secure.csml.SessionData;
+
+import java.util.Optional;
 
 /**
  * Interface for a Dynamic STS session, which set up secure channel and exchange
@@ -38,10 +41,25 @@ public abstract class SecureSession {
     protected final Callback mSessionCallback;
     protected final RunningProfileSessionInfo mRunningProfileSessionInfo;
 
+    // it could be sessionId for unicast session or subSessionId for multicast session.
+    protected Optional<Integer> mUniqueSessionId = Optional.empty();
+    // default session id/sub session id is derived in FiRa applet.
+    protected boolean mIsDefaultUniqueSessionId = false;
+    // session data is used by both controller and controlee finally.
+    protected SessionData mSessionData;
+
+    protected boolean mIsController = false;
+
     private final FiRaSecureChannel.SecureChannelCallback mSecureChannelCallback =
             new FiRaSecureChannel.SecureChannelCallback() {
                 @Override
-                public void onEstablished() {
+                public void onEstablished(Optional<Integer> defaultUniqueSessionId) {
+                    if (defaultUniqueSessionId.isPresent()) {
+                        mUniqueSessionId = defaultUniqueSessionId;
+                        mIsDefaultUniqueSessionId = true;
+                    } else if (mIsController) {
+                        mUniqueSessionId = Optional.of(CsmlUtil.generateRandomSessionId());
+                    }
                     handleFiRaSecureChannelEstablished();
                 }
 
@@ -72,9 +90,17 @@ public abstract class SecureSession {
                 public void onSeChannelClosed(boolean withError) {
                     // TODO: no action, may be removed.
                 }
+
+                @Override
+                public void onRdsAvailableAndTerminated(int sessionId) {
+                    mUniqueSessionId = Optional.of(sessionId);
+                    mSessionCallback.onSessionDataReady(
+                            sessionId, Optional.empty(), /*isSessionTerminated=*/ true);
+                }
             };
 
-    SecureSession(@NonNull Looper workLooper,
+    SecureSession(
+            @NonNull Looper workLooper,
             @NonNull FiRaSecureChannel fiRaSecureChannel,
             @NonNull Callback sessionCallback,
             @NonNull RunningProfileSessionInfo runningProfileSessionInfo) {
@@ -109,13 +135,15 @@ public abstract class SecureSession {
         /**
          * The session data is ready, the UWB configuration of Controller can be sent to UWBS.
          *
-         * @param sessionData         null for controller, TLV data for controllee.
-         * @param isSessionTerminated If the session is not terminated, the client should
-         *                            terminate the session accordingly.
+         * @param sessionData         empty if the session is terminated automatically, profile/app
+         *                            defined the session data in advance.
+         * @param isSessionTerminated If the session is terminated, the client shouldn't use
+         *                            the session further.
          */
-        // TODO: what if the 1 to m case? is this sub sessionId ?
-        void onSessionDataReady(int updatedSessionId,
-                @Nullable byte[] sessionData, boolean isSessionTerminated);
+        void onSessionDataReady(
+                int updatedSessionId,
+                Optional<SessionData> sessionData,
+                boolean isSessionTerminated);
 
         /**
          * Something wrong, the session is aborted.
