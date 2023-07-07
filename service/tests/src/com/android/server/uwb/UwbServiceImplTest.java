@@ -52,10 +52,12 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.database.ContentObserver;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.UserManager;
+import android.os.test.TestLooper;
 import android.platform.test.annotations.Presubmit;
 import android.provider.Settings;
 import android.test.suitebuilder.annotation.SmallTest;
@@ -70,6 +72,7 @@ import android.uwb.UwbAddress;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.modules.utils.build.SdkLevel;
+import com.android.server.uwb.UwbServiceCore.InitializationFailureListener;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
@@ -120,8 +123,10 @@ public class UwbServiceImplTest {
     @Captor private ArgumentCaptor<BroadcastReceiver> mApmModeBroadcastReceiver;
     @Captor private ArgumentCaptor<ContentObserver> mSatelliteModeContentObserver;
     @Captor private ArgumentCaptor<BroadcastReceiver> mUserRestrictionReceiver;
+    @Captor private ArgumentCaptor<InitializationFailureListener> mInitializationFailureListener;
 
     private UwbServiceImpl mUwbServiceImpl;
+    private TestLooper mTestLooper;
 
     private void createUwbServiceImpl() {
         mUwbServiceImpl = new UwbServiceImpl(mContext, mUwbInjector);
@@ -130,6 +135,7 @@ public class UwbServiceImplTest {
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        mTestLooper = new TestLooper();
         when(mUwbInjector.getUwbSettingsStore()).thenReturn(mUwbSettingsStore);
         when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(true);
         when(mUwbMultichipData.getChipInfos()).thenReturn(List.of(DEFAULT_CHIP_INFO_PARAMS));
@@ -145,15 +151,20 @@ public class UwbServiceImplTest {
         when(mUwbInjector.getNativeUwbManager()).thenReturn(mNativeUwbManager);
         when(mUwbInjector.getUserManager()).thenReturn(mUserManager);
         when(mUserManager.getUserRestrictions().getBoolean(anyString())).thenReturn(false);
+        when(mUwbServiceCore.getHandler()).thenReturn(new Handler(mTestLooper.getLooper()));
 
         createUwbServiceImpl();
+        verify(mUwbServiceCore).addInitializationFailureListener(
+                mInitializationFailureListener.capture());
         verify(mContext).registerReceiver(
                 mApmModeBroadcastReceiver.capture(),
                 argThat(i -> i.getAction(0).equals(Intent.ACTION_AIRPLANE_MODE_CHANGED)),
                 any(), any());
-        verify(mUwbInjector).registerContentObserver(
-                eq(Settings.Global.getUriFor(SETTINGS_SATELLITE_MODE_ENABLED)), anyBoolean(),
-                mSatelliteModeContentObserver.capture());
+        if (SdkLevel.isAtLeastU()) {
+            verify(mUwbInjector).registerContentObserver(
+                    eq(Settings.Global.getUriFor(SETTINGS_SATELLITE_MODE_ENABLED)), anyBoolean(),
+                    mSatelliteModeContentObserver.capture());
+        }
         verify(mContext).registerReceiver(
                 mUserRestrictionReceiver.capture(),
                 argThat(i -> i.getAction(0).equals(UserManager.ACTION_USER_RESTRICTIONS_CHANGED)),
@@ -445,7 +456,7 @@ public class UwbServiceImplTest {
         // Toggle APM on (ignored by uwb stack)
         when(mUwbInjector.getGlobalSettingsInt(Settings.Global.AIRPLANE_MODE_ON, 0)).thenReturn(1);
         mUwbServiceImpl.setEnabled(true);
-        verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, false);
+        verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, true);
         verify(mUwbServiceCore).setEnabled(false);
         clearInvocations(mUwbServiceCore, mUwbSettingsStore);
 
@@ -479,13 +490,6 @@ public class UwbServiceImplTest {
         assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
         when(mUwbInjector.getGlobalSettingsString(SETTINGS_SATELLITE_MODE_RADIOS))
                 .thenReturn("cell,bluetooth,nfc,wifi");
-
-        // Recreate UwbServiceImpl to ensure we don't register satellite mode content observer.
-        clearInvocations(mUwbInjector);
-        createUwbServiceImpl();
-
-        // Verify that we did not re-register the satellite mode content observer.
-        verify(mUwbInjector, never()).registerContentObserver(any(), anyBoolean(), any());
 
         mUwbServiceImpl.setEnabled(true);
         verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, true);
@@ -538,6 +542,22 @@ public class UwbServiceImplTest {
         mUwbServiceImpl.setEnabled(false);
         verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, false);
         verify(mUwbServiceCore).setEnabled(false);
+    }
+
+    @Test
+    public void testHandleInitializationFailure() throws Exception {
+        mUwbServiceImpl.setEnabled(true);
+        verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, true);
+        verify(mUwbServiceCore).setEnabled(true);
+
+        // Trigger failure callback.
+        mInitializationFailureListener.getValue().onFailure();
+        // Move time forward.
+        mTestLooper.moveTimeForward(UwbServiceImpl.INITIALIZATION_RETRY_TIMEOUT_MS);
+        // Verify UWB is re-enabled.
+        verify(mUwbServiceCore).setEnabled(true);
+        verify(mUwbServiceCore).removeInitializationFailureListener(
+                mInitializationFailureListener.getValue());
     }
 
     @Test
@@ -781,7 +801,7 @@ public class UwbServiceImplTest {
         assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         final PersistableBundle parameters = new PersistableBundle();
-        mUwbServiceImpl.onRangingRoundsUpdateDtTag(sessionHandle, parameters);
+        mUwbServiceImpl.updateRangingRoundsDtTag(sessionHandle, parameters);
 
         verify(mUwbServiceCore).rangingRoundsUpdateDtTag(sessionHandle, parameters);
     }
