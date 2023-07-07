@@ -29,6 +29,7 @@ import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_MAC_ADDRESS_2_LO
 import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_MAC_ADDRESS_LONG;
 import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_SHORT_MAC_ADDRESS;
 import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_SHORT_MAC_ADDRESS_LONG;
+import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_SHORT_UWB_ADDRESS;
 import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_UWB_ADDRESS;
 import static com.android.server.uwb.UwbTestUtils.PEER_EXTENDED_UWB_ADDRESS_2;
 import static com.android.server.uwb.UwbTestUtils.PEER_SHORT_MAC_ADDRESS;
@@ -46,8 +47,10 @@ import static com.android.server.uwb.data.UwbUciConstants.RANGING_DEVICE_ROLE_OB
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_OWR_AOA;
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY;
 import static com.android.server.uwb.data.UwbUciConstants.ROUND_USAGE_DS_TWR_DEFERRED_MODE;
+import static com.android.server.uwb.data.UwbUciConstants.ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE;
 import static com.android.server.uwb.data.UwbUciConstants.ROUND_USAGE_OWR_AOA_MEASUREMENT;
 import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_DATA_TRANSFER_ERROR_DATA_TRANSFER;
+import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_DATA_TRANSFER_OK;
 import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_DATA_TRANSFER_REPETITION_OK;
 
 import static com.google.common.truth.Truth.assertThat;
@@ -56,6 +59,7 @@ import static com.google.uwb.support.fira.FiraParams.RangeDataNtfConfigCapabilit
 import static com.google.uwb.support.fira.FiraParams.RangeDataNtfConfigCapabilityFlag.HAS_RANGE_DATA_NTF_CONFIG_ENABLE;
 import static com.google.uwb.support.fira.FiraParams.SESSION_TYPE_RANGING;
 import static com.google.uwb.support.fira.FiraParams.STATUS_CODE_OK;
+import static com.google.uwb.support.radar.RadarParams.RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -98,15 +102,18 @@ import android.uwb.StateChangeReason;
 import android.uwb.UwbAddress;
 import android.uwb.UwbOemExtensionCallbackListener;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.uwb.UwbSessionManager.UwbSession;
 import com.android.server.uwb.UwbSessionManager.WaitObj;
 import com.android.server.uwb.advertisement.UwbAdvertiseManager;
 import com.android.server.uwb.data.DtTagUpdateRangingRoundsStatus;
 import com.android.server.uwb.data.UwbMulticastListUpdateStatus;
+import com.android.server.uwb.data.UwbRadarData;
 import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
+import com.android.server.uwb.params.TlvUtil;
 
 import com.google.uwb.support.base.Params;
 import com.google.uwb.support.ccc.CccOpenRangingParams;
@@ -121,6 +128,8 @@ import com.google.uwb.support.fira.FiraProtocolVersion;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.fira.FiraSpecificationParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
+import com.google.uwb.support.radar.RadarOpenSessionParams;
+import com.google.uwb.support.radar.RadarParams;
 
 import org.junit.After;
 import org.junit.Before;
@@ -130,7 +139,6 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -152,6 +160,12 @@ public class UwbSessionManagerTest {
     private static final String PACKAGE_NAME_2 = "com.android.uwb.2";
     private static final AttributionSource ATTRIBUTION_SOURCE =
             new AttributionSource.Builder(UID).setPackageName(PACKAGE_NAME).build();
+    private static final AttributionSource ATTRIBUTION_SOURCE_2 =
+            new AttributionSource.Builder(UID_2).setPackageName(PACKAGE_NAME_2).build();
+    private static final SessionHandle SESSION_HANDLE =
+            new SessionHandle(TEST_SESSION_ID, ATTRIBUTION_SOURCE, 1);
+    private static final SessionHandle SESSION_HANDLE_2 =
+            new SessionHandle(TEST_SESSION_ID_2, ATTRIBUTION_SOURCE_2, 2);
     private static final UwbAddress UWB_DEST_ADDRESS =
             UwbAddress.fromBytes(new byte[] {(byte) 0x03, (byte) 0x04 });
     private static final UwbAddress UWB_DEST_ADDRESS_2 =
@@ -159,11 +173,11 @@ public class UwbSessionManagerTest {
     private static final UwbAddress UWB_DEST_ADDRESS_3 =
             UwbAddress.fromBytes(new byte[] {(byte) 0x07, (byte) 0x08 });
     private static final int TEST_RANGING_INTERVAL_MS = 200;
-    private static final byte DATA_SEQUENCE_NUM = 0;
-    private static final byte DATA_SEQUENCE_NUM_1 = 2;
+    private static final short DATA_SEQUENCE_NUM = 0;
+    private static final short DATA_SEQUENCE_NUM_1 = 2;
+    private static final int DATA_TRANSMISSION_COUNT = 1;
+    private static final int DATA_TRANSMISSION_COUNT_3 = 3;
 
-    private static final int SOURCE_END_POINT = 100;
-    private static final int DEST_END_POINT = 200;
     private static final int HANDLE_ID = 12;
     private static final int MAX_RX_DATA_PACKETS_TO_STORE = 10;
     private static final int PID = Process.myPid();
@@ -228,6 +242,8 @@ public class UwbSessionManagerTest {
         when(mCccSpecificationParams.getMaxRangingSessionNumber()).thenReturn(
                 (int) MAX_CCC_SESSION_NUM);
         when(mUwbMultichipData.getDefaultChipId()).thenReturn("default");
+        when(mDeviceConfigFacade.isBackgroundRangingEnabled()).thenReturn(false);
+        when(mDeviceConfigFacade.isRangingErrorStreakTimerEnabled()).thenReturn(true);
 
         // TODO: Don't use spy.
         mUwbSessionManager = spy(new UwbSessionManager(
@@ -252,43 +268,67 @@ public class UwbSessionManagerTest {
     public void cleanup() { }
 
     @Test
-    public void onDataReceived_extendedMacAddressFormat() {
+    public void onDataReceived_extendedMacAddressFormat_owrAoA() {
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
         verify(mockUwbSession).addReceivedDataInfo(isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
     }
 
     @Test
-    public void onDataReceived_unsupportedMacAddressLength() {
+    public void onDataReceived_unsupportedMacAddressLength_owrAoa() {
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_BAD_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_BAD_MAC_ADDRESS, DATA_PAYLOAD);
         verify(mockUwbSession, never()).addReceivedDataInfo(
                 isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics, never()).logDataRx(eq(mockUwbSession),
+                eq(UwbUciConstants.STATUS_CODE_OK));
     }
 
     @Test
-    public void onDataReceived_shortMacAddressFormat() {
+    public void onDataReceived_shortMacAddressFormat_owrAoa() {
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_SHORT_MAC_ADDRESS, SOURCE_END_POINT,
-                DEST_END_POINT, DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_SHORT_MAC_ADDRESS, DATA_PAYLOAD);
         verify(mockUwbSession).addReceivedDataInfo(isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+    }
+
+    @Test
+    public void onDataReceived_shortMacAddressFormat_dsTwr() {
+        UwbSession mockUwbSession = mock(UwbSession.class);
+        when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(
+                ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE);
+        doReturn(mockUwbSession)
+                .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
+
+        mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_SHORT_MAC_ADDRESS, DATA_PAYLOAD);
+
+        verify(mUwbSessionNotificationManager).onDataReceived(
+                isA(UwbSession.class), eq(PEER_EXTENDED_SHORT_UWB_ADDRESS),
+                isA(PersistableBundle.class), eq(DATA_PAYLOAD));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+        verify(mockUwbSession, never()).addReceivedDataInfo(
+                isA(UwbSessionManager.ReceivedDataInfo.class));
     }
 
     @Test
@@ -305,7 +345,6 @@ public class UwbSessionManagerTest {
 
         verify(mUwbSessionNotificationManager)
                 .onRangingResult(eq(mockUwbSession), eq(uwbRangingData));
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
     }
 
     @Test
@@ -320,7 +359,6 @@ public class UwbSessionManagerTest {
 
         verify(mUwbSessionNotificationManager, never())
                 .onRangingResult(any(), eq(uwbRangingData));
-        verify(mUwbMetrics, never()).logRangingResult(anyInt(), eq(uwbRangingData));
     }
 
     // Test scenario for receiving Application payload data followed by a RANGE_DATA_NTF with an
@@ -330,6 +368,7 @@ public class UwbSessionManagerTest {
             throws RemoteException {
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
         UwbOemExtensionCallbackListener mUwbOemExtensionCallbackListener =
@@ -341,9 +380,9 @@ public class UwbSessionManagerTest {
 
         // First call onDataReceived() to get the application payload data.
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
         verify(mockUwbSession).addReceivedDataInfo(isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF.
         UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
@@ -364,7 +403,7 @@ public class UwbSessionManagerTest {
                 .onDataReceived(eq(mockUwbSession), eq(PEER_EXTENDED_UWB_ADDRESS),
                         isA(PersistableBundle.class), eq(DATA_PAYLOAD));
         verify(mUwbAdvertiseManager).removeAdvertiseTarget(PEER_EXTENDED_MAC_ADDRESS_LONG);
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
+        verify(mUwbMetrics).logDataToUpperLayer(eq(mockUwbSession), eq(1));
     }
 
     // Test scenario for receiving Application payload data followed by a RANGE_DATA_NTF with an
@@ -374,6 +413,7 @@ public class UwbSessionManagerTest {
             throws RemoteException {
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
         UwbOemExtensionCallbackListener mUwbOemExtensionCallbackListener =
@@ -386,9 +426,9 @@ public class UwbSessionManagerTest {
         // First call onDataReceived() to get the application payload data. This should always have
         // the MacAddress (in 8 Bytes), even for a Short MacAddress (MSB are zeroed out).
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_SHORT_MAC_ADDRESS,
-                SOURCE_END_POINT, DEST_END_POINT, DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_SHORT_MAC_ADDRESS, DATA_PAYLOAD);
         verify(mockUwbSession).addReceivedDataInfo(isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF.
         UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
@@ -409,7 +449,7 @@ public class UwbSessionManagerTest {
                 .onDataReceived(eq(mockUwbSession), eq(PEER_SHORT_UWB_ADDRESS),
                         isA(PersistableBundle.class), eq(DATA_PAYLOAD));
         verify(mUwbAdvertiseManager).removeAdvertiseTarget(PEER_SHORT_MAC_ADDRESS_LONG);
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
+        verify(mUwbMetrics).logDataToUpperLayer(eq(mockUwbSession), eq(1));
     }
 
     // Test scenario for receiving Application payload data followed by a RANGE_DATA_NTF with an
@@ -418,26 +458,25 @@ public class UwbSessionManagerTest {
     public void onRangeDataNotificationReceived_owrAoa_success_multipleAdvertisers() {
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
         // First call onDataReceived() to get the application payload data.
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM_1, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM_1, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
 
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS_2, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS_2, DATA_PAYLOAD);
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM_1, PEER_EXTENDED_MAC_ADDRESS_2, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM_1, PEER_EXTENDED_MAC_ADDRESS_2, DATA_PAYLOAD);
 
         verify(mockUwbSession, times(4)).addReceivedDataInfo(
                 isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics, times(4)).logDataRx(
+                eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF.
         UwbRangingData uwbRangingData1 = UwbTestUtils.generateRangingData(
@@ -478,8 +517,7 @@ public class UwbSessionManagerTest {
                         isA(PersistableBundle.class), eq(DATA_PAYLOAD));
         verify(mUwbAdvertiseManager).removeAdvertiseTarget(PEER_EXTENDED_MAC_ADDRESS_LONG);
         verify(mUwbAdvertiseManager).removeAdvertiseTarget(PEER_EXTENDED_MAC_ADDRESS_2_LONG);
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData1));
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData2));
+        verify(mUwbMetrics, times(2)).logDataToUpperLayer(eq(mockUwbSession), eq(2));
     }
 
     @Test
@@ -487,6 +525,7 @@ public class UwbSessionManagerTest {
             throws RemoteException {
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
         UwbOemExtensionCallbackListener mUwbOemExtensionCallbackListener =
@@ -499,8 +538,7 @@ public class UwbSessionManagerTest {
         // First call onDataReceived() to get the application payload data. This should always have
         // the MacAddress (in 8 Bytes), even for a Short MacAddress (MSB are zeroed out).
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_SHORT_MAC_ADDRESS,
-                SOURCE_END_POINT, DEST_END_POINT, DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_SHORT_MAC_ADDRESS, DATA_PAYLOAD);
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF.
         UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
@@ -519,7 +557,6 @@ public class UwbSessionManagerTest {
                 .onDataReceived(eq(mockUwbSession), eq(PEER_SHORT_UWB_ADDRESS),
                         isA(PersistableBundle.class), eq(DATA_PAYLOAD));
         verify(mUwbAdvertiseManager, never()).removeAdvertiseTarget(PEER_SHORT_MAC_ADDRESS_LONG);
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
     }
 
     @Test
@@ -534,8 +571,7 @@ public class UwbSessionManagerTest {
 
         // First call onDataReceived() to get the application payload data.
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF.
         mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
@@ -550,21 +586,21 @@ public class UwbSessionManagerTest {
                 UwbUciConstants.STATUS_CODE_OK);
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
         // First call onDataReceived() to get the application payload data.
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
         verify(mockUwbSession).addReceivedDataInfo(isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF.
         mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
 
         verify(mUwbSessionNotificationManager)
                 .onRangingResult(eq(mockUwbSession), eq(uwbRangingData));
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
         verifyZeroInteractions(mUwbAdvertiseManager);
     }
 
@@ -575,14 +611,15 @@ public class UwbSessionManagerTest {
                 UwbUciConstants.STATUS_CODE_OK);
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
         // First call onDataReceived() to get the application payload data.
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
         verify(mockUwbSession).addReceivedDataInfo(isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF (with an
         // incorrect RangingRoundUsage value).
@@ -593,7 +630,6 @@ public class UwbSessionManagerTest {
 
         verify(mUwbSessionNotificationManager)
                 .onRangingResult(eq(mockUwbSession), eq(uwbRangingData));
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
         verifyZeroInteractions(mUwbAdvertiseManager);
     }
 
@@ -604,14 +640,15 @@ public class UwbSessionManagerTest {
                 UwbUciConstants.STATUS_CODE_OK);
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
         // First call onDataReceived() to get the application payload data.
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
         verify(mockUwbSession).addReceivedDataInfo(isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF.
         Params firaParams = setupFiraParams(
@@ -621,7 +658,6 @@ public class UwbSessionManagerTest {
 
         verify(mUwbSessionNotificationManager)
                 .onRangingResult(eq(mockUwbSession), eq(uwbRangingData));
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
         verifyZeroInteractions(mUwbAdvertiseManager);
     }
 
@@ -632,6 +668,7 @@ public class UwbSessionManagerTest {
                 UwbUciConstants.STATUS_CODE_OK);
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
@@ -648,8 +685,8 @@ public class UwbSessionManagerTest {
         verify(mUwbSessionNotificationManager)
                 .onRangingResult(eq(mockUwbSession), eq(uwbRangingData));
         verify(mUwbAdvertiseManager).updateAdvertiseTarget(uwbRangingData.mRangingOwrAoaMeasure);
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
         verifyZeroInteractions(mUwbSessionNotificationManager);
+        verify(mUwbMetrics, never()).logDataToUpperLayer(eq(mockUwbSession), anyInt());
     }
 
     @Test
@@ -659,15 +696,16 @@ public class UwbSessionManagerTest {
                 UwbUciConstants.STATUS_CODE_OK);
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
         // onDataReceived() called for a different MacAddress, which should be equivalent to it
         // not being called.
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS_2, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS_2, DATA_PAYLOAD);
         verify(mockUwbSession).addReceivedDataInfo(isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF.
         Params firaParams = setupFiraParams(
@@ -681,8 +719,8 @@ public class UwbSessionManagerTest {
         verify(mUwbSessionNotificationManager)
                 .onRangingResult(eq(mockUwbSession), eq(uwbRangingData));
         verify(mUwbAdvertiseManager).updateAdvertiseTarget(uwbRangingData.mRangingOwrAoaMeasure);
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
         verifyZeroInteractions(mUwbSessionNotificationManager);
+        verify(mUwbMetrics, never()).logDataToUpperLayer(eq(mockUwbSession), anyInt());
     }
 
     @Test
@@ -692,19 +730,21 @@ public class UwbSessionManagerTest {
                 UwbUciConstants.STATUS_CODE_OK);
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
         UwbSession mockUwbSession2 = mock(UwbSession.class);
         when(mockUwbSession2.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession2.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession2)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID_2));
 
         // onDataReceived() called for a different UwbSessionID, which should be equivalent to it
         // not being called.
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID_2, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
         verify(mockUwbSession2).addReceivedDataInfo(isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession2), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF. Setup such
         // that there is no ReceivedDataInfo returned for the UwbSession (to simulate the test
@@ -720,8 +760,8 @@ public class UwbSessionManagerTest {
         verify(mUwbSessionNotificationManager)
                 .onRangingResult(eq(mockUwbSession), eq(uwbRangingData));
         verify(mUwbAdvertiseManager).updateAdvertiseTarget(uwbRangingData.mRangingOwrAoaMeasure);
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
         verifyZeroInteractions(mUwbSessionNotificationManager);
+        verify(mUwbMetrics, never()).logDataToUpperLayer(eq(mockUwbSession), anyInt());
     }
 
     @Test
@@ -731,13 +771,14 @@ public class UwbSessionManagerTest {
                 UwbUciConstants.STATUS_CODE_OK);
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getRangingRoundUsage()).thenReturn(ROUND_USAGE_OWR_AOA_MEASUREMENT);
         doReturn(mockUwbSession)
                 .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
 
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
         verify(mockUwbSession).addReceivedDataInfo(isA(UwbSessionManager.ReceivedDataInfo.class));
+        verify(mUwbMetrics).logDataRx(eq(mockUwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // Setup isPointedTarget() to return false.
         when(mUwbAdvertiseManager.isPointedTarget(PEER_EXTENDED_MAC_ADDRESS)).thenReturn(false);
@@ -745,7 +786,6 @@ public class UwbSessionManagerTest {
 
         verify(mUwbSessionNotificationManager)
                 .onRangingResult(eq(mockUwbSession), eq(uwbRangingData));
-        verify(mUwbMetrics).logRangingResult(anyInt(), eq(uwbRangingData));
         verify(mUwbAdvertiseManager, never()).removeAdvertiseTarget(isA(Long.class));
         verifyZeroInteractions(mUwbSessionNotificationManager);
     }
@@ -912,6 +952,162 @@ public class UwbSessionManagerTest {
     }
 
     @Test
+    public void initSessionMaxSessions_lowestPrioritySessionReplaced() throws RemoteException {
+        doReturn(false).when(mUwbInjector).isSystemApp(UID, PACKAGE_NAME);
+        doReturn(true).when(mUwbInjector).isSystemApp(UID_2, PACKAGE_NAME_2);
+        doReturn(1L).when(mUwbSessionManager).getMaxFiraSessionsNumber(TEST_CHIP_ID);
+        IUwbRangingCallbacks mockRangingCallbacks = mock(IUwbRangingCallbacks.class);
+        Params mockParams = mock(FiraParams.class);
+        IBinder mockBinder = mock(IBinder.class);
+
+        when(mNativeUwbManager.initSession(anyInt(), anyByte(), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+        when(mNativeUwbManager.deInitSession(anyInt(), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+        when(mUwbConfigurationManager.setAppConfigurations(anyInt(), any(), anyString()))
+                .thenReturn(UwbUciConstants.STATUS_CODE_OK);
+
+        // Init session for 3rd party FG app
+        UwbSession lowPrioUwbSession = spy(
+                mUwbSessionManager.new UwbSession(ATTRIBUTION_SOURCE, SESSION_HANDLE,
+                        TEST_SESSION_ID, TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME, mockParams,
+                        mockRangingCallbacks, TEST_CHIP_ID));
+        doReturn(lowPrioUwbSession).when(mUwbSessionManager).createUwbSession(any(), any(),
+                anyInt(),
+                anyByte(), anyString(), any(), any(), anyString());
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_INIT,
+                UwbUciConstants.UWB_SESSION_STATE_IDLE).when(lowPrioUwbSession).getSessionState();
+        doReturn(mock(WaitObj.class)).when(lowPrioUwbSession).getWaitObj();
+        doReturn(mockBinder).when(lowPrioUwbSession).getBinder();
+
+        mUwbSessionManager.initSession(ATTRIBUTION_SOURCE, SESSION_HANDLE, TEST_SESSION_ID,
+                TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME, mockParams, mockRangingCallbacks,
+                TEST_CHIP_ID);
+
+        assertThat(mUwbSessionManager.getUwbSession(TEST_SESSION_ID)).isEqualTo(lowPrioUwbSession);
+        mTestLooper.dispatchNext();
+
+        // Init session for system app
+        UwbSession highPrioUwbSession = spy(
+                mUwbSessionManager.new UwbSession(ATTRIBUTION_SOURCE_2, SESSION_HANDLE_2,
+                        TEST_SESSION_ID_2, TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME, mockParams,
+                        mockRangingCallbacks, TEST_CHIP_ID));
+        doReturn(mockBinder).when(highPrioUwbSession).getBinder();
+        doReturn(mock(WaitObj.class)).when(highPrioUwbSession).getWaitObj();
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_INIT,
+                UwbUciConstants.UWB_SESSION_STATE_IDLE).when(highPrioUwbSession).getSessionState();
+        doReturn(highPrioUwbSession).when(mUwbSessionManager).createUwbSession(any(), any(),
+                anyInt(),
+                anyByte(), anyString(), any(), any(), anyString());
+        mUwbSessionManager.initSession(ATTRIBUTION_SOURCE_2, SESSION_HANDLE_2, TEST_SESSION_ID_2,
+                TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME, mockParams, mockRangingCallbacks,
+                TEST_CHIP_ID);
+        mTestLooper.dispatchAll();
+
+        verify(mNativeUwbManager).initSession(TEST_SESSION_ID, TEST_SESSION_TYPE, TEST_CHIP_ID);
+        verify(mNativeUwbManager).deInitSession(TEST_SESSION_ID, TEST_CHIP_ID);
+        verify(mNativeUwbManager).initSession(TEST_SESSION_ID_2, TEST_SESSION_TYPE, TEST_CHIP_ID);
+        verify(mockRangingCallbacks, never()).onRangingOpenFailed(any(), anyInt(), any());
+        verify(mUwbSessionNotificationManager).onRangingOpened(lowPrioUwbSession);
+        verify(mUwbSessionNotificationManager).onRangingClosed(lowPrioUwbSession,
+                UwbUciConstants.STATUS_CODE_ERROR_MAX_SESSIONS_EXCEEDED);
+        verify(mUwbSessionNotificationManager).onRangingOpened(highPrioUwbSession);
+        assertThat(mUwbSessionManager.getUwbSession(TEST_SESSION_ID)).isNull();
+        assertThat(mUwbSessionManager.getUwbSession(TEST_SESSION_ID_2)).isEqualTo(
+                highPrioUwbSession);
+    }
+
+    @Test
+    public void testNeedsAppConfigUpdate_setAppConfigCalledOnStartRanging() throws RemoteException {
+        UwbSession mockUwbSession = mock(UwbSession.class);
+
+        doReturn(true).when(mUwbSessionManager).isExistedSession(any());
+        doReturn(TEST_SESSION_ID).when(mUwbSessionManager).getSessionId(any());
+        doReturn(mockUwbSession).when(mUwbSessionManager).getUwbSession(anyInt());
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE)
+                .when(mUwbSessionManager).getCurrentSessionState(anyInt());
+        doReturn(PROTOCOL_NAME).when(mockUwbSession).getProtocolName();
+        doReturn(mock(WaitObj.class)).when(mockUwbSession).getWaitObj();
+        when(mockUwbSession.getNeedsAppConfigUpdate()).thenReturn(true);
+
+        mUwbSessionManager.startRanging(mock(SessionHandle.class), mock(Params.class));
+        mTestLooper.dispatchAll();
+
+        verify(mUwbConfigurationManager).setAppConfigurations(anyInt(), any(),
+                any());
+    }
+
+    @Test
+    public void testCreateUwbSession_correctSessionPrioritiesSet() throws RemoteException {
+        IUwbRangingCallbacks mockRangingCallbacks = mock(IUwbRangingCallbacks.class);
+        SessionHandle mockSessionHandle = mock(SessionHandle.class);
+        FiraOpenSessionParams mockFiraOpenSessionParams = mock(FiraOpenSessionParams.class);
+        Params mockCccParams = mock(CccParams.class);
+        FiraOpenSessionParams.Builder mockFiraBuilder = mock(FiraOpenSessionParams.Builder.class);
+
+        when(mockFiraOpenSessionParams.toBuilder()).thenReturn(mockFiraBuilder);
+        when(mockFiraBuilder.setSessionPriority(anyInt())).thenReturn(mockFiraBuilder);
+        when(mockFiraBuilder.build()).thenReturn(mockFiraOpenSessionParams);
+        when(mockFiraOpenSessionParams.getSessionPriority()).thenReturn(
+                UwbSession.DEFAULT_SESSION_PRIORITY);
+
+        // System session
+        String systemPackageName = "com.google.uwb";
+        when(mUwbInjector.isSystemApp(UID, systemPackageName)).thenReturn(true);
+        AttributionSource attributionSourceSystemApp =
+                new AttributionSource.Builder(UID).setPackageName(systemPackageName).build();
+        UwbSession systemUwbSession =
+                mUwbSessionManager.new UwbSession(attributionSourceSystemApp, mockSessionHandle,
+                        TEST_SESSION_ID, TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME,
+                        mockFiraOpenSessionParams,
+                        mockRangingCallbacks, TEST_CHIP_ID);
+
+        assertThat(systemUwbSession.getStackSessionPriority()).isEqualTo(
+                UwbSession.SYSTEM_APP_SESSION_PRIORITY);
+        verify(mockFiraBuilder).setSessionPriority(UwbSession.SYSTEM_APP_SESSION_PRIORITY);
+
+        // CCC session
+        UwbSession cccUwbSession =
+                mUwbSessionManager.new UwbSession(attributionSourceSystemApp, mockSessionHandle,
+                        TEST_SESSION_ID, TEST_SESSION_TYPE, CccParams.PROTOCOL_NAME, mockCccParams,
+                        mockRangingCallbacks, TEST_CHIP_ID);
+
+        assertThat(cccUwbSession.getStackSessionPriority()).isEqualTo(
+                UwbSession.CCC_SESSION_PRIORITY);
+
+        // 3rd party foreground session
+        String nonSystemPackageName = "com.something.app";
+        when(mUwbInjector.isForegroundAppOrService(UID, nonSystemPackageName))
+                .thenReturn(true);
+        AttributionSource attributionSourceNonSystemApp =
+                new AttributionSource.Builder(UID).setPackageName(nonSystemPackageName).build();
+        UwbSession nonSystemFgUwbSession =
+                mUwbSessionManager.new UwbSession(attributionSourceNonSystemApp, mockSessionHandle,
+                        TEST_SESSION_ID, TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME,
+                        mockFiraOpenSessionParams,
+                        mockRangingCallbacks, TEST_CHIP_ID);
+
+        assertThat(nonSystemFgUwbSession.getStackSessionPriority()).isEqualTo(
+                UwbSession.FG_SESSION_PRIORITY);
+        verify(mockFiraBuilder).setSessionPriority(UwbSession.FG_SESSION_PRIORITY);
+
+
+        // 3rd party background session
+        when(mUwbInjector.isForegroundAppOrService(UID, nonSystemPackageName))
+                .thenReturn(false);
+        UwbSession nonSystemBgUwbSession =
+                mUwbSessionManager.new UwbSession(attributionSourceNonSystemApp, mockSessionHandle,
+                        TEST_SESSION_ID, TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME,
+                        mockFiraOpenSessionParams,
+                        mockRangingCallbacks, TEST_CHIP_ID);
+
+        assertThat(nonSystemBgUwbSession.getStackSessionPriority()).isEqualTo(
+                UwbSession.BG_SESSION_PRIORITY);
+        verify(mockFiraBuilder).setSessionPriority(UwbSession.BG_SESSION_PRIORITY);
+
+    }
+
+    @Test
     public void initSession_controleeList() throws RemoteException {
         doReturn(0).when(mUwbSessionManager).getSessionCount();
         doReturn(0L).when(mUwbSessionManager).getCccSessionCount();
@@ -920,10 +1116,14 @@ public class UwbSessionManagerTest {
         IUwbRangingCallbacks mockRangingCallbacks = mock(IUwbRangingCallbacks.class);
         SessionHandle mockSessionHandle = mock(SessionHandle.class);
         FiraOpenSessionParams mockParams = mock(FiraOpenSessionParams.class);
+        FiraOpenSessionParams.Builder mockBuilder = mock(FiraOpenSessionParams.Builder.class);
         IBinder mockBinder = mock(IBinder.class);
 
         when(mockParams.getDestAddressList())
                 .thenReturn(Collections.singletonList(UWB_DEST_ADDRESS));
+        when(mockParams.toBuilder()).thenReturn(mockBuilder);
+        when(mockBuilder.setSessionPriority(anyInt())).thenReturn(mockBuilder);
+        when(mockBuilder.build()).thenReturn(mockParams);
 
         UwbSession uwbSession = spy(
                 mUwbSessionManager.new UwbSession(ATTRIBUTION_SOURCE, mockSessionHandle,
@@ -1252,6 +1452,11 @@ public class UwbSessionManagerTest {
     }
 
     private UwbSession setUpUwbSessionForExecution(AttributionSource attributionSource) {
+        return setUpUwbSessionForExecution(attributionSource, setupFiraParams());
+    }
+
+    private UwbSession setUpUwbSessionForExecution(AttributionSource attributionSource,
+            Params params) {
         // setup message
         doReturn(0).when(mUwbSessionManager).getSessionCount();
         doReturn(0L).when(mUwbSessionManager).getFiraSessionCount();
@@ -1259,10 +1464,14 @@ public class UwbSessionManagerTest {
         IUwbRangingCallbacks mockRangingCallbacks = mock(IUwbRangingCallbacks.class);
         SessionHandle mockSessionHandle = mock(SessionHandle.class);
         IBinder mockBinder = mock(IBinder.class);
-        Params params = setupFiraParams();
+        byte sessionType = TEST_SESSION_TYPE;
+        if (params.getProtocolName().equals(RadarParams.PROTOCOL_NAME)
+                && params instanceof RadarOpenSessionParams) {
+            sessionType = (byte) RadarParams.SESSION_TYPE_RADAR;
+        }
         UwbSession uwbSession = spy(
                 mUwbSessionManager.new UwbSession(attributionSource, mockSessionHandle,
-                        TEST_SESSION_ID, TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME, params,
+                        TEST_SESSION_ID, sessionType, params.getProtocolName(), params,
                         mockRangingCallbacks, TEST_CHIP_ID));
         doReturn(mockBinder).when(uwbSession).getBinder();
         doReturn(uwbSession).when(mUwbSessionManager).createUwbSession(any(), any(), anyInt(),
@@ -1297,6 +1506,26 @@ public class UwbSessionManagerTest {
         }
 
         return paramsBuilder.build();
+    }
+
+    private Params setupRadarParams() {
+        return new RadarOpenSessionParams.Builder()
+                        .setSessionId(22)
+                        .setBurstPeriod(100)
+                        .setSweepPeriod(40)
+                        .setSweepsPerBurst(16)
+                        .setSamplesPerSweep(128)
+                        .setChannelNumber(FiraParams.UWB_CHANNEL_5)
+                        .setSweepOffset(-1)
+                        .setRframeConfig(FiraParams.RFRAME_CONFIG_SP3)
+                        .setPreambleDuration(RadarParams.PREAMBLE_DURATION_T16384_SYMBOLS)
+                        .setPreambleCodeIndex(90)
+                        .setSessionPriority(99)
+                        .setBitsPerSample(RadarParams.BITS_PER_SAMPLES_32)
+                        .setPrfMode(FiraParams.PRF_MODE_HPRF)
+                        .setNumberOfBursts(1000)
+                        .setRadarDataType(RadarParams.RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES)
+                        .build();
     }
 
     private UwbSession setUpCccUwbSessionForExecution() throws RemoteException {
@@ -1513,6 +1742,22 @@ public class UwbSessionManagerTest {
         assertThat(mTestLooper.isIdle()).isFalse();
     }
 
+    @Test
+    public void testInitSessionWithNonSystemAppNotInFg_WhenBgRangingEnabled() throws Exception {
+        when(mDeviceConfigFacade.isBackgroundRangingEnabled()).thenReturn(true);
+        when(mUwbInjector.isSystemApp(UID, PACKAGE_NAME)).thenReturn(false);
+        when(mUwbInjector.isForegroundAppOrService(UID, PACKAGE_NAME)).thenReturn(false);
+
+        UwbSession uwbSession = setUpUwbSessionForExecution(ATTRIBUTION_SOURCE);
+        mUwbSessionManager.initSession(ATTRIBUTION_SOURCE, uwbSession.getSessionHandle(),
+                TEST_SESSION_ID, TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME,
+                uwbSession.getParams(), uwbSession.getIUwbRangingCallbacks(), TEST_CHIP_ID);
+
+        // OPEN_RANGING message scheduled.
+        assertThat(mTestLooper.nextMessage().what).isEqualTo(SESSION_OPEN_RANGING);
+        assertThat(mTestLooper.isIdle()).isFalse();
+    }
+
     private UwbSession initUwbSessionForNonSystemAppInFgInChain() throws Exception {
         when(mUwbInjector.isSystemApp(UID_2, PACKAGE_NAME_2)).thenReturn(false);
         when(mUwbInjector.isForegroundAppOrService(UID_2, PACKAGE_NAME_2))
@@ -1597,6 +1842,49 @@ public class UwbSessionManagerTest {
     }
 
     @Test
+    public void
+            testOpenRangingWithNonSystemAppInFgInChain_MoveToBgAndStayThere_WhenBgRangingEnabled()
+            throws Exception {
+        when(mDeviceConfigFacade.isBackgroundRangingEnabled()).thenReturn(true);
+        UwbSession uwbSession = initUwbSessionForNonSystemAppInFgInChain();
+
+        // Verify that an OPEN_RANGING message was scheduled.
+        assertThat(mTestLooper.nextMessage().what).isEqualTo(SESSION_OPEN_RANGING);
+
+        // Start Ranging
+        when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE,
+                UwbUciConstants.UWB_SESSION_STATE_ACTIVE).when(uwbSession).getSessionState();
+        mUwbSessionManager.startRanging(
+                uwbSession.getSessionHandle(), uwbSession.getParams());
+        mTestLooper.dispatchAll();
+
+        verify(mUwbSessionNotificationManager).onRangingStarted(eq(uwbSession), any());
+        verify(mUwbMetrics).longRangingStartEvent(
+                eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+
+        // Move the non-privileged app to background, this should result in the session getting
+        // reconfigured (to disable the ranging data notifications).
+        mOnUidImportanceListenerArgumentCaptor.getValue().onUidImportance(
+                UID_2, IMPORTANCE_BACKGROUND);
+        mTestLooper.dispatchAll();
+        ArgumentCaptor<Params> paramsArgumentCaptor = ArgumentCaptor.forClass(Params.class);
+        verify(mUwbConfigurationManager).setAppConfigurations(
+                eq(TEST_SESSION_ID), paramsArgumentCaptor.capture(), eq(TEST_CHIP_ID));
+        FiraRangingReconfigureParams firaParams =
+                (FiraRangingReconfigureParams) paramsArgumentCaptor.getValue();
+        assertThat(firaParams.getRangeDataNtfConfig()).isEqualTo(
+                FiraParams.RANGE_DATA_NTF_CONFIG_DISABLE);
+        verify(mUwbSessionNotificationManager, never()).onRangingReconfigured(eq(uwbSession));
+
+        // Verify the timer is not setup.
+        verify(mAlarmManager, never()).setExact(
+                anyInt(), anyLong(), eq(UwbSession.NON_PRIVILEGED_BG_APP_TIMER_TAG),
+                any(), any());
+    }
+
+    @Test
     public void testOpenRangingWithNonSystemAppInFgInChain_MoveToBgAndFg() throws Exception {
         UwbSession uwbSession = initUwbSessionForNonSystemAppInFgInChain();
         // OPEN_RANGING message scheduled.
@@ -1630,6 +1918,25 @@ public class UwbSessionManagerTest {
     }
 
     @Test
+    public void testOpenRangingWithNonSystemAppInFgInChain_MoveToBgTriggersSessionPriorityChange()
+            throws Exception {
+        UwbSession uwbSession = initUwbSessionForNonSystemAppInFgInChain();
+
+        assertThat(uwbSession.getStackSessionPriority()).isEqualTo(UwbSession.FG_SESSION_PRIORITY);
+        assertThat(mTestLooper.nextMessage().what).isEqualTo(SESSION_OPEN_RANGING);
+        mTestLooper.dispatchAll();
+
+        // Move to background.
+        when(mUwbInjector.isForegroundAppOrService(UID_2, PACKAGE_NAME_2))
+                .thenReturn(false);
+        mOnUidImportanceListenerArgumentCaptor.getValue().onUidImportance(
+                UID_2, ActivityManager.RunningAppProcessInfo.IMPORTANCE_CACHED);
+        mTestLooper.dispatchAll();
+
+        assertThat(uwbSession.getStackSessionPriority()).isEqualTo(UwbSession.BG_SESSION_PRIORITY);
+    }
+
+    @Test
     public void testOpenRangingWithNonSystemAppNotInFgInChain() throws Exception {
         when(mUwbInjector.isSystemApp(UID_2, PACKAGE_NAME_2)).thenReturn(false);
         when(mUwbInjector.isForegroundAppOrService(UID_2, PACKAGE_NAME_2))
@@ -1653,21 +1960,40 @@ public class UwbSessionManagerTest {
         assertThat(mTestLooper.isIdle()).isFalse();
     }
 
-    private UwbSession prepareExistingUwbSession() throws Exception {
-        UwbSession uwbSession = setUpUwbSessionForExecution(ATTRIBUTION_SOURCE);
-        mUwbSessionManager.initSession(ATTRIBUTION_SOURCE, uwbSession.getSessionHandle(),
-                TEST_SESSION_ID, TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME,
-                uwbSession.getParams(), uwbSession.getIUwbRangingCallbacks(), TEST_CHIP_ID);
+    private UwbSession prepareExistingUwbSessionCommon(UwbSession uwbSession) throws Exception {
+        mUwbSessionManager.initSession(
+                ATTRIBUTION_SOURCE, uwbSession.getSessionHandle(), uwbSession.getSessionId(),
+                uwbSession.getSessionType(), uwbSession.getProtocolName(), uwbSession.getParams(),
+                uwbSession.getIUwbRangingCallbacks(), uwbSession.getChipId());
         mTestLooper.nextMessage(); // remove the OPEN_RANGING msg;
 
         assertThat(mTestLooper.isIdle()).isFalse();
 
         return uwbSession;
     }
+    private UwbSession prepareExistingUwbSession(Params params) throws Exception {
+        UwbSession uwbSession = setUpUwbSessionForExecution(ATTRIBUTION_SOURCE, params);
+        return prepareExistingUwbSessionCommon(uwbSession);
+    }
+    private UwbSession prepareExistingUwbSession() throws Exception {
+        UwbSession uwbSession = setUpUwbSessionForExecution(ATTRIBUTION_SOURCE);
+        return prepareExistingUwbSessionCommon(uwbSession);
+    }
+
+    private UwbSession prepareExistingUwbSessionActive(Params params) throws Exception {
+        UwbSession uwbSession = setUpUwbSessionForExecution(ATTRIBUTION_SOURCE, params);
+        uwbSession = prepareExistingUwbSessionCommon(uwbSession);
+        return prepareExistingUwbSessionActiveCommon(uwbSession);
+    }
 
     private UwbSession prepareExistingUwbSessionActive() throws Exception {
-        UwbSession uwbSession = prepareExistingUwbSession();
+        UwbSession uwbSession = setUpUwbSessionForExecution(ATTRIBUTION_SOURCE);
+        uwbSession = prepareExistingUwbSessionCommon(uwbSession);
+        return prepareExistingUwbSessionActiveCommon(uwbSession);
+    }
 
+    private UwbSession prepareExistingUwbSessionActiveCommon(UwbSession uwbSession)
+            throws Exception {
         // Setup the UwbSession to start ranging (and move it to active state).
         doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE).when(uwbSession).getSessionState();
         when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
@@ -1869,6 +2195,38 @@ public class UwbSessionManagerTest {
                 .onRangingStoppedWithApiReasonCode(eq(uwbSession),
                         eq(RangingChangeReason.SYSTEM_POLICY));
         verify(mUwbMetrics).longRangingStopEvent(eq(uwbSession));
+    }
+
+    @Test
+    public void
+            execStartRanging_onRangeDataNotificationContinuousErrors_WhenErrorStreakTimerDisabled()
+            throws Exception {
+        when(mDeviceConfigFacade.isRangingErrorStreakTimerEnabled()).thenReturn(false);
+
+        UwbSession uwbSession = prepareExistingUwbSession();
+        // set up for start ranging
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE, UwbUciConstants.UWB_SESSION_STATE_ACTIVE)
+                .when(uwbSession).getSessionState();
+        when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+
+        mUwbSessionManager.startRanging(
+                uwbSession.getSessionHandle(), uwbSession.getParams());
+        mTestLooper.dispatchAll();
+
+        verify(mUwbSessionNotificationManager).onRangingStarted(eq(uwbSession), any());
+        verify(mUwbMetrics).longRangingStartEvent(
+                eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+
+        // Now send a range data notification with an error.
+        UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
+                RANGING_MEASUREMENT_TYPE_TWO_WAY, MAC_ADDRESSING_MODE_EXTENDED,
+                UwbUciConstants.STATUS_CODE_RANGING_RX_TIMEOUT);
+        mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
+        verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
+        // Ensure error streak timer is not started.
+        verify(mAlarmManager, never()).setExact(
+                anyInt(), anyLong(), anyString(), any(), any());
     }
 
     @Test
@@ -2113,8 +2471,7 @@ public class UwbSessionManagerTest {
 
         // Send data on the UWB session.
         when(mNativeUwbManager.sendData(eq(TEST_SESSION_ID), eq(macAddress),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
 
         mUwbSessionManager.sendData(
@@ -2122,14 +2479,15 @@ public class UwbSessionManagerTest {
         mTestLooper.dispatchNext();
 
         verify(mNativeUwbManager).sendData(eq(TEST_SESSION_ID), eq(macAddress),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
 
         // A DataTransferStatusNtf is received indicating success.
         mUwbSessionManager.onDataSendStatus(
-                uwbSession.getSessionId(), dataTransferStatus, DATA_SEQUENCE_NUM);
+                uwbSession.getSessionId(), dataTransferStatus, DATA_SEQUENCE_NUM,
+                DATA_TRANSMISSION_COUNT);
         verify(mUwbSessionNotificationManager).onDataSent(
                 eq(uwbSession), eq(uwbAddress), eq(PERSISTABLE_BUNDLE));
+        verify(mUwbMetrics).logDataTx(eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
     }
 
     // Test case for scenario when a Data packet is successfully sent to a remote device (in
@@ -2170,36 +2528,6 @@ public class UwbSessionManagerTest {
     }
 
     @Test
-    public void sendData_success_sequenceNumberRollover() throws Exception {
-        // Setup a UwbSession to start ranging (and move it to active state).
-        UwbSession uwbSession = prepareExistingUwbSessionActive();
-        clearInvocations(mNativeUwbManager);
-
-        // Send 257 data packets on the UWB session, so that the UCI sequence number rolls over,
-        // back to 0.
-        when(mNativeUwbManager.sendData(anyInt(), any(), anyByte(), anyByte(), any(), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
-
-        for (int i = 0; i <= 256; i++) {
-            mUwbSessionManager.sendData(uwbSession.getSessionHandle(), PEER_EXTENDED_UWB_ADDRESS,
-                    PERSISTABLE_BUNDLE, DATA_PAYLOAD);
-            mTestLooper.dispatchNext();
-        }
-
-        // Verify that there are 257 calls to mNativeUwbManager.sendData(), with the important
-        // thing here being that there should be 2 calls for sequence_number = 0, and 1 call for all
-        // the other sequence number values [1-255].
-        for (int i = 0; i < 256; i++) {
-            int expectedCount = (i == 0) ? 2 : 1;
-            verify(mNativeUwbManager, times(expectedCount)).sendData(eq(TEST_SESSION_ID),
-                    eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                    eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq((byte) i),
-                    eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
-        }
-        verifyNoMoreInteractions(mNativeUwbManager);
-    }
-
-    @Test
     public void sendData_missingSessionHandle() throws Exception {
         // Setup a UwbSession to start ranging (and move it to active state).
         prepareExistingUwbSessionActive();
@@ -2212,8 +2540,7 @@ public class UwbSessionManagerTest {
 
         verify(mNativeUwbManager, never()).sendData(
                 eq(TEST_SESSION_ID), eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
         verify(mUwbSessionNotificationManager).onDataSendFailed(
                 eq(null), eq(PEER_EXTENDED_UWB_ADDRESS),
                 eq(UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST), eq(PERSISTABLE_BUNDLE));
@@ -2233,8 +2560,7 @@ public class UwbSessionManagerTest {
 
         verify(mNativeUwbManager, never()).sendData(
                 eq(TEST_SESSION_ID), eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
         verify(mUwbSessionNotificationManager).onDataSendFailed(
                 eq(null), eq(PEER_EXTENDED_UWB_ADDRESS),
                 eq(UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST), eq(PERSISTABLE_BUNDLE));
@@ -2253,8 +2579,7 @@ public class UwbSessionManagerTest {
 
         verify(mNativeUwbManager, never()).sendData(
                 eq(TEST_SESSION_ID), eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
         verify(mUwbSessionNotificationManager).onDataSendFailed(
                 eq(uwbSession), eq(PEER_EXTENDED_UWB_ADDRESS),
                 eq(UwbUciConstants.STATUS_CODE_FAILED), eq(PERSISTABLE_BUNDLE));
@@ -2272,8 +2597,7 @@ public class UwbSessionManagerTest {
 
         verify(mNativeUwbManager, never()).sendData(
                 eq(TEST_SESSION_ID), eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
         verify(mUwbSessionNotificationManager).onDataSendFailed(
                 eq(uwbSession), eq(PEER_EXTENDED_UWB_ADDRESS),
                 eq(UwbUciConstants.STATUS_CODE_INVALID_PARAM), eq(PERSISTABLE_BUNDLE));
@@ -2291,8 +2615,7 @@ public class UwbSessionManagerTest {
 
         verify(mNativeUwbManager, never()).sendData(
                 eq(TEST_SESSION_ID), eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
         verify(mUwbSessionNotificationManager).onDataSendFailed(
                 eq(uwbSession), eq(null),
                 eq(UwbUciConstants.STATUS_CODE_INVALID_PARAM), eq(PERSISTABLE_BUNDLE));
@@ -2306,8 +2629,7 @@ public class UwbSessionManagerTest {
         // Attempt to send data on the UWB session.
         when(mNativeUwbManager.sendData(eq(TEST_SESSION_ID),
                 eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_FAILED);
 
         mUwbSessionManager.sendData(uwbSession.getSessionHandle(), PEER_EXTENDED_UWB_ADDRESS,
@@ -2316,11 +2638,11 @@ public class UwbSessionManagerTest {
 
         verify(mNativeUwbManager).sendData(eq(TEST_SESSION_ID),
                 eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
         verify(mUwbSessionNotificationManager).onDataSendFailed(
                 eq(uwbSession), eq(PEER_EXTENDED_UWB_ADDRESS),
                 eq(UwbUciConstants.STATUS_CODE_FAILED), eq(PERSISTABLE_BUNDLE));
+        verify(mUwbMetrics).logDataTx(eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_FAILED));
     }
 
     @Test
@@ -2332,8 +2654,7 @@ public class UwbSessionManagerTest {
         // Send data on the UWB session.
         when(mNativeUwbManager.sendData(eq(TEST_SESSION_ID),
                 eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
 
         mUwbSessionManager.sendData(uwbSession.getSessionHandle(), PEER_EXTENDED_UWB_ADDRESS,
@@ -2342,12 +2663,13 @@ public class UwbSessionManagerTest {
 
         verify(mNativeUwbManager).sendData(eq(TEST_SESSION_ID),
                 eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+        verify(mUwbMetrics).logDataTx(eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // We receive a DataTransferStatusNtf with a sessionId for a different UwbSession, so it
         // should be dropped (no onDataSend()/onDataSendFailure() notifications sent).
-        mUwbSessionManager.onDataSendStatus(TEST_SESSION_ID_2, STATUS_CODE_OK, DATA_SEQUENCE_NUM);
+        mUwbSessionManager.onDataSendStatus(TEST_SESSION_ID_2, STATUS_CODE_OK, DATA_SEQUENCE_NUM,
+                DATA_TRANSMISSION_COUNT);
         verifyNoMoreInteractions(mUwbSessionNotificationManager);
     }
 
@@ -2360,8 +2682,7 @@ public class UwbSessionManagerTest {
         // Send data on the UWB session.
         when(mNativeUwbManager.sendData(eq(TEST_SESSION_ID),
                 eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
 
         mUwbSessionManager.sendData(uwbSession.getSessionHandle(), PEER_EXTENDED_UWB_ADDRESS,
@@ -2370,13 +2691,14 @@ public class UwbSessionManagerTest {
 
         verify(mNativeUwbManager).sendData(eq(TEST_SESSION_ID),
                 eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+        verify(mUwbMetrics).logDataTx(eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // We receive a DataTransferStatusNtf with an incorrect UCI sequence number (for which a
         // packet was never sent), so it should be dropped (no onDataSend()/onDataSendFailure()
         // notifications sent).
-        mUwbSessionManager.onDataSendStatus(TEST_SESSION_ID, STATUS_CODE_OK, DATA_SEQUENCE_NUM_1);
+        mUwbSessionManager.onDataSendStatus(TEST_SESSION_ID, STATUS_CODE_OK, DATA_SEQUENCE_NUM_1,
+                DATA_TRANSMISSION_COUNT);
         verifyNoMoreInteractions(mUwbSessionNotificationManager);
     }
 
@@ -2389,8 +2711,7 @@ public class UwbSessionManagerTest {
         // Send data on the UWB session.
         when(mNativeUwbManager.sendData(eq(TEST_SESSION_ID),
                 eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
 
         mUwbSessionManager.sendData(uwbSession.getSessionHandle(), PEER_EXTENDED_UWB_ADDRESS,
@@ -2399,12 +2720,13 @@ public class UwbSessionManagerTest {
 
         verify(mNativeUwbManager).sendData(eq(TEST_SESSION_ID),
                 eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+        verify(mUwbMetrics).logDataTx(eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // We receive a DataTransferStatusNtf with an error status code.
         mUwbSessionManager.onDataSendStatus(TEST_SESSION_ID,
-                STATUS_CODE_DATA_TRANSFER_ERROR_DATA_TRANSFER, DATA_SEQUENCE_NUM);
+                STATUS_CODE_DATA_TRANSFER_ERROR_DATA_TRANSFER, DATA_SEQUENCE_NUM,
+                DATA_TRANSMISSION_COUNT);
         verify(mUwbSessionNotificationManager).onDataSendFailed(
                 eq(uwbSession), eq(PEER_EXTENDED_UWB_ADDRESS),
                 eq(STATUS_CODE_DATA_TRANSFER_ERROR_DATA_TRANSFER), eq(PERSISTABLE_BUNDLE));
@@ -2419,8 +2741,7 @@ public class UwbSessionManagerTest {
         // Send data on the UWB session.
         when(mNativeUwbManager.sendData(eq(TEST_SESSION_ID),
                 eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID)))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
 
         mUwbSessionManager.sendData(uwbSession.getSessionHandle(), PEER_EXTENDED_UWB_ADDRESS,
@@ -2429,8 +2750,8 @@ public class UwbSessionManagerTest {
 
         verify(mNativeUwbManager).sendData(eq(TEST_SESSION_ID),
                 eq(PEER_EXTENDED_UWB_ADDRESS.toBytes()),
-                eq(UwbUciConstants.UWB_DESTINATION_END_POINT_HOST), eq(DATA_SEQUENCE_NUM),
-                eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+                eq(DATA_SEQUENCE_NUM), eq(DATA_PAYLOAD), eq(TEST_CHIP_ID));
+        verify(mUwbMetrics).logDataTx(eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
 
         // We never receive a DataTransferStatusNtf, so no onDataSend()/onDataSendFailure()
         // notifications are sent.
@@ -2440,6 +2761,94 @@ public class UwbSessionManagerTest {
         // Eventually Session DeInit is called, and the stored SendDataInfo(s) should be deleted.
         mUwbSessionManager.deInitSession(uwbSession.getSessionHandle());
         mTestLooper.dispatchNext();
+        assertNull(uwbSession.getSendDataInfo(DATA_SEQUENCE_NUM));
+    }
+
+    // Test case for scenario when a Data packet is successfully sent to a remote device (in
+    // short MacAddress format). Verifies the deletion of stored data depending upon the status
+    // code (STATUS_CODE_DATA_TRANSFER_REPETITION_OK) when data repetition count = 0.
+    @Test
+    public void sendData_withZeroDataRepetitionCount() throws Exception {
+        FiraOpenSessionParams params = new FiraOpenSessionParams.Builder()
+                .setDeviceAddress(UwbAddress.fromBytes(new byte[] {(byte) 0x01, (byte) 0x02 }))
+                .setVendorId(new byte[] { (byte) 0x00, (byte) 0x01 })
+                .setStaticStsIV(new byte[] { (byte) 0x01, (byte) 0x02, (byte) 0x03,
+                        (byte) 0x04, (byte) 0x05, (byte) 0x06 })
+                .setDestAddressList(Arrays.asList(
+                        UWB_DEST_ADDRESS))
+                .setProtocolVersion(new FiraProtocolVersion(1, 0))
+                .setSessionId(10)
+                .setSessionType(FiraParams.SESSION_TYPE_RANGING_AND_IN_BAND_DATA)
+                .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_CONTROLLER)
+                .setDeviceRole(FiraParams.RANGING_DEVICE_ROLE_INITIATOR)
+                .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
+                .setRangingIntervalMs(TEST_RANGING_INTERVAL_MS)
+                .setDataRepetitionCount(0)
+                .build();
+        UwbSession uwbSession = prepareExistingUwbSessionActive(params);
+        assertThat(uwbSession.getDataRepetitionCount()).isEqualTo(0);
+
+        // Send the Data packet and simulate the onDataSendStatus() callback being received.
+        mUwbSessionManager.sendData(
+                uwbSession.getSessionHandle(), PEER_EXTENDED_SHORT_UWB_ADDRESS, PERSISTABLE_BUNDLE,
+                DATA_PAYLOAD);
+        mTestLooper.dispatchNext();
+
+        // Since txCount is 0, stored data should not be deleted
+        mUwbSessionManager.onDataSendStatus(TEST_SESSION_ID,
+                STATUS_CODE_DATA_TRANSFER_REPETITION_OK, DATA_SEQUENCE_NUM, 0);
+        assertNotNull(uwbSession.getSendDataInfo(DATA_SEQUENCE_NUM));
+
+        // Since txCount = DataRepetitionCount, stored data should removed
+        mUwbSessionManager.onDataSendStatus(TEST_SESSION_ID,
+                STATUS_CODE_DATA_TRANSFER_OK, DATA_SEQUENCE_NUM, 1);
+        assertNull(uwbSession.getSendDataInfo(DATA_SEQUENCE_NUM));
+    }
+
+    // Test case for scenario when a Data packet is successfully sent to a remote device (in
+    // short MacAddress format). Verifies the deletion of stored data depending upon the status
+    // code (STATUS_CODE_DATA_TRANSFER_REPETITION_OK) and data repetition count of the
+    // DataTransferStatus notification.
+    @Test
+    public void sendData_withNonZeroDataRepetitionCount() throws Exception {
+        FiraOpenSessionParams params = new FiraOpenSessionParams.Builder()
+                .setDeviceAddress(UwbAddress.fromBytes(new byte[] {(byte) 0x01, (byte) 0x02 }))
+                .setVendorId(new byte[] { (byte) 0x00, (byte) 0x01 })
+                .setStaticStsIV(new byte[] { (byte) 0x01, (byte) 0x02, (byte) 0x03,
+                        (byte) 0x04, (byte) 0x05, (byte) 0x06 })
+                .setDestAddressList(Arrays.asList(
+                        UWB_DEST_ADDRESS))
+                .setProtocolVersion(new FiraProtocolVersion(1, 0))
+                .setSessionId(10)
+                .setSessionType(FiraParams.SESSION_TYPE_RANGING_AND_IN_BAND_DATA)
+                .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_CONTROLLER)
+                .setDeviceRole(FiraParams.RANGING_DEVICE_ROLE_INITIATOR)
+                .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
+                .setRangingIntervalMs(TEST_RANGING_INTERVAL_MS)
+                .setDataRepetitionCount(DATA_TRANSMISSION_COUNT_3)
+                .build();
+        UwbSession uwbSession = prepareExistingUwbSessionActive(params);
+        assertThat(uwbSession.getDataRepetitionCount()).isEqualTo(DATA_TRANSMISSION_COUNT_3);
+
+        // Send the Data packet and simulate the onDataSendStatus() callback being received.
+        mUwbSessionManager.sendData(
+                uwbSession.getSessionHandle(), PEER_EXTENDED_SHORT_UWB_ADDRESS, PERSISTABLE_BUNDLE,
+                DATA_PAYLOAD);
+        mTestLooper.dispatchNext();
+
+        mUwbSessionManager.onDataSendStatus(TEST_SESSION_ID,
+                STATUS_CODE_DATA_TRANSFER_REPETITION_OK, DATA_SEQUENCE_NUM,
+                DATA_TRANSMISSION_COUNT);
+
+        // Since txCount < DataRepetitionCount, stored data should not be deleted
+        assertNotNull(uwbSession.getSendDataInfo(DATA_SEQUENCE_NUM));
+
+        // Now simulate the onDataSendStatus() callback being received with a higher TxCount value.
+        mUwbSessionManager.onDataSendStatus(TEST_SESSION_ID,
+                STATUS_CODE_DATA_TRANSFER_OK, DATA_SEQUENCE_NUM,
+                DATA_TRANSMISSION_COUNT_3 + 1);
+
+        // Since txCount = DataRepetitionCount, stored data should removed
         assertNull(uwbSession.getSendDataInfo(DATA_SEQUENCE_NUM));
     }
 
@@ -2615,11 +3024,11 @@ public class UwbSessionManagerTest {
                 .anyMatch(e -> e.getUwbAddress().equals(UWB_DEST_ADDRESS_2)))
                 .isTrue();
 
-        short dstAddress =
-                ByteBuffer.wrap(reconfigureParams.getAddressList()[0].toBytes()).getShort(0);
+        byte[] dstAddress =
+                getComputedMacAddress(reconfigureParams.getAddressList()[0].toBytes());
         verify(mNativeUwbManager).controllerMulticastListUpdate(
                 uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
-                new short[] {dstAddress}, reconfigureParams.getSubSessionIdList(), null,
+                dstAddress, reconfigureParams.getSubSessionIdList(), null,
                 uwbSession.getChipId());
         verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession));
         verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
@@ -2659,11 +3068,10 @@ public class UwbSessionManagerTest {
                 .anyMatch(e -> e.getUwbAddress().equals(UWB_DEST_ADDRESS)))
                 .isFalse();
 
-        short dstAddress =
-                ByteBuffer.wrap(reconfigureParams.getAddressList()[0].toBytes()).getShort(0);
+        byte[] dstAddress = getComputedMacAddress(reconfigureParams.getAddressList()[0].toBytes());
         verify(mNativeUwbManager).controllerMulticastListUpdate(
                 uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
-                new short[] {dstAddress}, reconfigureParams.getSubSessionIdList(), null,
+                dstAddress, reconfigureParams.getSubSessionIdList(), null,
                 uwbSession.getChipId());
         verify(mUwbSessionNotificationManager).onControleeRemoved(eq(uwbSession));
         verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
@@ -2702,11 +3110,10 @@ public class UwbSessionManagerTest {
                 .anyMatch(e -> e.getUwbAddress().equals(UWB_DEST_ADDRESS_2)))
                 .isTrue();
 
-        short dstAddress =
-                ByteBuffer.wrap(reconfigureParams.getAddressList()[0].toBytes()).getShort(0);
+        byte[] dstAddress = getComputedMacAddress(reconfigureParams.getAddressList()[0].toBytes());
         verify(mNativeUwbManager).controllerMulticastListUpdate(
                 uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
-                new short[] {dstAddress}, reconfigureParams.getSubSessionIdList(),
+                dstAddress, reconfigureParams.getSubSessionIdList(),
                 reconfigureParams.getSubSessionKeyList(), uwbSession.getChipId());
         verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession));
         verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
@@ -3037,7 +3444,10 @@ public class UwbSessionManagerTest {
 
     @Test
     public void onSessionStatusNotification_session_deinit_owrAoa() throws Exception {
-        UwbSession uwbSession = prepareExistingUwbSession();
+        Params firaParams = setupFiraParams(
+                RANGING_DEVICE_ROLE_OBSERVER, Optional.of(ROUND_USAGE_OWR_AOA_MEASUREMENT));
+        UwbSession uwbSession = prepareExistingUwbSession(firaParams);
+
         UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
                 RANGING_MEASUREMENT_TYPE_OWR_AOA, MAC_ADDRESSING_MODE_EXTENDED,
                 UwbUciConstants.STATUS_CODE_OK);
@@ -3046,15 +3456,11 @@ public class UwbSessionManagerTest {
         when(mDeviceConfigFacade.getRxDataMaxPacketsToStore())
                 .thenReturn(MAX_RX_DATA_PACKETS_TO_STORE);
         mUwbSessionManager.onDataReceived(TEST_SESSION_ID, UwbUciConstants.STATUS_CODE_OK,
-                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, SOURCE_END_POINT, DEST_END_POINT,
-                DATA_PAYLOAD);
+                DATA_SEQUENCE_NUM, PEER_EXTENDED_MAC_ADDRESS, DATA_PAYLOAD);
 
         // Next call onRangeDataNotificationReceived() to process the RANGE_DATA_NTF. Setup
         // isPointedTarget() to return "false", as in that scenario the stored AdvertiseTarget
         // is not removed.
-        Params firaParams = setupFiraParams(
-                RANGING_DEVICE_ROLE_OBSERVER, Optional.of(ROUND_USAGE_OWR_AOA_MEASUREMENT));
-        when(uwbSession.getParams()).thenReturn(firaParams);
         when(mUwbAdvertiseManager.isPointedTarget(PEER_EXTENDED_MAC_ADDRESS)).thenReturn(false);
         mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
 
@@ -3121,6 +3527,61 @@ public class UwbSessionManagerTest {
         verify(mUwbSessionNotificationManager).onRangingRoundsUpdateStatus(any(), any());
     }
 
+    @Test
+    public void onRadarDataNotificationReceivedWithValidUwbSession() {
+        UwbRadarData uwbRadarData = UwbTestUtils.generateUwbRadarData(
+                RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES,
+                UwbUciConstants.STATUS_CODE_OK);
+        UwbSession mockUwbSession = mock(UwbSession.class);
+        when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        doReturn(mockUwbSession)
+                .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
+
+        mUwbSessionManager.onRadarDataNotificationReceived(uwbRadarData);
+
+        verify(mUwbSessionNotificationManager)
+                .onRadarData(eq(mockUwbSession), eq(uwbRadarData));
+    }
+
+    @Test
+    public void onRadarDataNotificationReceivedWithInvalidSession() {
+        UwbRadarData uwbRadarData = UwbTestUtils.generateUwbRadarData(
+                RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES,
+                UwbUciConstants.STATUS_CODE_OK);
+        doReturn(null)
+                .when(mUwbSessionManager).getUwbSession(eq(TEST_SESSION_ID));
+
+        mUwbSessionManager.onRadarDataNotificationReceived(uwbRadarData);
+
+        verify(mUwbSessionNotificationManager, never())
+                .onRadarData(any(), eq(uwbRadarData));
+    }
+
+    @Test
+    public void execStartRanging_onRadarDataNotification() throws Exception {
+        UwbSession uwbSession = prepareExistingUwbSession(setupRadarParams());
+        // set up for start ranging
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE, UwbUciConstants.UWB_SESSION_STATE_ACTIVE)
+                .when(uwbSession).getSessionState();
+        when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+
+        mUwbSessionManager.startRanging(
+                uwbSession.getSessionHandle(), uwbSession.getParams());
+        mTestLooper.dispatchAll();
+
+        verify(mUwbSessionNotificationManager).onRangingStarted(eq(uwbSession), any());
+        verify(mUwbMetrics).longRangingStartEvent(
+                eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+
+        // Now send a radar data notification.
+        UwbRadarData uwbRadarData = UwbTestUtils.generateUwbRadarData(
+                RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES,
+                UwbUciConstants.STATUS_CODE_OK);
+        mUwbSessionManager.onRadarDataNotificationReceived(uwbRadarData);
+        verify(mUwbSessionNotificationManager).onRadarData(uwbSession, uwbRadarData);
+    }
+
     private UwbSessionManager.ReceivedDataInfo buildReceivedDataInfo(long macAddress) {
         return buildReceivedDataInfo(macAddress, DATA_SEQUENCE_NUM);
     }
@@ -3132,9 +3593,14 @@ public class UwbSessionManagerTest {
         info.status = STATUS_CODE_OK;
         info.sequenceNum = sequenceNum;
         info.address = macAddress;
-        info.sourceEndPoint = SOURCE_END_POINT;
-        info.destEndPoint = DEST_END_POINT;
         info.payload = DATA_PAYLOAD;
         return info;
+    }
+
+    private static byte[] getComputedMacAddress(byte[] address) {
+        if (!SdkLevel.isAtLeastU()) {
+            return TlvUtil.getReverseBytes(address);
+        }
+        return address;
     }
 }

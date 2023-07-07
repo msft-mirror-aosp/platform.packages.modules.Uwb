@@ -20,6 +20,9 @@ import static android.uwb.RangingMeasurement.RANGING_STATUS_SUCCESS;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import android.uwb.AngleMeasurement;
 import android.uwb.AngleOfArrivalMeasurement;
 import android.uwb.DistanceMeasurement;
@@ -36,17 +39,20 @@ import org.mockito.Mock;
 
 public class UwbControleeTest {
     public static final UwbAddress UWB_ADDRESS = UwbAddress.fromBytes(new byte[] {1, 2});
-    @Mock
     UwbControlee mControlee;
+    @Mock
+    UwbInjector mUwbInjector;
 
     @Before
     public void setUp() {
         UwbFilterEngine.Builder builder = new UwbFilterEngine.Builder();
         UwbFilterEngine engine = builder.build();
+        mUwbInjector = mock(UwbInjector.class);
+        when(mUwbInjector.getElapsedSinceBootMillis()).thenReturn(10L);
         mControlee = new UwbControlee(
                 UWB_ADDRESS,
                 engine,
-                null);
+                mUwbInjector);
     }
 
     @After
@@ -84,5 +90,27 @@ public class UwbControleeTest {
         RangingMeasurement newMeasure = rm.build();
         TestHelpers.assertClose(newMeasure.getAngleOfArrivalMeasurement().getAzimuth()
                 .getRadians(), testRads);
+    }
+
+    @Test
+    public void testNonAoaMeasurement() {
+        final double testDist = 2;
+        DistanceMeasurement dm = new DistanceMeasurement.Builder()
+                .setMeters(testDist)
+                .setErrorMeters(0.0)
+                .setConfidenceLevel(1.0)
+                .build();
+
+        RangingMeasurement.Builder rm = new RangingMeasurement.Builder()
+                .setDistanceMeasurement(dm)
+                .setStatus(RANGING_STATUS_SUCCESS)
+                .setRemoteDeviceAddress(UWB_ADDRESS)
+                .setElapsedRealtimeNanos(100);
+
+        // Filtering a single measurement value should just yield that same value.
+        mControlee.filterMeasurement(rm);
+
+        RangingMeasurement newMeasure = rm.build();
+        assertThat(newMeasure.getAngleOfArrivalMeasurement()).isNull();
     }
 }
