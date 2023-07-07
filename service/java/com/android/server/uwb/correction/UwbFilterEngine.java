@@ -28,7 +28,6 @@ import com.android.server.uwb.correction.pose.IPoseSource;
 import com.android.server.uwb.correction.pose.PoseEventListener;
 import com.android.server.uwb.correction.primers.IPrimer;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -42,10 +41,11 @@ public class UwbFilterEngine implements AutoCloseable, PoseEventListener {
     @NonNull private final List<IPrimer> mPrimers;
     @Nullable private final IPositionFilter mFilter;
     @Nullable private final IPoseSource mPoseSource;
-    private static boolean sDebug = false;
+    private static final boolean sDebug;
 
     static {
-        sDebug = Build.TYPE.equals("userdebug");
+        sDebug = (Build.TYPE != null && Build.TYPE.equals("userdebug"))
+                || System.getProperty("DEBUG") != null;
     }
 
     /**
@@ -53,7 +53,7 @@ public class UwbFilterEngine implements AutoCloseable, PoseEventListener {
      * are available.  If computation fails or is not possible (ie - filter or primer is not
      * configured), the computation function will return this.
      */
-    @Nullable private SphericalVector mLastInputState;
+    @Nullable private SphericalVector.Annotated mLastInputState;
 
     private boolean mClosed;
 
@@ -73,25 +73,22 @@ public class UwbFilterEngine implements AutoCloseable, PoseEventListener {
     /**
      * Updates the engine with the latest UWB data.
      * @param position The raw position produced by the UWB hardware.
+     * @param timeMs The time at which the UWB value was received, in ms since boot.
      */
-    public void add(@NonNull SphericalVector.Sparse position) {
-        add(position, Instant.now());
-    }
-
-    /**
-     * Updates the engine with the latest UWB data.
-     * @param position The raw position produced by the UWB hardware.
-     * @param instant The instant at which the UWB value was received.
-     */
-    public void add(@NonNull SphericalVector.Sparse position, Instant instant) {
+    public void add(@NonNull SphericalVector.Annotated position, long timeMs) {
         StringBuilder bigLog = sDebug ? new StringBuilder(position.toString()) : null;
         Objects.requireNonNull(position);
-        Objects.requireNonNull(instant);
 
-        SphericalVector prediction = compute(instant);
+        SphericalVector prediction = compute(timeMs);
+
+        if (sDebug) {
+            bigLog.append("(Prediction ");
+            bigLog.append(prediction);
+            bigLog.append(")");
+        }
 
         for (IPrimer primer: mPrimers) {
-            position = primer.prime(position, prediction, mPoseSource);
+            position = primer.prime(position, prediction, mPoseSource, timeMs);
             if (bigLog != null) {
                 bigLog.append(" ->")
                         .append(primer.getClass().getSimpleName()).append("=")
@@ -99,23 +96,23 @@ public class UwbFilterEngine implements AutoCloseable, PoseEventListener {
             }
         }
         if (position.isComplete() || prediction == null) {
-            mLastInputState = position.vector;
+            mLastInputState = position;
         } else {
             // Primers did not fully prime the position vector. This can happen when elevation is
             //  missing and there is no primer for an estimate, or if there was a bad UWB reading.
             // Fill in with predictions.
             mLastInputState = SphericalVector.fromRadians(
-                    position.hasAzimuth ? position.vector.azimuth : prediction.azimuth,
-                    position.hasElevation ? position.vector.elevation : prediction.elevation,
-                    position.hasDistance ? position.vector.distance : prediction.distance
-            );
+                    position.hasAzimuth ? position.azimuth : prediction.azimuth,
+                    position.hasElevation ? position.elevation : prediction.elevation,
+                    position.hasDistance ? position.distance : prediction.distance
+            ).toAnnotated().copyFomFrom(position);
         }
         if (mFilter != null) {
-            mFilter.updatePose(mPoseSource, instant);
-            mFilter.add(mLastInputState, instant);
+            mFilter.updatePose(mPoseSource, timeMs);
+            mFilter.add(mLastInputState, timeMs);
             if (bigLog != null) {
                 bigLog.append(" : filtered=")
-                        .append(mFilter.compute());
+                        .append(mFilter.compute(timeMs));
             }
         }
         if (bigLog != null) {
@@ -124,26 +121,15 @@ public class UwbFilterEngine implements AutoCloseable, PoseEventListener {
     }
 
     /**
-     * Computes the most probable UWB location as of now.
-     *
+     * Computes the most probable UWB location as of the given time.
+     * @param timeMs The time at which the UWB value was received, in ms since boot.
      * @return A SphericalVector representing the most likely UWB location.
      */
     @Nullable
-    public SphericalVector compute() {
-        return compute(Instant.now());
-    }
-
-    /**
-     * Computes the most probable UWB location as of the given instant.
-     * @param instant The time for which to compute the UWB location. This should be at or after
-     * the most recent UWB sample.
-     * @return A SphericalVector representing the most likely UWB location.
-     */
-    @Nullable
-    public SphericalVector compute(Instant instant) {
+    public SphericalVector.Annotated compute(long timeMs) {
         if (mFilter != null) {
-            mFilter.updatePose(mPoseSource, instant);
-            return mFilter.compute(instant);
+            mFilter.updatePose(mPoseSource, timeMs);
+            return mFilter.compute(timeMs);
         }
         return mLastInputState;
     }
