@@ -240,6 +240,11 @@ public class DeviceConfigFacadeTest {
         mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);
         assertEquals(true, mDeviceConfigFacade.isDeviceErrorBugreportEnabled());
 
+        when(DeviceConfig.getBoolean(anyString(), eq("session_init_error_bugreport_enabled"),
+                anyBoolean())).thenReturn(true);
+        mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);
+        assertEquals(true, mDeviceConfigFacade.isSessionInitErrorBugreportEnabled());
+
         when(DeviceConfig.getInt(anyString(), eq("bug_report_min_interval_ms"),
                 anyInt())).thenReturn(10 * 3600_000);
         mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);

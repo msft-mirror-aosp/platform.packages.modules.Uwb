@@ -24,6 +24,9 @@ import android.uwb.UwbAddress;
 
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.modules.utils.build.SdkLevel;
+import com.android.server.uwb.params.TlvUtil;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -62,9 +65,9 @@ public class UwbMulticastListUpdateStatusTest {
                 .isEqualTo(TEST_CONTROLEE_ADDRESS);
 
         for (int i = 0; i < TEST_NUM_OF_CONTROLLEES; i++) {
-            assertThat(mUwbMulticastListUpdateStatus.getControleeUwbAddresses()[i])
-                    .isEqualTo(UwbAddress.fromBytes(new byte[]{TEST_CONTROLEE_ADDRESS[0],
-                            TEST_CONTROLEE_ADDRESS[1]}));
+            assertThat(getComputedMacAddress(
+                mUwbMulticastListUpdateStatus.getControleeUwbAddresses()[i].toBytes())).isEqualTo(
+                    new byte[]{TEST_CONTROLEE_ADDRESS[0], TEST_CONTROLEE_ADDRESS[1]});
         }
 
         assertThat(mUwbMulticastListUpdateStatus.getSubSessionId()).isEqualTo(TEST_SUB_SESSION_ID);
@@ -95,12 +98,21 @@ public class UwbMulticastListUpdateStatusTest {
         assertThat(mUwbMulticastListUpdateStatus.getNumOfControlee())
                 .isEqualTo(numOfControlees);
 
-        assertThat(mUwbMulticastListUpdateStatus.getControleeUwbAddresses()[0].toBytes()).isEqualTo(
+        assertThat(getComputedMacAddress(
+                mUwbMulticastListUpdateStatus.getControleeUwbAddresses()[0].toBytes())).isEqualTo(
                 new byte[]{0x02, 0x03});
-        assertThat(mUwbMulticastListUpdateStatus.getControleeUwbAddresses()[1].toBytes()).isEqualTo(
+        assertThat(getComputedMacAddress(
+                mUwbMulticastListUpdateStatus.getControleeUwbAddresses()[1].toBytes())).isEqualTo(
                 new byte[]{0x05, 0x06});
 
         assertThat(mUwbMulticastListUpdateStatus.getSubSessionId()).isEqualTo(TEST_SUB_SESSION_ID);
         assertThat(mUwbMulticastListUpdateStatus.getStatus()).isEqualTo(TEST_STATUS);
+    }
+
+    public static byte[] getComputedMacAddress(byte[] address) {
+        if (!SdkLevel.isAtLeastU()) {
+            return TlvUtil.getReverseBytes(address);
+        }
+        return address;
     }
 }

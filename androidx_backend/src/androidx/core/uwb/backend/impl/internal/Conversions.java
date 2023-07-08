@@ -46,7 +46,7 @@ final class Conversions {
         return new RangingMeasurement(confidenceLevel, (float) value, valid);
     }
 
-    private static boolean isDlTDoAMeasurement(android.uwb.RangingMeasurement measurement) {
+    public static boolean isDlTdoaMeasurement(android.uwb.RangingMeasurement measurement) {
         if (Build.VERSION.SDK_INT <= VERSION_CODES.TIRAMISU) {
             return false;
         }
@@ -62,12 +62,12 @@ final class Conversions {
     @Nullable
     static RangingPosition convertToPosition(android.uwb.RangingMeasurement measurement) {
         RangingMeasurement distance;
-        DlTDoAMeasurement dlTdoaMeasurement = null;
-        if (isDlTDoAMeasurement(measurement)) {
+        DlTdoaMeasurement dlTdoaMeasurement = null;
+        if (isDlTdoaMeasurement(measurement)) {
             com.google.uwb.support.dltdoa.DlTDoAMeasurement
                     dlTDoAMeasurement = com.google.uwb.support.dltdoa.DlTDoAMeasurement.fromBundle(
                     measurement.getRangingMeasurementMetadata());
-            dlTdoaMeasurement = new DlTDoAMeasurement(
+            dlTdoaMeasurement = new DlTdoaMeasurement(
                     dlTDoAMeasurement.getMessageType(),
                     dlTDoAMeasurement.getMessageControl(),
                     dlTDoAMeasurement.getBlockIndex(),
@@ -101,7 +101,7 @@ final class Conversions {
         RangingMeasurement altitude = null;
         if (aoaMeasurement != null) {
             AngleMeasurement azimuthMeasurement = aoaMeasurement.getAzimuth();
-            if (azimuthMeasurement != null) {
+            if (azimuthMeasurement != null && !isMeasurementAllZero(azimuthMeasurement)) {
                 azimuth =
                         createMeasurement(
                                 Math.toDegrees(azimuthMeasurement.getRadians()),
@@ -109,7 +109,7 @@ final class Conversions {
                                 true);
             }
             AngleMeasurement altitudeMeasurement = aoaMeasurement.getAltitude();
-            if (altitudeMeasurement != null) {
+            if (altitudeMeasurement != null && !isMeasurementAllZero(altitudeMeasurement)) {
                 altitude =
                         createMeasurement(
                                 Math.toDegrees(altitudeMeasurement.getRadians()),
@@ -128,6 +128,12 @@ final class Conversions {
         }
         return new RangingPosition(
                 distance, azimuth, altitude, measurement.getElapsedRealtimeNanos());
+    }
+
+    private static boolean isMeasurementAllZero(AngleMeasurement measurement) {
+        return measurement.getRadians() == 0
+                && measurement.getErrorRadians() == 0
+                && measurement.getConfidenceLevel() == 0;
     }
 
     @RangingSessionCallback.RangingSuspendedReason

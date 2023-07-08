@@ -46,6 +46,7 @@ public abstract class FiraParams extends Params {
     }
 
     public static final FiraProtocolVersion PROTOCOL_VERSION_1_1 = new FiraProtocolVersion(1, 1);
+    public static final FiraProtocolVersion PROTOCOL_VERSION_2_0 = new FiraProtocolVersion(2, 0);
 
     /** Service ID for FiRa profile */
     @IntDef(
@@ -263,7 +264,7 @@ public abstract class FiraParams extends Params {
 
     public static final int CONSTRAINT_LENGTH_7 = 7;
 
-    /** Measurement Report */
+    /** Measurement Report Type */
     @IntDef(
             value = {
                 MEASUREMENT_REPORT_TYPE_INITIATOR_TO_RESPONDER,
@@ -274,6 +275,18 @@ public abstract class FiraParams extends Params {
     public static final int MEASUREMENT_REPORT_TYPE_INITIATOR_TO_RESPONDER = 0;
 
     public static final int MEASUREMENT_REPORT_TYPE_RESPONDER_TO_INITIATOR = 1;
+
+    /** Measurement Report Phase */
+    @IntDef(
+            value = {
+                MEASUREMENT_REPORT_PHASE_NOTSET,
+                MEASUREMENT_REPORT_PHASE_SET,
+            })
+    public @interface MeasurementReportPhase {}
+
+    public static final int MEASUREMENT_REPORT_PHASE_NOTSET = 0;
+
+    public static final int MEASUREMENT_REPORT_PHASE_SET = 1;
 
     /** PRF Mode */
     @IntDef(
@@ -408,6 +421,7 @@ public abstract class FiraParams extends Params {
     /** SFD ID */
     @IntDef(
             value = {
+                SFD_ID_VALUE_0,
                 SFD_ID_VALUE_1,
                 SFD_ID_VALUE_2,
                 SFD_ID_VALUE_3,
@@ -415,6 +429,7 @@ public abstract class FiraParams extends Params {
             })
     public @interface SfdIdValue {}
 
+    public static final int SFD_ID_VALUE_0 = 0;
     public static final int SFD_ID_VALUE_1 = 1;
     public static final int SFD_ID_VALUE_2 = 2;
     public static final int SFD_ID_VALUE_3 = 3;
@@ -1066,6 +1081,9 @@ public abstract class FiraParams extends Params {
 
     // Default value (Unlimited)
     public static final int MAX_NUMBER_OF_MEASUREMENTS_DEFAULT = 0;
+
+    // Default value (Host as the both secure & non-secure endpoint).
+    public static final int APPLICATION_DATA_ENDPOINT_DEFAULT = 0;
 
     // Helper functions
     protected static UwbAddress longToUwbAddress(long value, int length) {
