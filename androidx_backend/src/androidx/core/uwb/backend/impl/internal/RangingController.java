@@ -23,6 +23,7 @@ import static androidx.core.uwb.backend.impl.internal.Utils.INVALID_API_CALL;
 import static androidx.core.uwb.backend.impl.internal.Utils.STATUS_OK;
 import static androidx.core.uwb.backend.impl.internal.Utils.SUPPORTED_BPRF_PREAMBLE_INDEX;
 import static androidx.core.uwb.backend.impl.internal.Utils.TAG;
+import static androidx.core.uwb.backend.impl.internal.Utils.UWB_RECONFIGURATION_FAILURE;
 import static androidx.core.uwb.backend.impl.internal.Utils.UWB_SYSTEM_CALLBACK_FAILURE;
 
 import static com.google.uwb.support.fira.FiraParams.UWB_CHANNEL_9;
@@ -52,7 +53,8 @@ public class RangingController extends RangingDevice {
 
     private final List<UwbAddress> mDynamicallyAddedPeers = new ArrayList<>();
 
-    @Nullable private RangingSessionCallback mRangingSessionCallback;
+    @Nullable
+    private RangingSessionCallback mRangingSessionCallback;
 
     RangingController(UwbManager manager, Executor executor,
             OpAsyncCallbackRunner<Boolean> opAsyncCallbackRunner, UwbFeatureFlags uwbFeatureFlags) {
@@ -170,7 +172,7 @@ public class RangingController extends RangingDevice {
         // Reconfigure the session.
         int[] subSessionIdList = mRangingParameters.getUwbConfigId()
                 == CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR
-                ? new int[] {mRangingParameters.getSubSessionId()}
+                ? new int[]{mRangingParameters.getSubSessionId()}
                 : null;
         byte[] subSessionKeyInfo = mRangingParameters.getUwbConfigId()
                 == CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR
@@ -181,7 +183,7 @@ public class RangingController extends RangingDevice {
                         ConfigurationManager.createReconfigureParams(
                                         mRangingParameters.getUwbConfigId(),
                                         FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD,
-                                        new UwbAddress[] {controleeAddress},
+                                        new UwbAddress[]{controleeAddress},
                                         subSessionIdList,
                                         subSessionKeyInfo,
                                         mUwbFeatureFlags)
@@ -233,7 +235,7 @@ public class RangingController extends RangingDevice {
         // Reconfigure the session.
         int[] subSessionIdList = mRangingParameters.getUwbConfigId()
                 == CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR
-                ? new int[] {params.getSubSessionId()}
+                ? new int[]{params.getSubSessionId()}
                 : null;
         byte[] subSessionKeyInfo = mRangingParameters.getUwbConfigId()
                 == CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR
@@ -244,7 +246,7 @@ public class RangingController extends RangingDevice {
                         ConfigurationManager.createReconfigureParams(
                                         mRangingParameters.getUwbConfigId(),
                                         FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD,
-                                        new UwbAddress[] {controleeAddress},
+                                        new UwbAddress[]{controleeAddress},
                                         subSessionIdList,
                                         subSessionKeyInfo,
                                         mUwbFeatureFlags)
@@ -317,6 +319,32 @@ public class RangingController extends RangingDevice {
                                     REASON_STOP_RANGING_CALLED));
         }
         mDynamicallyAddedPeers.remove(controleeAddress);
+        return STATUS_OK;
+    }
+
+    /**
+     * Reconfigures ranging interval for an ongoing session
+     *
+     * @return STATUS_OK if reconfigure was successful.
+     * @return UWB_RECONFIGURATION_FAILURE if reconfigure failed.
+     * @return INVALID_API_CALL if ranging session is not active.
+     */
+    public synchronized int setBlockStriding(int blockStridingLength) {
+        if (!isAlive()) {
+            Log.w(TAG, "Attempt to set block striding while session is not active.");
+            return INVALID_API_CALL;
+        }
+
+        boolean success =
+                reconfigureRanging(
+                        ConfigurationManager.createReconfigureParamsBlockStriding(
+                                        blockStridingLength)
+                                .toBundle());
+
+        if (!success) {
+            Log.w(TAG, "Reconfiguring ranging interval failed");
+            return UWB_RECONFIGURATION_FAILURE;
+        }
         return STATUS_OK;
     }
 }

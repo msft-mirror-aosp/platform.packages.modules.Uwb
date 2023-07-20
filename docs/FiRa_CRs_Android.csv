@@ -100,7 +100,7 @@ CR455,NA,
 CR456,NA,
 CR457,NA,Marked as N/A (MAC)
 CR458,NA,Marked as N/A (MAC)
-CR459,NA,
+CR459,YES,
 CR460,NO,
 CR461,YES,
 CR462,NA,Marked as N/A (MAC)
@@ -122,7 +122,7 @@ CR484,YES,
 CR485,NO,
 CR486,NA,Marked as N/A (MAC)
 CR487,NA,Marked as N/A (MAC)
-CR490,NO,
+CR490,YES,
 CR496,NO,
 CR498,Partial,Pending: Anchor CMDs
 CR499,NA,Marked as N/A (MAC)
@@ -175,8 +175,8 @@ CR1083,NA,Marked as N/A (MAC)
 CR1084,NA,Marked as N/A (MAC)
 CR1086,NA,Marked as N/A (MAC)
 CR1087,NO,
-CR1093,NA,Marked as N/A (MAC)
-CR1094,NO,
+CR1093,YES,
+CR1094,YES,
 CR1097,YES,
 CR1098,NA,Marked as N/A (MAC)
 CR1100,NA,Marked as N/A (MAC)

@@ -16,6 +16,18 @@
 
 package com.android.server.uwb.config;
 
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.BITS_PER_SAMPLE;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.NUMBER_OF_BURSTS;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.RADAR_CHANNEL_NUMBER;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.RADAR_DATA_TYPE;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.RADAR_PREAMBLE_CODE_INDEX;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.RADAR_PREAMBLE_DURATION;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.RADAR_PRF_MODE;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.RADAR_RFRAME_CONFIG;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.RADAR_SESSION_PRIORITY;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.RADAR_TIMING_PARAMS;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.SAMPLES_PER_SWEEP;
+import static android.hardware.uwb.fira_android.UwbVendorRadarAppConfigTlvTypes.SWEEP_OFFSET;
 import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.CCC_HOP_MODE_KEY;
 import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.CCC_LAST_INDEX_USED;
 import static android.hardware.uwb.fira_android.UwbVendorSessionAppConfigTlvTypes.CCC_PULSESHAPE_COMBO;
@@ -63,6 +75,7 @@ public class ConfigParam {
     public static final int PSDU_DATA_RATE = 0x16;
     public static final int PREAMBLE_DURATION = 0x17;
     public static final int LINK_LAYER_MODE = 0x18;
+    public static final int DATA_REPETITION_COUNT = 0x19;
     public static final int RANGING_TIME_STRUCT = 0x1A;
     public static final int SLOTS_PER_RR = 0x1B;
     public static final int TX_ADAPTIVE_PAYLOAD_POWER = 0x1C;
@@ -97,6 +110,7 @@ public class ConfigParam {
     public static final int INTER_FRAME_INTERVAL = 0x3C;
     public static final int SESSION_KEY = 0x45;
     public static final int SUBSESSION_KEY = 0x46;
+    public static final int SESSION_DATA_TRANSFER_STATUS_NTF_CONFIG = 0x47;
     public static final int APPLICATION_DATA_ENDPOINT = 0x4C;
 
     // Android specific params.
@@ -124,6 +138,20 @@ public class ConfigParam {
     public static final int UWB_TIME0 = CCC_UWB_TIME0;
 
     public static final int RANGING_PROTOCOL_VER_BYTE_COUNT = 2;
+
+    // Radar App Config Parameter IDs
+    public static final int RADAR_TIMING_PARAMS_KEY = RADAR_TIMING_PARAMS;
+    public static final int SAMPLES_PER_SWEEP_KEY = SAMPLES_PER_SWEEP;
+    public static final int CHANNEL_NUMBER_KEY = RADAR_CHANNEL_NUMBER;
+    public static final int SWEEP_OFFSET_KEY = SWEEP_OFFSET;
+    public static final int RFRAME_CONFIG_KEY = RADAR_RFRAME_CONFIG;
+    public static final int PREAMBLE_DURATION_KEY = RADAR_PREAMBLE_DURATION;
+    public static final int PREAMBLE_CODE_INDEX_KEY = RADAR_PREAMBLE_CODE_INDEX;
+    public static final int SESSION_PRIORITY_KEY = RADAR_SESSION_PRIORITY;
+    public static final int BITS_PER_SAMPLE_KEY = BITS_PER_SAMPLE;
+    public static final int PRF_MODE_KEY = RADAR_PRF_MODE;
+    public static final int NUMBER_OF_BURSTS_KEY = NUMBER_OF_BURSTS;
+    public static final int RADAR_DATA_TYPE_KEY = RADAR_DATA_TYPE;
 
     public static byte[] getTagBytes(int tagType) {
         int tagLength = 1;

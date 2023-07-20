@@ -21,8 +21,9 @@ import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABL
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_EDGE_TRIG;
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
 
-import android.annotation.IntDef;
 import android.util.ArrayMap;
+
+import androidx.annotation.IntDef;
 
 import com.google.common.collect.ImmutableList;
 import com.google.uwb.support.fira.FiraParams;
@@ -43,8 +44,8 @@ public final class Utils {
         CONFIG_PROVISIONED_MULTICAST_DS_TWR,
         CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA,
         CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
-        CONFIG_DL_TDOA_DT_TAG,
         CONFIG_MULTICAST_DS_TWR_NO_AOA,
+        CONFIG_DL_TDOA_DT_TAG,
     })
     public @interface UwbConfigId {}
 
@@ -73,11 +74,11 @@ public final class Utils {
     /** Same as {@code CONFIG_ID_2}, except P-STS individual controlee key mode is enabled. */
     public static final int CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 7;
 
-    /** FiRa- defined Downlink-TDoA for DT-Tag ranging */
-    public static final int CONFIG_DL_TDOA_DT_TAG = 8;
-
     /** Same as {@code CONFIG_ID_3}, except not unicast @Hide */
     public static final int CONFIG_MULTICAST_DS_TWR_NO_AOA = 1000;
+
+    /** FiRa- defined Downlink-TDoA for DT-Tag ranging */
+    public static final int CONFIG_DL_TDOA_DT_TAG = 1001;
 
     @IntDef({
         INFREQUENT,
@@ -86,14 +87,14 @@ public final class Utils {
     })
     public @interface RangingUpdateRate {}
 
-    /** Reports ranging data in a couple of seconds (default to 4 seconds). */
-    public static final int INFREQUENT = 1;
-
     /**
      * Reports ranging data in hundreds of milliseconds (depending on the ranging interval setting
      * of the config)
      */
-    public static final int NORMAL = 2;
+    public static final int NORMAL = 1;
+
+    /** Reports ranging data in a couple of seconds (default to 4 seconds). */
+    public static final int INFREQUENT = 2;
 
     /** Reports ranging data as fast as possible (depending on the device's capability). */
     public static final int FAST = 3;
@@ -206,11 +207,38 @@ public final class Utils {
         }
     }
 
+    @IntDef(
+            value = {
+                    FREQUENT_RANGING_INTERVAL,
+                    AUTOMATIC,
+                    INFREQUENT_RANGING_INTERVAL,
+            }
+    )
+    public @interface RangingInterval {}
+
+    public static final int FREQUENT_RANGING_INTERVAL = 100;
+    public static final int AUTOMATIC = 200;
+    public static final int INFREQUENT_RANGING_INTERVAL = 600;
+
+    @IntDef(
+            value = {
+                    DURATION_1_MS,
+                    DURATION_2_MS,
+            }
+    )
+    public @interface SlotDuration {}
+
+    public static final int DURATION_1_MS = 1;
+    public static final int DURATION_2_MS = 2;
+
     /**
      * Unusual failures happened in UWB system callback, such as stopping ranging or removing a
      * known controlee failed.
      */
     public static final int UWB_SYSTEM_CALLBACK_FAILURE = 5;
+
+    /** Failed to reconfigure an existing ranging session. */
+    public static final int UWB_RECONFIGURATION_FAILURE = 6;
 
     static {
         setRangingTimingParams(
@@ -325,6 +353,11 @@ public final class Utils {
     // frequency) support will be added.
     public static final ImmutableList<Integer> SUPPORTED_BPRF_PREAMBLE_INDEX =
             ImmutableList.of(9, 10, 11, 12);
+
+    /** Converts millisecond to RSTU. */
+    public static int convertMsToRstu(int value) {
+        return (int) (value * 499.2 * 1000 / 416);
+    }
 
     private Utils() {}
 }
