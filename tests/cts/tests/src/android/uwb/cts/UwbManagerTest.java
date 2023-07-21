@@ -26,6 +26,8 @@ import static android.uwb.UwbManager.MESSAGE_TYPE_COMMAND;
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_DT_TAG;
+import static com.google.uwb.support.fira.FiraParams.RFRAME_CONFIG_SP1;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
@@ -81,7 +83,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -1012,6 +1013,11 @@ public class UwbManagerTest {
             assertThat(rangingSessionCallback.onOpenFailedCalled).isFalse();
             assertThat(rangingSessionCallback.rangingSession).isNotNull();
 
+            if (firaOpenSessionParams.getDeviceRole() == RANGING_DEVICE_DT_TAG) {
+                runOperationWhenSessionIsRunning.run(rangingSessionCallback);
+                runOperationWhenSessionIsRunning = null;
+            }
+
             countDownLatch = new CountDownLatch(1);
             rangingSessionCallback.replaceCtrlCountDownLatch(countDownLatch);
             rangingSessionCallback.rangingSession.start(new PersistableBundle());
@@ -1101,10 +1107,10 @@ public class UwbManagerTest {
                 .setStaticStsIV(new byte[]{0x5, 0x6, 0x9, 0xa, 0x4, 0x6})
                 .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_DT_TAG)
                 .setDeviceRole(FiraParams.RANGING_DEVICE_DT_TAG)
-                .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
                 .setRangingRoundUsage(FiraParams.RANGING_ROUND_USAGE_DL_TDOA)
                 .setDeviceAddress(UwbAddress.fromBytes(new byte[]{0x5, 6}))
-                .setDestAddressList(List.of(UwbAddress.fromBytes(new byte[]{0x5, 6})))
+                .setRframeConfig(RFRAME_CONFIG_SP1)
+                .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_ONE_TO_MANY)
                 .build();
         verifyFiraRangingSession(
                 firaOpenSessionParams,
@@ -1123,7 +1129,7 @@ public class UwbManagerTest {
                             new DlTDoARangingRoundsUpdate.Builder()
                                     .setSessionId(1)
                                     .setNoOfRangingRounds(1)
-                                    .setRangingRoundIndexes(new byte[]{1})
+                                    .setRangingRoundIndexes(new byte[]{0})
                                     .build();
 
                     // Update Ranging Rounds for DT Tag.
@@ -1217,10 +1223,11 @@ public class UwbManagerTest {
     @CddTest(requirements = {"7.3.13/C-1-1,C-1-2,C-1-5"})
     public void testFiraRangingSessionWithProvisionedSTS() throws Exception {
         FiraSpecificationParams params = getFiraSpecificationParams();
-        EnumSet<FiraParams.StsCapabilityFlag> stsCapabilities = EnumSet.of(
-                FiraParams.StsCapabilityFlag.HAS_STATIC_STS_SUPPORT,
-                FiraParams.StsCapabilityFlag.HAS_PROVISIONED_STS_SUPPORT);
-        assumeTrue(params.getStsCapabilities() == stsCapabilities);
+        assumeTrue(params.getStsCapabilities()
+                .contains(FiraParams.StsCapabilityFlag.HAS_PROVISIONED_STS_SUPPORT)
+                && params.getStsCapabilities()
+                .contains(FiraParams.StsCapabilityFlag
+                        .HAS_PROVISIONED_STS_INDIVIDUAL_CONTROLEE_KEY_SUPPORT));
 
         FiraOpenSessionParams firaOpenSessionParams = new FiraOpenSessionParams.Builder()
                 .setProtocolVersion(new FiraProtocolVersion(1, 1))
