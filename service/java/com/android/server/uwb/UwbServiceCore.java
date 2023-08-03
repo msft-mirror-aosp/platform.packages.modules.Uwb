@@ -66,6 +66,7 @@ import com.google.uwb.support.fira.FiraControleeParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
+import com.google.uwb.support.fira.FiraSuspendRangingParams;
 import com.google.uwb.support.generic.GenericParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
 import com.google.uwb.support.oemextension.DeviceStatus;
@@ -602,7 +603,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         if (!isUwbEnabled()) {
             throw new IllegalStateException("Uwb is not enabled");
         }
-        Params  reconfigureRangingParams = null;
+        Params reconfigureRangingParams = null;
         if (FiraParams.isCorrectProtocol(params)) {
             FiraControleeParams controleeParams = FiraControleeParams.fromBundle(params);
             reconfigureRangingParams = new FiraRangingReconfigureParams.Builder()
@@ -610,6 +611,46 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                     .setAddressList(controleeParams.getAddressList())
                     .setSubSessionIdList(controleeParams.getSubSessionIdList())
                     .setSubSessionKeyList(controleeParams.getSubSessionKeyList())
+                    .build();
+        }
+        mSessionManager.reconfigure(sessionHandle, reconfigureRangingParams);
+    }
+
+    private void checkPauseOrResumeParams(
+            PersistableBundle params, int expectedSuspendRangingRoundsValue) {
+        if (!FiraParams.isCorrectProtocol(params)) {
+            throw new IllegalStateException("Incorrect protocol type in given params");
+        }
+        FiraSuspendRangingParams suspendRangingParams =
+                FiraSuspendRangingParams.fromBundle(params);
+        if (suspendRangingParams.getSuspendRangingRounds() != expectedSuspendRangingRoundsValue) {
+            throw new IllegalStateException(
+                    "Incorrect SuspendRangingRound value "
+                    + suspendRangingParams.getSuspendRangingRounds()
+                    + ", expected value = " + expectedSuspendRangingRoundsValue);
+        }
+    }
+
+    public void pause(SessionHandle sessionHandle, PersistableBundle params) {
+        checkPauseOrResumeParams(params, FiraParams.SUSPEND_RANGING_ENABLED);
+        pauseOrResumeSession(sessionHandle, params);
+    }
+
+    public void resume(SessionHandle sessionHandle, PersistableBundle params) {
+        checkPauseOrResumeParams(params, FiraParams.SUSPEND_RANGING_DISABLED);
+        pauseOrResumeSession(sessionHandle, params);
+    }
+
+    private void pauseOrResumeSession(SessionHandle sessionHandle, PersistableBundle params) {
+        if (!isUwbEnabled()) {
+            throw new IllegalStateException("Uwb is not enabled");
+        }
+        Params reconfigureRangingParams = null;
+        if (FiraParams.isCorrectProtocol(params)) {
+            FiraSuspendRangingParams suspendRangingParams =
+                    FiraSuspendRangingParams.fromBundle(params);
+            reconfigureRangingParams = new FiraRangingReconfigureParams.Builder()
+                    .setSuspendRangingRounds(suspendRangingParams.getSuspendRangingRounds())
                     .build();
         }
         mSessionManager.reconfigure(sessionHandle, reconfigureRangingParams);
@@ -642,6 +683,24 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             return AdapterStateCallback.STATE_DISABLED;
         }
         return getInternalAdapterState();
+    }
+
+    /**
+     * Configure a Hybrid session.
+     */
+    public int setHybridSessionConfiguration(SessionHandle sessionHandle,
+            PersistableBundle params) {
+        int status = UwbUciConstants.STATUS_CODE_FAILED;
+        if (!isUwbEnabled()) {
+            throw new IllegalStateException("Uwb is not enabled");
+        }
+        try {
+            status = mSessionManager.setHybridSessionConfiguration(sessionHandle, params);
+            return status;
+        } catch (RemoteException e) {
+            Log.e(TAG, "Failed to set Hybrid Session Configuration", e);
+        }
+        return status;
     }
 
     private /* @UwbManager.AdapterStateCallback.State */ int getInternalAdapterState() {
