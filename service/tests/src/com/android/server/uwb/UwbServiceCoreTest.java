@@ -39,6 +39,7 @@ import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_
 import static com.google.uwb.support.fira.FiraParams.SESSION_TYPE_RANGING;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -104,6 +105,7 @@ import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraProtocolVersion;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.fira.FiraSpecificationParams;
+import com.google.uwb.support.fira.FiraSuspendRangingParams;
 import com.google.uwb.support.generic.GenericParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
 import com.google.uwb.support.radar.RadarOpenSessionParams;
@@ -396,6 +398,28 @@ public class UwbServiceCoreTest {
         verifyGetCachedSpecificationInfoSuccess();
     }
 
+    @Test
+    public void testEnable_failure() throws Exception {
+        IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
+        when(cb.asBinder()).thenReturn(mock(IBinder.class));
+        mUwbServiceCore.registerAdapterStateCallbacks(cb);
+        verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
+                StateChangeReason.UNKNOWN);
+        UwbServiceCore.InitializationFailureListener initFailCb =
+                mock(UwbServiceCore.InitializationFailureListener.class);
+        mUwbServiceCore.addInitializationFailureListener(initFailCb);
+        clearInvocations(cb, initFailCb);
+
+        when(mNativeUwbManager.doInitialize()).thenReturn(false);
+
+        mUwbServiceCore.setEnabled(true);
+        mTestLooper.dispatchAll();
+
+        verify(mNativeUwbManager).doInitialize();
+        assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
+        verify(initFailCb).onFailure();
+        verifyNoMoreInteractions(cb, initFailCb);
+    }
 
     @Test
     public void testEnableWithCountryCode_success() throws Exception {
@@ -460,11 +484,33 @@ public class UwbServiceCoreTest {
         mUwbServiceCore.setEnabled(true);
         mTestLooper.dispatchAll();
 
+        // Verify that UWB adapter state is notified as DISABLED, and future calls to
+        // getAdapterState() also return the state as DISABLED.
         verify(mNativeUwbManager).doInitialize();
         verify(mUwbCountryCode).setCountryCode(true);
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
                 StateChangeReason.SYSTEM_REGULATION);
         assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
+
+        // Verify that a UWB ranging session cannot be opened or started.
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        IUwbRangingCallbacks rangingCallbacks = mock(IUwbRangingCallbacks.class);
+
+        try {
+            mUwbServiceCore.openRanging(
+                    TEST_ATTRIBUTION_SOURCE, sessionHandle, rangingCallbacks,
+                    TEST_FIRA_OPEN_SESSION_PARAMS.build().toBundle(), TEST_DEFAULT_CHIP_ID);
+            fail();
+        } catch (IllegalStateException e) {
+            // pass
+        }
+
+        try {
+            mUwbServiceCore.startRanging(sessionHandle, new PersistableBundle());
+            fail();
+        } catch (IllegalStateException e) {
+           // pass
+        }
     }
 
     // Unit test for scenario when setting the country code (during UWB Enable) fails with a generic
@@ -490,11 +536,33 @@ public class UwbServiceCoreTest {
         mUwbServiceCore.setEnabled(true);
         mTestLooper.dispatchAll();
 
+        // Verify that UWB adapter state is notified as DISABLED, and future calls to
+        // getAdapterState() also return the state as DISABLED.
         verify(mNativeUwbManager).doInitialize();
         verify(mUwbCountryCode).setCountryCode(true);
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
                 StateChangeReason.SYSTEM_POLICY);
         assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
+
+        // Verify that a UWB ranging session cannot be opened or started.
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        IUwbRangingCallbacks rangingCallbacks = mock(IUwbRangingCallbacks.class);
+
+        try {
+            mUwbServiceCore.openRanging(
+                    TEST_ATTRIBUTION_SOURCE, sessionHandle, rangingCallbacks,
+                    TEST_FIRA_OPEN_SESSION_PARAMS.build().toBundle(), TEST_DEFAULT_CHIP_ID);
+            fail();
+        } catch (IllegalStateException e) {
+            // pass
+        }
+
+        try {
+            mUwbServiceCore.startRanging(sessionHandle, new PersistableBundle());
+            fail();
+        } catch (IllegalStateException e) {
+           // pass
+        }
     }
 
     @Test
@@ -520,7 +588,7 @@ public class UwbServiceCoreTest {
 
         // Enable again. should be ignored.
         enableUwb(VALID_COUNTRY_CODE);
-        verifyNoMoreInteractions(mNativeUwbManager, mUwbCountryCode, cb);
+        verifyNoMoreInteractions(mNativeUwbManager, cb);
         assertThat(mUwbServiceCore.getAdapterState())
                 .isEqualTo(AdapterState.STATE_ENABLED_INACTIVE);
     }
@@ -783,7 +851,7 @@ public class UwbServiceCoreTest {
         // Disable again. should be ignored.
         disableUwb();
 
-        verifyNoMoreInteractions(mNativeUwbManager, mUwbCountryCode, cb);
+        verifyNoMoreInteractions(mNativeUwbManager, cb);
         assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
     }
 
@@ -1025,6 +1093,86 @@ public class UwbServiceCoreTest {
         verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
                 argThat((x) ->
                         ((FiraRangingReconfigureParams) x).getBlockStrideLength().equals(6)));
+    }
+
+    @Test
+    public void testPauseRanging() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_ENABLED)
+                        .build();
+        mUwbServiceCore.pause(sessionHandle, parameters.toBundle());
+        verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
+                argThat((x) ->
+                        ((FiraRangingReconfigureParams) x).getSuspendRangingRounds().equals(1)));
+    }
+
+    @Test
+    public void testPauseRanging_incorrectParams() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.pause(
+                        sessionHandle, TEST_CCC_OPEN_RANGING_PARAMS.build().toBundle()));
+    }
+
+    @Test
+    public void testPauseRanging_incorrectSuspendRangingRoundsValue() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_DISABLED)
+                        .build();
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.pause(sessionHandle, parameters.toBundle()));
+    }
+
+    @Test
+    public void testResumeRanging() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_DISABLED)
+                        .build();
+        mUwbServiceCore.resume(sessionHandle, parameters.toBundle());
+        verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
+                argThat((x) ->
+                        ((FiraRangingReconfigureParams) x).getSuspendRangingRounds().equals(0)));
+    }
+
+    @Test
+    public void testResumeRanging_incorrectParams() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.resume(
+                        sessionHandle, TEST_CCC_OPEN_RANGING_PARAMS.build().toBundle()));
+    }
+
+    @Test
+    public void testResumeRanging_incorrectSuspendRangingRoundsValue() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_ENABLED)
+                        .build();
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.resume(sessionHandle, parameters.toBundle()));
     }
 
     @Test
@@ -1529,6 +1677,17 @@ public class UwbServiceCoreTest {
         mUwbServiceCore.rangingRoundsUpdateDtTag(sessionHandle, bundle);
 
         verify(mUwbSessionManager).rangingRoundsUpdateDtTag(sessionHandle, bundle);
+    }
+
+    @Test
+    public void testHybridSessionConfiguration() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        PersistableBundle bundle = new PersistableBundle();
+        mUwbServiceCore.setHybridSessionConfiguration(sessionHandle, bundle);
+
+        verify(mUwbSessionManager).setHybridSessionConfiguration(sessionHandle, bundle);
     }
 
     public CccSpecificationParams getTestCccSpecificationParams() {

@@ -84,6 +84,8 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
      */
     @VisibleForTesting
     public static final String SETTINGS_SATELLITE_MODE_ENABLED = "satellite_mode_enabled";
+    @VisibleForTesting
+    public static final int INITIALIZATION_RETRY_TIMEOUT_MS = 10_000;
 
     private final Context mContext;
     private final UwbInjector mUwbInjector;
@@ -92,12 +94,28 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
 
     private boolean mUwbUserRestricted;
 
+    private UwbServiceCore.InitializationFailureListener mInitializationFailureListener;
 
     UwbServiceImpl(@NonNull Context context, @NonNull UwbInjector uwbInjector) {
         mContext = context;
         mUwbInjector = uwbInjector;
         mUwbSettingsStore = uwbInjector.getUwbSettingsStore();
         mUwbServiceCore = uwbInjector.getUwbServiceCore();
+        mInitializationFailureListener = () -> {
+            Log.i(TAG, "Initialization failed, retry initialization after "
+                    + INITIALIZATION_RETRY_TIMEOUT_MS + "ms");
+            mUwbServiceCore.getHandler().postDelayed(() -> {
+                try {
+                    mUwbServiceCore.setEnabled(isUwbEnabled());
+                } catch (Exception e) {
+                    Log.e(TAG, "Unable to set UWB Adapter state.", e);
+                }
+            }, INITIALIZATION_RETRY_TIMEOUT_MS);
+            // Remove initialization failure listener after first retry attempt to avoid
+            // continuously retrying.
+            mUwbServiceCore.removeInitializationFailureListener(mInitializationFailureListener);
+        };
+        mUwbServiceCore.addInitializationFailureListener(mInitializationFailureListener);
         registerAirplaneModeReceiver();
         registerSatelliteModeReceiver();
         mUwbUserRestricted = isUwbUserRestricted();
@@ -335,15 +353,13 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     @Override
     public void pause(SessionHandle sessionHandle, PersistableBundle params) {
         enforceUwbPrivilegedPermission();
-        // TODO(b/200678461): Implement this.
-        throw new IllegalStateException("Not implemented");
+        mUwbServiceCore.pause(sessionHandle, params);
     }
 
     @Override
     public void resume(SessionHandle sessionHandle, PersistableBundle params) {
         enforceUwbPrivilegedPermission();
-        // TODO(b/200678461): Implement this.
-        throw new IllegalStateException("Not implemented");
+        mUwbServiceCore.resume(sessionHandle, params);
     }
 
     @Override
@@ -375,6 +391,16 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     @Override
     public synchronized int getAdapterState() throws RemoteException {
         return mUwbServiceCore.getAdapterState();
+    }
+
+    @Override
+    public int setHybridSessionConfiguration(SessionHandle sessionHandle,
+            PersistableBundle params) {
+        if (!SdkLevel.isAtLeastV()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        return mUwbServiceCore.setHybridSessionConfiguration(sessionHandle, params);
     }
 
     @Override
