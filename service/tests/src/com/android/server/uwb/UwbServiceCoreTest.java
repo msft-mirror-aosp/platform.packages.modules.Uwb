@@ -39,6 +39,7 @@ import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_
 import static com.google.uwb.support.fira.FiraParams.SESSION_TYPE_RANGING;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -104,6 +105,7 @@ import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraProtocolVersion;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.fira.FiraSpecificationParams;
+import com.google.uwb.support.fira.FiraSuspendRangingParams;
 import com.google.uwb.support.generic.GenericParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
 import com.google.uwb.support.radar.RadarOpenSessionParams;
@@ -1091,6 +1093,86 @@ public class UwbServiceCoreTest {
         verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
                 argThat((x) ->
                         ((FiraRangingReconfigureParams) x).getBlockStrideLength().equals(6)));
+    }
+
+    @Test
+    public void testPauseRanging() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_ENABLED)
+                        .build();
+        mUwbServiceCore.pause(sessionHandle, parameters.toBundle());
+        verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
+                argThat((x) ->
+                        ((FiraRangingReconfigureParams) x).getSuspendRangingRounds().equals(1)));
+    }
+
+    @Test
+    public void testPauseRanging_incorrectParams() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.pause(
+                        sessionHandle, TEST_CCC_OPEN_RANGING_PARAMS.build().toBundle()));
+    }
+
+    @Test
+    public void testPauseRanging_incorrectSuspendRangingRoundsValue() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_DISABLED)
+                        .build();
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.pause(sessionHandle, parameters.toBundle()));
+    }
+
+    @Test
+    public void testResumeRanging() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_DISABLED)
+                        .build();
+        mUwbServiceCore.resume(sessionHandle, parameters.toBundle());
+        verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
+                argThat((x) ->
+                        ((FiraRangingReconfigureParams) x).getSuspendRangingRounds().equals(0)));
+    }
+
+    @Test
+    public void testResumeRanging_incorrectParams() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.resume(
+                        sessionHandle, TEST_CCC_OPEN_RANGING_PARAMS.build().toBundle()));
+    }
+
+    @Test
+    public void testResumeRanging_incorrectSuspendRangingRoundsValue() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_ENABLED)
+                        .build();
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.resume(sessionHandle, parameters.toBundle()));
     }
 
     @Test
