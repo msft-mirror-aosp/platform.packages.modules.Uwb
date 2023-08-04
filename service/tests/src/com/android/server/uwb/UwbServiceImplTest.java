@@ -24,6 +24,7 @@ import static com.android.server.uwb.UwbServiceImpl.SETTINGS_SATELLITE_MODE_ENAB
 import static com.android.server.uwb.UwbServiceImpl.SETTINGS_SATELLITE_MODE_RADIOS;
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_TOGGLE_STATE;
 import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
+import static com.android.server.uwb.UwbTestUtils.TEST_STATUS;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.fira.FiraParams.PACS_PROFILE_SERVICE_ID;
@@ -78,7 +79,9 @@ import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
 import com.android.server.uwb.pm.ProfileManager;
 
+import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
+import com.google.uwb.support.fira.FiraSuspendRangingParams;
 import com.google.uwb.support.multichip.ChipInfoParams;
 import com.google.uwb.support.profile.ServiceProfile;
 import com.google.uwb.support.profile.UuidBundleWrapper;
@@ -740,23 +743,17 @@ public class UwbServiceImplTest {
     @Test
     public void testResume() throws Exception {
         final SessionHandle sessionHandle = mock(SessionHandle.class);
-        final PersistableBundle parameters = new PersistableBundle();
-
-        try {
-            mUwbServiceImpl.resume(sessionHandle, parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        PersistableBundle bundle = new PersistableBundle();
+        mUwbServiceImpl.resume(sessionHandle, bundle);
+        verify(mUwbServiceCore).resume(sessionHandle, bundle);
     }
 
     @Test
     public void testPause() throws Exception {
         final SessionHandle sessionHandle = mock(SessionHandle.class);
-        final PersistableBundle parameters = new PersistableBundle();
-
-        try {
-            mUwbServiceImpl.pause(sessionHandle, parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        PersistableBundle bundle = new PersistableBundle();
+        mUwbServiceImpl.pause(sessionHandle, bundle);
+        verify(mUwbServiceCore).pause(sessionHandle, bundle);
     }
 
     @Test
@@ -816,6 +813,20 @@ public class UwbServiceImplTest {
         assertThat(mUwbServiceImpl.queryMaxDataSizeBytes(sessionHandle)).isEqualTo(MAX_DATA_SIZE);
 
         verify(mUwbServiceCore).queryMaxDataSizeBytes(sessionHandle);
+    }
+
+    @Test
+    public void testSetHybridSessionConfiguration() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
+        final SessionHandle sessionHandle = mock(SessionHandle.class);
+        final PersistableBundle parameters = new PersistableBundle();
+
+        when(mUwbServiceCore.setHybridSessionConfiguration(sessionHandle, parameters))
+               .thenReturn(TEST_STATUS);
+        assertThat(mUwbServiceImpl.setHybridSessionConfiguration(sessionHandle, parameters))
+                .isEqualTo(TEST_STATUS);
+
+        verify(mUwbServiceCore).setHybridSessionConfiguration(sessionHandle, parameters);
     }
 
     @Test

@@ -35,8 +35,8 @@ use jni::JNIEnv;
 use log::{debug, error};
 use uwb_core::error::{Error, Result};
 use uwb_core::params::{
-    AppConfigTlv, CountryCode, RawAppConfigTlv, RawUciMessage,
-    SessionUpdateDtTagRangingRoundsResponse, SetAppConfigResponse,
+    AppConfigTlv, CountryCode, PhaseList, RawAppConfigTlv, RawUciMessage,
+    SessionUpdateDtTagRangingRoundsResponse, SetAppConfigResponse, UpdateTime,
 };
 use uwb_uci_packets::{
     AppConfigTlvType, CapTlv, Controlee, Controlee_V2_0_16_Byte_Version,
@@ -385,6 +385,82 @@ fn native_set_app_configurations(
     uci_manager.session_set_app_config(session_id as u32, tlvs)
 }
 
+fn parse_hybrid_config_phase_list_vec(
+    number_of_phases: usize,
+    byte_array: &[u8],
+) -> Result<Vec<PhaseList>> {
+    let mut parsed_phase_lists_len = 0;
+    let received_phase_list_len = byte_array.len();
+    let mut phase_lists = Vec::with_capacity(number_of_phases);
+    // The PhaseList consists of session handle as u32 in 4 bytes, Start Slot Index as u16
+    // in 2 byte and End Slot Index as u16 in 2 bytes
+    const PHASE_LIST_SIZE: usize = 8;
+    for chunk in byte_array.chunks_exact(PHASE_LIST_SIZE) {
+        let phase_list = PhaseList::parse(chunk).map_err(|_| Error::BadParameters)?;
+        parsed_phase_lists_len += PHASE_LIST_SIZE;
+        phase_lists.push(phase_list);
+    }
+
+    if parsed_phase_lists_len != received_phase_list_len {
+        return Err(Error::BadParameters);
+    }
+    Ok(phase_lists)
+}
+
+/// Set hybrid session configurations. Return null JObject if failed.
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSetHybridSessionConfigurations(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    number_of_phases: jint,
+    update_time: jbyteArray,
+    phase_list: jbyteArray,
+    chip_id: JString,
+) -> jbyte {
+    debug!("{}: enter", function_name!());
+    byte_result_helper(
+        native_set_hybrid_session_configurations(
+            env,
+            obj,
+            session_id,
+            number_of_phases,
+            update_time,
+            phase_list,
+            chip_id,
+        ),
+        function_name!(),
+    )
+}
+
+fn native_set_hybrid_session_configurations(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    number_of_phases: jint,
+    update_time: jbyteArray,
+    phase_list: jbyteArray,
+    chip_id: JString,
+) -> Result<()> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    let phase_list_bytes =
+        env.convert_byte_array(phase_list).map_err(|_| Error::ForeignFunctionInterface)?;
+    let phase_list_vec =
+        parse_hybrid_config_phase_list_vec(number_of_phases as usize, &phase_list_bytes)?;
+
+    let update_time_bytes =
+        env.convert_byte_array(update_time).map_err(|_| Error::ForeignFunctionInterface)?;
+    let update_time_array: [u8; 8] =
+        TryFrom::try_from(&update_time_bytes[..]).map_err(|_| Error::BadParameters)?;
+
+    uci_manager.session_set_hybrid_config(
+        session_id as u32,
+        number_of_phases as u8,
+        UpdateTime::new(&update_time_array).unwrap(),
+        phase_list_vec,
+    )
+}
+
 fn create_get_config_response(tlvs: Vec<AppConfigTlv>, env: JNIEnv) -> Result<jbyteArray> {
     let tlv_data_class =
         env.find_class(TLV_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
@@ -690,10 +766,12 @@ unsafe fn create_vendor_response(msg: RawUciMessage, env: JNIEnv) -> Result<jobj
     let vendor_response_class =
         env.find_class(VENDOR_RESPONSE_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
 
-    // Unsafe from_raw call
-    let payload_jobject = JObject::from_raw(
-        env.byte_array_from_slice(&msg.payload).map_err(|_| Error::ForeignFunctionInterface)?,
-    );
+    // Safety: the byte array jobject is just constructed so it must be valid.
+    let payload_jobject = unsafe {
+        JObject::from_raw(
+            env.byte_array_from_slice(&msg.payload).map_err(|_| Error::ForeignFunctionInterface)?,
+        )
+    };
 
     match env.new_object(
         vendor_response_class,
@@ -728,9 +806,9 @@ fn create_invalid_vendor_response(env: JNIEnv) -> Result<jobject> {
     }
 }
 
-/// Safety:
+/// # Safety
 ///
-/// response should be checked before calling to ensure safety.
+/// `response` should be checked before calling to ensure safety.
 unsafe fn create_ranging_round_status(
     response: SessionUpdateDtTagRangingRoundsResponse,
     env: JNIEnv,
@@ -740,10 +818,13 @@ unsafe fn create_ranging_round_status(
         .map_err(|_| Error::ForeignFunctionInterface)?;
     let indexes = response.ranging_round_indexes;
 
-    // Unsafe from_raw call
-    let indexes_jobject = JObject::from_raw(
-        env.byte_array_from_slice(indexes.as_ref()).map_err(|_| Error::ForeignFunctionInterface)?,
-    );
+    // Safety: the byte array jobject is just constructed so it must be valid.
+    let indexes_jobject = unsafe {
+        JObject::from_raw(
+            env.byte_array_from_slice(indexes.as_ref())
+                .map_err(|_| Error::ForeignFunctionInterface)?,
+        )
+    };
 
     match env.new_object(
         dt_ranging_rounds_update_status_class,
