@@ -100,6 +100,7 @@ import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.fira.FiraSpecificationParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
 import com.google.uwb.support.oemextension.AdvertisePointedTarget;
+import com.google.uwb.support.oemextension.SessionConfigParams;
 import com.google.uwb.support.oemextension.SessionStatus;
 
 import java.io.Closeable;
@@ -458,11 +459,14 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
             return;
         }
         if (mUwbInjector.getUwbServiceCore().isOemExtensionCbRegistered()) {
+            String appPackageName = uwbSession.getAnyNonPrivilegedAppInAttributionSource() != null
+                    ? uwbSession.getAnyNonPrivilegedAppInAttributionSource().getPackageName()
+                    : uwbSession.getAttributionSource().getPackageName();
             PersistableBundle sessionStatusBundle = new SessionStatus.Builder()
                     .setSessionId(sessionId)
                     .setState(state)
                     .setReasonCode(reasonCode)
-                    .setAppPackageName(uwbSession.getAttributionSource().getPackageName())
+                    .setAppPackageName(appPackageName)
                     .setSessiontoken(mSessionTokenMap.getOrDefault(uwbSession.getSessionId(), 0))
                     .build()
                     .toBundle();
@@ -518,8 +522,14 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
         if (status == UwbUciConstants.STATUS_CODE_OK
                 && mUwbInjector.getUwbServiceCore().isOemExtensionCbRegistered()) {
             try {
+                SessionConfigParams sessionConfigParams = new SessionConfigParams.Builder()
+                        .setSessionId(uwbSession.getSessionId())
+                        .setSessiontoken(
+                                mSessionTokenMap.getOrDefault(uwbSession.getSessionId(), 0))
+                        .setOpenSessionParamsBundle(uwbSession.getParams().toBundle())
+                        .build();
                 status = mUwbInjector.getUwbServiceCore().getOemExtensionCallback()
-                        .onSessionConfigurationReceived(uwbSession.getParams().toBundle());
+                        .onSessionConfigurationReceived(sessionConfigParams.toBundle());
             } catch (RemoteException e) {
                 Log.e(TAG, "Failed to send vendor notification", e);
             }
@@ -1727,13 +1737,9 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                             status = mNativeUwbManager.deInitSession(uwbSession.getSessionId(),
                                     uwbSession.getChipId());
                             if (status != UwbUciConstants.STATUS_CODE_OK) {
-                                mSessionNotificationManager.onRangingClosed(uwbSession, status);
                                 return status;
                             }
                             uwbSession.getWaitObj().blockingWait();
-                            Log.i(TAG, "onRangingClosed - status : " + status);
-                            mSessionNotificationManager.onRangingClosed(uwbSession,
-                                    reason);
                         }
                         return status;
                     });
@@ -1744,7 +1750,6 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                         IUwbAdapter.RANGING_SESSION_CLOSE_THRESHOLD_MS);
             } catch (TimeoutException e) {
                 Log.i(TAG, "Failed to Stop Ranging - status : TIMEOUT");
-                mSessionNotificationManager.onRangingClosed(uwbSession, status);
             } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
             }
@@ -1753,6 +1758,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
             // Reset all UWB session timers when the session is de-initialized (ie, closed).
             uwbSession.stopTimers();
             removeSession(uwbSession);
+
+            // Notify about Session closure after removing it from the SessionTable.
+            Log.i(TAG, "onRangingClosed - status : " + status);
+            mSessionNotificationManager.onRangingClosed(uwbSession,
+                    status == STATUS_CODE_OK ? reason : status);
+
             Log.i(TAG, "deinit finish : status :" + status);
             Trace.endSection();
         }
