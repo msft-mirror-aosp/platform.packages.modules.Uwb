@@ -26,6 +26,8 @@ import static android.uwb.UwbManager.MESSAGE_TYPE_COMMAND;
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_DT_TAG;
+import static com.google.uwb.support.fira.FiraParams.RFRAME_CONFIG_SP1;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
@@ -71,17 +73,19 @@ import com.google.uwb.support.fira.FiraPoseUpdateParams;
 import com.google.uwb.support.fira.FiraProtocolVersion;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.fira.FiraSpecificationParams;
+import com.google.uwb.support.fira.FiraSuspendRangingParams;
 import com.google.uwb.support.multichip.ChipInfoParams;
 import com.google.uwb.support.oemextension.DeviceStatus;
 import com.google.uwb.support.oemextension.RangingReportMetadata;
+import com.google.uwb.support.oemextension.SessionConfigParams;
 import com.google.uwb.support.oemextension.SessionStatus;
 
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -1012,6 +1016,11 @@ public class UwbManagerTest {
             assertThat(rangingSessionCallback.onOpenFailedCalled).isFalse();
             assertThat(rangingSessionCallback.rangingSession).isNotNull();
 
+            if (firaOpenSessionParams.getDeviceRole() == RANGING_DEVICE_DT_TAG) {
+                runOperationWhenSessionIsRunning.run(rangingSessionCallback);
+                runOperationWhenSessionIsRunning = null;
+            }
+
             countDownLatch = new CountDownLatch(1);
             rangingSessionCallback.replaceCtrlCountDownLatch(countDownLatch);
             rangingSessionCallback.rangingSession.start(new PersistableBundle());
@@ -1084,6 +1093,7 @@ public class UwbManagerTest {
         verifyFiraRangingSession(firaOpenSessionParams, null, null);
     }
 
+    @Ignore // Disabled in U as FiRa 2.0 is not fully formalized.
     @Test
     @CddTest(requirements = {"7.3.13/C-1-1,C-1-2,C-1-5"})
     public void testDlTdoaRangingSession() throws Exception {
@@ -1101,10 +1111,10 @@ public class UwbManagerTest {
                 .setStaticStsIV(new byte[]{0x5, 0x6, 0x9, 0xa, 0x4, 0x6})
                 .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_DT_TAG)
                 .setDeviceRole(FiraParams.RANGING_DEVICE_DT_TAG)
-                .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
                 .setRangingRoundUsage(FiraParams.RANGING_ROUND_USAGE_DL_TDOA)
                 .setDeviceAddress(UwbAddress.fromBytes(new byte[]{0x5, 6}))
-                .setDestAddressList(List.of(UwbAddress.fromBytes(new byte[]{0x5, 6})))
+                .setRframeConfig(RFRAME_CONFIG_SP1)
+                .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_ONE_TO_MANY)
                 .build();
         verifyFiraRangingSession(
                 firaOpenSessionParams,
@@ -1123,7 +1133,7 @@ public class UwbManagerTest {
                             new DlTDoARangingRoundsUpdate.Builder()
                                     .setSessionId(1)
                                     .setNoOfRangingRounds(1)
-                                    .setRangingRoundIndexes(new byte[]{1})
+                                    .setRangingRoundIndexes(new byte[]{0})
                                     .build();
 
                     // Update Ranging Rounds for DT Tag.
@@ -1134,6 +1144,7 @@ public class UwbManagerTest {
                 });
     }
 
+    @Ignore // Disabled in U as FiRa 2.0 is not fully formalized.
     @Test
     @CddTest(requirements = {"7.3.13/C-1-1,C-1-2,C-1-5"})
     public void testAdvertisingRangingSession() throws Exception {
@@ -1217,10 +1228,11 @@ public class UwbManagerTest {
     @CddTest(requirements = {"7.3.13/C-1-1,C-1-2,C-1-5"})
     public void testFiraRangingSessionWithProvisionedSTS() throws Exception {
         FiraSpecificationParams params = getFiraSpecificationParams();
-        EnumSet<FiraParams.StsCapabilityFlag> stsCapabilities = EnumSet.of(
-                FiraParams.StsCapabilityFlag.HAS_STATIC_STS_SUPPORT,
-                FiraParams.StsCapabilityFlag.HAS_PROVISIONED_STS_SUPPORT);
-        assumeTrue(params.getStsCapabilities() == stsCapabilities);
+        assumeTrue(params.getStsCapabilities()
+                .contains(FiraParams.StsCapabilityFlag.HAS_PROVISIONED_STS_SUPPORT)
+                && params.getStsCapabilities()
+                .contains(FiraParams.StsCapabilityFlag
+                        .HAS_PROVISIONED_STS_INDIVIDUAL_CONTROLEE_KEY_SUPPORT));
 
         FiraOpenSessionParams firaOpenSessionParams = new FiraOpenSessionParams.Builder()
                 .setProtocolVersion(new FiraProtocolVersion(1, 1))
@@ -1373,6 +1385,12 @@ public class UwbManagerTest {
     @Test
     @CddTest(requirements = {"7.3.13/C-1-1,C-1-2,C-1-5"})
     public void testFiraRangingSessionPauseResume() throws Exception {
+        // The AppConfig Parameter SUSPEND_RANGING_ROUNDS (defined in CR-328) is supported
+        // only for devices with FiRa 2.0 support.
+        FiraSpecificationParams params = getFiraSpecificationParams();
+        FiraProtocolVersion firaProtocolVersion = params.getMaxMacVersionSupported();
+        assumeTrue(firaProtocolVersion.getMajor() >= 2);
+
         FiraOpenSessionParams firaOpenSessionParams = makeOpenSessionBuilder()
                 .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_ONE_TO_MANY)
                 .build();
@@ -1380,19 +1398,30 @@ public class UwbManagerTest {
                 firaOpenSessionParams,
                 null,
                 (rangingSessionCallback) -> {
-                    // Pause the session - not supported yet.
-                    assertThrows(IllegalStateException.class,
-                            () -> rangingSessionCallback.rangingSession.pause(
-                                    new PersistableBundle()
-                            ));
-                    assertThat(rangingSessionCallback.onPauseCalled).isFalse();
+                    // Pause Session
+                    CountDownLatch countDownLatch = new CountDownLatch(1);
+                    rangingSessionCallback.replaceCtrlCountDownLatch(countDownLatch);
+
+                    FiraSuspendRangingParams pauseParams =
+                            new FiraSuspendRangingParams.Builder()
+                                    .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_ENABLED)
+                                    .build();
+                    rangingSessionCallback.rangingSession.pause(pauseParams.toBundle());
+                    assertThat(countDownLatch.await(1, TimeUnit.SECONDS)).isTrue();
+                    assertThat(rangingSessionCallback.onPauseCalled).isTrue();
                     assertThat(rangingSessionCallback.onPauseFailedCalled).isFalse();
-                    // Resume the session - not supported yet.
-                    assertThrows(IllegalStateException.class,
-                            () -> rangingSessionCallback.rangingSession.resume(
-                                    new PersistableBundle()
-                            ));
-                    assertThat(rangingSessionCallback.onResumeCalled).isFalse();
+
+                    // Resume session
+                    countDownLatch = new CountDownLatch(1);
+                    rangingSessionCallback.replaceCtrlCountDownLatch(countDownLatch);
+
+                    FiraSuspendRangingParams resumeParams =
+                            new FiraSuspendRangingParams.Builder()
+                                    .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_DISABLED)
+                                    .build();
+                    rangingSessionCallback.rangingSession.resume(resumeParams.toBundle());
+                    assertThat(countDownLatch.await(1, TimeUnit.SECONDS)).isTrue();
+                    assertThat(rangingSessionCallback.onResumeCalled).isTrue();
                     assertThat(rangingSessionCallback.onResumeFailedCalled).isFalse();
                 });
     }
@@ -1696,8 +1725,11 @@ public class UwbManagerTest {
             assertThat(uwbOemExtensionCallback.onSessionConfigCompleteCalled).isTrue();
             assertThat(uwbOemExtensionCallback.mSessionConfig).isNotNull();
 
-            FiraOpenSessionParams openSessionParamsBundle = FiraOpenSessionParams
+            SessionConfigParams sessionConfigParams = SessionConfigParams
                     .fromBundle(uwbOemExtensionCallback.mSessionConfig);
+            assertEquals(sessionConfigParams.getSessionId(), sessionId);
+            FiraOpenSessionParams openSessionParamsBundle = FiraOpenSessionParams
+                    .fromBundle(sessionConfigParams.getFiraOpenSessionParamsBundle());
             assertEquals(openSessionParamsBundle.getSessionId(), sessionId);
             assertEquals(openSessionParamsBundle.getStsConfig(), FiraParams.STS_CONFIG_STATIC);
             assertEquals(openSessionParamsBundle.getDeviceType(),

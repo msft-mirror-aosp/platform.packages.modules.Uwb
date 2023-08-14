@@ -389,7 +389,7 @@ impl NotificationManagerAndroid {
         let (mac_address_vec, (subsession_id_vec, status_vec)): (Vec<[u8; 2]>, (Vec<_>, Vec<_>)) =
             status_list
                 .into_iter()
-                .map(|cs| (cs.mac_address, (cs.subsession_id as i64, cs.status as i32)))
+                .map(|cs| (cs.mac_address, (cs.subsession_id as i64, i32::from(cs.status))))
                 .unzip();
 
         let mac_address_vec_i8 =
@@ -564,8 +564,8 @@ impl NotificationManagerAndroid {
 
             // Safety: mac_address_jbytearray is safely instantiated above.
             let mac_address_jobject = unsafe { JObject::from_raw(mac_address_jbytearray) };
-            // Safety: dt_anchor_location_jbytearray is safely instantiated above.
             let dt_anchor_location_jobject =
+            // Safety: dt_anchor_location_jbytearray is safely instantiated above.
                 unsafe { JObject::from_raw(dt_anchor_location_jbytearray) };
             // Safety: ranging_rounds_jbytearray is safely instantiated above.
             let ranging_rounds_jobject = unsafe { JObject::from_raw(ranging_rounds_jbytearray) };
@@ -959,7 +959,7 @@ impl NotificationManagerAndroid {
     fn on_data_transfer_status_notification(
         &mut self,
         session_id: u32,
-        uci_sequence_number: u8,
+        uci_sequence_number: u16,
         status_code: u8,
         tx_count: u8,
     ) -> Result<JObject, JNIError> {
