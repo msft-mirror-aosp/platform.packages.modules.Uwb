@@ -54,6 +54,7 @@ java_library {
         "com.android.tethering",
     ],
     visibility: [
+        ":__subpackages__",
         "//packages/modules/Connectivity/remoteauth:__subpackages__",
     ],
 }
