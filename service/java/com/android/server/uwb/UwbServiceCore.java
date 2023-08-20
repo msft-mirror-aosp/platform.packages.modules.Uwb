@@ -51,6 +51,7 @@ import android.uwb.UwbManager.AdapterStateCallback;
 import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.uwb.data.UwbDeviceInfoResponse;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.data.UwbVendorUciResponse;
 import com.android.server.uwb.info.UwbPowerStats;
@@ -121,6 +122,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     private final UwbInjector mUwbInjector;
     private final Map<String, /* @UwbManager.AdapterStateCallback.State */ Integer>
             mChipIdToStateMap;
+    private Map<String, UwbDeviceInfoResponse> mChipIdToDeviceInfoResponseMap = new HashMap<>();
     private @StateChangeReason int mLastAdapterStateChangedReason = StateChangeReason.UNKNOWN;
     private @AdapterStateCallback.State int mLastAdapterStateNotification = -1;
     private  IUwbVendorUciCallback mCallBack = null;
@@ -275,8 +277,8 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         Log.i(TAG, "updateDeviceState(): deviceState = " + getDeviceStateString(deviceState)
                 + ", current internal adapter state = " + getInternalAdapterState());
 
-        oemExtensionDeviceStatusUpdate(deviceState, chipId);
         updateState(getAdapterStateFromDeviceState(deviceState), chipId);
+        oemExtensionDeviceStatusUpdate(deviceState, chipId);
     }
 
     void oemExtensionDeviceStatusUpdate(int deviceState, String chipId) {
@@ -429,6 +431,14 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         getSpecificationInfo(chipId);
         mNeedCachedSpecParamsUpdate = false;
         return mCachedSpecificationParams;
+    }
+
+    /**
+     * Get cached CORE_GET_DEVICE_INFO response, for the given Uwb ChipId.
+     */
+    @Nullable
+    public UwbDeviceInfoResponse getCachedDeviceInfoResponse(String chipId) {
+        return mChipIdToDeviceInfoResponseMap.get(chipId);
     }
 
     /**
@@ -908,10 +918,18 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                 }
 
                 try {
-                    if (!mNativeUwbManager.doInitialize()) {
+                    Map<String, UwbDeviceInfoResponse> result = mNativeUwbManager.doInitialize();
+                    if (result == null) {
                         Log.e(TAG, "Error enabling UWB");
                         mUwbMetrics.incrementDeviceInitFailureCount();
-                        takBugReportAfterDeviceError("UWB Bugreport: error enabling UWB");
+
+                        // Capture a bug report only if the Listener list is empty. This acts as a
+                        // proxy for this being the second initialization attempt, since currently
+                        // there is only one listener (UwbServiceImpl), which is removed after the
+                        // first retry attempt.
+                        if (mListeners.isEmpty()) {
+                            takBugReportAfterDeviceError("UWB Bugreport: error enabling UWB");
+                        }
                         for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
                             updateState(AdapterStateCallback.STATE_DISABLED, chipId);
                         }
@@ -919,6 +937,8 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                             listener.onFailure();
                         }
                     } else {
+                        mChipIdToDeviceInfoResponseMap = result;
+
                         Log.i(TAG, "Initialization success");
                         /* TODO : keep it until MW, FW fix b/196943897 */
                         mUwbMetrics.incrementDeviceInitSuccessCount();

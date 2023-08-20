@@ -108,6 +108,7 @@ import com.android.server.uwb.UwbSessionManager.UwbSession;
 import com.android.server.uwb.UwbSessionManager.WaitObj;
 import com.android.server.uwb.advertisement.UwbAdvertiseManager;
 import com.android.server.uwb.data.DtTagUpdateRangingRoundsStatus;
+import com.android.server.uwb.data.UwbDeviceInfoResponse;
 import com.android.server.uwb.data.UwbMulticastListUpdateStatus;
 import com.android.server.uwb.data.UwbRadarData;
 import com.android.server.uwb.data.UwbRangingData;
@@ -195,6 +196,23 @@ public class UwbSessionManagerTest {
                                         HAS_RANGE_DATA_NTF_CONFIG_DISABLE,
                                         HAS_RANGE_DATA_NTF_CONFIG_ENABLE))
                     .build();
+
+    private static final UwbDeviceInfoResponse UWB_DEVICE_INFO_RESPONSE_1_1 =
+            new UwbDeviceInfoResponse(
+                    UwbUciConstants.STATUS_CODE_OK,
+                    /* UciVersion 1.1 = */ 0x1001,
+                    /* MacVersion 1.1 = */ 0x1001,
+                    /* PhyVersion 1.1 = */ 0x1001,
+                    /* UciTestVersion 1.1 = */ 0x1001,
+                    /* vendor_spec_info = */ new byte[]{0x0a, 0x0b, 0x0c, 0x0d});
+    private static final UwbDeviceInfoResponse UWB_DEVICE_INFO_RESPONSE_2_0 =
+            new UwbDeviceInfoResponse(
+                    UwbUciConstants.STATUS_CODE_OK,
+                    /* UciVersion 2.0 = */ 0x0002,
+                    /* MacVersion 2.0 = */ 0x0002,
+                    /* PhyVersion 2.0 = */ 0x0002,
+                    /* UciTestVersion 2.0 = */ 0x0002,
+                    /* vendor_spec_info = */ new byte[]{0x0a, 0x0b, 0x0c, 0x0d});
     private static final long UWBS_TIMESTAMP = 2000000L;
     private static final int HANDLE_ID = 12;
     private static final int MAX_RX_DATA_PACKETS_TO_STORE = 10;
@@ -1805,6 +1823,26 @@ public class UwbSessionManagerTest {
         return uwbSession;
     }
 
+    private UwbSession initUwbSessionForNonSystemAppNotInFgInChain() throws Exception {
+        when(mUwbInjector.isSystemApp(UID_2, PACKAGE_NAME_2)).thenReturn(false);
+        when(mUwbInjector.isForegroundAppOrService(UID_2, PACKAGE_NAME_2))
+                .thenReturn(false);
+
+        // simulate system app triggered the request on behalf of a fg app in fg.
+        AttributionSource attributionSource = new AttributionSource.Builder(UID)
+                .setPackageName(PACKAGE_NAME)
+                .setNext(new AttributionSource.Builder(UID_2)
+                        .setPackageName(PACKAGE_NAME_2)
+                        .build())
+                .build();
+
+        UwbSession uwbSession = setUpUwbSessionForExecution(attributionSource);
+        mUwbSessionManager.initSession(attributionSource, uwbSession.getSessionHandle(),
+                TEST_SESSION_ID, TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME,
+                uwbSession.getParams(), uwbSession.getIUwbRangingCallbacks(), TEST_CHIP_ID);
+        return uwbSession;
+    }
+
     @Test
     public void testOpenRangingWithNonSystemAppInFgInChain() throws Exception {
         initUwbSessionForNonSystemAppInFgInChain();
@@ -1864,7 +1902,7 @@ public class UwbSessionManagerTest {
         // Expect session stop.
         mTestLooper.dispatchAll();
         verify(mUwbSessionNotificationManager).onRangingStoppedWithApiReasonCode(
-                eq(uwbSession), eq(RangingChangeReason.SYSTEM_POLICY));
+                eq(uwbSession), eq(RangingChangeReason.SYSTEM_POLICY), any());
         verify(mUwbMetrics).longRangingStopEvent(eq(uwbSession));
     }
 
@@ -1895,6 +1933,45 @@ public class UwbSessionManagerTest {
         // reconfigured (to disable the ranging data notifications).
         mOnUidImportanceListenerArgumentCaptor.getValue().onUidImportance(
                 UID_2, IMPORTANCE_BACKGROUND);
+        mTestLooper.dispatchAll();
+        ArgumentCaptor<Params> paramsArgumentCaptor = ArgumentCaptor.forClass(Params.class);
+        verify(mUwbConfigurationManager).setAppConfigurations(
+                eq(TEST_SESSION_ID), paramsArgumentCaptor.capture(), eq(TEST_CHIP_ID));
+        FiraRangingReconfigureParams firaParams =
+                (FiraRangingReconfigureParams) paramsArgumentCaptor.getValue();
+        assertThat(firaParams.getRangeDataNtfConfig()).isEqualTo(
+                FiraParams.RANGE_DATA_NTF_CONFIG_DISABLE);
+        verify(mUwbSessionNotificationManager, never()).onRangingReconfigured(eq(uwbSession));
+
+        // Verify the timer is not setup.
+        verify(mAlarmManager, never()).setExact(
+                anyInt(), anyLong(), eq(UwbSession.NON_PRIVILEGED_BG_APP_TIMER_TAG),
+                any(), any());
+    }
+
+    @Test
+    public void testOpenRangingWithNonSystemAppInFgInChain_StartInBg_WhenBgRangingEnabled()
+            throws Exception {
+        when(mDeviceConfigFacade.isBackgroundRangingEnabled()).thenReturn(true);
+        UwbSession uwbSession = initUwbSessionForNonSystemAppNotInFgInChain();
+
+        // Verify that an OPEN_RANGING message was scheduled.
+        assertThat(mTestLooper.nextMessage().what).isEqualTo(SESSION_OPEN_RANGING);
+
+        // Start Ranging
+        when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE,
+                UwbUciConstants.UWB_SESSION_STATE_ACTIVE).when(uwbSession).getSessionState();
+        mUwbSessionManager.startRanging(
+                uwbSession.getSessionHandle(), uwbSession.getParams());
+        mTestLooper.dispatchAll();
+
+        verify(mUwbSessionNotificationManager).onRangingStarted(eq(uwbSession), any());
+        verify(mUwbMetrics).longRangingStartEvent(
+                eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+
+        // Ensure that we reconfigure the session immediately to disable range data notifications.
         mTestLooper.dispatchAll();
         ArgumentCaptor<Params> paramsArgumentCaptor = ArgumentCaptor.forClass(Params.class);
         verify(mUwbConfigurationManager).setAppConfigurations(
@@ -2117,8 +2194,13 @@ public class UwbSessionManagerTest {
     }
 
     @Test
-    public void execStartRanging_success() throws Exception {
+    public void execStartRanging_success_Fira_1_x_relativeUwbInitiationTime() throws Exception {
+        // Setup the UWBS to return Fira UCI version as 1.1.
+        when(mUwbServiceCore.getCachedDeviceInfoResponse(TEST_CHIP_ID)).thenReturn(
+                UWB_DEVICE_INFO_RESPONSE_1_1);
+        Params params = setupFiraParams(new FiraProtocolVersion(1, 1));
         UwbSession uwbSession = prepareExistingUwbSession();
+
         // set up for start ranging
         doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE, UwbUciConstants.UWB_SESSION_STATE_ACTIVE)
                 .when(uwbSession).getSessionState();
@@ -2132,24 +2214,15 @@ public class UwbSessionManagerTest {
         verify(mUwbSessionNotificationManager).onRangingStarted(eq(uwbSession), any());
         verify(mUwbMetrics).longRangingStartEvent(
                 eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+        verify(mUwbServiceCore, never()).queryUwbsTimestampMicros();
+        verify(mUwbConfigurationManager, never()).setAppConfigurations(anyInt(), any(), any());
     }
 
     @Test
-    public void execStartRanging_absoluteInitiationTime() throws Exception {
-        // Setup the UWBS to return Fira version as 2.0.
-        FiraSpecificationParams firaSpecificationParams20 = new FiraSpecificationParams.Builder()
-                .setMinPhyVersionSupported(FIRA_VERSION_2_0)
-                .setMaxPhyVersionSupported(FIRA_VERSION_2_0)
-                .setSupportedChannels(FIRA_SPECIFICATION_PARAMS.getSupportedChannels())
-                .setRangeDataNtfConfigCapabilities(
-                        FIRA_SPECIFICATION_PARAMS.getRangeDataNtfConfigCapabilities())
-                .build();
-        GenericSpecificationParams specificationParams = new GenericSpecificationParams.Builder()
-                .setCccSpecificationParams(mCccSpecificationParams)
-                .setFiraSpecificationParams(firaSpecificationParams20)
-                .build();
-        when(mUwbServiceCore.getCachedSpecificationParams(any())).thenReturn(specificationParams);
-
+    public void execStartRanging_success_Fira_2_0_absoluteUwbInitiationTime() throws Exception {
+        // Setup the UWBS to return Fira UCI version as 2.0.
+        when(mUwbServiceCore.getCachedDeviceInfoResponse(TEST_CHIP_ID)).thenReturn(
+                UWB_DEVICE_INFO_RESPONSE_2_0);
         Params params = setupFiraParams(new FiraProtocolVersion(2, 0));
         UwbSession uwbSession = prepareExistingUwbSession(params);
 
@@ -2176,20 +2249,45 @@ public class UwbSessionManagerTest {
     }
 
     @Test
-    public void execStartRangingCcc_absoluteInitiationTimeNotConfigured() throws Exception {
-        // Setup the UWBS to return Fira version as 2.0.
-        FiraSpecificationParams firaSpecificationParams20 = new FiraSpecificationParams.Builder()
-                .setMinPhyVersionSupported(FIRA_VERSION_2_0)
-                .setMaxPhyVersionSupported(FIRA_VERSION_2_0)
-                .setSupportedChannels(FIRA_SPECIFICATION_PARAMS.getSupportedChannels())
-                .setRangeDataNtfConfigCapabilities(
-                        FIRA_SPECIFICATION_PARAMS.getRangeDataNtfConfigCapabilities())
-                .build();
-        GenericSpecificationParams specificationParams = new GenericSpecificationParams.Builder()
-                .setCccSpecificationParams(mCccSpecificationParams)
-                .setFiraSpecificationParams(firaSpecificationParams20)
-                .build();
-        when(mUwbServiceCore.getCachedSpecificationParams(any())).thenReturn(specificationParams);
+    public void execStartRanging_success_Fira_2_0_absoluteUwbInitiationTimeUserConfigured()
+            throws Exception {
+        // Setup the UWBS to return Fira UCI version as 2.0.
+        when(mUwbServiceCore.getCachedDeviceInfoResponse(TEST_CHIP_ID)).thenReturn(
+                UWB_DEVICE_INFO_RESPONSE_2_0);
+        Params params = setupFiraParams(new FiraProtocolVersion(2, 0));
+
+        // Setup the AbsoluteInitationTime in the FiraOpenSessionParams.
+        FiraOpenSessionParams firaParams = new
+                FiraOpenSessionParams.Builder((FiraOpenSessionParams) params)
+                        .setAbsoluteInitiationTime(1000000L)
+                        .build();
+        UwbSession uwbSession = prepareExistingUwbSession(firaParams);
+
+        // Setup for start ranging.
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE, UwbUciConstants.UWB_SESSION_STATE_ACTIVE)
+                .when(uwbSession).getSessionState();
+        when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+        when(mUwbServiceCore.queryUwbsTimestampMicros()).thenReturn(UWBS_TIMESTAMP);
+        when(mUwbConfigurationManager.setAppConfigurations(anyInt(), any(), anyString()))
+                .thenReturn(UwbUciConstants.STATUS_CODE_OK);
+
+        mUwbSessionManager.startRanging(uwbSession.getSessionHandle(), params);
+        mTestLooper.dispatchAll();
+
+        // Verify that queryUwbsTimestampMicros() isn't called (which is the expected behavior as
+        // the firaParams has the absolute_initiation_time field set).
+        verify(mUwbServiceCore, never()).queryUwbsTimestampMicros();
+        verify(mUwbSessionNotificationManager).onRangingStarted(eq(uwbSession), any());
+        verify(mUwbMetrics).longRangingStartEvent(
+                eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+    }
+
+    @Test
+    public void execStartRangingCcc_success_absoluteInitiationTimeNotConfigured() throws Exception {
+        // Setup the UWBS to return Fira UCI version as 2.0.
+        when(mUwbServiceCore.getCachedDeviceInfoResponse(TEST_CHIP_ID)).thenReturn(
+                UWB_DEVICE_INFO_RESPONSE_2_0);
 
         UwbSession uwbSession = prepareExistingCccUwbSession();
         Params params = new CccStartRangingParams.Builder()
@@ -2233,18 +2331,8 @@ public class UwbSessionManagerTest {
     @Test
     public void execStartRangingCcc_absoluteInitiationTimeConfigured() throws Exception {
         // Setup the UWBS to return Fira version as 2.0.
-        FiraSpecificationParams firaSpecificationParams20 = new FiraSpecificationParams.Builder()
-                .setMinPhyVersionSupported(FIRA_VERSION_2_0)
-                .setMaxPhyVersionSupported(FIRA_VERSION_2_0)
-                .setSupportedChannels(FIRA_SPECIFICATION_PARAMS.getSupportedChannels())
-                .setRangeDataNtfConfigCapabilities(
-                        FIRA_SPECIFICATION_PARAMS.getRangeDataNtfConfigCapabilities())
-                .build();
-        GenericSpecificationParams specificationParams = new GenericSpecificationParams.Builder()
-                .setCccSpecificationParams(mCccSpecificationParams)
-                .setFiraSpecificationParams(firaSpecificationParams20)
-                .build();
-        when(mUwbServiceCore.getCachedSpecificationParams(any())).thenReturn(specificationParams);
+        when(mUwbServiceCore.getCachedDeviceInfoResponse(TEST_CHIP_ID)).thenReturn(
+                UWB_DEVICE_INFO_RESPONSE_2_0);
 
         UwbSession uwbSession = prepareExistingCccUwbSession();
         CccStartRangingParams params = new CccStartRangingParams.Builder()
@@ -2287,7 +2375,12 @@ public class UwbSessionManagerTest {
 
     @Test
     public void execStartRangingCcc_absoluteInitiationTime_Non_Fira_2_0() throws Exception {
+        // Setup the UWBS to return Fira version as 1.1.
+        when(mUwbServiceCore.getCachedDeviceInfoResponse(TEST_CHIP_ID)).thenReturn(
+                UWB_DEVICE_INFO_RESPONSE_1_1);
+
         UwbSession uwbSession = prepareExistingCccUwbSession();
+
         // set up for start ranging
         doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE, UwbUciConstants.UWB_SESSION_STATE_ACTIVE)
                 .when(uwbSession).getSessionState();
@@ -2301,7 +2394,7 @@ public class UwbSessionManagerTest {
                 uwbSession.getSessionHandle(), cccStartRangingParams);
         mTestLooper.dispatchAll();
 
-        // Verify that queryUwbsTimestampMicros() is not called for FiRa 1.0
+        // Verify that queryUwbsTimestampMicros() is not called for FiRa 1.x.
         verify((mUwbServiceCore), times(0)).queryUwbsTimestampMicros();
         CccOpenRangingParams cccOpenRangingParams = (CccOpenRangingParams) uwbSession.getParams();
         assertThat(cccOpenRangingParams.getAbsoluteInitiationTimeUs()).isEqualTo(0);
@@ -2393,7 +2486,7 @@ public class UwbSessionManagerTest {
         mTestLooper.dispatchNext();
         verify(mUwbSessionNotificationManager)
                 .onRangingStoppedWithApiReasonCode(eq(uwbSession),
-                        eq(RangingChangeReason.SYSTEM_POLICY));
+                        eq(RangingChangeReason.SYSTEM_POLICY), any());
         verify(mUwbMetrics).longRangingStopEvent(eq(uwbSession));
     }
 
@@ -3104,7 +3197,7 @@ public class UwbSessionManagerTest {
                 any(), eq(IUwbAdapter.RANGING_SESSION_START_THRESHOLD_MS));
         verify(mUwbSessionNotificationManager)
                 .onRangingStoppedWithApiReasonCode(eq(uwbSession),
-                        eq(RangingChangeReason.LOCAL_API));
+                        eq(RangingChangeReason.LOCAL_API), any());
         verify(mUwbMetrics).longRangingStopEvent(eq(uwbSession));
     }
 
@@ -3428,7 +3521,7 @@ public class UwbSessionManagerTest {
                 any(), eq(TEST_RANGING_INTERVAL_MS * 4 * 11));
         verify(mUwbSessionNotificationManager)
                 .onRangingStoppedWithApiReasonCode(eq(uwbSession),
-                        eq(RangingChangeReason.LOCAL_API));
+                        eq(RangingChangeReason.LOCAL_API), any());
         verify(mUwbMetrics).longRangingStopEvent(eq(uwbSession));
     }
 
