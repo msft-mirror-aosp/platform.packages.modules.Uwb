@@ -30,7 +30,6 @@ import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_DT_TAG;
 
 import static java.util.Objects.requireNonNull;
 
-import android.annotation.WorkerThread;
 import android.os.PersistableBundle;
 import android.util.Log;
 import android.uwb.RangingMeasurement;
@@ -40,6 +39,7 @@ import android.uwb.UwbManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.WorkerThread;
 
 import com.google.common.hash.Hashing;
 import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate;
@@ -53,7 +53,7 @@ import java.util.concurrent.ExecutorService;
 /** Implements start/stop ranging operations. */
 public abstract class RangingDevice {
 
-    private static final int SESSION_ID_UNSET = 0;
+    public static final int SESSION_ID_UNSET = 0;
 
     /** Timeout value after ranging start call */
     private static final int RANGING_START_TIMEOUT_MILLIS = 3100;
