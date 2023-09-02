@@ -67,6 +67,7 @@ import com.google.uwb.support.fira.FiraControleeParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
+import com.google.uwb.support.fira.FiraSpecificationParams;
 import com.google.uwb.support.fira.FiraSuspendRangingParams;
 import com.google.uwb.support.generic.GenericParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
@@ -459,6 +460,15 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             Log.e(TAG, "Failed to retrieve specification params");
             return new PersistableBundle();
         }
+        if (specificationParams.second.getFiraSpecificationParams() != null) {
+            FiraSpecificationParams firaSpecificationParams =
+                    new FiraSpecificationParams.Builder(
+                            specificationParams.second.getFiraSpecificationParams())
+                            .setBackgroundRangingSupport(mUwbInjector.getDeviceConfigFacade()
+                                    .isBackgroundRangingEnabled())
+                            .build();
+            specificationParams.second.setFiraSpecificationParams(firaSpecificationParams);
+        }
         mCachedSpecificationParams = specificationParams.second;
         return specificationParams.second.toBundle();
     }
@@ -505,7 +515,9 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         } else if (FiraParams.isCorrectProtocol(params)) {
             FiraOpenSessionParams.Builder builder =
                     new FiraOpenSessionParams.Builder(FiraOpenSessionParams.fromBundle(params));
-            if (getCachedSpecificationParams(chipId)
+            UwbDeviceInfoResponse deviceInfo = getCachedDeviceInfoResponse(chipId);
+            if ((deviceInfo != null && deviceInfo.mUciVersion >= 2)
+                    || getCachedSpecificationParams(chipId)
                     .getFiraSpecificationParams().hasRssiReportingSupport()) {
                 builder.setIsRssiReportingEnabled(true);
             }
