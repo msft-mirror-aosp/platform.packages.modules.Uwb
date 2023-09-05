@@ -19,7 +19,6 @@ package com.android.server.uwb;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 import android.annotation.NonNull;
-import android.app.admin.SecurityLog;
 import android.content.AttributionSource;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -192,20 +191,11 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         Log.i(TAG, "Disallow UWB user restriction changed from " + mUwbUserRestricted + " to "
                 + !mUwbUserRestricted + ".");
         mUwbUserRestricted = !mUwbUserRestricted;
-        logSecurityUwbUserRestrictionChanged(mUwbUserRestricted);
 
         try {
             mUwbServiceCore.setEnabled(isUwbEnabled());
         } catch (Exception e) {
             Log.e(TAG, "Unable to set UWB Adapter state.", e);
-        }
-    }
-
-    private void logSecurityUwbUserRestrictionChanged(boolean restricted) {
-        if (restricted) {
-            SecurityLog.writeEvent(SecurityLog.TAG_USER_RESTRICTION_ADDED);
-        } else {
-            SecurityLog.writeEvent(SecurityLog.TAG_USER_RESTRICTION_REMOVED);
         }
     }
 
@@ -353,15 +343,13 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     @Override
     public void pause(SessionHandle sessionHandle, PersistableBundle params) {
         enforceUwbPrivilegedPermission();
-        // TODO(b/200678461): Implement this.
-        throw new IllegalStateException("Not implemented");
+        mUwbServiceCore.pause(sessionHandle, params);
     }
 
     @Override
     public void resume(SessionHandle sessionHandle, PersistableBundle params) {
         enforceUwbPrivilegedPermission();
-        // TODO(b/200678461): Implement this.
-        throw new IllegalStateException("Not implemented");
+        mUwbServiceCore.resume(sessionHandle, params);
     }
 
     @Override

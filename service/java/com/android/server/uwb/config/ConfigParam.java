@@ -103,11 +103,13 @@ public class ConfigParam {
     public static final int UL_TDOA_TX_INTERVAL = 0x33;
     public static final int UL_TDOA_RANDOM_WINDOW = 0x34;
     public static final int STS_LENGTH = 0x35;
+    public static final int SUSPEND_RANGING_ROUNDS = 0x36;
     public static final int UL_TDOA_DEVICE_ID = 0x38;
     public static final int UL_TDOA_TX_TIMESTAMP = 0x39;
     public static final int MIN_FRAMES_PER_RR = 0x3A;
     public static final int MTU_SIZE = 0x3B;
     public static final int INTER_FRAME_INTERVAL = 0x3C;
+    public static final int DL_TDOA_BLOCK_STRIDING = 0x43;
     public static final int SESSION_KEY = 0x45;
     public static final int SUBSESSION_KEY = 0x46;
     public static final int SESSION_DATA_TRANSFER_STATUS_NTF_CONFIG = 0x47;
