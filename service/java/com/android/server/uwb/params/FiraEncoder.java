@@ -90,8 +90,6 @@ public class FiraEncoder extends TlvEncoder {
                 // n.a. for OWR UL-TDoA and 0x01 for all other RangingRoundUsage values.
                 .putByte(ConfigParam.RANGING_TIME_STRUCT, (byte) 0x01)
                 .putByte(ConfigParam.SLOTS_PER_RR, (byte) params.getSlotsPerRangingRound())
-                .putByte(ConfigParam.TX_ADAPTIVE_PAYLOAD_POWER,
-                        params.isTxAdaptivePayloadPowerEnabled() ? (byte) 1 : (byte) 0)
                 .putByte(ConfigParam.PRF_MODE, (byte) params.getPrfMode())
                 .putByte(ConfigParam.SCHEDULED_MODE, (byte) params.getScheduledMode())
                 .putByte(ConfigParam.KEY_ROTATION,
@@ -157,12 +155,20 @@ public class FiraEncoder extends TlvEncoder {
                             params.getSessionDataTransferStatusNtfConfig() ? (byte) 1 : (byte) 0)
                     .putByte(ConfigParam.APPLICATION_DATA_ENDPOINT,
                             (byte) params.getApplicationDataEndpoint());
+            if (deviceType == FiraParams.RANGING_DEVICE_TYPE_CONTROLLER && UwbUtil.isBitSet(
+                             params.getReferenceTimeBase(),
+                             FiraParams.SESSION_TIME_BASE_REFERENCE_FEATURE_ENABLED)) {
+                tlvBufferBuilder.putByteArray(ConfigParam.SESSION_TIME_BASE,
+                            getSessionTimeBase(params));
+            }
         } else {
             if (deviceRole != FiraParams.RANGING_DEVICE_DT_TAG) {
                 tlvBufferBuilder
                         .putInt(ConfigParam.UWB_INITIATION_TIME,
                                 Math.toIntExact(params.getInitiationTime()));
             }
+            tlvBufferBuilder.putByte(ConfigParam.TX_ADAPTIVE_PAYLOAD_POWER,
+                        params.isTxAdaptivePayloadPowerEnabled() ? (byte) 1 : (byte) 0);
         }
 
         configureStsParameters(tlvBufferBuilder, params);
@@ -408,5 +414,21 @@ public class FiraEncoder extends TlvEncoder {
             return TlvUtil.getReverseBytes(data);
         }
         return data;
+    }
+
+    private byte[] getSessionTimeBase(FiraOpenSessionParams params) {
+        byte[] sessionTimeBaseParam = new byte[FiraParams.SESSION_TIME_BASE_PARAM_LEN];
+        int offset = 0;
+        sessionTimeBaseParam[offset++] = (byte) params.getReferenceTimeBase();
+        byte[] sessionHandleValue = TlvUtil.getBytes(params.getReferenceSessionHandle());
+        for (int index = FiraParams.SESSION_HANDLE_LEN - 1; index >= 0; index--) {
+            sessionTimeBaseParam[offset++] = (byte) sessionHandleValue[index];
+        }
+        byte[] sessionOffsetInMicroSecondValue =
+                TlvUtil.getBytes(params.getSessionOffsetInMicroSeconds());
+        for (int index = FiraParams.SESSION_OFFSET_TIME_LEN - 1; index >= 0; index--) {
+            sessionTimeBaseParam[offset++] = (byte) sessionOffsetInMicroSecondValue[index];
+        }
+        return sessionTimeBaseParam;
     }
 }
