@@ -57,7 +57,6 @@ public class FiraEncoder extends TlvEncoder {
 
     private TlvBuffer getTlvBufferFromFiraOpenSessionParams(Params baseParam) {
         FiraOpenSessionParams params = (FiraOpenSessionParams) baseParam;
-        int stsConfig = params.getStsConfig();
         int deviceType = params.getDeviceType();
         int resultReportConfig = getResultReportConfig(params);
         int rangingRoundControl = getRangingRoundControl(params);
@@ -91,8 +90,6 @@ public class FiraEncoder extends TlvEncoder {
                 // n.a. for OWR UL-TDoA and 0x01 for all other RangingRoundUsage values.
                 .putByte(ConfigParam.RANGING_TIME_STRUCT, (byte) 0x01)
                 .putByte(ConfigParam.SLOTS_PER_RR, (byte) params.getSlotsPerRangingRound())
-                .putByte(ConfigParam.TX_ADAPTIVE_PAYLOAD_POWER,
-                        params.isTxAdaptivePayloadPowerEnabled() ? (byte) 1 : (byte) 0)
                 .putByte(ConfigParam.PRF_MODE, (byte) params.getPrfMode())
                 .putByte(ConfigParam.SCHEDULED_MODE, (byte) params.getScheduledMode())
                 .putByte(ConfigParam.KEY_ROTATION,
@@ -117,24 +114,39 @@ public class FiraEncoder extends TlvEncoder {
             tlvBufferBuilder.putInt(ConfigParam.RANGING_INTERVAL, params.getRangingIntervalMs());
         }
         if (deviceRole != FiraParams.RANGING_DEVICE_DT_TAG) {
-            tlvBufferBuilder.putByte(ConfigParam.DEVICE_TYPE, (byte) params.getDeviceType())
-                    .putByte(ConfigParam.NUMBER_OF_CONTROLEES,
-                            (byte) params.getDestAddressList().size());
+            tlvBufferBuilder.putByte(ConfigParam.DEVICE_TYPE, (byte) params.getDeviceType());
+        }
+
+        if (isTimeScheduledTwrSession(
+                    params.getScheduledMode(), params.getRangingRoundUsage()))  {
             if (params.getDestAddressList().size() > 0) {
                 ByteBuffer dstAddressList = ByteBuffer.allocate(1024);
                 for (UwbAddress address : params.getDestAddressList()) {
                     dstAddressList.put(getComputedMacAddress(address));
                 }
-                tlvBufferBuilder.putByteArray(
-                        ConfigParam.DST_MAC_ADDRESS, dstAddressList.position(),
-                        Arrays.copyOf(dstAddressList.array(), dstAddressList.position()));
+                tlvBufferBuilder
+                        .putByte(ConfigParam.NUMBER_OF_CONTROLEES,
+                                (byte) params.getDestAddressList().size())
+                        .putByteArray(
+                                ConfigParam.DST_MAC_ADDRESS, dstAddressList.position(),
+                                Arrays.copyOf(dstAddressList.array(), dstAddressList.position()));
             }
         }
+
         if (params.getProtocolVersion().getMajor() >= 2) {
             // Initiation time Changed from 4 byte field to 8 byte field in version 2.
             if (deviceRole != FiraParams.RANGING_DEVICE_DT_TAG) {
-                tlvBufferBuilder.putLong(ConfigParam.UWB_INITIATION_TIME,
-                        params.getInitiationTime());
+                // For FiRa 2.0+ device, prefer to set the Absolute UWB Initiation time.
+                if (params.getAbsoluteInitiationTime() > 0) {
+                    tlvBufferBuilder.putLong(ConfigParam.UWB_INITIATION_TIME,
+                            params.getAbsoluteInitiationTime());
+                } else {
+                    tlvBufferBuilder.putLong(ConfigParam.UWB_INITIATION_TIME,
+                            params.getInitiationTime());
+                }
+            } else {
+                tlvBufferBuilder.putByte(ConfigParam.DL_TDOA_BLOCK_STRIDING,
+                    (byte) params.getDlTdoaBlockStriding());
             }
             tlvBufferBuilder.putByte(ConfigParam.LINK_LAYER_MODE, (byte) params.getLinkLayerMode())
                     .putByte(ConfigParam.DATA_REPETITION_COUNT,
@@ -143,34 +155,24 @@ public class FiraEncoder extends TlvEncoder {
                             params.getSessionDataTransferStatusNtfConfig() ? (byte) 1 : (byte) 0)
                     .putByte(ConfigParam.APPLICATION_DATA_ENDPOINT,
                             (byte) params.getApplicationDataEndpoint());
+            if (deviceType == FiraParams.RANGING_DEVICE_TYPE_CONTROLLER && UwbUtil.isBitSet(
+                             params.getReferenceTimeBase(),
+                             FiraParams.SESSION_TIME_BASE_REFERENCE_FEATURE_ENABLED)) {
+                tlvBufferBuilder.putByteArray(ConfigParam.SESSION_TIME_BASE,
+                            getSessionTimeBase(params));
+            }
         } else {
             if (deviceRole != FiraParams.RANGING_DEVICE_DT_TAG) {
-                tlvBufferBuilder.putInt(ConfigParam.UWB_INITIATION_TIME,
-                        Math.toIntExact(params.getInitiationTime()));
+                tlvBufferBuilder
+                        .putInt(ConfigParam.UWB_INITIATION_TIME,
+                                Math.toIntExact(params.getInitiationTime()));
             }
+            tlvBufferBuilder.putByte(ConfigParam.TX_ADAPTIVE_PAYLOAD_POWER,
+                        params.isTxAdaptivePayloadPowerEnabled() ? (byte) 1 : (byte) 0);
         }
-        if ((stsConfig == FiraParams.STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY)
-                && (deviceType == FiraParams.RANGING_DEVICE_TYPE_CONTROLEE)) {
-            tlvBufferBuilder.putInt(ConfigParam.SUB_SESSION_ID, params.getSubSessionId());
-        }
-        if (stsConfig == FiraParams.STS_CONFIG_STATIC) {
-            tlvBufferBuilder
-                    .putByteArray(ConfigParam.VENDOR_ID, params.getVendorId() != null
-                            ? getComputedVendorId(params.getVendorId())
-                            : null)
-                    .putByteArray(ConfigParam.STATIC_STS_IV, params.getStaticStsIV());
-        } else if ((stsConfig == FiraParams.STS_CONFIG_PROVISIONED)
-                || (stsConfig
-                == FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY)) {
-            tlvBufferBuilder.putByteArray(ConfigParam.SESSION_KEY, params.getSessionKey());
-            if (stsConfig
-                    == FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY
-                    && (deviceType == FiraParams.RANGING_DEVICE_TYPE_CONTROLEE)) {
-                tlvBufferBuilder.putInt(ConfigParam.SUB_SESSION_ID, params.getSubSessionId());
-                tlvBufferBuilder.putByteArray(ConfigParam.SUBSESSION_KEY,
-                        params.getSubsessionKey());
-            }
-        }
+
+        configureStsParameters(tlvBufferBuilder, params);
+
         if (params.getAoaResultRequest()
                 == FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_INTERLEAVED) {
             tlvBufferBuilder.putByte(ConfigParam.NUM_RANGE_MEASUREMENTS,
@@ -234,6 +236,49 @@ public class FiraEncoder extends TlvEncoder {
         return tlvBufferBuilder.build();
     }
 
+    private boolean isTimeScheduledTwrSession(int scheduledMode, int rangingUsage) {
+        if (scheduledMode == FiraParams.TIME_SCHEDULED_RANGING) {
+            if (rangingUsage == FiraParams.RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE
+                    || rangingUsage == FiraParams.RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE
+                    || rangingUsage == FiraParams.RANGING_ROUND_USAGE_SS_TWR_NON_DEFERRED_MODE
+                    || rangingUsage == FiraParams.RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void configureStsParameters(TlvBuffer.Builder tlvBufferBuilder,
+        FiraOpenSessionParams params) {
+        int stsConfig = params.getStsConfig();
+
+        if (stsConfig == FiraParams.STS_CONFIG_STATIC) {
+             tlvBufferBuilder
+                    .putByteArray(ConfigParam.VENDOR_ID, params.getVendorId() != null
+                            ? getComputedVendorId(params.getVendorId()): null)
+                    .putByteArray(ConfigParam.STATIC_STS_IV, params.getStaticStsIV());
+        } else if (stsConfig == FiraParams.STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY) {
+            if (params.getDeviceType() == FiraParams.RANGING_DEVICE_TYPE_CONTROLEE) {
+                tlvBufferBuilder.putInt(ConfigParam.SUB_SESSION_ID, params.getSubSessionId());
+            }
+        } else if (stsConfig == FiraParams.STS_CONFIG_PROVISIONED) {
+            if (params.getSessionKey() != null ) {
+                tlvBufferBuilder.putByteArray(ConfigParam.SESSION_KEY, params.getSessionKey());
+            }
+        } else if (stsConfig == FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
+            if (params.getDeviceType() == FiraParams.RANGING_DEVICE_TYPE_CONTROLEE) {
+                tlvBufferBuilder.putInt(ConfigParam.SUB_SESSION_ID, params.getSubSessionId());
+                if (params.getSubsessionKey() != null ) {
+                    tlvBufferBuilder.
+                          putByteArray(ConfigParam.SUBSESSION_KEY, params.getSubsessionKey());
+                }
+            }
+            if (params.getSessionKey() != null ) {
+                tlvBufferBuilder.putByteArray(ConfigParam.SESSION_KEY, params.getSessionKey());
+            }
+        }
+    }
+
     private byte[] getUlTdoaDeviceId(int ulTdoaDeviceIdType, byte[] ulTdoaDeviceId) {
         if (ulTdoaDeviceIdType == FiraParams.UL_TDOA_DEVICE_ID_NONE) {
             // Device ID not included
@@ -256,6 +301,7 @@ public class FiraEncoder extends TlvEncoder {
         Double rangeDataAoaAzimuthUpper = params.getRangeDataAoaAzimuthUpper();
         Double rangeDataAoaElevationLower = params.getRangeDataAoaElevationLower();
         Double rangeDataAoaElevationUpper = params.getRangeDataAoaElevationUpper();
+        Integer suspendRangingRounds = params.getSuspendRangingRounds();
 
         if (blockStrideLength != null) {
             tlvBuilder.putByte(ConfigParam.BLOCK_STRIDE_LENGTH,
@@ -311,6 +357,10 @@ public class FiraEncoder extends TlvEncoder {
                 });
             }
         }
+        if (suspendRangingRounds != null) {
+                tlvBuilder.putByte(ConfigParam.SUSPEND_RANGING_ROUNDS,
+                        (byte) suspendRangingRounds.intValue());
+        }
         return tlvBuilder.build();
     }
 
@@ -364,5 +414,21 @@ public class FiraEncoder extends TlvEncoder {
             return TlvUtil.getReverseBytes(data);
         }
         return data;
+    }
+
+    private byte[] getSessionTimeBase(FiraOpenSessionParams params) {
+        byte[] sessionTimeBaseParam = new byte[FiraParams.SESSION_TIME_BASE_PARAM_LEN];
+        int offset = 0;
+        sessionTimeBaseParam[offset++] = (byte) params.getReferenceTimeBase();
+        byte[] sessionHandleValue = TlvUtil.getBytes(params.getReferenceSessionHandle());
+        for (int index = FiraParams.SESSION_HANDLE_LEN - 1; index >= 0; index--) {
+            sessionTimeBaseParam[offset++] = (byte) sessionHandleValue[index];
+        }
+        byte[] sessionOffsetInMicroSecondValue =
+                TlvUtil.getBytes(params.getSessionOffsetInMicroSeconds());
+        for (int index = FiraParams.SESSION_OFFSET_TIME_LEN - 1; index >= 0; index--) {
+            sessionTimeBaseParam[offset++] = (byte) sessionOffsetInMicroSecondValue[index];
+        }
+        return sessionTimeBaseParam;
     }
 }

@@ -24,6 +24,7 @@ import static com.android.server.uwb.UwbServiceImpl.SETTINGS_SATELLITE_MODE_ENAB
 import static com.android.server.uwb.UwbServiceImpl.SETTINGS_SATELLITE_MODE_RADIOS;
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_TOGGLE_STATE;
 import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
+import static com.android.server.uwb.UwbTestUtils.TEST_STATUS;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.fira.FiraParams.PACS_PROFILE_SERVICE_ID;
@@ -52,11 +53,16 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.database.ContentObserver;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.UserManager;
+import android.os.test.TestLooper;
 import android.platform.test.annotations.Presubmit;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.provider.Settings;
 import android.test.suitebuilder.annotation.SmallTest;
 import android.uwb.IOnUwbActivityEnergyInfoListener;
@@ -70,10 +76,13 @@ import android.uwb.UwbAddress;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.modules.utils.build.SdkLevel;
+import com.android.server.uwb.UwbServiceCore.InitializationFailureListener;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
 import com.android.server.uwb.pm.ProfileManager;
+import com.android.uwb.flags.FeatureFlags;
+import com.android.uwb.flags.Flags;
 
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.multichip.ChipInfoParams;
@@ -81,6 +90,7 @@ import com.google.uwb.support.profile.ServiceProfile;
 import com.google.uwb.support.profile.UuidBundleWrapper;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Answers;
@@ -120,8 +130,15 @@ public class UwbServiceImplTest {
     @Captor private ArgumentCaptor<BroadcastReceiver> mApmModeBroadcastReceiver;
     @Captor private ArgumentCaptor<ContentObserver> mSatelliteModeContentObserver;
     @Captor private ArgumentCaptor<BroadcastReceiver> mUserRestrictionReceiver;
+    @Captor private ArgumentCaptor<InitializationFailureListener> mInitializationFailureListener;
 
     private UwbServiceImpl mUwbServiceImpl;
+    private TestLooper mTestLooper;
+
+    @Mock private FeatureFlags mFeatureFlags;
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
+
 
     private void createUwbServiceImpl() {
         mUwbServiceImpl = new UwbServiceImpl(mContext, mUwbInjector);
@@ -130,6 +147,7 @@ public class UwbServiceImplTest {
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        mTestLooper = new TestLooper();
         when(mUwbInjector.getUwbSettingsStore()).thenReturn(mUwbSettingsStore);
         when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(true);
         when(mUwbMultichipData.getChipInfos()).thenReturn(List.of(DEFAULT_CHIP_INFO_PARAMS));
@@ -144,9 +162,13 @@ public class UwbServiceImplTest {
                 .thenReturn("cell,bluetooth,nfc,uwb,wifi");
         when(mUwbInjector.getNativeUwbManager()).thenReturn(mNativeUwbManager);
         when(mUwbInjector.getUserManager()).thenReturn(mUserManager);
+        when(mUwbInjector.getFeatureFlags()).thenReturn(mFeatureFlags);
         when(mUserManager.getUserRestrictions().getBoolean(anyString())).thenReturn(false);
+        when(mUwbServiceCore.getHandler()).thenReturn(new Handler(mTestLooper.getLooper()));
 
         createUwbServiceImpl();
+        verify(mUwbServiceCore).addInitializationFailureListener(
+                mInitializationFailureListener.capture());
         verify(mContext).registerReceiver(
                 mApmModeBroadcastReceiver.capture(),
                 argThat(i -> i.getAction(0).equals(Intent.ACTION_AIRPLANE_MODE_CHANGED)),
@@ -536,6 +558,22 @@ public class UwbServiceImplTest {
     }
 
     @Test
+    public void testHandleInitializationFailure() throws Exception {
+        mUwbServiceImpl.setEnabled(true);
+        verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, true);
+        verify(mUwbServiceCore).setEnabled(true);
+
+        // Trigger failure callback.
+        mInitializationFailureListener.getValue().onFailure();
+        // Move time forward.
+        mTestLooper.moveTimeForward(UwbServiceImpl.INITIALIZATION_RETRY_TIMEOUT_MS);
+        // Verify UWB is re-enabled.
+        verify(mUwbServiceCore).setEnabled(true);
+        verify(mUwbServiceCore).removeInitializationFailureListener(
+                mInitializationFailureListener.getValue());
+    }
+
+    @Test
     public void testGetDefaultChipId() {
         assertEquals(DEFAULT_CHIP_ID, mUwbServiceImpl.getDefaultChipId());
     }
@@ -715,23 +753,17 @@ public class UwbServiceImplTest {
     @Test
     public void testResume() throws Exception {
         final SessionHandle sessionHandle = mock(SessionHandle.class);
-        final PersistableBundle parameters = new PersistableBundle();
-
-        try {
-            mUwbServiceImpl.resume(sessionHandle, parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        PersistableBundle bundle = new PersistableBundle();
+        mUwbServiceImpl.resume(sessionHandle, bundle);
+        verify(mUwbServiceCore).resume(sessionHandle, bundle);
     }
 
     @Test
     public void testPause() throws Exception {
         final SessionHandle sessionHandle = mock(SessionHandle.class);
-        final PersistableBundle parameters = new PersistableBundle();
-
-        try {
-            mUwbServiceImpl.pause(sessionHandle, parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        PersistableBundle bundle = new PersistableBundle();
+        mUwbServiceImpl.pause(sessionHandle, bundle);
+        verify(mUwbServiceCore).pause(sessionHandle, bundle);
     }
 
     @Test
@@ -782,15 +814,33 @@ public class UwbServiceImplTest {
     }
 
     @Test
+    @RequiresFlagsEnabled(Flags.FLAG_QUERY_TIMESTAMP_MICROS)
     public void testQueryDataSize() throws Exception {
-        assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
+        assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         final PersistableBundle parameters = new PersistableBundle();
 
+        when(mFeatureFlags.queryTimestampMicros()).thenReturn(true);
         when(mUwbServiceCore.queryMaxDataSizeBytes(sessionHandle)).thenReturn(MAX_DATA_SIZE);
         assertThat(mUwbServiceImpl.queryMaxDataSizeBytes(sessionHandle)).isEqualTo(MAX_DATA_SIZE);
 
         verify(mUwbServiceCore).queryMaxDataSizeBytes(sessionHandle);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_HYBRID_SESSION_SUPPORT)
+    public void testSetHybridSessionConfiguration() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
+        final SessionHandle sessionHandle = mock(SessionHandle.class);
+        final PersistableBundle parameters = new PersistableBundle();
+
+        when(mFeatureFlags.hybridSessionSupport()).thenReturn(true);
+        when(mUwbServiceCore.setHybridSessionConfiguration(sessionHandle, parameters))
+               .thenReturn(TEST_STATUS);
+        assertThat(mUwbServiceImpl.setHybridSessionConfiguration(sessionHandle, parameters))
+                .isEqualTo(TEST_STATUS);
+
+        verify(mUwbServiceCore).setHybridSessionConfiguration(sessionHandle, parameters);
     }
 
     @Test

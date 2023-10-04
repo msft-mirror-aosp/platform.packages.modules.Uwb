@@ -30,6 +30,7 @@ import static com.android.server.uwb.config.CapabilityParam.CCC_HOPPING_CONFIG_M
 import static com.android.server.uwb.config.CapabilityParam.CCC_HOPPING_CONFIG_MODE_NONE;
 import static com.android.server.uwb.config.CapabilityParam.CCC_HOPPING_SEQUENCE_AES;
 import static com.android.server.uwb.config.CapabilityParam.CCC_HOPPING_SEQUENCE_DEFAULT;
+import static com.android.server.uwb.config.CapabilityParam.CCC_PRIORITIZED_CHANNEL_LIST;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_CHANNELS;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_CHAPS_PER_SLOT;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_HOPPING_CONFIG_MODES_AND_SEQUENCES;
@@ -64,6 +65,7 @@ import com.google.uwb.support.base.Params;
 import com.google.uwb.support.ccc.CccProtocolVersion;
 import com.google.uwb.support.ccc.CccPulseShapeCombo;
 import com.google.uwb.support.ccc.CccRangingStartedParams;
+import com.google.uwb.support.ccc.CccRangingStoppedParams;
 import com.google.uwb.support.ccc.CccSpecificationParams;
 
 import java.nio.ByteBuffer;
@@ -83,6 +85,9 @@ public class CccDecoder extends TlvDecoder {
         }
         if (CccSpecificationParams.class.equals(paramsType)) {
             return (T) getCccSpecificationParamsFromTlvBuffer(tlvs);
+        }
+        if (CccRangingStoppedParams.class.equals(paramsType)) {
+            return (T) getCccRangingStoppedParamsFromTlvBuffer(tlvs);
         }
         return null;
     }
@@ -156,19 +161,31 @@ public class CccDecoder extends TlvDecoder {
         if (isBitSet(chapsPerslot, CCC_CHAPS_PER_SLOT_24)) {
             builder.addChapsPerSlot(CHAPS_PER_SLOT_24);
         }
-        // Don't use TlvDecodeBuffer#getInt() to avoid conversion to little endian.
-        int syncCodes = ByteBuffer.wrap(tlvs.getByteArray(CCC_SUPPORTED_SYNC_CODES)).getInt();
-        for (int i = 0; i < 32; i++) {
-            if (isBitSet(syncCodes, 1 << i)) {
-                builder.addSyncCode(i + 1);
+        byte[] syncCodes = tlvs.getByteArray(CCC_SUPPORTED_SYNC_CODES);
+        for (int byteIndex = 0; byteIndex < syncCodes.length; byteIndex++) {
+            byte syncCodeByte = syncCodes[byteIndex];
+            for (int bitIndex = 0; bitIndex < 8; bitIndex++) {
+                if ((syncCodeByte & (1 << bitIndex)) != 0) {
+                    int syncCodeValue = (byteIndex * 8) + bitIndex + 1;
+                    builder.addSyncCode(syncCodeValue);
+                }
             }
         }
-        byte channels = tlvs.getByte(CCC_SUPPORTED_CHANNELS);
-        if (isBitSet(channels, CCC_CHANNEL_5)) {
-            builder.addChannel(UWB_CHANNEL_5);
-        }
-        if (isBitSet(channels, CCC_CHANNEL_9)) {
-            builder.addChannel(UWB_CHANNEL_9);
+
+        try {
+            byte[] prioritizedChannels = tlvs.getByteArray(CCC_PRIORITIZED_CHANNEL_LIST);
+            for (byte prioritizedChannel : prioritizedChannels) {
+                builder.addChannel(prioritizedChannel);
+            }
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "CCC_PRIORITIZED_CHANNEL_LIST not found");
+            byte channels = tlvs.getByte(CCC_SUPPORTED_CHANNELS);
+            if (isBitSet(channels, CCC_CHANNEL_5)) {
+                builder.addChannel(UWB_CHANNEL_5);
+            }
+            if (isBitSet(channels, CCC_CHANNEL_9)) {
+                builder.addChannel(UWB_CHANNEL_9);
+            }
         }
         byte hoppingConfigModesAndSequences =
                 tlvs.getByte(CCC_SUPPORTED_HOPPING_CONFIG_MODES_AND_SEQUENCES);
@@ -202,5 +219,12 @@ public class CccDecoder extends TlvDecoder {
             Log.w(TAG, "SUPPORTED_MIN_UWB_INITIATION_TIME_MS not found");
         }
         return builder.build();
+    }
+
+    private CccRangingStoppedParams getCccRangingStoppedParamsFromTlvBuffer(TlvDecoderBuffer tlvs) {
+        int lastStsIndexUsed = tlvs.getInt(ConfigParam.LAST_STS_INDEX_USED);
+        return new CccRangingStoppedParams.Builder()
+                .setLastStsIndexUsed(lastStsIndexUsed)
+                .build();
     }
 }
