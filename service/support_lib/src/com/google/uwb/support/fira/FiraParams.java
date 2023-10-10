@@ -233,12 +233,15 @@ public abstract class FiraParams extends Params {
             value = {
                 CONTENTION_BASED_RANGING,
                 TIME_SCHEDULED_RANGING,
+                HYBRID_SCHEDULED_RANGING,
             })
     public @interface SchedulingMode {}
 
     public static final int CONTENTION_BASED_RANGING = 0;
 
     public static final int TIME_SCHEDULED_RANGING = 1;
+
+    public static final int HYBRID_SCHEDULED_RANGING = 2;
 
     /** Ranging Time Struct */
     @IntDef(
@@ -535,6 +538,7 @@ public abstract class FiraParams extends Params {
                 STATUS_CODE_UNKNOWN_OID,
                 STATUS_CODE_READ_ONLY,
                 STATUS_CODE_COMMAND_RETRY,
+                STATUS_CODE_UNKNOWN,
                 STATUS_CODE_ERROR_SESSION_NOT_EXIST,
                 STATUS_CODE_ERROR_SESSION_DUPLICATE,
                 STATUS_CODE_ERROR_SESSION_ACTIVE,
@@ -571,6 +575,7 @@ public abstract class FiraParams extends Params {
     public static final int STATUS_CODE_UNKNOWN_OID = 0x08;
     public static final int STATUS_CODE_READ_ONLY = 0x09;
     public static final int STATUS_CODE_COMMAND_RETRY = 0x0A;
+    public static final int STATUS_CODE_UNKNOWN = 0x0B;
     public static final int STATUS_CODE_ERROR_SESSION_NOT_EXIST = 0x11;
     public static final int STATUS_CODE_ERROR_SESSION_DUPLICATE = 0x12;
     public static final int STATUS_CODE_ERROR_SESSION_ACTIVE = 0x13;
@@ -606,7 +611,8 @@ public abstract class FiraParams extends Params {
                     STATUS_CODE_DATA_TRANSFER_NTF_ERROR_NO_CREDIT_AVAILABLE,
                     STATUS_CODE_DATA_TRANSFER_NTF_ERROR_REJECTED,
                     STATUS_CODE_DATA_TRANSFER_NTF_SESSION_TYPE_NOT_SUPPORTED,
-                    STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER_IS_ONGOING
+                    STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER_IS_ONGOING,
+                    STATUS_CODE_DATA_TRANSFER_NTF_STATUS_INVALID_FORMAT
             })
     public @interface DataTransferStatusNtfCode {}
 
@@ -617,6 +623,7 @@ public abstract class FiraParams extends Params {
     public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_REJECTED = 4;
     public static final int STATUS_CODE_DATA_TRANSFER_NTF_SESSION_TYPE_NOT_SUPPORTED = 5;
     public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER_IS_ONGOING = 6;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_STATUS_INVALID_FORMAT = 7;
 
     /** State change reason codes defined in UCI table-15 */
     @IntDef(
@@ -629,6 +636,10 @@ public abstract class FiraParams extends Params {
                 STATE_CHANGE_REASON_CODE_ERROR_INVALID_RANGING_INTERVAL,
                 STATE_CHANGE_REASON_CODE_ERROR_INVALID_STS_CONFIG,
                 STATE_CHANGE_REASON_CODE_ERROR_INVALID_RFRAME_CONFIG,
+                STATE_CHANGE_REASON_CODE_ERROR_HUS_NOT_ENOUGH_SLOTS,
+                STATE_CHANGE_REASON_CODE_ERROR_HUS_CFP_PHASE_TOO_SHORT,
+                STATE_CHANGE_REASON_CODE_ERROR_HUS_CAP_PHASE_TOO_SHORT,
+                STATE_CHANGE_REASON_CODE_ERROR_HUS_OTHERS,
             })
     public @interface StateChangeReasonCode {}
 
@@ -640,6 +651,10 @@ public abstract class FiraParams extends Params {
     public static final int STATE_CHANGE_REASON_CODE_ERROR_INVALID_RANGING_INTERVAL = 0x23;
     public static final int STATE_CHANGE_REASON_CODE_ERROR_INVALID_STS_CONFIG = 0x24;
     public static final int STATE_CHANGE_REASON_CODE_ERROR_INVALID_RFRAME_CONFIG = 0x25;
+    public static final int STATE_CHANGE_REASON_CODE_ERROR_HUS_NOT_ENOUGH_SLOTS = 0x26;
+    public static final int STATE_CHANGE_REASON_CODE_ERROR_HUS_CFP_PHASE_TOO_SHORT = 0x27;
+    public static final int STATE_CHANGE_REASON_CODE_ERROR_HUS_CAP_PHASE_TOO_SHORT = 0x28;
+    public static final int STATE_CHANGE_REASON_CODE_ERROR_HUS_OTHERS = 0x29;
 
     /** Multicast controlee add/delete actions defined in UCI */
     @IntDef(
@@ -1082,8 +1097,15 @@ public abstract class FiraParams extends Params {
     // Default value (Unlimited)
     public static final int MAX_NUMBER_OF_MEASUREMENTS_DEFAULT = 0;
 
+    public static final int SESSION_TIME_BASE_PARAM_LEN = 9;
+    public static final int SESSION_HANDLE_LEN = 4;
+    public static final int SESSION_OFFSET_TIME_LEN = 4;
+
     // Default value (Host as the both secure & non-secure endpoint).
     public static final int APPLICATION_DATA_ENDPOINT_DEFAULT = 0;
+
+    //Reference time base feature mask.
+    public static final int SESSION_TIME_BASE_REFERENCE_FEATURE_ENABLED = 1;
 
     // Helper functions
     protected static UwbAddress longToUwbAddress(long value, int length) {
