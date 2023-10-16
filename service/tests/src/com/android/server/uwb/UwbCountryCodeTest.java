@@ -16,6 +16,7 @@
 
 package com.android.server.uwb;
 
+import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_FAILED;
 import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_OK;
 
 import static org.junit.Assert.assertEquals;
@@ -30,6 +31,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.BroadcastReceiver;
@@ -52,7 +54,6 @@ import android.util.Pair;
 
 import androidx.test.filters.SmallTest;
 
-import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
 
 import org.junit.Before;
@@ -87,6 +88,8 @@ public class UwbCountryCodeTest {
     @Mock UwbInjector mUwbInjector;
     @Mock PackageManager mPackageManager;
     @Mock Location mLocation;
+    @Mock UwbCountryCode.CountryCodeChangedListener mListener;
+    @Mock DeviceConfigFacade mDeviceConfigFacade;
     private TestLooper mTestLooper;
     private UwbCountryCode mUwbCountryCode;
 
@@ -131,11 +134,15 @@ public class UwbCountryCodeTest {
         when(mLocation.getLongitude()).thenReturn(0.0);
         when(mUwbInjector.makeGeocoder()).thenReturn(mGeocoder);
         when(mUwbInjector.isGeocoderPresent()).thenReturn(true);
+        when(mDeviceConfigFacade.isLocationUseForCountryCodeEnabled()).thenReturn(true);
+        when(mUwbInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
         when(mPackageManager.hasSystemFeature(PackageManager.FEATURE_WIFI)).thenReturn(true);
         when(mNativeUwbManager.setCountryCode(any())).thenReturn(
                 (byte) STATUS_CODE_OK);
         mUwbCountryCode = new UwbCountryCode(
                 mContext, mNativeUwbManager, new Handler(mTestLooper.getLooper()), mUwbInjector);
+
+        mUwbCountryCode.addListener(mListener);
     }
 
     @Test
@@ -143,6 +150,7 @@ public class UwbCountryCodeTest {
         mUwbCountryCode.initialize();
         verify(mNativeUwbManager).setCountryCode(
                 UwbCountryCode.DEFAULT_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, UwbCountryCode.DEFAULT_COUNTRY_CODE);
     }
 
     @Test
@@ -151,6 +159,7 @@ public class UwbCountryCodeTest {
         mUwbCountryCode.initialize();
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 
     @Test
@@ -159,18 +168,16 @@ public class UwbCountryCodeTest {
                 anyInt());
         mUwbCountryCode.initialize();
         verify(mNativeUwbManager, never()).setCountryCode(any());
+        verify(mListener, never()).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 
     @Test
     public void testInitializeCountryCodeFromTelephonyVerifyListener() {
-        UwbCountryCode.CountryCodeChangedListener listener = mock(
-                UwbCountryCode.CountryCodeChangedListener.class);
-        mUwbCountryCode.addListener(listener);
         when(mTelephonyManager.getNetworkCountryIso(anyInt())).thenReturn(TEST_COUNTRY_CODE);
         mUwbCountryCode.initialize();
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
-        verify(listener).onCountryCodeChanged(TEST_COUNTRY_CODE);
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 
     @Test
@@ -179,13 +186,15 @@ public class UwbCountryCodeTest {
         mUwbCountryCode.initialize();
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
-        clearInvocations(mNativeUwbManager);
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
+        clearInvocations(mNativeUwbManager, mListener);
 
         assertEquals(Pair.create(STATUS_CODE_OK, TEST_COUNTRY_CODE),
                 mUwbCountryCode.setCountryCode(false));
         // already set.
         verify(mNativeUwbManager, never()).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener, never()).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 
     @Test
@@ -202,39 +211,52 @@ public class UwbCountryCodeTest {
         mTestLooper.dispatchAll();
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
-        clearInvocations(mNativeUwbManager);
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
+        clearInvocations(mNativeUwbManager, mListener);
 
         assertEquals(Pair.create(STATUS_CODE_OK, TEST_COUNTRY_CODE),
                 mUwbCountryCode.setCountryCode(false));
         // already set.
         verify(mNativeUwbManager, never()).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener, never()).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
+    }
+
+    @Test
+    public void testSetCountryCodeWhenLocationUseIsDisabled() {
+        when(mDeviceConfigFacade.isLocationUseForCountryCodeEnabled()).thenReturn(false);
+        when(mLocationManager.getLastKnownLocation(LocationManager.FUSED_PROVIDER))
+                .thenReturn(mLocation);
+        mUwbCountryCode.initialize();
+        verifyNoMoreInteractions(mGeocoder);
     }
 
     @Test
     public void testSetCountryCodeWithForceUpdateFromTelephony() {
         when(mTelephonyManager.getNetworkCountryIso(anyInt())).thenReturn(TEST_COUNTRY_CODE);
         mUwbCountryCode.initialize();
-        clearInvocations(mNativeUwbManager);
+        clearInvocations(mNativeUwbManager, mListener);
 
         assertEquals(Pair.create(STATUS_CODE_OK, TEST_COUNTRY_CODE),
                 mUwbCountryCode.setCountryCode(true));
         // set again
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 
     @Test
     public void testSetCountryCodeFromOemWhenTelephonyAndWifiNotAvailable() {
         when(mTelephonyManager.getNetworkCountryIso(anyInt())).thenReturn(TEST_COUNTRY_CODE);
         mUwbCountryCode.initialize();
-        clearInvocations(mNativeUwbManager);
+        clearInvocations(mNativeUwbManager, mListener);
 
         assertEquals(Pair.create(STATUS_CODE_OK, TEST_COUNTRY_CODE),
                 mUwbCountryCode.setCountryCode(false));
         // already set.
         verify(mNativeUwbManager, never()).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener, never()).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 
     @Test
@@ -243,12 +265,12 @@ public class UwbCountryCodeTest {
         mUwbCountryCode.initialize();
         clearInvocations(mNativeUwbManager);
 
-        when(mNativeUwbManager.setCountryCode(any())).thenReturn(
-                (byte) UwbUciConstants.STATUS_CODE_FAILED);
-        assertEquals(Pair.create(UwbUciConstants.STATUS_CODE_FAILED, TEST_COUNTRY_CODE),
+        when(mNativeUwbManager.setCountryCode(any())).thenReturn((byte) STATUS_CODE_FAILED);
+        assertEquals(Pair.create(STATUS_CODE_FAILED, TEST_COUNTRY_CODE),
                 mUwbCountryCode.setCountryCode(true));
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_FAILED, TEST_COUNTRY_CODE);
     }
 
     @Test
@@ -262,6 +284,7 @@ public class UwbCountryCodeTest {
         mTelephonyCountryCodeReceiverCaptor.getValue().onReceive(mock(Context.class), intent);
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 
     @Test
@@ -272,6 +295,7 @@ public class UwbCountryCodeTest {
         mWifiCountryCodeReceiverCaptor.getValue().onActiveCountryCodeChanged(TEST_COUNTRY_CODE);
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 
     @Test
@@ -289,6 +313,7 @@ public class UwbCountryCodeTest {
         mTestLooper.dispatchAll();
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 
     @Test
@@ -301,6 +326,7 @@ public class UwbCountryCodeTest {
                 mTelephonyCountryCodeReceiverCaptor.capture(), any(), any(), any());
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
         verify(mLocationManager).requestLocationUpdates(
                 anyString(), anyLong(), anyFloat(), mLocationListenerCaptor.capture());
         mLocationListenerCaptor.getValue().onLocationChanged(mLocation);
@@ -318,6 +344,7 @@ public class UwbCountryCodeTest {
         mTelephonyCountryCodeReceiverCaptor.getValue().onReceive(mock(Context.class), intent);
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE_OTHER.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE_OTHER);
     }
 
     @Test
@@ -338,6 +365,7 @@ public class UwbCountryCodeTest {
         mTelephonyCountryCodeReceiverCaptor.getValue().onReceive(mock(Context.class), intent);
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 
     @Test
@@ -350,6 +378,7 @@ public class UwbCountryCodeTest {
                 mTelephonyCountryCodeReceiverCaptor.capture(), any(), any(), any());
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
 
         Intent intent = new Intent(TelephonyManager.ACTION_NETWORK_COUNTRY_CHANGED)
                 .putExtra(TelephonyManager.EXTRA_NETWORK_COUNTRY, TEST_COUNTRY_CODE_OTHER)
@@ -357,6 +386,7 @@ public class UwbCountryCodeTest {
         mTelephonyCountryCodeReceiverCaptor.getValue().onReceive(mock(Context.class), intent);
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE_OTHER.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE_OTHER);
 
         intent = new Intent(TelephonyManager.ACTION_NETWORK_COUNTRY_CHANGED)
                 .putExtra(TelephonyManager.EXTRA_NETWORK_COUNTRY, TEST_COUNTRY_CODE_OTHER)
@@ -364,6 +394,7 @@ public class UwbCountryCodeTest {
         mTelephonyCountryCodeReceiverCaptor.getValue().onReceive(mock(Context.class), intent);
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE_OTHER.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE_OTHER);
     }
 
     @Test
@@ -374,15 +405,17 @@ public class UwbCountryCodeTest {
         verify(mWifiManager).registerActiveCountryCodeChangedCallback(
                 any(), mWifiCountryCodeReceiverCaptor.capture());
         mWifiCountryCodeReceiverCaptor.getValue().onActiveCountryCodeChanged(TEST_COUNTRY_CODE);
-        clearInvocations(mNativeUwbManager);
+        clearInvocations(mNativeUwbManager, mListener);
 
         mUwbCountryCode.setOverrideCountryCode(TEST_COUNTRY_CODE_OTHER);
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE_OTHER.getBytes(StandardCharsets.UTF_8));
-        clearInvocations(mNativeUwbManager);
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE_OTHER);
+        clearInvocations(mNativeUwbManager, mListener);
 
         mUwbCountryCode.clearOverrideCountryCode();
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
     }
 }

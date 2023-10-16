@@ -141,7 +141,7 @@ public class UwbServiceImpl {
         requireNonNull(mUwbFeatureFlags);
 
         if (mUwbFeatureFlags.skipRangingCapabilitiesCheck()
-                && VERSION.SDK_INT <= VERSION_CODES.S_V2) {
+                && VERSION.SDK_INT < VERSION_CODES.TIRAMISU) {
             return new RangingCapabilities(
                     /* supportsDistance= */ true,
                     mUwbFeatureFlags.hasAzimuthSupport(),
@@ -152,7 +152,8 @@ public class UwbServiceImpl {
                     new ArrayList<>(RANGE_DATA_NTF_ENABLE),
                     FIRA_DEFAULT_SUPPORTED_CONFIG_IDS,
                     DEFAULT_SUPPORTED_SLOT_DURATIONS,
-                    DEFAULT_SUPPORTED_RANGING_UPDATE_RATE);
+                    DEFAULT_SUPPORTED_RANGING_UPDATE_RATE,
+                    false);
         }
 
         PersistableBundle bundle = mUwbManager.getSpecificationInfo();
@@ -218,7 +219,8 @@ public class UwbServiceImpl {
                 ImmutableList.copyOf(supportedNtfConfigs),
                 ImmutableList.copyOf(supportedConfigIds),
                 ImmutableList.copyOf(supportedSlotDurations),
-                ImmutableList.copyOf(supportedRangingUpdateRates)
+                ImmutableList.copyOf(supportedRangingUpdateRates),
+                specificationParams.hasBackgroundRangingSupport()
                 );
     }
 
