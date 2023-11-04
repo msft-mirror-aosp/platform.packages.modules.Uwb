@@ -86,9 +86,9 @@ import com.google.uwb.support.base.Params;
 import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccRangingStartedParams;
+import com.google.uwb.support.ccc.CccRangingStoppedParams;
 import com.google.uwb.support.ccc.CccSpecificationParams;
 import com.google.uwb.support.ccc.CccStartRangingParams;
-import com.google.uwb.support.ccc.CccRangingStoppedParams;
 import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate;
 import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdateStatus;
 import com.google.uwb.support.fira.FiraHybridSessionConfig;
@@ -496,8 +496,18 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
     }
 
     private int setAppConfigurations(UwbSession uwbSession) {
+        if (uwbSession.getProtocolName().equals(FiraParams.PROTOCOL_NAME)
+                        && uwbSession.getParams() instanceof FiraOpenSessionParams) {
+            FiraOpenSessionParams params = (FiraOpenSessionParams) uwbSession.getParams();
+            if (mSessionTokenMap.containsKey(params.getReferenceSessionHandle())) {
+                uwbSession.updateFiraParamsForSessionTimeBase(
+                           mSessionTokenMap.get(params.getReferenceSessionHandle()));
+            }
+        }
+
         int status = mConfigurationManager.setAppConfigurations(uwbSession.getSessionId(),
-                uwbSession.getParams(), uwbSession.getChipId());
+                uwbSession.getParams(), uwbSession.getChipId(),
+                getUwbsFiraProtocolVersion(uwbSession.getChipId()));
         if (status == UwbUciConstants.STATUS_CODE_OK
                 && mUwbInjector.getUwbServiceCore().isOemExtensionCbRegistered()) {
             try {
@@ -674,12 +684,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
         if (currentSessionState == UwbUciConstants.UWB_SESSION_STATE_IDLE) {
             if (uwbSession.getProtocolName().equals(CccParams.PROTOCOL_NAME)
                     && params instanceof CccStartRangingParams) {
-                CccStartRangingParams rangingStartParams = (CccStartRangingParams) params;
+                CccStartRangingParams cccStartRangingParams = (CccStartRangingParams) params;
                 Log.i(TAG, "startRanging() - update RAN multiplier: "
-                        + rangingStartParams.getRanMultiplier()
-                        + ", stsIndex: " + rangingStartParams.getStsIndex());
+                        + cccStartRangingParams.getRanMultiplier()
+                        + ", stsIndex: " + cccStartRangingParams.getStsIndex());
                 // Need to update the RAN multiplier from the CccStartRangingParams for CCC session.
-                uwbSession.updateCccParamsOnStart(rangingStartParams);
+                uwbSession.updateCccParamsOnStart(cccStartRangingParams);
             }
             if (uwbSession.getProtocolName().equals(FiraParams.PROTOCOL_NAME)) {
                 // Need to update session priority if it changed.
@@ -1342,7 +1352,11 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                             status = UwbUciConstants.STATUS_CODE_FAILED;
                             if (uwbSession.getSessionState()
                                     == UwbUciConstants.UWB_SESSION_STATE_INIT) {
+                                uwbSession.setNeedsQueryUwbsTimestamp(
+                                        null /* cccRangingStartParams */);
+                                uwbSession.setAbsoluteInitiationTimeIfNeeded();
                                 status = UwbSessionManager.this.setAppConfigurations(uwbSession);
+                                uwbSession.resetAbsoluteInitiationTime();
                                 if (status != UwbUciConstants.STATUS_CODE_OK) {
                                     return status;
                                 }
@@ -1393,20 +1407,13 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                     () -> {
                         int status = UwbUciConstants.STATUS_CODE_FAILED;
                         synchronized (uwbSession.getWaitObj()) {
-                            if (uwbSession.getNeedsQueryUwbsTimestamp()) {
-                                // Query the UWBS timestamp and add the relative initiation time
-                                // stored in the FiraOpenSessionParams, to get the absolute
-                                // initiation time to be configured.
-                                long uwbsTimestamp =
-                                        mUwbInjector.getUwbServiceCore().queryUwbsTimestampMicros();
-                                uwbSession.computeAbsoluteInitiationTime(uwbsTimestamp);
-                            }
-
+                            uwbSession.setAbsoluteInitiationTimeIfNeeded();
                             if (uwbSession.getNeedsAppConfigUpdate()) {
                                 uwbSession.resetNeedsAppConfigUpdate();
                                 status = mConfigurationManager.setAppConfigurations(
                                         uwbSession.getSessionId(),
-                                        uwbSession.getParams(), uwbSession.getChipId());
+                                        uwbSession.getParams(), uwbSession.getChipId(),
+                                        getUwbsFiraProtocolVersion(uwbSession.getChipId()));
                                 uwbSession.resetAbsoluteInitiationTime();
                                 if (status != UwbUciConstants.STATUS_CODE_OK) {
                                     mSessionNotificationManager.onRangingStartFailed(
@@ -1493,9 +1500,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                             uwbSession.getWaitObj().blockingWait();
                             if (uwbSession.getSessionState()
                                     == UwbUciConstants.UWB_SESSION_STATE_IDLE) {
-                                 Params rangingStoppedParams = uwbSession.getParams();
+                                PersistableBundle rangingStoppedParamsBundle =
+                                        new PersistableBundle();
                                 // For CCC sessions, retrieve the app configs
-                                if (uwbSession.getProtocolName().equals(CccParams.PROTOCOL_NAME)) {
+                                if (uwbSession.getProtocolName().equals(CccParams.PROTOCOL_NAME)
+                                        && mUwbInjector.getDeviceConfigFacade()
+                                        .isCccRangingStoppedParamsSendEnabled()) {
                                     Pair<Integer, CccRangingStoppedParams> statusAndParams  =
                                             mConfigurationManager.getAppConfigurations(
                                                     uwbSession.getSessionId(),
@@ -1506,13 +1516,13 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                                     if (statusAndParams.first != UwbUciConstants.STATUS_CODE_OK) {
                                         Log.e(TAG, "Failed to get CCC ranging stopped params");
                                     }
-                                    rangingStoppedParams = statusAndParams.second;
+                                    rangingStoppedParamsBundle = statusAndParams.second.toBundle();
                                 }
                                 int apiReasonCode = triggeredBySystemPolicy
                                         ? RangingChangeReason.SYSTEM_POLICY
                                         : RangingChangeReason.LOCAL_API;
                                 mSessionNotificationManager.onRangingStoppedWithApiReasonCode(
-                                        uwbSession, apiReasonCode, rangingStoppedParams.toBundle());
+                                        uwbSession, apiReasonCode, rangingStoppedParamsBundle);
                             } else {
                                 status = UwbUciConstants.STATUS_CODE_FAILED;
                                 mSessionNotificationManager.onRangingStopFailed(uwbSession,
@@ -1673,7 +1683,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                                 // setAppConfigurations only applies to config changes,
                                 //  not controlee list changes
                                 status = mConfigurationManager.setAppConfigurations(
-                                        uwbSession.getSessionId(), param, uwbSession.getChipId());
+                                        uwbSession.getSessionId(), param, uwbSession.getChipId(),
+                                        getUwbsFiraProtocolVersion(uwbSession.getChipId()));
                                 // send suspendRangingCallbacks only on suspend ranging reconfigure
                                 Integer suspendRangingRounds =
                                     rangingReconfigureParams.getSuspendRangingRounds();
@@ -1892,6 +1903,18 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
             return false;
         }
         return true;
+    }
+
+    private FiraProtocolVersion getUwbsFiraProtocolVersion(String chipId) {
+        UwbDeviceInfoResponse deviceInfo =
+                mUwbInjector.getUwbServiceCore().getCachedDeviceInfoResponse(chipId);
+        if (deviceInfo != null) {
+            return FiraProtocolVersion.fromLEShort((short) deviceInfo.mUciVersion);
+        }
+
+        // Return a (safe) backward-compatible FiraProtocolVersion if we couldn't retrieve it
+        // from the UWBS.
+        return FiraParams.PROTOCOL_VERSION_1_1;
     }
 
     /** Represents a UWB session */
@@ -2276,15 +2299,8 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
             return mDataRepetitionCount;
         }
         public void updateCccParamsOnStart(CccStartRangingParams rangingStartParams) {
-            UwbDeviceInfoResponse deviceInfo =
-                    mUwbInjector.getUwbServiceCore().getCachedDeviceInfoResponse(mChipId);
-            if (deviceInfo != null
-                    && FiraProtocolVersion.fromLEShort((short) deviceInfo.mUciVersion).getMajor()
-                            >= 2
-                    && ((CccOpenRangingParams) mParams).getAbsoluteInitiationTimeUs() == 0
-                    && rangingStartParams.getAbsoluteInitiationTimeUs() == 0) {
-                this.mNeedsQueryUwbsTimestamp = true;
-            }
+            setNeedsQueryUwbsTimestamp(rangingStartParams);
+
             // Need to update the RAN multiplier and initiation time
             // from the CccStartRangingParams for CCC session.
             CccOpenRangingParams newParams =
@@ -2312,19 +2328,76 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                 this.mNeedsAppConfigUpdate = true;
             }
 
-            // When the UWBS supports Fira 2.0+ and the application has not configured an absolute
-            // UWB initiation time, we must fetch the UWBS timestamp (to compute the absolute time).
-            UwbDeviceInfoResponse deviceInfo =
-                    mUwbInjector.getUwbServiceCore().getCachedDeviceInfoResponse(mChipId);
-            if (deviceInfo != null
-                    && FiraProtocolVersion.fromLEShort((short) deviceInfo.mUciVersion).getMajor()
-                            >= 2
-                    && firaOpenSessionParams.getAbsoluteInitiationTime() == 0) {
-                this.mNeedsQueryUwbsTimestamp = true;
+            setNeedsQueryUwbsTimestamp(null /* rangingStartParams */);
+        }
+
+        /**
+         * Sets {@code mNeedsQueryUwbsTimestamp} to {@code true}, if the UWBS Timestamp needs to be
+         * fetched from the UWBS controller (for computing an absolute UWB initiation time).
+         */
+        public void setNeedsQueryUwbsTimestamp(
+                @Nullable CccStartRangingParams cccStartRangingParams) {
+            // When the UWBS supports Fira 2.0+, the application has configured a relative UWB
+            // initation time, but not configured an absolute UWB initiation time, we must fetch
+            // the UWBS timestamp (to compute the absolute UWB initiation time).
+            if (getUwbsFiraProtocolVersion(mChipId).getMajor() >= 2) {
+                if (mParams instanceof FiraOpenSessionParams) {
+                    FiraOpenSessionParams firaOpenSessionParams = (FiraOpenSessionParams) mParams;
+                    if (firaOpenSessionParams.getInitiationTime() != 0
+                            && firaOpenSessionParams.getAbsoluteInitiationTime() == 0) {
+                        this.mNeedsQueryUwbsTimestamp = true;
+                    }
+                } else if (mParams instanceof CccOpenRangingParams
+                               && mUwbInjector.getDeviceConfigFacade()
+                                       .isCccAbsoluteUwbInitiationTimeEnabled()) {
+                    // When CccStartRangingParams is present; we check only for it's fields,
+                    // since its values overrides the earlier CccOpenRangingParams.
+                    if (cccStartRangingParams != null) {
+                        if (cccStartRangingParams.getInitiationTimeMs() != 0
+                                && cccStartRangingParams.getAbsoluteInitiationTimeUs() == 0) {
+                            this.mNeedsQueryUwbsTimestamp = true;
+                        }
+                    } else {
+                        // TODO(b/291851851): Query UWBS timestamp at time of CCC SessionInit also.
+                    }
+                }
             }
         }
 
         /**
+         * Computes an absolute UWB initiation time, if it's needed.
+         */
+        public void setAbsoluteInitiationTimeIfNeeded() {
+            if (this.mNeedsQueryUwbsTimestamp) {
+                // Query the UWBS timestamp and add the relative initiation time
+                // stored in the FiraOpenSessionParams, to get the absolute
+                // initiation time to be configured.
+                long uwbsTimestamp =
+                        mUwbInjector.getUwbServiceCore().queryUwbsTimestampMicros();
+                computeAbsoluteInitiationTime(uwbsTimestamp);
+            }
+        }
+
+        /**
+         * For Fira 2.0+ controller devices, replace the reference Session's SessionID with
+         * its SessionToken, in the SessionTimeBase AppConfig parameter.
+         */
+        public void updateFiraParamsForSessionTimeBase(int sessionToken) {
+            if (mParams instanceof FiraOpenSessionParams) {
+                FiraOpenSessionParams firaOpenSessionParams = (FiraOpenSessionParams) mParams;
+                int deviceRole = firaOpenSessionParams.getDeviceRole();
+                if (deviceRole == FiraParams.RANGING_DEVICE_TYPE_CONTROLLER
+                           && UwbUtil.isBitSet(firaOpenSessionParams.getReferenceTimeBase(),
+                           FiraParams.SESSION_TIME_BASE_REFERENCE_FEATURE_ENABLED)) {
+                    this.mParams = ((FiraOpenSessionParams) mParams).toBuilder().setSessionTimeBase(
+                        firaOpenSessionParams.getReferenceTimeBase(), sessionToken,
+                        firaOpenSessionParams.getSessionOffsetInMicroSeconds())
+                        .build();
+                }
+            }
+        }
+
+       /**
          * Compute absolute initiation time, by doing a sum of the UWBS Timestamp (in micro-seconds)
          * and the relative initiation time (in milli-seconds). This method should be
          * called only for FiRa UCI ProtocolVersion >= 2.0 devices.
