@@ -987,6 +987,47 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
         return true;
     }
 
+    private boolean sessionUpdateMulticastListCmdPreconditioncheck(UwbSession uwbSession,
+              int action, byte[] subSessionKeyList) {
+        FiraOpenSessionParams firaOpenSessionParams =
+                (FiraOpenSessionParams) uwbSession.getParams();
+        int deviceType = firaOpenSessionParams.getDeviceType();
+        int stsConfig = firaOpenSessionParams.getStsConfig();
+        byte[] sessionKey = firaOpenSessionParams.getSessionKey();
+        Log.i(TAG, "sessionUpdateMulticastListCmdPreconditioncheck  - deviceType: "
+                   + deviceType + " stsConfig: " + stsConfig + " action: " + action);
+        if (deviceType == FiraParams.RANGING_DEVICE_TYPE_CONTROLLER) {
+            switch (action) {
+                case FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD:
+                case FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE:
+                    if (subSessionKeyList != null) {
+                        return false;
+                    }
+                    break;
+                case FiraParams.P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_16_BYTE:
+                case FiraParams.P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_32_BYTE:
+                    if (stsConfig
+                            != FiraParams.STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
+                        return false;
+                    }
+                    // sessionKey is provided while opening the session and subSessionKeyList
+                    // is provided while updating the multicast list. Check that both the
+                    // sessionKey and subSessionKeyList are either set or not set (as both
+                    // have to be provided by the same source - Host or SE).
+                    if ((sessionKey == null && subSessionKeyList != null)
+                            || (sessionKey != null && subSessionKeyList == null)) {
+                        return false;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        } else {
+            return false;
+        }
+        return true;
+    }
+
     private synchronized int reconfigureInternal(SessionHandle sessionHandle,
             @Nullable Params params, boolean triggeredByFgStateChange) {
         int status = UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST;
@@ -1006,6 +1047,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
             // suspendRangingPreconditionCheck only on suspend ranging reconfigure
             if ((rangingReconfigureParams.getSuspendRangingRounds() != null) &&
                     (!suspendRangingPreconditionCheck(uwbSession))) {
+                return UwbUciConstants.STATUS_CODE_REJECTED;
+            }
+            if ((rangingReconfigureParams.getAddressList() != null)
+                    && (!sessionUpdateMulticastListCmdPreconditioncheck(uwbSession,
+                        rangingReconfigureParams.getAction(),
+                        rangingReconfigureParams.getSubSessionKeyList()))) {
                 return UwbUciConstants.STATUS_CODE_REJECTED;
             }
             // Do not update mParams if this was triggered by framework.
@@ -1494,35 +1541,18 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                             status = mNativeUwbManager.stopRanging(uwbSession.getSessionId(),
                                     uwbSession.getChipId());
                             if (status != UwbUciConstants.STATUS_CODE_OK) {
+                                if (uwbSession.getSessionState()
+                                        == UwbUciConstants.UWB_SESSION_STATE_IDLE) {
+                                    handleStopRangingParams(uwbSession, true /*systemPolicy*/);
+                                    return UwbUciConstants.STATUS_CODE_OK;
+                                }
                                 mSessionNotificationManager.onRangingStopFailed(uwbSession, status);
                                 return status;
                             }
                             uwbSession.getWaitObj().blockingWait();
                             if (uwbSession.getSessionState()
                                     == UwbUciConstants.UWB_SESSION_STATE_IDLE) {
-                                PersistableBundle rangingStoppedParamsBundle =
-                                        new PersistableBundle();
-                                // For CCC sessions, retrieve the app configs
-                                if (uwbSession.getProtocolName().equals(CccParams.PROTOCOL_NAME)
-                                        && mUwbInjector.getDeviceConfigFacade()
-                                        .isCccRangingStoppedParamsSendEnabled()) {
-                                    Pair<Integer, CccRangingStoppedParams> statusAndParams  =
-                                            mConfigurationManager.getAppConfigurations(
-                                                    uwbSession.getSessionId(),
-                                                    CccParams.PROTOCOL_NAME,
-                                                    new byte[0],
-                                                    CccRangingStoppedParams.class,
-                                                    uwbSession.getChipId());
-                                    if (statusAndParams.first != UwbUciConstants.STATUS_CODE_OK) {
-                                        Log.e(TAG, "Failed to get CCC ranging stopped params");
-                                    }
-                                    rangingStoppedParamsBundle = statusAndParams.second.toBundle();
-                                }
-                                int apiReasonCode = triggeredBySystemPolicy
-                                        ? RangingChangeReason.SYSTEM_POLICY
-                                        : RangingChangeReason.LOCAL_API;
-                                mSessionNotificationManager.onRangingStoppedWithApiReasonCode(
-                                        uwbSession, apiReasonCode, rangingStoppedParamsBundle);
+                                handleStopRangingParams(uwbSession, triggeredBySystemPolicy);
                             } else {
                                 status = UwbUciConstants.STATUS_CODE_FAILED;
                                 mSessionNotificationManager.onRangingStopFailed(uwbSession,
@@ -1558,6 +1588,32 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
             uwbSession.stopTimers();
             removeAdvertiserData(uwbSession);
             Trace.endSection();
+        }
+
+        private void handleStopRangingParams(UwbSession uwbSession,
+                boolean triggeredBySystemPolicy) {
+            PersistableBundle rangingStoppedParamsBundle = new PersistableBundle();
+            // For CCC sessions, retrieve the app configs
+            if (uwbSession.getProtocolName().equals(CccParams.PROTOCOL_NAME)
+                    && mUwbInjector.getDeviceConfigFacade()
+                    .isCccRangingStoppedParamsSendEnabled()) {
+                Pair<Integer, CccRangingStoppedParams> statusAndParams  =
+                        mConfigurationManager.getAppConfigurations(
+                                uwbSession.getSessionId(),
+                                CccParams.PROTOCOL_NAME,
+                                new byte[0],
+                                CccRangingStoppedParams.class,
+                                uwbSession.getChipId());
+                if (statusAndParams.first != UwbUciConstants.STATUS_CODE_OK) {
+                    Log.e(TAG, "Failed to get CCC ranging stopped params");
+                }
+                rangingStoppedParamsBundle = statusAndParams.second.toBundle();
+            }
+            int apiReasonCode = triggeredBySystemPolicy
+                    ? RangingChangeReason.SYSTEM_POLICY
+                    : RangingChangeReason.LOCAL_API;
+            mSessionNotificationManager.onRangingStoppedWithApiReasonCode(
+                    uwbSession, apiReasonCode, rangingStoppedParamsBundle);
         }
 
         private void suspendRangingCallbacks(int suspendRangingRounds, int status,
@@ -2358,7 +2414,11 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                             this.mNeedsQueryUwbsTimestamp = true;
                         }
                     } else {
-                        // TODO(b/291851851): Query UWBS timestamp at time of CCC SessionInit also.
+                        CccOpenRangingParams cccOpenRangingParams = (CccOpenRangingParams) mParams;
+                        if (cccOpenRangingParams.getInitiationTimeMs() != 0
+                                && cccOpenRangingParams.getAbsoluteInitiationTimeUs() == 0) {
+                            this.mNeedsQueryUwbsTimestamp = true;
+                        }
                     }
                 }
             }
