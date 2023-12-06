@@ -88,6 +88,10 @@ public class DeviceConfigFacade {
     private boolean mRangingErrorStreakTimerEnabled;
     // Flag to enable sending ranging stopped params.
     private boolean mCccRangingStoppedParamsSendEnabled;
+    // Flag to enable the UWB Initiation time as an absolute time, for a CCC ranging session.
+    private boolean mCccAbsoluteUwbInitiationTimeEnabled;
+    // Flag to interpret CCC supported sync codes value as little endian
+    private boolean mCccSupportedSyncCodesLittleEndian;
 
     public DeviceConfigFacade(Handler handler, Context context) {
         mContext = context;
@@ -256,6 +260,18 @@ public class DeviceConfigFacade {
                 DeviceConfig.NAMESPACE_UWB,
                 "ccc_ranging_stopped_params_send_enabled",
                 mContext.getResources().getBoolean(R.bool.ccc_ranging_stopped_params_send_enabled)
+        );
+
+        mCccAbsoluteUwbInitiationTimeEnabled = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "ccc_absolute_uwb_initiation_time_enabled",
+                mContext.getResources().getBoolean(R.bool.ccc_absolute_uwb_initiation_time_enabled)
+        );
+
+        mCccSupportedSyncCodesLittleEndian = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "ccc_supported_sync_codes_little_endian",
+                mContext.getResources().getBoolean(R.bool.ccc_supported_sync_codes_little_endian)
         );
 
         // A little parsing and cleanup:
@@ -504,5 +520,22 @@ public class DeviceConfigFacade {
      */
     public boolean isCccRangingStoppedParamsSendEnabled() {
         return mCccRangingStoppedParamsSendEnabled;
+    }
+
+    /**
+     * Returns whether an absolute UWB initiation time should be computed and configured for
+     * CCC ranging session(s).
+     * If disabled, a relative UWB initiation time (the value in CCCStartRangingParams), is
+     * configured for the CCC ranging session.
+     */
+    public boolean isCccAbsoluteUwbInitiationTimeEnabled() {
+        return mCccAbsoluteUwbInitiationTimeEnabled;
+    }
+
+    /**
+     * Returns whether CCC supported sync codes value is interpreted as little endian.
+     */
+    public boolean isCccSupportedSyncCodesLittleEndian() {
+        return mCccSupportedSyncCodesLittleEndian;
     }
 }
