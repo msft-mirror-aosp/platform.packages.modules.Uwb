@@ -26,11 +26,15 @@ import static com.google.uwb.support.ccc.CccParams.PULSE_SHAPE_PRECURSOR_FREE;
 import static com.google.uwb.support.ccc.CccParams.PULSE_SHAPE_PRECURSOR_FREE_SPECIAL;
 import static com.google.uwb.support.ccc.CccParams.UWB_CONFIG_0;
 
+import static org.mockito.Mockito.when;
+
 import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.server.uwb.DeviceConfigFacade;
+import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.util.UwbUtil;
 
 import com.google.uwb.support.ccc.CccParams;
@@ -39,8 +43,11 @@ import com.google.uwb.support.ccc.CccPulseShapeCombo;
 import com.google.uwb.support.ccc.CccRangingStartedParams;
 import com.google.uwb.support.ccc.CccSpecificationParams;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.util.List;
 
@@ -70,10 +77,37 @@ public class CccDecoderTest {
                     + "a80401000000"
                     + "a90401000000";
 
+    public static final String TEST_CCC_SPECIFICATION_TLV_DATA_STRING_PRIORITIZED_CHANNELS =
+            "a00111"
+                    + "a10400000082"
+                    + "a20168"
+                    + "a4020102"
+                    + "a50100"
+                    + "a60112"
+                    + "a7040a000000"
+                    + "a80401000000"
+                    + "a90401000000"
+                    + "aa020509";
+
     private static final byte[] TEST_CCC_SPECIFICATION_TLV_DATA =
             UwbUtil.getByteArray(TEST_CCC_SPECIFICATION_TLV_DATA_STRING);
+
+    private static final byte[] TEST_CCC_SPECIFICATION_TLV_DATA_PRIORITIZED_CHANNELS =
+            UwbUtil.getByteArray(TEST_CCC_SPECIFICATION_TLV_DATA_STRING_PRIORITIZED_CHANNELS);
     public static final int TEST_CCC_SPECIFICATION_TLV_NUM_PARAMS = 10;
-    private final CccDecoder mCccDecoder = new CccDecoder();
+    @Mock
+    private UwbInjector mUwbInjector;
+    @Mock
+    private DeviceConfigFacade mDeviceConfigFacade;
+    private CccDecoder mCccDecoder;
+
+    @Before
+    public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+        when(mUwbInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
+        when(mDeviceConfigFacade.isCccSupportedSyncCodesLittleEndian()).thenReturn(true);
+        mCccDecoder = new CccDecoder(mUwbInjector);
+    }
 
     private void verifyCccRangingOpend(CccRangingStartedParams cccRangingStartedParams) {
         assertThat(cccRangingStartedParams).isNotNull();
@@ -97,7 +131,7 @@ public class CccDecoderTest {
         assertThat(cccSpecificationParams.getChapsPerSlot()).isEqualTo(
                 List.of(CHAPS_PER_SLOT_3, CHAPS_PER_SLOT_9));
         assertThat(cccSpecificationParams.getSyncCodes()).isEqualTo(
-                List.of(2, 8));
+                List.of(26, 32));
         assertThat(cccSpecificationParams.getChannels()).isEqualTo(List.of(5, 9));
         assertThat(cccSpecificationParams.getHoppingConfigModes()).isEqualTo(
                 List.of(HOPPING_CONFIG_MODE_CONTINUOUS, HOPPING_CONFIG_MODE_ADAPTIVE));
@@ -139,7 +173,7 @@ public class CccDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         CccRangingStartedParams cccRangingStartedParams = TlvDecoder
-                .getDecoder(CccParams.PROTOCOL_NAME)
+                .getDecoder(CccParams.PROTOCOL_NAME, mUwbInjector)
                 .getParams(tlvDecoderBuffer, CccRangingStartedParams.class);
         verifyCccRangingOpend(cccRangingStartedParams);
     }
@@ -152,8 +186,21 @@ public class CccDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         CccSpecificationParams cccSpecificationParams = TlvDecoder
-                .getDecoder(CccParams.PROTOCOL_NAME)
+                .getDecoder(CccParams.PROTOCOL_NAME, mUwbInjector)
                 .getParams(tlvDecoderBuffer, CccSpecificationParams.class);
+        verifyCccSpecification(cccSpecificationParams);
+    }
+
+    @Test
+    public void testGetCccSpecificationWithPrioritizedChannel() throws Exception {
+        TlvDecoderBuffer tlvDecoderBuffer =
+                new TlvDecoderBuffer(
+                        TEST_CCC_SPECIFICATION_TLV_DATA_PRIORITIZED_CHANNELS,
+                        TEST_CCC_SPECIFICATION_TLV_NUM_PARAMS);
+        assertThat(tlvDecoderBuffer.parse()).isTrue();
+
+        CccSpecificationParams cccSpecificationParams = mCccDecoder.getParams(
+                tlvDecoderBuffer, CccSpecificationParams.class);
         verifyCccSpecification(cccSpecificationParams);
     }
 }
