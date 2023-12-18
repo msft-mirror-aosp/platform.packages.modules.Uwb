@@ -145,6 +145,10 @@ public class DeviceConfigFacadeTest {
                 .thenReturn(false);
         when(mResources.getBoolean(R.bool.ranging_error_streak_timer_enabled))
                 .thenReturn(true);
+        when(mResources.getBoolean(R.bool.ccc_ranging_stopped_params_send_enabled))
+                .thenReturn(false);
+        when(mResources.getBoolean(R.bool.ccc_absolute_uwb_initiation_time_enabled))
+                .thenReturn(false);
 
         when(mContext.getResources()).thenReturn(mResources);
 
@@ -219,6 +223,8 @@ public class DeviceConfigFacadeTest {
         assertEquals(10, mDeviceConfigFacade.getRxDataMaxPacketsToStore());
         assertEquals(false, mDeviceConfigFacade.isBackgroundRangingEnabled());
         assertEquals(true, mDeviceConfigFacade.isRangingErrorStreakTimerEnabled());
+        assertEquals(false, mDeviceConfigFacade.isCccRangingStoppedParamsSendEnabled());
+        assertEquals(false, mDeviceConfigFacade.isCccAbsoluteUwbInitiationTimeEnabled());
     }
 
     /**
@@ -320,6 +326,10 @@ public class DeviceConfigFacadeTest {
                 anyBoolean())).thenReturn(true);
         when(DeviceConfig.getBoolean(anyString(), eq("ranging_error_streak_timer_enabled"),
                 anyBoolean())).thenReturn(false);
+        when(DeviceConfig.getBoolean(anyString(), eq("ccc_ranging_stopped_params_send_enabled"),
+                anyBoolean())).thenReturn(true);
+        when(DeviceConfig.getBoolean(anyString(), eq("ccc_absolute_uwb_initiation_time_enabled"),
+                anyBoolean())).thenReturn(true);
 
         mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);
         assertEquals(0, mDeviceConfigFacade.getPrimerFovDegree());
@@ -335,6 +345,8 @@ public class DeviceConfigFacadeTest {
         assertEquals(20, mDeviceConfigFacade.getRxDataMaxPacketsToStore());
         assertEquals(true, mDeviceConfigFacade.isBackgroundRangingEnabled());
         assertEquals(false, mDeviceConfigFacade.isRangingErrorStreakTimerEnabled());
+        assertEquals(true, mDeviceConfigFacade.isCccRangingStoppedParamsSendEnabled());
+        assertEquals(true, mDeviceConfigFacade.isCccAbsoluteUwbInitiationTimeEnabled());
         when(DeviceConfig.getString(anyString(), eq("pose_source_type"),
                 anyString())).thenReturn("NONE");
         mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);

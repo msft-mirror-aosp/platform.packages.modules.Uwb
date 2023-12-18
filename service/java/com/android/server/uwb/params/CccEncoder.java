@@ -21,13 +21,14 @@ import com.android.server.uwb.data.UwbCccConstants;
 import com.android.server.uwb.data.UwbUciConstants;
 
 import com.google.uwb.support.base.Params;
+import com.google.uwb.support.base.ProtocolVersion;
 import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.fira.FiraParams;
 
 public class CccEncoder extends TlvEncoder {
     @Override
-    public TlvBuffer getTlvBuffer(Params param) {
+    public TlvBuffer getTlvBuffer(Params param, ProtocolVersion protocolVersion) {
         if (param instanceof CccOpenRangingParams) {
             return getTlvBufferFromCccOpenRangingParams(param);
         }
@@ -93,11 +94,13 @@ public class CccEncoder extends TlvEncoder {
                         (short) (params.getNumChapsPerSlot() * 400)) // SLOT_DURATION
                 .putByte(ConfigParam.PREAMBLE_CODE_INDEX,
                         (byte) params.getSyncCodeIndex()); // PREAMBLE_CODE_INDEX
-        if (params.getLastStsIndexUsed() != CccParams.LAST_STS_INDEX_USED_UNSET) {
-            tlvBufferBuilder.putInt(
-                    ConfigParam.LAST_STS_INDEX_USED, params.getLastStsIndexUsed());
+        if (params.getStsIndex() != CccParams.STS_INDEX_UNSET) {
+              tlvBufferBuilder.putInt(ConfigParam.STS_INDEX, params.getStsIndex());
         }
-        if (params.getInitiationTimeMs() != CccParams.UWB_INITIATION_TIME_MS_UNSET) {
+        if (params.getAbsoluteInitiationTimeUs() > 0) {
+            tlvBufferBuilder.putLong(ConfigParam.UWB_INITIATION_TIME,
+                    params.getAbsoluteInitiationTimeUs());
+        } else if (params.getInitiationTimeMs() != CccParams.UWB_INITIATION_TIME_MS_UNSET) {
             tlvBufferBuilder.putLong(
                     ConfigParam.UWB_INITIATION_TIME, params.getInitiationTimeMs());
         }
