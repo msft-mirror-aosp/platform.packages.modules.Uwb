@@ -21,8 +21,9 @@ import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABL
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_EDGE_TRIG;
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
 
-import android.annotation.IntDef;
 import android.util.ArrayMap;
+
+import androidx.annotation.IntDef;
 
 import com.google.common.collect.ImmutableList;
 import com.google.uwb.support.fira.FiraParams;
@@ -208,19 +209,6 @@ public final class Utils {
 
     @IntDef(
             value = {
-                    FREQUENT_RANGING_INTERVAL,
-                    AUTOMATIC,
-                    INFREQUENT_RANGING_INTERVAL,
-            }
-    )
-    public @interface RangingInterval {}
-
-    public static final int FREQUENT_RANGING_INTERVAL = 100;
-    public static final int AUTOMATIC = 200;
-    public static final int INFREQUENT_RANGING_INTERVAL = 600;
-
-    @IntDef(
-            value = {
                     DURATION_1_MS,
                     DURATION_2_MS,
             }
@@ -244,8 +232,8 @@ public final class Utils {
                 CONFIG_UNICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 240,
-                        /* rangingIntervalFast= */ 240,
-                        /* rangingIntervalInfrequent= */ 4000,
+                        /* rangingIntervalFast= */ 120,
+                        /* rangingIntervalInfrequent= */ 600,
                         /* slotPerRangingRound= */ 6,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
@@ -255,8 +243,8 @@ public final class Utils {
                 CONFIG_MULTICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 200,
-                        /* rangingIntervalInfrequent= */ 4000,
+                        /* rangingIntervalFast= */ 120,
+                        /* rangingIntervalInfrequent= */ 600,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
@@ -266,8 +254,8 @@ public final class Utils {
                 CONFIG_UNICAST_DS_TWR_NO_AOA,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 200,
-                        /* rangingIntervalInfrequent= */4000,
+                        /* rangingIntervalFast= */ 120,
+                        /* rangingIntervalInfrequent= */600,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
@@ -277,8 +265,8 @@ public final class Utils {
                 CONFIG_PROVISIONED_UNICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 240,
-                        /* rangingIntervalFast= */ 240,
-                        /* rangingIntervalInfrequent= */ 4000,
+                        /* rangingIntervalFast= */ 120,
+                        /* rangingIntervalInfrequent= */ 600,
                         /* slotPerRangingRound= */ 6,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
@@ -288,8 +276,8 @@ public final class Utils {
                 CONFIG_PROVISIONED_MULTICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 200,
-                        /* rangingIntervalInfrequent= */ 4000,
+                        /* rangingIntervalFast= */ 120,
+                        /* rangingIntervalInfrequent= */ 600,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
@@ -299,8 +287,8 @@ public final class Utils {
                 CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 200,
-                        /* rangingIntervalInfrequent= */ 4000,
+                        /* rangingIntervalFast= */ 120,
+                        /* rangingIntervalInfrequent= */ 600,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
@@ -310,8 +298,8 @@ public final class Utils {
                 CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 200,
-                        /* rangingIntervalInfrequent= */ 4000,
+                        /* rangingIntervalFast= */ 120,
+                        /* rangingIntervalInfrequent= */ 600,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
@@ -321,8 +309,8 @@ public final class Utils {
                 CONFIG_DL_TDOA_DT_TAG,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 200,
-                        /* rangingIntervalInfrequent= */ 4000,
+                        /* rangingIntervalFast= */ 120,
+                        /* rangingIntervalInfrequent= */ 600,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
@@ -332,8 +320,8 @@ public final class Utils {
                 CONFIG_MULTICAST_DS_TWR_NO_AOA,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 200,
-                        /* rangingIntervalInfrequent= */ 4000,
+                        /* rangingIntervalFast= */ 120,
+                        /* rangingIntervalInfrequent= */ 600,
                         /* slotPerRangingRound= */ 20,
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
