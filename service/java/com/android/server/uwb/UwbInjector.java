@@ -142,7 +142,7 @@ public class UwbInjector {
         mUwbMetrics = new UwbMetrics(this);
         mDeviceConfigFacade = new DeviceConfigFacade(new Handler(mLooper), mContext);
         UwbConfigurationManager uwbConfigurationManager =
-                new UwbConfigurationManager(mNativeUwbManager);
+                new UwbConfigurationManager(mNativeUwbManager, this);
         UwbSessionNotificationManager uwbSessionNotificationManager =
                 new UwbSessionNotificationManager(this);
         UwbAdvertiseManager uwbAdvertiseManager = new UwbAdvertiseManager(this,
@@ -462,11 +462,14 @@ public class UwbInjector {
 
     /** Helper method to check if the app is from foreground app/service. */
     public boolean isForegroundAppOrService(int uid, @NonNull String packageName) {
+        long identity = Binder.clearCallingIdentity();
         try {
             return isForegroundAppOrServiceImportance(getPackageImportance(uid, packageName));
         } catch (SecurityException e) {
             Log.e(TAG, "Failed to retrieve the app importance", e);
             return false;
+        } finally {
+            Binder.restoreCallingIdentity(identity);
         }
     }
 
