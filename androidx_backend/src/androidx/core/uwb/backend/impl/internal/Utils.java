@@ -46,6 +46,8 @@ public final class Utils {
         CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
         CONFIG_MULTICAST_DS_TWR_NO_AOA,
         CONFIG_DL_TDOA_DT_TAG,
+        CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE,
+        CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE_HPRF
     })
     public @interface UwbConfigId {}
 
@@ -79,6 +81,15 @@ public final class Utils {
 
     /** FiRa- defined Downlink-TDoA for DT-Tag ranging */
     public static final int CONFIG_DL_TDOA_DT_TAG = 1001;
+
+    /**
+     * Same as {@code CONFIG_ID_4}, except result report phase is disabled, fast ranging interval 96
+     * ms, filtering disabled, @Hide
+     */
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE = 1002;
+
+    /** Same as {@code CONFIG_ID_1002}, except PRF mode is HPRF, @Hide */
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE_HPRF = 1003;
 
     @IntDef({
         INFREQUENT,
@@ -326,6 +337,28 @@ public final class Utils {
                         /* slotDurationRstu= */ 2400,
                         /* initiationTimeMs= */ 0,
                         /* hoppingEnabled= */ true));
+
+        setRangingTimingParams(
+                CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE,
+                new RangingTimingParams(
+                        /* rangingIntervalNormal= */ 240,
+                        /* rangingIntervalFast= */ 96,
+                        /* rangingIntervalInfrequent= */ 600,
+                        /* slotPerRangingRound= */ 6,
+                        /* slotDurationRstu= */ 2400,
+                        /* initiationTimeMs= */ 0,
+                        /* hoppingEnabled= */ true));
+
+        setRangingTimingParams(
+                CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE_HPRF,
+                new RangingTimingParams(
+                        /* rangingIntervalNormal= */ 240,
+                        /* rangingIntervalFast= */ 96,
+                        /* rangingIntervalInfrequent= */ 600,
+                        /* slotPerRangingRound= */ 6,
+                        /* slotDurationRstu= */ 2400,
+                        /* initiationTimeMs= */ 0,
+                        /* hoppingEnabled= */ true));
     }
 
     public static int channelForTesting = 9;
@@ -336,10 +369,14 @@ public final class Utils {
             ImmutableList.of(5, 6, 8, 9, 10, 12, 13, 14);
 
     // Preamble index used by BPRF (base pulse repetition frequency) mode. BPRF supports bitrate up
-    // to 6Mb/s, which is good enough for ranging purpose. Eventually, HPRF (high pulse repetition
-    // frequency) support will be added.
+    // to 6Mb/s, which is good enough for ranging purpose.
     public static final ImmutableList<Integer> SUPPORTED_BPRF_PREAMBLE_INDEX =
             ImmutableList.of(9, 10, 11, 12);
+
+    // Preamble index used by HPRF (high pulse repetition frequency) mode. HPRF supports bitrate up
+    // to 31.2 Mbps.
+    public static final ImmutableList<Integer> SUPPORTED_HPRF_PREAMBLE_INDEX =
+            ImmutableList.of(25, 26, 27, 28, 19, 30, 31, 32);
 
     /** Converts millisecond to RSTU. */
     public static int convertMsToRstu(int value) {

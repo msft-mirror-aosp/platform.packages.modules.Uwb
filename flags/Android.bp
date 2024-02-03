@@ -15,6 +15,7 @@
 //
 
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -67,4 +68,17 @@ rust_aconfig_library {
         "//packages/modules/Uwb:__subpackages__",
         "//external/uwb:__subpackages__",
     ],
+}
+
+rust_aconfig_library {
+    name: "libuwb_aconfig_flags_rust_test",
+    crate_name: "uwb_aconfig_flags_rust_test",
+    aconfig_declarations: "uwb_aconfig_flags",
+    min_sdk_version: "33",
+    host_supported: true,
+    visibility: [
+        "//packages/modules/Uwb:__subpackages__",
+        "//external/uwb:__subpackages__",
+    ],
+    mode: "test",
 }

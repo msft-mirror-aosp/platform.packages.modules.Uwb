@@ -246,32 +246,36 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
 
     @Override
     public void onDeviceStatusNotificationReceived(int deviceState, String chipId) {
-        Log.d(TAG, "onDeviceStatusNotificationReceived(): deviceState = " + deviceState
-                + ", current country code = " + mUwbCountryCode.getCountryCode());
+        try {
+            Log.d(TAG, "onDeviceStatusNotificationReceived(): deviceState = " + deviceState
+                    + ", current country code = " + mUwbCountryCode.getCountryCode());
 
-        // If error status is received, toggle UWB off to reset stack state.
-        // TODO(b/227488208): Should we try to restart (like wifi) instead?
-        if (!mUwbInjector.getMultichipData().getChipIds().contains(chipId)) {
-            Log.e(TAG, "onDeviceStatusNotificationReceived with invalid chipId " + chipId
-                    + ". Ignoring...");
-            return;
+            // If error status is received, toggle UWB off to reset stack state.
+            // TODO(b/227488208): Should we try to restart (like wifi) instead?
+            if (!mUwbInjector.getMultichipData().getChipIds().contains(chipId)) {
+                Log.e(TAG, "onDeviceStatusNotificationReceived with invalid chipId " + chipId
+                        + ". Ignoring...");
+                return;
+            }
+
+            if ((byte) deviceState == UwbUciConstants.DEVICE_STATE_ERROR) {
+                Log.e(TAG, "Error device status received. Restarting...");
+                mUwbMetrics.incrementDeviceStatusErrorCount();
+                takBugReportAfterDeviceError("UWB Bugreport: restarting UWB due to device error");
+                mUwbTask.execute(TASK_RESTART);
+                oemExtensionDeviceStatusUpdate(deviceState, chipId);
+                return;
+            }
+
+            updateDeviceState(deviceState, chipId);
+
+            mUwbTask.computeAndNotifyAdapterStateChange(
+                    getReasonFromDeviceState(deviceState),
+                    mUwbCountryCode.getCountryCode(),
+                    mUwbCountryCode.getCountryCodeStatus());
+        } catch (Exception e) {
+            Log.e(TAG, "Exception in onDeviceStatusNotificationReceived");
         }
-
-        if ((byte) deviceState == UwbUciConstants.DEVICE_STATE_ERROR) {
-            Log.e(TAG, "Error device status received. Restarting...");
-            mUwbMetrics.incrementDeviceStatusErrorCount();
-            takBugReportAfterDeviceError("UWB Bugreport: restarting UWB due to device error");
-            mUwbTask.execute(TASK_RESTART);
-            oemExtensionDeviceStatusUpdate(deviceState, chipId);
-            return;
-        }
-
-        updateDeviceState(deviceState, chipId);
-
-        mUwbTask.computeAndNotifyAdapterStateChange(
-                getReasonFromDeviceState(deviceState),
-                mUwbCountryCode.getCountryCode(),
-                mUwbCountryCode.getCountryCodeStatus());
     }
 
     void updateDeviceState(int deviceState, String chipId) {
@@ -453,7 +457,8 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         // TODO(b/211445008): Consolidate to a single uwb thread.
         Pair<Integer, GenericSpecificationParams> specificationParams =
                 mConfigurationManager.getCapsInfo(
-                        GenericParams.PROTOCOL_NAME, GenericSpecificationParams.class, chipId);
+                        GenericParams.PROTOCOL_NAME, GenericSpecificationParams.class, chipId,
+                        mSessionManager.getUwbsFiraProtocolVersion(chipId));
         Trace.endSection();
         if (specificationParams.first != UwbUciConstants.STATUS_CODE_OK
                 || specificationParams.second == null)  {
