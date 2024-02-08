@@ -58,6 +58,10 @@ import com.android.server.uwb.info.UwbPowerStats;
 import com.android.server.uwb.jni.INativeUwbManager;
 import com.android.server.uwb.jni.NativeUwbManager;
 
+import com.google.uwb.support.aliro.AliroOpenRangingParams;
+import com.google.uwb.support.aliro.AliroParams;
+import com.google.uwb.support.aliro.AliroRangingReconfiguredParams;
+import com.google.uwb.support.aliro.AliroStartRangingParams;
 import com.google.uwb.support.base.Params;
 import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.ccc.CccParams;
@@ -207,7 +211,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         return getAdapterState() != AdapterStateCallback.STATE_DISABLED;
     }
 
-    private boolean isUwbChipEnabled() {
+    private boolean isUwbEnabledInternal() {
         synchronized (UwbServiceCore.this) {
             return getInternalAdapterState() != AdapterStateCallback.STATE_DISABLED;
         }
@@ -544,6 +548,14 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
             mSessionManager.initSession(attributionSource, sessionHandle, sessionId,
                     (byte) sessionType, cccOpenRangingParams.getProtocolName(),
                     cccOpenRangingParams, rangingCallbacks, chipId);
+        } else if (AliroParams.isCorrectProtocol(params)) {
+            AliroOpenRangingParams aliroOpenRangingParams =
+                    AliroOpenRangingParams.fromBundle(params);
+            sessionId = aliroOpenRangingParams.getSessionId();
+            sessionType = aliroOpenRangingParams.getSessionType();
+            mSessionManager.initSession(attributionSource, sessionHandle, sessionId,
+                    (byte) sessionType, aliroOpenRangingParams.getProtocolName(),
+                    aliroOpenRangingParams, rangingCallbacks, chipId);
         } else if (RadarParams.isCorrectProtocol(params)) {
             RadarOpenSessionParams radarOpenSessionParams =
                     RadarOpenSessionParams.fromBundle(params);
@@ -566,9 +578,11 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         if (!isUwbEnabled()) {
             throw new IllegalStateException("Uwb is not enabled");
         }
-        Params  startRangingParams = null;
+        Params startRangingParams = null;
         if (CccParams.isCorrectProtocol(params)) {
             startRangingParams = CccStartRangingParams.fromBundle(params);
+        } else if (AliroParams.isCorrectProtocol(params)) {
+            startRangingParams = AliroStartRangingParams.fromBundle(params);
         }
 
         if (mUwbInjector.getProfileManager().hasSession(sessionHandle)) {
@@ -582,12 +596,15 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         if (!isUwbEnabled()) {
             throw new IllegalStateException("Uwb is not enabled");
         }
-        Params  reconfigureRangingParams = null;
+        Params reconfigureRangingParams = null;
         if (FiraParams.isCorrectProtocol(params)) {
             reconfigureRangingParams = FiraRangingReconfigureParams.fromBundle(params);
         } else if (CccParams.isCorrectProtocol(params)) {
             reconfigureRangingParams = CccRangingReconfiguredParams.fromBundle(params);
+        } else if (AliroParams.isCorrectProtocol(params)) {
+            reconfigureRangingParams = AliroRangingReconfiguredParams.fromBundle(params);
         }
+
         mSessionManager.reconfigure(sessionHandle, reconfigureRangingParams);
     }
 
@@ -758,10 +775,10 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     public synchronized void setEnabled(boolean enabled) {
         int task = enabled ? TASK_ENABLE : TASK_DISABLE;
 
-        if (enabled && isUwbChipEnabled()) {
-            Log.w(TAG, "Uwb chip is already enabled");
-        } else if (!enabled && !isUwbChipEnabled()) {
-            Log.w(TAG, "Uwb chip is already disabled");
+        if (enabled && isUwbEnabledInternal()) {
+            Log.w(TAG, "Uwb is already enabled");
+        } else if (!enabled && !isUwbEnabledInternal()) {
+            Log.w(TAG, "Uwb is already disabled");
         }
 
         mUwbTask.execute(task);
@@ -921,7 +938,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         }
 
         private void handleEnable() {
-            if (isUwbChipEnabled()) {
+            if (isUwbEnabledInternal()) {
                 Log.i(TAG, "UWB chip is already enabled, notify adapter state = "
                         + getAdapterState());
                 return;
@@ -996,7 +1013,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         }
 
         private void handleDisable() {
-            if (!isUwbChipEnabled()) {
+            if (!isUwbEnabledInternal()) {
                 Log.i(TAG, "UWB chip is already disabled, notify adapter state = "
                         + getAdapterState());
                 return;
