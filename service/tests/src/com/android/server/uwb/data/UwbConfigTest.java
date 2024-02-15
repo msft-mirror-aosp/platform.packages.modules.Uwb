@@ -45,11 +45,11 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.platform.test.annotations.Presubmit;
-import android.test.suitebuilder.annotation.SmallTest;
 import android.uwb.IUwbRangingCallbacks;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.server.uwb.UwbInjector;
@@ -233,7 +233,6 @@ public class UwbConfigTest {
                 mIUwbRangingCallbacks, mHandler, TEST_CHIP_ID);
 
         pacsControleeSession.mSessionInfo.setSessionId(10);
-        pacsControleeSession.mSessionInfo.setSubSessionId(24);
         pacsControleeSession.mSessionInfo
                 .setUwbAddress(UwbAddress.fromBytes(new byte[]{0x0A, 0x01}));
         pacsControleeSession.mSessionInfo.mDestAddressList
@@ -243,7 +242,6 @@ public class UwbConfigTest {
                 UwbConfig.getOpenSessionParams(pacsControleeSession.mSessionInfo, controleeConfig);
 
         assertEquals(controleeParams.getSessionId(), 10);
-        assertEquals(controleeParams.getSubSessionId(), 24);
         assertEquals(controleeParams.getDeviceRole(), RANGING_DEVICE_ROLE_RESPONDER);
         assertEquals(controleeParams.getDeviceType(), RANGING_DEVICE_TYPE_CONTROLEE);
 
@@ -269,6 +267,65 @@ public class UwbConfigTest {
         assertEquals(controllerParams.getSubSessionId(), 0);
         assertEquals(controllerParams.getDeviceRole(), RANGING_DEVICE_ROLE_RESPONDER);
         assertEquals(controllerParams.getDeviceType(), RANGING_DEVICE_TYPE_CONTROLEE);
+    }
 
+    @Test
+    public void testGetOpenSessionParamsForDynamicStsIndKey() {
+        UwbConfig controleeConfig = PacsProfile.getPacsControlleeProfileForDynamicStsInd();
+        SessionHandle sessionHandleControlee = mock(SessionHandle.class);
+
+        PacsControleeSession pacsControleeSession = new PacsControleeSession(
+                sessionHandleControlee, mAttributionSource, mContext, mUwbInjector,
+                mServiceProfileInfo,
+                mIUwbRangingCallbacks, mHandler, TEST_CHIP_ID);
+
+        pacsControleeSession.mSessionInfo.setSessionId(10);
+        pacsControleeSession.mSessionInfo.setSubSessionId(24);
+        pacsControleeSession.mSessionInfo
+                .setUwbAddress(UwbAddress.fromBytes(new byte[]{0x0A, 0x01}));
+        pacsControleeSession.mSessionInfo.mDestAddressList
+                .add(UwbAddress.fromBytes(new byte[]{0x0B, 0x01}));
+
+        FiraOpenSessionParams controleeParams =
+                UwbConfig.getOpenSessionParams(pacsControleeSession.mSessionInfo, controleeConfig);
+
+        assertEquals(controleeParams.getSessionId(), 10);
+        assertEquals(controleeParams.getSubSessionId(), 24);
+        assertEquals(controleeParams.getDeviceRole(), RANGING_DEVICE_ROLE_RESPONDER);
+        assertEquals(controleeParams.getDeviceType(), RANGING_DEVICE_TYPE_CONTROLEE);
+    }
+
+    @Test
+    public void testPacsControllerProfileForProvSTSIndKey() {
+        byte[] subSessionKey = new byte[]{0x6, 0x79, 0x6, 0x79, 0x6, 0x79, 0x6,
+                                 0x79, 0x6, 0x79, 0x6, 0x79, 0x6, 0x79, 0x6, 0x79};
+        byte[] sessionKey = new byte[]{0x5, 0x78, 0x5, 0x78, 0x5, 0x78, 0x5,
+                                 0x78, 0x5, 0x78, 0x5, 0x78, 0x5, 0x78, 0x5, 0x78};
+        UwbConfig uwbConfig = PacsProfile.getPacsControlleeProfileForProvSTSInd();
+        SessionHandle sessionHandleControlee = mock(SessionHandle.class);
+
+        PacsControleeSession pacsControleeSession = new PacsControleeSession(
+                sessionHandleControlee, mAttributionSource, mContext, mUwbInjector,
+                mServiceProfileInfo,
+                mIUwbRangingCallbacks, mHandler, TEST_CHIP_ID);
+
+        pacsControleeSession.mSessionInfo.setSessionId(10);
+        pacsControleeSession.mSessionInfo.setSubSessionId(24);
+        pacsControleeSession.mSessionInfo.setSubSessionKey(subSessionKey);
+        pacsControleeSession.mSessionInfo.setSessionKey(sessionKey);
+        pacsControleeSession.mSessionInfo
+                .setUwbAddress(UwbAddress.fromBytes(new byte[]{0x0A, 0x01}));
+        pacsControleeSession.mSessionInfo.mDestAddressList
+                .add(UwbAddress.fromBytes(new byte[]{0x0B, 0x01}));
+
+        FiraOpenSessionParams controleeParams =
+                UwbConfig.getOpenSessionParams(pacsControleeSession.mSessionInfo, uwbConfig);
+
+        assertEquals(controleeParams.getSessionId(), 10);
+        assertEquals(controleeParams.getSubSessionId(), 24);
+        assertEquals(controleeParams.getSubsessionKey(), subSessionKey);
+        assertEquals(controleeParams.getSessionKey(), sessionKey);
+        assertEquals(controleeParams.getDeviceRole(), RANGING_DEVICE_ROLE_RESPONDER);
+        assertEquals(controleeParams.getDeviceType(), RANGING_DEVICE_TYPE_CONTROLEE);
     }
 }

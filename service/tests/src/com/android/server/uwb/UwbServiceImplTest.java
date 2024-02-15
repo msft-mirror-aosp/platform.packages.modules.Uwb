@@ -22,8 +22,10 @@ import static android.uwb.UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE
 
 import static com.android.server.uwb.UwbServiceImpl.SETTINGS_SATELLITE_MODE_ENABLED;
 import static com.android.server.uwb.UwbServiceImpl.SETTINGS_SATELLITE_MODE_RADIOS;
+import static com.android.server.uwb.UwbSettingsStore.SETTINGS_FIRST_TOGGLE_DONE;
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_TOGGLE_STATE;
 import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
+import static com.android.server.uwb.UwbTestUtils.TEST_STATUS;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.fira.FiraParams.PACS_PROFILE_SERVICE_ID;
@@ -59,8 +61,10 @@ import android.os.Process;
 import android.os.UserManager;
 import android.os.test.TestLooper;
 import android.platform.test.annotations.Presubmit;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.provider.Settings;
-import android.test.suitebuilder.annotation.SmallTest;
 import android.uwb.IOnUwbActivityEnergyInfoListener;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbAdfProvisionStateCallbacks;
@@ -69,6 +73,7 @@ import android.uwb.IUwbVendorUciCallback;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.modules.utils.build.SdkLevel;
@@ -77,6 +82,8 @@ import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
 import com.android.server.uwb.pm.ProfileManager;
+import com.android.uwb.flags.FeatureFlags;
+import com.android.uwb.flags.Flags;
 
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.multichip.ChipInfoParams;
@@ -84,6 +91,7 @@ import com.google.uwb.support.profile.ServiceProfile;
 import com.google.uwb.support.profile.UuidBundleWrapper;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Answers;
@@ -119,6 +127,9 @@ public class UwbServiceImplTest {
     @Mock private UwbMultichipData mUwbMultichipData;
     @Mock private ProfileManager mProfileManager;
     @Mock(answer = Answers.RETURNS_DEEP_STUBS) private UserManager mUserManager;
+    @Mock private DeviceConfigFacade mDeviceConfigFacade;
+    @Mock private UwbCountryCode mUwbCountryCode;
+    @Mock private UciLogModeStore mUciLogModeStore;
     @Captor private ArgumentCaptor<IUwbRangingCallbacks> mRangingCbCaptor;
     @Captor private ArgumentCaptor<BroadcastReceiver> mApmModeBroadcastReceiver;
     @Captor private ArgumentCaptor<ContentObserver> mSatelliteModeContentObserver;
@@ -127,6 +138,11 @@ public class UwbServiceImplTest {
 
     private UwbServiceImpl mUwbServiceImpl;
     private TestLooper mTestLooper;
+
+    @Mock private FeatureFlags mFeatureFlags;
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
+
 
     private void createUwbServiceImpl() {
         mUwbServiceImpl = new UwbServiceImpl(mContext, mUwbInjector);
@@ -138,6 +154,9 @@ public class UwbServiceImplTest {
         mTestLooper = new TestLooper();
         when(mUwbInjector.getUwbSettingsStore()).thenReturn(mUwbSettingsStore);
         when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(true);
+        when(mUwbSettingsStore.get(SETTINGS_FIRST_TOGGLE_DONE)).thenReturn(false);
+        when(mUwbInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
+        when(mDeviceConfigFacade.isUwbDisabledUntilFirstToggle()).thenReturn(false);
         when(mUwbMultichipData.getChipInfos()).thenReturn(List.of(DEFAULT_CHIP_INFO_PARAMS));
         when(mUwbMultichipData.getDefaultChipId()).thenReturn(DEFAULT_CHIP_ID);
         when(mUwbInjector.getUwbServiceCore()).thenReturn(mUwbServiceCore);
@@ -150,6 +169,9 @@ public class UwbServiceImplTest {
                 .thenReturn("cell,bluetooth,nfc,uwb,wifi");
         when(mUwbInjector.getNativeUwbManager()).thenReturn(mNativeUwbManager);
         when(mUwbInjector.getUserManager()).thenReturn(mUserManager);
+        when(mUwbInjector.getFeatureFlags()).thenReturn(mFeatureFlags);
+        when(mUwbInjector.getUwbCountryCode()).thenReturn(mUwbCountryCode);
+        when(mUwbInjector.getUciLogModeStore()).thenReturn(mUciLogModeStore);
         when(mUserManager.getUserRestrictions().getBoolean(anyString())).thenReturn(false);
         when(mUwbServiceCore.getHandler()).thenReturn(new Handler(mTestLooper.getLooper()));
 
@@ -341,6 +363,31 @@ public class UwbServiceImplTest {
     }
 
     @Test
+    public void testInitialize() throws Exception {
+        when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(true);
+        mUwbServiceImpl.initialize();
+        verify(mUwbServiceCore).setEnabled(true);
+
+        when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(false);
+        mUwbServiceImpl.initialize();
+        verify(mUwbServiceCore).setEnabled(false);
+    }
+
+    @Test
+    public void testInitializeWithUwbDisabledUntilFirstToggleFlagOn() throws Exception {
+        when(mDeviceConfigFacade.isUwbDisabledUntilFirstToggle()).thenReturn(true);
+        when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(true);
+
+        when(mUwbSettingsStore.get(SETTINGS_FIRST_TOGGLE_DONE)).thenReturn(false);
+        mUwbServiceImpl.initialize();
+        verify(mUwbServiceCore).setEnabled(false);
+
+        when(mUwbSettingsStore.get(SETTINGS_FIRST_TOGGLE_DONE)).thenReturn(true);
+        mUwbServiceImpl.initialize();
+        verify(mUwbServiceCore).setEnabled(true);
+    }
+
+    @Test
     public void testToggleStatePersistenceToSharedPrefs() throws Exception {
         mUwbServiceImpl.setEnabled(true);
         verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, true);
@@ -349,6 +396,23 @@ public class UwbServiceImplTest {
         when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(false);
         mUwbServiceImpl.setEnabled(false);
         verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, false);
+        verify(mUwbServiceCore).setEnabled(false);
+    }
+
+    @Test
+    public void testToggleStatePersistenceToSharedPrefsWithUwbDisabledUntilFirstToggleFlagOn()
+            throws Exception {
+        when(mDeviceConfigFacade.isUwbDisabledUntilFirstToggle()).thenReturn(true);
+
+        mUwbServiceImpl.setEnabled(true);
+        verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, true);
+        verify(mUwbSettingsStore).put(SETTINGS_FIRST_TOGGLE_DONE, true);
+        verify(mUwbServiceCore).setEnabled(true);
+
+        when(mUwbSettingsStore.get(SETTINGS_TOGGLE_STATE)).thenReturn(false);
+        mUwbServiceImpl.setEnabled(false);
+        verify(mUwbSettingsStore).put(SETTINGS_TOGGLE_STATE, false);
+        verify(mUwbSettingsStore, times(2)).put(SETTINGS_FIRST_TOGGLE_DONE, true);
         verify(mUwbServiceCore).setEnabled(false);
     }
 
@@ -740,23 +804,17 @@ public class UwbServiceImplTest {
     @Test
     public void testResume() throws Exception {
         final SessionHandle sessionHandle = mock(SessionHandle.class);
-        final PersistableBundle parameters = new PersistableBundle();
-
-        try {
-            mUwbServiceImpl.resume(sessionHandle, parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        PersistableBundle bundle = new PersistableBundle();
+        mUwbServiceImpl.resume(sessionHandle, bundle);
+        verify(mUwbServiceCore).resume(sessionHandle, bundle);
     }
 
     @Test
     public void testPause() throws Exception {
         final SessionHandle sessionHandle = mock(SessionHandle.class);
-        final PersistableBundle parameters = new PersistableBundle();
-
-        try {
-            mUwbServiceImpl.pause(sessionHandle, parameters);
-            fail();
-        } catch (IllegalStateException e) { /* pass */ }
+        PersistableBundle bundle = new PersistableBundle();
+        mUwbServiceImpl.pause(sessionHandle, bundle);
+        verify(mUwbServiceCore).pause(sessionHandle, bundle);
     }
 
     @Test
@@ -807,15 +865,33 @@ public class UwbServiceImplTest {
     }
 
     @Test
+    @RequiresFlagsEnabled(Flags.FLAG_QUERY_TIMESTAMP_MICROS)
     public void testQueryDataSize() throws Exception {
-        assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
+        assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         final PersistableBundle parameters = new PersistableBundle();
 
+        when(mFeatureFlags.queryTimestampMicros()).thenReturn(true);
         when(mUwbServiceCore.queryMaxDataSizeBytes(sessionHandle)).thenReturn(MAX_DATA_SIZE);
         assertThat(mUwbServiceImpl.queryMaxDataSizeBytes(sessionHandle)).isEqualTo(MAX_DATA_SIZE);
 
         verify(mUwbServiceCore).queryMaxDataSizeBytes(sessionHandle);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_HYBRID_SESSION_SUPPORT)
+    public void testSetHybridSessionConfiguration() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
+        final SessionHandle sessionHandle = mock(SessionHandle.class);
+        final PersistableBundle parameters = new PersistableBundle();
+
+        when(mFeatureFlags.hybridSessionSupport()).thenReturn(true);
+        when(mUwbServiceCore.setHybridSessionConfiguration(sessionHandle, parameters))
+               .thenReturn(TEST_STATUS);
+        assertThat(mUwbServiceImpl.setHybridSessionConfiguration(sessionHandle, parameters))
+                .isEqualTo(TEST_STATUS);
+
+        verify(mUwbServiceCore).setHybridSessionConfiguration(sessionHandle, parameters);
     }
 
     @Test

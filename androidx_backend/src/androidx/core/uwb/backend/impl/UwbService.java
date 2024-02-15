@@ -17,11 +17,13 @@ package androidx.core.uwb.backend.impl;
 
 import android.app.Service;
 import android.content.Intent;
+import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 
 import androidx.core.uwb.backend.IUwb;
 import androidx.core.uwb.backend.IUwbClient;
+import androidx.core.uwb.backend.impl.internal.UwbAvailabilityCallback;
 import androidx.core.uwb.backend.impl.internal.UwbFeatureFlags;
 import androidx.core.uwb.backend.impl.internal.UwbServiceImpl;
 
@@ -32,8 +34,15 @@ public class UwbService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        UwbFeatureFlags uwbFeatureFlags = new UwbFeatureFlags.Builder().build();
-        mUwbServiceImpl = new UwbServiceImpl(this, uwbFeatureFlags);
+        UwbFeatureFlags uwbFeatureFlags = new UwbFeatureFlags.Builder()
+                .setSkipRangingCapabilitiesCheck(Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2)
+                .setReversedByteOrderFiraParams(
+                        Build.VERSION.SDK_INT <= Build.VERSION_CODES.TIRAMISU)
+                .build();
+        UwbAvailabilityCallback uwbAvailabilityCallback = (isUwbAvailable, reason) -> {
+            // TODO: Implement when adding backend support.
+        };
+        mUwbServiceImpl = new UwbServiceImpl(this, uwbFeatureFlags, uwbAvailabilityCallback);
     }
 
     @Override

@@ -17,6 +17,7 @@
 package android.uwb;
 
 import android.Manifest;
+import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.RequiresPermission;
@@ -108,6 +109,7 @@ public final class RangingSession implements AutoCloseable {
                 REASON_SE_INTERACTION_FAILURE,
                 REASON_INSUFFICIENT_SLOTS_PER_RR,
                 REASON_SYSTEM_REGULATION,
+                REASON_INBAND_SESSION_STOP,
         })
         @interface Reason {}
 
@@ -191,6 +193,12 @@ public final class RangingSession implements AutoCloseable {
          * the country.
          */
         int REASON_SYSTEM_REGULATION = 15;
+
+        /**
+         * Indicates session was stopped due to inband signal.
+         */
+        @FlaggedApi("com.android.uwb.flags.reason_inband_session_stop")
+        int REASON_INBAND_SESSION_STOP = 16;
 
         /**
          * @hide
@@ -793,6 +801,39 @@ public final class RangingSession implements AutoCloseable {
         Log.v(mTag, "QueryMaxDataSizeBytes - sessionHandle: " + mSessionHandle);
         try {
             return mAdapter.queryMaxDataSizeBytes(mSessionHandle);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Sets the Hybrid UWB Session Configuration
+     *
+     * @param params protocol specific parameters to initiate the hybrid session
+     * @return HUS configuration status code
+     * <p>{@link UwbUciConstants#STATUS_CODE_OK} UWBS successfully processes the command
+     *
+     * <p>{@link UwbUciConstants#STATUS_CODE_FAILED} Intended operation is failed to complete
+     *
+     * <p>{@link UwbUciConstants#STATUS_CODE_ERROR_SESSION_NOT_EXIST} Primary session or
+     * secondary session is not existing or not created
+     *
+     * <p>{@link UwbUciConstants#STATUS_CODE_ERROR_SESSION_NOT_CONFIGURED} Primary session or
+     * secondary session has not been configured (i.e. SESSION_STATE_IDLE)
+     *
+     * <p>{@link UwbUciConstants#STATUS_CODE_ERROR_SESSION_DUPLICATE} Session Handle in phase
+     * list is repeated
+     * @throws RemoteException if a remote error occurred
+     */
+    @RequiresPermission(Manifest.permission.UWB_PRIVILEGED)
+    @FlaggedApi("com.android.uwb.flags.hybrid_session_support")
+    public int setHybridSessionConfiguration(@NonNull PersistableBundle params) {
+        if (!isOpen()) {
+            throw new IllegalStateException("Ranging session is not open");
+        }
+
+        try {
+            return mAdapter.setHybridSessionConfiguration(mSessionHandle, params);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }

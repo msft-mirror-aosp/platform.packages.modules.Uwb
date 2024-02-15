@@ -27,9 +27,9 @@ CR322,NA,Marked as N/A (MAC)
 CR324,NA,Marked as N/A (MAC)
 CR326,YES,
 CR327,NA,Marked as N/A (MAC)
-CR328,NO,
+CR328,YES,
 CR329,NO,
-CR330,NO,
+CR330,YES,
 CR337,NA,CR-337 seems to have been withdrawn
 CR338,NA,Marked as N/A (MAC)
 CR340,NA,Marked as N/A (MAC)
@@ -74,7 +74,7 @@ CR412,NA,Marked as N/A (MAC)
 CR414,NA,CR adds clarifying text; no Android stack changes required
 CR421,NA,Marked as N/A (MAC)
 CR422,NA,CR specifies interpretation of existing field; no Android stack change required
-CR423,NO,
+CR423,Yes,Ranging interval renaming not addressed
 CR424,YES,
 CR425,NA,Marked as N/A (MAC)
 CR426,NA,CR clarifies UWBS behavior; no Android stack changes required
@@ -85,7 +85,7 @@ CR432,NA,Marked as N/A (MAC)
 CR433,YES,
 CR435,YES,
 CR436,NA,
-CR437,NO,
+CR437,YES,
 CR438,YES,
 CR441,NO,
 CR442,YES,
@@ -100,8 +100,8 @@ CR455,NA,
 CR456,NA,
 CR457,NA,Marked as N/A (MAC)
 CR458,NA,Marked as N/A (MAC)
-CR459,NA,
-CR460,NO,
+CR459,YES,
+CR460,YES,
 CR461,YES,
 CR462,NA,Marked as N/A (MAC)
 CR466,NA,Marked as N/A (MAC)
@@ -122,7 +122,7 @@ CR484,YES,
 CR485,NO,
 CR486,NA,Marked as N/A (MAC)
 CR487,NA,Marked as N/A (MAC)
-CR490,NO,
+CR490,YES,
 CR496,NO,
 CR498,Partial,Pending: Anchor CMDs
 CR499,NA,Marked as N/A (MAC)
@@ -134,7 +134,7 @@ CR509,NO,
 CR510,NA,Marked as N/A (MAC)
 CR511,YES,
 CR514,NA,Marked as N/A (MAC)
-CR518,NO,
+CR518,YES,
 CR529,NO,
 CR534,NA,Marked as N/A (MAC)
 CR1001,NA,Marked as N/A (MAC)
@@ -154,14 +154,14 @@ CR1031,NA,Marked as N/A (MAC)
 CR1032,NO,
 CR1033,NA,Marked as N/A (MAC)
 CR1036,NA,Marked as N/A (MAC)
-CR1037,Partial,Implemented: OwrAoa uses standard status table; Pending: New status field in SESSION_QUERY_DATA_SIZE_IN_RANGING_RSP and other changes.
-CR1038,NO,
+CR1037,YES,
+CR1038,YES,
 CR1043,NA,Marked as N/A (MAC)
 CR1044,NO,
 CR1046,NA,Marked as N/A (MAC)
 CR1048,NA,CR clarifies the DL-TDoA Ranging Measurement field values in case of an error; no Android stack change required
 CR1049,NA,Marked as N/A (MAC)
-CR1051,NO,
+CR1051,YES,
 CR1056,NA,Marked as N/A (MAC)
 CR1057,NO,
 CR1058,Partial,Slot index field is already present in UwbTwoWayMeasurement.
@@ -175,8 +175,8 @@ CR1083,NA,Marked as N/A (MAC)
 CR1084,NA,Marked as N/A (MAC)
 CR1086,NA,Marked as N/A (MAC)
 CR1087,NO,
-CR1093,NA,Marked as N/A (MAC)
-CR1094,NO,
+CR1093,YES,
+CR1094,YES,
 CR1097,YES,
 CR1098,NA,Marked as N/A (MAC)
 CR1100,NA,Marked as N/A (MAC)

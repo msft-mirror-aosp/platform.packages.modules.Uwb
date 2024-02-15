@@ -22,10 +22,14 @@ import android.uwb.UwbManager;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.google.uwb.support.aliro.AliroParams;
+import com.google.uwb.support.aliro.AliroSpecificationParams;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccSpecificationParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraSpecificationParams;
+import com.google.uwb.support.radar.RadarParams;
+import com.google.uwb.support.radar.RadarSpecificationParams;
 
 import java.util.Objects;
 
@@ -38,20 +42,28 @@ public class GenericSpecificationParams extends GenericParams {
     private static final int BUNDLE_VERSION_1 = 1;
     private static final int BUNDLE_VERSION_CURRENT = BUNDLE_VERSION_1;
 
-    private final FiraSpecificationParams mFiraSpecificationParams;
+    private FiraSpecificationParams mFiraSpecificationParams;
     private final CccSpecificationParams mCccSpecificationParams;
+    private final AliroSpecificationParams mAliroSpecificationParams;
+    private final RadarSpecificationParams mRadarSpecificationParams;
     private final boolean mHasPowerStatsSupport;
 
     private static final String KEY_FIRA_SPECIFICATION_PARAMS = FiraParams.PROTOCOL_NAME;
+    private static final String KEY_ALIRO_SPECIFICATION_PARAMS = AliroParams.PROTOCOL_NAME;
     private static final String KEY_CCC_SPECIFICATION_PARAMS = CccParams.PROTOCOL_NAME;
+    private static final String KEY_RADAR_SPECIFICATION_PARAMS = RadarParams.PROTOCOL_NAME;
     private static final String KEY_POWER_STATS_QUERY_SUPPORT = "power_stats_query";
 
     private GenericSpecificationParams(
             FiraSpecificationParams firaSpecificationParams,
             CccSpecificationParams cccSpecificationParams,
+            AliroSpecificationParams aliroSpecificationParams,
+            RadarSpecificationParams radarSpecificationParams,
             boolean hasPowerStatsSupport) {
         mFiraSpecificationParams = firaSpecificationParams;
         mCccSpecificationParams = cccSpecificationParams;
+        mAliroSpecificationParams = aliroSpecificationParams;
+        mRadarSpecificationParams = radarSpecificationParams;
         mHasPowerStatsSupport = hasPowerStatsSupport;
     }
 
@@ -70,6 +82,16 @@ public class GenericSpecificationParams extends GenericParams {
         return mCccSpecificationParams;
     }
 
+    @Nullable
+    public AliroSpecificationParams getAliroSpecificationParams() {
+        return mAliroSpecificationParams;
+    }
+
+    @Nullable
+    public RadarSpecificationParams getRadarSpecificationParams() {
+        return mRadarSpecificationParams;
+    }
+
     /**
      * @return if the power stats is supported
      */
@@ -77,14 +99,26 @@ public class GenericSpecificationParams extends GenericParams {
         return mHasPowerStatsSupport;
     }
 
+    public void setFiraSpecificationParams(FiraSpecificationParams params) {
+        mFiraSpecificationParams = params;
+    }
+
     @Override
     public PersistableBundle toBundle() {
         PersistableBundle bundle = super.toBundle();
         bundle.putPersistableBundle(KEY_FIRA_SPECIFICATION_PARAMS,
                 mFiraSpecificationParams.toBundle());
+        if (mAliroSpecificationParams != null) {
+            bundle.putPersistableBundle(KEY_ALIRO_SPECIFICATION_PARAMS,
+                    mAliroSpecificationParams.toBundle());
+        }
         if (mCccSpecificationParams != null) {
             bundle.putPersistableBundle(KEY_CCC_SPECIFICATION_PARAMS,
                     mCccSpecificationParams.toBundle());
+        }
+        if (mRadarSpecificationParams != null) {
+            bundle.putPersistableBundle(KEY_RADAR_SPECIFICATION_PARAMS,
+                    mRadarSpecificationParams.toBundle());
         }
         bundle.putBoolean(KEY_POWER_STATS_QUERY_SUPPORT, mHasPowerStatsSupport);
         return bundle;
@@ -109,8 +143,20 @@ public class GenericSpecificationParams extends GenericParams {
         PersistableBundle cccBundle = bundle.getPersistableBundle(KEY_CCC_SPECIFICATION_PARAMS);
         if (cccBundle != null) {
             builder = builder.setCccSpecificationParams(
-                    CccSpecificationParams.fromBundle(
-                            cccBundle));
+                    CccSpecificationParams.fromBundle(cccBundle));
+        }
+
+        PersistableBundle aliroBundle = bundle.getPersistableBundle(KEY_ALIRO_SPECIFICATION_PARAMS);
+        if (aliroBundle != null) {
+            builder = builder.setAliroSpecificationParams(
+                    AliroSpecificationParams.fromBundle(aliroBundle));
+        }
+
+        PersistableBundle radarBundle = bundle.getPersistableBundle(
+                KEY_RADAR_SPECIFICATION_PARAMS);
+        if (radarBundle != null) {
+            builder = builder.setRadarSpecificationParams(
+                    RadarSpecificationParams.fromBundle(radarBundle));
         }
         return builder.build();
     }
@@ -119,6 +165,8 @@ public class GenericSpecificationParams extends GenericParams {
     public static class Builder {
         private FiraSpecificationParams mFiraSpecificationParams = null;
         private CccSpecificationParams mCccSpecificationParams = null;
+        private AliroSpecificationParams mAliroSpecificationParams = null;
+        private RadarSpecificationParams mRadarSpecificationParams = null;
         private boolean mHasPowerStatsSupport = false;
 
         /**
@@ -140,6 +188,24 @@ public class GenericSpecificationParams extends GenericParams {
         }
 
         /**
+         * Set ALIRO specification params.
+         */
+        public Builder setAliroSpecificationParams(
+                @NonNull AliroSpecificationParams aliroSpecificationParams) {
+            mAliroSpecificationParams = Objects.requireNonNull(aliroSpecificationParams);
+            return this;
+        }
+
+        /**
+         * Set RADAR specification params
+         */
+        public Builder setRadarSpecificationParams(
+                @NonNull RadarSpecificationParams radarSpecificationParams) {
+            mRadarSpecificationParams = Objects.requireNonNull(radarSpecificationParams);
+            return this;
+        }
+
+        /**
          * Sets if the power stats is supported
          */
         public Builder hasPowerStatsSupport(boolean value) {
@@ -154,6 +220,8 @@ public class GenericSpecificationParams extends GenericParams {
             return new GenericSpecificationParams(
                     mFiraSpecificationParams,
                     mCccSpecificationParams,
+                    mAliroSpecificationParams,
+                    mRadarSpecificationParams,
                     mHasPowerStatsSupport);
         }
     }

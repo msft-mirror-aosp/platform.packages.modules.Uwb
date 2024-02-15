@@ -64,6 +64,7 @@ import com.android.server.uwb.data.ServiceProfileData;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
 import com.android.server.uwb.pm.ProfileManager;
+import com.android.uwb.flags.FeatureFlags;
 
 import java.io.File;
 import java.util.HashMap;
@@ -116,6 +117,7 @@ public class UwbInjector {
     private int mPoseSourceRefCount = 0;
 
     private final UwbSessionManager mUwbSessionManager;
+    private final FeatureFlags mFeatureFlags;
 
     public UwbInjector(@NonNull UwbContext context) {
         // Create UWB service thread.
@@ -142,7 +144,7 @@ public class UwbInjector {
         mUwbMetrics = new UwbMetrics(this);
         mDeviceConfigFacade = new DeviceConfigFacade(new Handler(mLooper), mContext);
         UwbConfigurationManager uwbConfigurationManager =
-                new UwbConfigurationManager(mNativeUwbManager);
+                new UwbConfigurationManager(mNativeUwbManager, this);
         UwbSessionNotificationManager uwbSessionNotificationManager =
                 new UwbSessionNotificationManager(this);
         UwbAdvertiseManager uwbAdvertiseManager = new UwbAdvertiseManager(this,
@@ -157,6 +159,11 @@ public class UwbInjector {
                 mUwbCountryCode, mUwbSessionManager, uwbConfigurationManager, this, mLooper);
         mSystemBuildProperties = new SystemBuildProperties();
         mUwbDiagnostics = new UwbDiagnostics(mContext, this, mSystemBuildProperties);
+        mFeatureFlags = new com.android.uwb.flags.FeatureFlagsImpl();
+    }
+
+    public FeatureFlags getFeatureFlags() {
+        return mFeatureFlags;
     }
 
     public Looper getUwbServiceLooper() {
@@ -265,14 +272,19 @@ public class UwbInjector {
     /**
      * Returns true if the UWB_RANGING permission is granted for the calling app.
      *
-     * <p>Should be used in situations where data will be delivered and hence the app op should
-     * be noted.
+     * <p>Used for checking permission before first data delivery for the session.
      */
-    public boolean checkUwbRangingPermissionForDataDelivery(
+    public boolean checkUwbRangingPermissionForStartDataDelivery(
             @NonNull AttributionSource attributionSource, @NonNull String message) {
-        int permissionCheckResult = mPermissionManager.checkPermissionForDataDelivery(
+        int permissionCheckResult = mPermissionManager.checkPermissionForStartDataDelivery(
                 UWB_RANGING, attributionSource, message);
         return permissionCheckResult == PERMISSION_GRANTED;
+    }
+
+    /** Indicate permission manager that the ranging session is done or stopped. */
+    public void finishUwbRangingPermissionForDataDelivery(
+            @NonNull AttributionSource attributionSource) {
+        mPermissionManager.finishDataDelivery(UWB_RANGING, attributionSource);
     }
 
     /**
@@ -462,11 +474,14 @@ public class UwbInjector {
 
     /** Helper method to check if the app is from foreground app/service. */
     public boolean isForegroundAppOrService(int uid, @NonNull String packageName) {
+        long identity = Binder.clearCallingIdentity();
         try {
             return isForegroundAppOrServiceImportance(getPackageImportance(uid, packageName));
         } catch (SecurityException e) {
             Log.e(TAG, "Failed to retrieve the app importance", e);
             return false;
+        } finally {
+            Binder.restoreCallingIdentity(identity);
         }
     }
 

@@ -16,6 +16,7 @@
 // ============================================================
 
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -43,7 +44,7 @@ android_test {
         "frameworks-base-testutils",
         "guava",
         "mockito-target-minus-junit4",
-        "truth-prebuilt",
+        "truth",
         "modules-utils-build",
     ],
 

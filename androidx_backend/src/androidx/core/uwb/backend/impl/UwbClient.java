@@ -16,7 +16,12 @@
 
 package androidx.core.uwb.backend.impl;
 
+import static androidx.core.uwb.backend.impl.internal.Utils.DURATION_2_MS;
+import static androidx.core.uwb.backend.impl.internal.Utils.STATUS_OK;
+import static androidx.core.uwb.backend.impl.internal.Utils.TAG;
+
 import android.os.RemoteException;
+import android.util.Log;
 
 import androidx.core.uwb.backend.IRangingSessionCallback;
 import androidx.core.uwb.backend.IUwbClient;
@@ -38,6 +43,7 @@ import java.util.List;
 public abstract class UwbClient extends IUwbClient.Stub {
     protected final UwbServiceImpl mUwbService;
     protected final RangingDevice mDevice;
+    protected boolean mSupportsAzimuthalAngle = true;
 
     protected UwbClient(RangingDevice device, UwbServiceImpl uwbService) {
         mDevice = device;
@@ -54,9 +60,12 @@ public abstract class UwbClient extends IUwbClient.Stub {
         androidx.core.uwb.backend.impl.internal.RangingCapabilities cap =
                 mUwbService.getRangingCapabilities();
         RangingCapabilities rangingCapabilities = new RangingCapabilities();
-        rangingCapabilities.supportsAzimuthalAngle = cap.supportsAzimuthalAngle();
+        mSupportsAzimuthalAngle = cap.supportsAzimuthalAngle();
+        rangingCapabilities.supportsAzimuthalAngle = mSupportsAzimuthalAngle;
         rangingCapabilities.supportsDistance = cap.supportsDistance();
         rangingCapabilities.supportsElevationAngle = cap.supportsElevationAngle();
+        rangingCapabilities.supportsRangingIntervalReconfigure =
+                cap.supportsRangingIntervalReconfigure();
         rangingCapabilities.minRangingInterval = cap.getMinRangingInterval();
         rangingCapabilities.supportedChannels = cap.getSupportedChannels()
                 .stream().mapToInt(Integer::intValue).toArray();
@@ -64,6 +73,11 @@ public abstract class UwbClient extends IUwbClient.Stub {
                 .stream().mapToInt(Integer::intValue).toArray();
         rangingCapabilities.supportedConfigIds = cap.getSupportedConfigIds()
                 .stream().mapToInt(Integer::intValue).toArray();
+        rangingCapabilities.supportedSlotDurations = cap.getSupportedSlotDurations()
+                .stream().mapToInt(Integer::intValue).toArray();
+        rangingCapabilities.supportedRangingUpdateRates = cap.getSupportedRangingUpdateRates()
+                .stream().mapToInt(Integer::intValue).toArray();
+        rangingCapabilities.hasBackgroundRangingSupport = cap.hasBackgroundRangingSupport();
         return rangingCapabilities;
     }
 
@@ -84,13 +98,22 @@ public abstract class UwbClient extends IUwbClient.Stub {
             addresses.add(androidx.core.uwb.backend.impl.internal.UwbAddress
                     .fromBytes(device.address.address));
         }
-        //TODO(b/272558796) : Add UwbRangeDataConfig from parameters after aidl changes
-        UwbRangeDataNtfConfig uwbRangeDataNtfConfig = new UwbRangeDataNtfConfig.Builder().build();
+        UwbRangeDataNtfConfig.Builder uwbRangeDataNtfConfigBuilder =
+                new UwbRangeDataNtfConfig.Builder();
+        if (parameters.uwbRangeDataNtfConfig != null) {
+            uwbRangeDataNtfConfigBuilder
+                    .setRangeDataConfigType(parameters.uwbRangeDataNtfConfig.rangeDataNtfConfigType)
+                    .setNtfProximityNear(parameters.uwbRangeDataNtfConfig.ntfProximityNearCm)
+                    .setNtfProximityFar(parameters.uwbRangeDataNtfConfig.ntfProximityFarCm);
+        }
+        int duration = parameters.slotDuration == 0 ? DURATION_2_MS : parameters.slotDuration;
         mDevice.setRangingParameters(
                 new androidx.core.uwb.backend.impl.internal.RangingParameters(
                         parameters.uwbConfigId, parameters.sessionId, parameters.subSessionId,
                         parameters.sessionKeyInfo, parameters.subSessionKeyInfo,
-                        channel, addresses, parameters.rangingUpdateRate, uwbRangeDataNtfConfig));
+                        channel, addresses, parameters.rangingUpdateRate,
+                        uwbRangeDataNtfConfigBuilder.build(), duration,
+                        !mSupportsAzimuthalAngle || parameters.isAoaDisabled));
     }
 
     protected androidx.core.uwb.backend.impl.internal.RangingSessionCallback convertCallback(
@@ -154,5 +177,20 @@ public abstract class UwbClient extends IUwbClient.Stub {
                 }
             }
         };
+    }
+
+    @Override
+    public void reconfigureRangeDataNtf(int configType, int proximityNear, int proximityFar)
+            throws RemoteException {
+        UwbRangeDataNtfConfig config = new UwbRangeDataNtfConfig.Builder()
+                .setRangeDataConfigType(configType)
+                .setNtfProximityNear(proximityNear)
+                .setNtfProximityFar(proximityFar)
+                .build();
+        int status = mDevice.reconfigureRangeDataNtfConfig(config);
+        if (status != STATUS_OK) {
+            Log.w(TAG, String.format(
+                    "Reconfiguring range data notification config failed with status %d", status));
+        }
     }
 }

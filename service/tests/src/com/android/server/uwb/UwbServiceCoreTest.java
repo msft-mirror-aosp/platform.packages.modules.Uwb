@@ -39,6 +39,7 @@ import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_
 import static com.google.uwb.support.fira.FiraParams.SESSION_TYPE_RANGING;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -67,7 +68,6 @@ import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.test.TestLooper;
 import android.platform.test.annotations.Presubmit;
-import android.test.suitebuilder.annotation.SmallTest;
 import android.util.Pair;
 import android.uwb.AdapterState;
 import android.uwb.IOnUwbActivityEnergyInfoListener;
@@ -80,10 +80,12 @@ import android.uwb.StateChangeReason;
 import android.uwb.UwbAddress;
 import android.uwb.UwbManager;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.uwb.data.UwbDeviceInfoResponse;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.data.UwbVendorUciResponse;
 import com.android.server.uwb.jni.NativeUwbManager;
@@ -92,6 +94,12 @@ import com.android.server.uwb.multichip.MultichipConfigFileCreator;
 import com.android.server.uwb.pm.ProfileManager;
 import com.android.uwb.resources.R;
 
+import com.google.uwb.support.aliro.AliroOpenRangingParams;
+import com.google.uwb.support.aliro.AliroParams;
+import com.google.uwb.support.aliro.AliroProtocolVersion;
+import com.google.uwb.support.aliro.AliroPulseShapeCombo;
+import com.google.uwb.support.aliro.AliroSpecificationParams;
+import com.google.uwb.support.aliro.AliroStartRangingParams;
 import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccProtocolVersion;
@@ -104,8 +112,11 @@ import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraProtocolVersion;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.fira.FiraSpecificationParams;
+import com.google.uwb.support.fira.FiraSuspendRangingParams;
 import com.google.uwb.support.generic.GenericParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
+import com.google.uwb.support.radar.RadarOpenSessionParams;
+import com.google.uwb.support.radar.RadarParams;
 
 import org.junit.After;
 import org.junit.Before;
@@ -123,6 +134,8 @@ import org.mockito.stubbing.Answer;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -161,7 +174,24 @@ public class UwbServiceCoreTest {
                     .setRangingRoundUsage(RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE)
                     .setVendorId(new byte[]{0x5, 0x78})
                     .setStaticStsIV(new byte[]{0x1a, 0x55, 0x77, 0x47, 0x7e, 0x7d});
-
+    @VisibleForTesting
+    private static final AliroOpenRangingParams.Builder TEST_ALIRO_OPEN_RANGING_PARAMS =
+            new AliroOpenRangingParams.Builder()
+                    .setProtocolVersion(AliroParams.PROTOCOL_VERSION_1_0)
+                    .setUwbConfig(AliroParams.UWB_CONFIG_0)
+                    .setPulseShapeCombo(
+                            new AliroPulseShapeCombo(
+                                    PULSE_SHAPE_SYMMETRICAL_ROOT_RAISED_COSINE,
+                                    PULSE_SHAPE_SYMMETRICAL_ROOT_RAISED_COSINE))
+                    .setSessionId(1)
+                    .setRanMultiplier(4)
+                    .setChannel(AliroParams.UWB_CHANNEL_9)
+                    .setNumChapsPerSlot(AliroParams.CHAPS_PER_SLOT_3)
+                    .setNumResponderNodes(1)
+                    .setNumSlotsPerRound(AliroParams.SLOTS_PER_ROUND_6)
+                    .setSyncCodeIndex(1)
+                    .setHoppingConfigMode(AliroParams.HOPPING_CONFIG_MODE_NONE)
+                    .setHoppingSequence(AliroParams.HOPPING_SEQUENCE_DEFAULT);
     @VisibleForTesting
     private static final CccOpenRangingParams.Builder TEST_CCC_OPEN_RANGING_PARAMS =
             new CccOpenRangingParams.Builder()
@@ -180,12 +210,40 @@ public class UwbServiceCoreTest {
                     .setSyncCodeIndex(1)
                     .setHoppingConfigMode(HOPPING_CONFIG_MODE_NONE)
                     .setHoppingSequence(HOPPING_SEQUENCE_DEFAULT);
+    private static final RadarOpenSessionParams.Builder TEST_RADAR_OPEN_SESSION_PARAMS =
+            new RadarOpenSessionParams.Builder()
+                    .setSessionId(22)
+                        .setBurstPeriod(100)
+                        .setSweepPeriod(40)
+                        .setSweepsPerBurst(16)
+                        .setSamplesPerSweep(128)
+                        .setChannelNumber(FiraParams.UWB_CHANNEL_5)
+                        .setSweepOffset(-1)
+                        .setRframeConfig(FiraParams.RFRAME_CONFIG_SP3)
+                        .setPreambleDuration(RadarParams.PREAMBLE_DURATION_T16384_SYMBOLS)
+                        .setPreambleCodeIndex(90)
+                        .setSessionPriority(99)
+                        .setBitsPerSample(RadarParams.BITS_PER_SAMPLES_32)
+                        .setPrfMode(FiraParams.PRF_MODE_HPRF)
+                        .setNumberOfBursts(1000)
+                        .setRadarDataType(RadarParams.RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES);
+    private static final UwbDeviceInfoResponse UWB_DEVICE_INFO_RESPONSE =
+            new UwbDeviceInfoResponse(
+                    UwbUciConstants.STATUS_CODE_OK,
+                    /* UciVersion 1.1 = */ 0x1001,
+                    /* MacVersion 1.1 = */ 0x1001,
+                    /* PhyVersion 1.1 = */ 0x1001,
+                    /* UciTestVersion 1.1 = */ 0x1001,
+                    /* vendor_spec_info = */ new byte[]{0x0a, 0x0b, 0x0c, 0x0d});
+    private static final Map<String, UwbDeviceInfoResponse> UWB_DEVICE_INFO_RESPONSE_MAP =
+            Map.of(TEST_DEFAULT_CHIP_ID, UWB_DEVICE_INFO_RESPONSE);
     @Mock private Context mContext;
     @Mock private NativeUwbManager mNativeUwbManager;
     @Mock private UwbMetrics mUwbMetrics;
     @Mock private UwbCountryCode mUwbCountryCode;
     @Mock private UwbSessionManager mUwbSessionManager;
     @Mock private UwbConfigurationManager mUwbConfigurationManager;
+    @Mock private UwbDiagnostics mUwbDiagnostics;
     @Mock private UwbInjector mUwbInjector;
     @Mock DeviceConfigFacade mDeviceConfigFacade;
     @Mock private ProfileManager mProfileManager;
@@ -207,11 +265,13 @@ public class UwbServiceCoreTest {
         when(powerManager.newWakeLock(anyInt(), anyString()))
                 .thenReturn(mUwbWakeLock);
         when(mContext.getSystemService(PowerManager.class)).thenReturn(powerManager);
+        when(mUwbInjector.getUwbDiagnostics()).thenReturn(mUwbDiagnostics);
         when(mUwbInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
         UwbMultichipData uwbMultichipData = setUpMultichipDataForOneChip();
         when(mUwbInjector.getMultichipData()).thenReturn(uwbMultichipData);
         when(mDeviceConfigFacade.getBugReportMinIntervalMs())
                 .thenReturn(DeviceConfigFacade.DEFAULT_BUG_REPORT_MIN_INTERVAL_MS);
+        when(mDeviceConfigFacade.isHwIdleTurnOffEnabled()).thenReturn(false);
         when(mUwbInjector.getProfileManager()).thenReturn(mProfileManager);
         doAnswer(invocation -> {
             FutureTask t = invocation.getArgument(0);
@@ -276,7 +336,7 @@ public class UwbServiceCoreTest {
         when(genericSpecificationParams.toBundle()).thenReturn(genericSpecificationBundle);
 
         when(mUwbConfigurationManager
-                .getCapsInfo(eq(GenericParams.PROTOCOL_NAME), any(), anyString()))
+                .getCapsInfo(eq(GenericParams.PROTOCOL_NAME), any(), anyString(), any()))
                 .thenReturn(Pair.create(
                         UwbUciConstants.STATUS_CODE_OK, genericSpecificationParams));
 
@@ -284,7 +344,8 @@ public class UwbServiceCoreTest {
                 TEST_DEFAULT_CHIP_ID);
         assertThat(specifications).isEqualTo(genericSpecificationBundle);
         verify(mUwbConfigurationManager)
-                .getCapsInfo(eq(GenericParams.PROTOCOL_NAME), any(), eq(TEST_DEFAULT_CHIP_ID));
+                .getCapsInfo(eq(GenericParams.PROTOCOL_NAME), any(),
+                                eq(TEST_DEFAULT_CHIP_ID), any());
 
         assertThat(mUwbServiceCore.getCachedSpecificationParams(TEST_DEFAULT_CHIP_ID)).isEqualTo(
                 genericSpecificationParams);
@@ -297,7 +358,7 @@ public class UwbServiceCoreTest {
         when(genericSpecificationParams.toBundle()).thenReturn(genericSpecificationBundle);
 
         when(mUwbConfigurationManager
-                .getCapsInfo(eq(GenericParams.PROTOCOL_NAME), any(), anyString()))
+                .getCapsInfo(eq(GenericParams.PROTOCOL_NAME), any(), anyString(), any()))
                 .thenReturn(Pair.create(
                         UwbUciConstants.STATUS_CODE_OK, genericSpecificationParams));
 
@@ -305,11 +366,12 @@ public class UwbServiceCoreTest {
                 TEST_DEFAULT_CHIP_ID);
         assertThat(specifications.toBundle()).isEqualTo(genericSpecificationBundle);
         verify(mUwbConfigurationManager)
-                .getCapsInfo(eq(GenericParams.PROTOCOL_NAME), any(), eq(TEST_DEFAULT_CHIP_ID));
+                .getCapsInfo(eq(GenericParams.PROTOCOL_NAME), any(),
+                                eq(TEST_DEFAULT_CHIP_ID), any());
     }
 
     private void enableUwb(String countryCode) throws Exception {
-        when(mNativeUwbManager.doInitialize()).thenReturn(true);
+        when(mNativeUwbManager.doInitialize()).thenReturn(UWB_DEVICE_INFO_RESPONSE_MAP);
         when(mUwbCountryCode.getCountryCode()).thenReturn(countryCode);
         when(mUwbCountryCode.setCountryCode(anyBoolean())).thenReturn(
                 Pair.create(STATUS_CODE_FAILED, null));
@@ -319,14 +381,14 @@ public class UwbServiceCoreTest {
     }
 
     private void enableUwbWithCountryCodeChangedCallback() throws Exception {
-        when(mNativeUwbManager.doInitialize()).thenReturn(true);
+        when(mNativeUwbManager.doInitialize()).thenReturn(UWB_DEVICE_INFO_RESPONSE_MAP);
 
         // When there is a valid country code, we expect an immediate (inline) invocation of the
         // mUwbServiceCore.onCountryCodeChanged() callback to happen.
         doAnswer(new Answer() {
             @Override
             public Object answer(InvocationOnMock invocation) throws Throwable {
-                mUwbServiceCore.onCountryCodeChanged(VALID_COUNTRY_CODE);
+                mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, VALID_COUNTRY_CODE);
                 return Pair.create(STATUS_CODE_OK, VALID_COUNTRY_CODE);
             }
         }).when(mUwbCountryCode).setCountryCode(anyBoolean());
@@ -371,7 +433,7 @@ public class UwbServiceCoreTest {
 
         // Later on, the onCountryCodeChanged() callback is invoked, with a valid country code.
         when(mUwbCountryCode.getCountryCode()).thenReturn(VALID_COUNTRY_CODE);
-        mUwbServiceCore.onCountryCodeChanged(VALID_COUNTRY_CODE);
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, VALID_COUNTRY_CODE);
 
         // Verify that invoking cached specification info updates the cached value.
         verifyGetCachedSpecificationInfoSuccess();
@@ -389,15 +451,43 @@ public class UwbServiceCoreTest {
         mUwbServiceCore.addInitializationFailureListener(initFailCb);
         clearInvocations(cb, initFailCb);
 
-        when(mNativeUwbManager.doInitialize()).thenReturn(false);
+        // Setup doInitialize() to return null when the UWB firmware init failed.
+        when(mNativeUwbManager.doInitialize()).thenReturn(null);
+
+        mUwbServiceCore.setEnabled(true);
+        mTestLooper.dispatchAll();
+
+        verify(mNativeUwbManager).doInitialize();
+        verify(mUwbMetrics).logUwbStateChangeEvent(true, false, false);
+        assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
+        verify(initFailCb).onFailure();
+        verify(mDeviceConfigFacade, never()).isDeviceErrorBugreportEnabled();
+        verify(mUwbDiagnostics, never()).takeBugReport(anyString());
+        verifyNoMoreInteractions(cb, initFailCb);
+    }
+
+    @Test
+    public void testEnable_failure_noInitializationFailureListener() throws Exception {
+        IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
+        when(cb.asBinder()).thenReturn(mock(IBinder.class));
+        mUwbServiceCore.registerAdapterStateCallbacks(cb);
+        verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
+                StateChangeReason.UNKNOWN);
+        clearInvocations(cb);
+
+        // Setup doInitialize() to return null when the UWB firmware init failed, and
+        // the DeviceConfigFacade to capture bug reports.
+        when(mDeviceConfigFacade.isDeviceErrorBugreportEnabled()).thenReturn(true);
+        when(mNativeUwbManager.doInitialize()).thenReturn(null);
 
         mUwbServiceCore.setEnabled(true);
         mTestLooper.dispatchAll();
 
         verify(mNativeUwbManager).doInitialize();
         assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
-        verify(initFailCb).onFailure();
-        verifyNoMoreInteractions(cb, initFailCb);
+        verify(mDeviceConfigFacade).isDeviceErrorBugreportEnabled();
+        verify(mUwbDiagnostics).takeBugReport(anyString());
+        verifyNoMoreInteractions(cb);
     }
 
     @Test
@@ -413,6 +503,7 @@ public class UwbServiceCoreTest {
         enableUwb(null);
 
         verify(mNativeUwbManager).doInitialize();
+        verify(mUwbMetrics).logUwbStateChangeEvent(true, true, false);
         verify(mUwbCountryCode).setCountryCode(true);
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
                 StateChangeReason.SYSTEM_REGULATION);
@@ -424,7 +515,7 @@ public class UwbServiceCoreTest {
         // We receive an initial onCountryCodeChanged() notification with the default (invalid)
         // country code. We don't expect any more AdapterState notifications as the Adapter State
         // is still considered to be the same (STATE_DISABLED).
-        mUwbServiceCore.onCountryCodeChanged("00");
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, "00");
 
         verifyNoMoreInteractions(cb);
         assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
@@ -433,7 +524,7 @@ public class UwbServiceCoreTest {
         // The message queue immediately has a message to process, which results in a call to the
         // adapter state callback.
         when(mUwbCountryCode.getCountryCode()).thenReturn(VALID_COUNTRY_CODE);
-        mUwbServiceCore.onCountryCodeChanged("US");
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, "US");
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE,
                 StateChangeReason.SYSTEM_POLICY);
         assertThat(mUwbServiceCore.getAdapterState())
@@ -454,7 +545,7 @@ public class UwbServiceCoreTest {
         clearInvocations(mNativeUwbManager, mUwbCountryCode, cb);
 
         // Enable (with country code that results in the Vendor-specific UWB_REGULATION error).
-        when(mNativeUwbManager.doInitialize()).thenReturn(true);
+        when(mNativeUwbManager.doInitialize()).thenReturn(UWB_DEVICE_INFO_RESPONSE_MAP);
 
         when(mUwbCountryCode.getCountryCode()).thenReturn(null);
         when(mUwbCountryCode.setCountryCode(anyBoolean()))
@@ -463,8 +554,68 @@ public class UwbServiceCoreTest {
         mUwbServiceCore.setEnabled(true);
         mTestLooper.dispatchAll();
 
+        // Verify that UWB adapter state is notified as DISABLED, and future calls to
+        // getAdapterState() also return the state as DISABLED.
+        verify(mNativeUwbManager).doInitialize();
+        verify(mUwbMetrics).logUwbStateChangeEvent(true, true, false);
+        verify(mUwbCountryCode).setCountryCode(true);
+        verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
+                StateChangeReason.SYSTEM_REGULATION);
+        assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
+
+        // Verify that a UWB ranging session cannot be opened or started.
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        IUwbRangingCallbacks rangingCallbacks = mock(IUwbRangingCallbacks.class);
+
+        try {
+            mUwbServiceCore.openRanging(
+                    TEST_ATTRIBUTION_SOURCE, sessionHandle, rangingCallbacks,
+                    TEST_FIRA_OPEN_SESSION_PARAMS.build().toBundle(), TEST_DEFAULT_CHIP_ID);
+            fail();
+        } catch (IllegalStateException e) {
+            // pass
+        }
+
+        try {
+            mUwbServiceCore.startRanging(sessionHandle, new PersistableBundle());
+            fail();
+        } catch (IllegalStateException e) {
+           // pass
+        }
+    }
+
+    // Unit test for scenario when a country code change happens (while UWB had a valid country code
+    // configured and was enabled). Configuring the new country code in UWBS fails with a UWB
+    // regulatory error (eg: UWB not available in the new country). In this case also, we expect
+    // the apps to be notified with UWB state as Disabled and reason as SYSTEM_REGULATION.
+    @Test
+    public void testCountryCodeChange_fromValidCountry_statusRegulationUwbOff() throws Exception {
+        IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
+        when(cb.asBinder()).thenReturn(mock(IBinder.class));
+        mUwbServiceCore.registerAdapterStateCallbacks(cb);
+        verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
+                StateChangeReason.UNKNOWN);
+        clearInvocations(cb);
+
+        // Enable UWB (with a valid country code).
+        enableUwbWithCountryCodeChangedCallback();
+
         verify(mNativeUwbManager).doInitialize();
         verify(mUwbCountryCode).setCountryCode(true);
+        verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE,
+                StateChangeReason.SYSTEM_POLICY);
+        assertThat(mUwbServiceCore.getAdapterState())
+                .isEqualTo(AdapterState.STATE_ENABLED_INACTIVE);
+
+        clearInvocations(mNativeUwbManager, mUwbCountryCode, cb);
+
+        // We receive a onCountryCodeChanged() notification with a country code, in which UWB is
+        // not supported.
+        when(mUwbCountryCode.getCountryCode()).thenReturn("JP");
+        when(mUwbCountryCode.getCountryCodeStatus()).thenReturn(
+                Optional.of(STATUS_CODE_ANDROID_REGULATION_UWB_OFF));
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_ANDROID_REGULATION_UWB_OFF, "JP");
+
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
                 StateChangeReason.SYSTEM_REGULATION);
         assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
@@ -485,7 +636,7 @@ public class UwbServiceCoreTest {
 
         // Enable (with a valid country code), but the firmware returns some error. Hence,
         // UwbCountryCode.getCountryCode() will return null.
-        when(mNativeUwbManager.doInitialize()).thenReturn(true);
+        when(mNativeUwbManager.doInitialize()).thenReturn(UWB_DEVICE_INFO_RESPONSE_MAP);
         when(mUwbCountryCode.getCountryCode()).thenReturn(null);
         when(mUwbCountryCode.setCountryCode(anyBoolean())).thenReturn(Pair.create(
                 STATUS_CODE_FAILED, VALID_COUNTRY_CODE));
@@ -493,11 +644,33 @@ public class UwbServiceCoreTest {
         mUwbServiceCore.setEnabled(true);
         mTestLooper.dispatchAll();
 
+        // Verify that UWB adapter state is notified as DISABLED, and future calls to
+        // getAdapterState() also return the state as DISABLED.
         verify(mNativeUwbManager).doInitialize();
         verify(mUwbCountryCode).setCountryCode(true);
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
                 StateChangeReason.SYSTEM_POLICY);
         assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
+
+        // Verify that a UWB ranging session cannot be opened or started.
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        IUwbRangingCallbacks rangingCallbacks = mock(IUwbRangingCallbacks.class);
+
+        try {
+            mUwbServiceCore.openRanging(
+                    TEST_ATTRIBUTION_SOURCE, sessionHandle, rangingCallbacks,
+                    TEST_FIRA_OPEN_SESSION_PARAMS.build().toBundle(), TEST_DEFAULT_CHIP_ID);
+            fail();
+        } catch (IllegalStateException e) {
+            // pass
+        }
+
+        try {
+            mUwbServiceCore.startRanging(sessionHandle, new PersistableBundle());
+            fail();
+        } catch (IllegalStateException e) {
+           // pass
+        }
     }
 
     @Test
@@ -523,7 +696,7 @@ public class UwbServiceCoreTest {
 
         // Enable again. should be ignored.
         enableUwb(VALID_COUNTRY_CODE);
-        verifyNoMoreInteractions(mNativeUwbManager, mUwbCountryCode, cb);
+        verifyNoMoreInteractions(mNativeUwbManager, cb);
         assertThat(mUwbServiceCore.getAdapterState())
                 .isEqualTo(AdapterState.STATE_ENABLED_INACTIVE);
     }
@@ -539,18 +712,20 @@ public class UwbServiceCoreTest {
                 StateChangeReason.UNKNOWN);
 
         // Setup doInitialize() to take long time, such that the WatchDog thread times out.
-        when(mNativeUwbManager.doInitialize()).thenAnswer(new Answer<Boolean>() {
-            public Boolean answer(InvocationOnMock invocation) throws Throwable {
-                // Return success but too late, so this result shouldn't matter.
-                Thread.sleep(UwbServiceCore.WATCHDOG_MS + 1000);
-                return true;
-            }
+        when(mNativeUwbManager.doInitialize())
+                .thenAnswer(new Answer<Map<String, UwbDeviceInfoResponse>>() {
+                    public Map<String, UwbDeviceInfoResponse> answer(InvocationOnMock invocation)
+                            throws Throwable {
+                        // Return success but too late, so this result shouldn't matter.
+                        Thread.sleep(UwbServiceCore.WATCHDOG_MS + 1000);
+                        return UWB_DEVICE_INFO_RESPONSE_MAP;
+                    }
         });
 
         doAnswer(new Answer() {
             @Override
             public Object answer(InvocationOnMock invocation) throws Throwable {
-                mUwbServiceCore.onCountryCodeChanged(VALID_COUNTRY_CODE);
+                mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, VALID_COUNTRY_CODE);
                 return Pair.create(STATUS_CODE_OK, VALID_COUNTRY_CODE);
             }
         }).when(mUwbCountryCode).setCountryCode(anyBoolean());
@@ -586,6 +761,7 @@ public class UwbServiceCoreTest {
         enableUwbWithCountryCodeChangedCallback();
 
         verify(mNativeUwbManager).doInitialize();
+        verify(mUwbMetrics).logUwbStateChangeEvent(true, true, false);
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE,
                 StateChangeReason.SYSTEM_POLICY);
         verifyNoMoreInteractions(cb);
@@ -598,6 +774,7 @@ public class UwbServiceCoreTest {
         disableUwb();
 
         verify(mNativeUwbManager).doDeinitialize();
+        verify(mUwbMetrics).logUwbStateChangeEvent(false, true, false);
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
                 StateChangeReason.SYSTEM_POLICY);
         assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
@@ -659,7 +836,7 @@ public class UwbServiceCoreTest {
         clearInvocations(cb);
 
         // Invoke onCountryCodeChanged() callback, with a valid country code.
-        mUwbServiceCore.onCountryCodeChanged(VALID_COUNTRY_CODE);
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, VALID_COUNTRY_CODE);
 
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
                 StateChangeReason.SYSTEM_POLICY);
@@ -667,7 +844,7 @@ public class UwbServiceCoreTest {
 
         // Invoke onCountryCodeChanged() callback again, with a valid country code.
         // AdapterStateChange notification not expected as it's already in STATE_DISABLED.
-        mUwbServiceCore.onCountryCodeChanged(VALID_COUNTRY_CODE);
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, VALID_COUNTRY_CODE);
         verifyNoMoreInteractions(cb);
     }
 
@@ -681,7 +858,7 @@ public class UwbServiceCoreTest {
         clearInvocations(cb);
 
         // Enable UWB (with country code unknown).
-        when(mNativeUwbManager.doInitialize()).thenReturn(true);
+        when(mNativeUwbManager.doInitialize()).thenReturn(UWB_DEVICE_INFO_RESPONSE_MAP);
         enableUwb(null);
 
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
@@ -689,7 +866,7 @@ public class UwbServiceCoreTest {
         clearInvocations(cb);
 
         // Invoke onCountryCodeChanged() callback, with a valid country code.
-        mUwbServiceCore.onCountryCodeChanged(VALID_COUNTRY_CODE);
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, VALID_COUNTRY_CODE);
 
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE,
                 StateChangeReason.SYSTEM_POLICY);
@@ -697,7 +874,7 @@ public class UwbServiceCoreTest {
 
         // Invoke onCountryCodeChanged() callback again, with a valid country code.
         // AdapterStateChange notification not expected as it's already in STATE_ENABLED_INACTIVE
-        mUwbServiceCore.onCountryCodeChanged(VALID_COUNTRY_CODE);
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, VALID_COUNTRY_CODE);
         verifyNoMoreInteractions(cb);
     }
 
@@ -711,7 +888,7 @@ public class UwbServiceCoreTest {
         clearInvocations(cb);
 
         // Invoke onCountryCodeChanged() callback, with an invalid country code.
-        mUwbServiceCore.onCountryCodeChanged("00");
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, "00");
 
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
                 StateChangeReason.SYSTEM_REGULATION);
@@ -719,7 +896,7 @@ public class UwbServiceCoreTest {
 
         // Invoke onCountryCodeChanged() callback again, with an invalid country code.
         // AdapterStateChange notification not expected as it was already in DISABLED state.
-        mUwbServiceCore.onCountryCodeChanged("00");
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, "00");
         verifyNoMoreInteractions(cb);
     }
 
@@ -740,14 +917,14 @@ public class UwbServiceCoreTest {
         clearInvocations(cb);
 
         // Now we receive onCountryCodeChanged() with an invalid country code.
-        mUwbServiceCore.onCountryCodeChanged("00");
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, "00");
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_DISABLED,
                 StateChangeReason.SYSTEM_REGULATION);
         clearInvocations(cb);
 
         // Invoke onCountryCodeChanged() callback again, with an invalid country code.
         // AdapterStateChange notification not expected as it's already in STATE_DISABLED.
-        mUwbServiceCore.onCountryCodeChanged("00");
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, "00");
         verifyNoMoreInteractions(cb);
     }
 
@@ -786,13 +963,13 @@ public class UwbServiceCoreTest {
         // Disable again. should be ignored.
         disableUwb();
 
-        verifyNoMoreInteractions(mNativeUwbManager, mUwbCountryCode, cb);
+        verifyNoMoreInteractions(mNativeUwbManager, cb);
         assertThat(mUwbServiceCore.getAdapterState()).isEqualTo(AdapterState.STATE_DISABLED);
     }
 
     @Test
     public void testToggleMultipleEnableDisable() throws Exception {
-        when(mNativeUwbManager.doInitialize()).thenReturn(true);
+        when(mNativeUwbManager.doInitialize()).thenReturn(UWB_DEVICE_INFO_RESPONSE_MAP);
         when(mNativeUwbManager.doDeinitialize()).thenReturn(true);
 
         IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
@@ -816,7 +993,7 @@ public class UwbServiceCoreTest {
 
         // Later on, the onCountryCodeChanged() callback is invoked, with a valid country code.
         when(mUwbCountryCode.getCountryCode()).thenReturn(VALID_COUNTRY_CODE);
-        mUwbServiceCore.onCountryCodeChanged(VALID_COUNTRY_CODE);
+        mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, VALID_COUNTRY_CODE);
 
         verify(cb).onAdapterStateChanged(UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE,
                 StateChangeReason.SYSTEM_POLICY);
@@ -853,7 +1030,7 @@ public class UwbServiceCoreTest {
 
     @Test
     public void testToggleMultipleEnableDisableQuickly() throws Exception {
-        when(mNativeUwbManager.doInitialize()).thenReturn(true);
+        when(mNativeUwbManager.doInitialize()).thenReturn(UWB_DEVICE_INFO_RESPONSE_MAP);
         when(mNativeUwbManager.doDeinitialize()).thenReturn(true);
 
         IUwbAdapterStateCallbacks cb = mock(IUwbAdapterStateCallbacks.class);
@@ -866,7 +1043,7 @@ public class UwbServiceCoreTest {
         doAnswer(new Answer() {
             @Override
             public Object answer(InvocationOnMock invocation) throws Throwable {
-                mUwbServiceCore.onCountryCodeChanged(VALID_COUNTRY_CODE);
+                mUwbServiceCore.onCountryCodeChanged(STATUS_CODE_OK, VALID_COUNTRY_CODE);
                 return Pair.create(STATUS_CODE_OK, VALID_COUNTRY_CODE);
             }
         }).when(mUwbCountryCode).setCountryCode(anyBoolean());
@@ -908,7 +1085,7 @@ public class UwbServiceCoreTest {
         AttributionSource attributionSource = TEST_ATTRIBUTION_SOURCE;
         FiraOpenSessionParams params = TEST_FIRA_OPEN_SESSION_PARAMS.build();
         when(mUwbConfigurationManager
-                .getCapsInfo(eq(GenericParams.PROTOCOL_NAME), any(), anyString()))
+                .getCapsInfo(eq(GenericParams.PROTOCOL_NAME), any(), anyString(), any()))
                 .thenReturn(Pair.create(
                         UwbUciConstants.STATUS_CODE_OK, genericSpecificationParams));
         when(genericSpecificationParams.getFiraSpecificationParams())
@@ -925,6 +1102,25 @@ public class UwbServiceCoreTest {
                 argThat(p -> ((FiraOpenSessionParams) p).getSessionId() == params.getSessionId()),
                 eq(cb), eq(TEST_DEFAULT_CHIP_ID));
 
+    }
+
+    @Test
+    public void testOpenAliroRanging() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        IUwbRangingCallbacks cb = mock(IUwbRangingCallbacks.class);
+        AliroOpenRangingParams params = TEST_ALIRO_OPEN_RANGING_PARAMS.build();
+        AttributionSource attributionSource = TEST_ATTRIBUTION_SOURCE;
+        mUwbServiceCore.openRanging(
+                attributionSource, sessionHandle, cb, params.toBundle(), TEST_DEFAULT_CHIP_ID);
+
+        verify(mUwbSessionManager).initSession(
+                eq(attributionSource),
+                eq(sessionHandle), eq(params.getSessionId()), eq((byte) params.getSessionType()),
+                eq(AliroParams.PROTOCOL_NAME),
+                argThat(p -> ((AliroOpenRangingParams) p).getSessionId() == params.getSessionId()),
+                eq(cb), eq(TEST_DEFAULT_CHIP_ID));
     }
 
     @Test
@@ -947,7 +1143,48 @@ public class UwbServiceCoreTest {
     }
 
     @Test
-    public void testOpenRangingWhenUwbDisabled() throws Exception {
+    public void testOpenRadarSession() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        IUwbRangingCallbacks cb = mock(IUwbRangingCallbacks.class);
+        RadarOpenSessionParams params = TEST_RADAR_OPEN_SESSION_PARAMS.build();
+        AttributionSource attributionSource = TEST_ATTRIBUTION_SOURCE;
+        mUwbServiceCore.openRanging(
+                attributionSource, sessionHandle, cb, params.toBundle(), TEST_DEFAULT_CHIP_ID);
+
+        verify(mUwbSessionManager).initSession(
+                eq(attributionSource),
+                eq(sessionHandle), eq(params.getSessionId()), eq((byte) params.getSessionType()),
+                eq(RadarParams.PROTOCOL_NAME),
+                argThat(p -> ((RadarOpenSessionParams) p).getSessionId() == params.getSessionId()),
+                eq(cb), eq(TEST_DEFAULT_CHIP_ID));
+    }
+
+    @Test
+    public void testOpenAliroRangingWhenUwbDisabled() throws Exception {
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        IUwbRangingCallbacks cb = mock(IUwbRangingCallbacks.class);
+        AliroOpenRangingParams params = TEST_ALIRO_OPEN_RANGING_PARAMS.build();
+        AttributionSource attributionSource = TEST_ATTRIBUTION_SOURCE;
+
+        try {
+            mUwbServiceCore.openRanging(attributionSource,
+                    sessionHandle,
+                    cb,
+                    params.toBundle(),
+                    TEST_DEFAULT_CHIP_ID);
+            fail();
+        } catch (IllegalStateException e) {
+            // pass
+        }
+
+        // Should be ignored.
+        verifyNoMoreInteractions(mUwbSessionManager);
+    }
+
+    @Test
+    public void testOpenCccRangingWhenUwbDisabled() throws Exception {
         SessionHandle sessionHandle = mock(SessionHandle.class);
         IUwbRangingCallbacks cb = mock(IUwbRangingCallbacks.class);
         CccOpenRangingParams params = TEST_CCC_OPEN_RANGING_PARAMS.build();
@@ -969,6 +1206,22 @@ public class UwbServiceCoreTest {
     }
 
     @Test
+    public void testStartAliroRanging() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        AliroStartRangingParams params = new AliroStartRangingParams.Builder()
+                .setRanMultiplier(6)
+                .setSessionId(1)
+                .build();
+        mUwbServiceCore.startRanging(sessionHandle, params.toBundle());
+
+        verify(mUwbSessionManager).startRanging(eq(sessionHandle),
+                argThat(p ->
+                        ((AliroStartRangingParams) p).getSessionId() == params.getSessionId()));
+    }
+
+    @Test
     public void testStartCccRanging() throws Exception {
         enableUwbWithCountryCodeChangedCallback();
 
@@ -981,6 +1234,16 @@ public class UwbServiceCoreTest {
 
         verify(mUwbSessionManager).startRanging(eq(sessionHandle),
                 argThat(p -> ((CccStartRangingParams) p).getSessionId() == params.getSessionId()));
+    }
+
+    @Test
+    public void testStartAliroRangingWithNoStartParams() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        mUwbServiceCore.startRanging(sessionHandle, new PersistableBundle());
+
+        verify(mUwbSessionManager).startRanging(eq(sessionHandle), argThat(p -> (p == null)));
     }
 
     @Test
@@ -1009,6 +1272,94 @@ public class UwbServiceCoreTest {
         verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
                 argThat((x) ->
                         ((FiraRangingReconfigureParams) x).getBlockStrideLength().equals(6)));
+    }
+
+    @Test
+    public void testPauseRanging() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_ENABLED)
+                        .build();
+        mUwbServiceCore.pause(sessionHandle, parameters.toBundle());
+        verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
+                argThat((x) ->
+                        ((FiraRangingReconfigureParams) x).getSuspendRangingRounds().equals(1)));
+    }
+
+    @Test
+    public void testPauseRanging_incorrectProtocolInParams() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.pause(
+                        sessionHandle, TEST_CCC_OPEN_RANGING_PARAMS.build().toBundle()));
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.pause(
+                        sessionHandle, TEST_ALIRO_OPEN_RANGING_PARAMS.build().toBundle()));
+    }
+
+    @Test
+    public void testPauseRanging_incorrectSuspendRangingRoundsValue() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_DISABLED)
+                        .build();
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.pause(sessionHandle, parameters.toBundle()));
+    }
+
+    @Test
+    public void testResumeRanging() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_DISABLED)
+                        .build();
+        mUwbServiceCore.resume(sessionHandle, parameters.toBundle());
+        verify(mUwbSessionManager).reconfigure(eq(sessionHandle),
+                argThat((x) ->
+                        ((FiraRangingReconfigureParams) x).getSuspendRangingRounds().equals(0)));
+    }
+
+    @Test
+    public void testResumeRanging_incorrectProtocolInParams() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.resume(
+                        sessionHandle, TEST_CCC_OPEN_RANGING_PARAMS.build().toBundle()));
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.resume(
+                        sessionHandle, TEST_ALIRO_OPEN_RANGING_PARAMS.build().toBundle()));
+    }
+
+    @Test
+    public void testResumeRanging_incorrectSuspendRangingRoundsValue() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        final FiraSuspendRangingParams parameters =
+                new FiraSuspendRangingParams.Builder()
+                        .setSuspendRangingRounds(FiraParams.SUSPEND_RANGING_ENABLED)
+                        .build();
+        assertThrows(
+                IllegalStateException.class,
+                () -> mUwbServiceCore.resume(sessionHandle, parameters.toBundle()));
     }
 
     @Test
@@ -1216,13 +1567,15 @@ public class UwbServiceCoreTest {
                 .setSupportedChannels(supportedChannels)
                 .build();
         CccSpecificationParams cccSpecificationParams = getTestCccSpecificationParams();
+        AliroSpecificationParams aliroSpecificationParams = getTestAliroSpecificationParams();
 
         GenericSpecificationParams genericSpecificationParams =
                 new GenericSpecificationParams.Builder()
                         .setFiraSpecificationParams(firaSpecificationParams)
                         .setCccSpecificationParams(cccSpecificationParams)
+                        .setAliroSpecificationParams(aliroSpecificationParams)
                         .build();
-        when(mUwbConfigurationManager.getCapsInfo(any(), any(), anyString()))
+        when(mUwbConfigurationManager.getCapsInfo(any(), any(), anyString(), any()))
                 .thenReturn(Pair.create(
                         UwbUciConstants.STATUS_CODE_OK, genericSpecificationParams));
 
@@ -1244,12 +1597,15 @@ public class UwbServiceCoreTest {
                 .setSupportedChannels(supportedChannels)
                 .build();
         CccSpecificationParams cccSpecificationParams = getTestCccSpecificationParams();
+        AliroSpecificationParams aliroSpecificationParams = getTestAliroSpecificationParams();
+
         GenericSpecificationParams genericSpecificationParams =
                 new GenericSpecificationParams.Builder()
                         .setFiraSpecificationParams(firaSpecificationParams)
                         .setCccSpecificationParams(cccSpecificationParams)
+                        .setAliroSpecificationParams(aliroSpecificationParams)
                         .build();
-        when(mUwbConfigurationManager.getCapsInfo(any(), any(), anyString()))
+        when(mUwbConfigurationManager.getCapsInfo(any(), any(), anyString(), any()))
                 .thenReturn(Pair.create(
                         UwbUciConstants.STATUS_CODE_OK, genericSpecificationParams));
         IUwbVendorUciCallback vendorCb = mock(IUwbVendorUciCallback.class);
@@ -1364,7 +1720,7 @@ public class UwbServiceCoreTest {
                 StateChangeReason.SYSTEM_POLICY);
 
         when(mNativeUwbManager.doDeinitialize()).thenReturn(true);
-        when(mNativeUwbManager.doInitialize()).thenReturn(true);
+        when(mNativeUwbManager.doInitialize()).thenReturn(UWB_DEVICE_INFO_RESPONSE_MAP);
 
         clearInvocations(mNativeUwbManager, mUwbCountryCode, cb);
 
@@ -1414,7 +1770,7 @@ public class UwbServiceCoreTest {
         when(mUwbCountryCode.setCountryCode(anyBoolean())).thenReturn(
                 Pair.create(STATUS_CODE_FAILED, null));
         when(mNativeUwbManager.doDeinitialize()).thenReturn(true);
-        when(mNativeUwbManager.doInitialize()).thenReturn(true);
+        when(mNativeUwbManager.doInitialize()).thenReturn(UWB_DEVICE_INFO_RESPONSE_MAP);
 
         mUwbServiceCore.onDeviceStatusNotificationReceived(UwbUciConstants.DEVICE_STATE_ERROR,
                 TEST_DEFAULT_CHIP_ID);
@@ -1505,6 +1861,19 @@ public class UwbServiceCoreTest {
     }
 
     @Test
+    public void testDeviceStateCallback_exeception() throws Exception {
+        when(mUwbInjector.getMultichipData())
+                .thenThrow(new IllegalStateException());
+        enableUwbWithCountryCodeChangedCallback();
+        try {
+             mUwbServiceCore.onDeviceStatusNotificationReceived(
+                     UwbUciConstants.DEVICE_STATE_ACTIVE, TEST_CHIP_ONE_CHIP_ID);
+        } catch (Exception e) {
+             fail("Unexpected exception "+ e);
+        }
+    }
+
+    @Test
     public void testRangingRoundsUpdateDtTag() throws Exception {
         enableUwbWithCountryCodeChangedCallback();
 
@@ -1515,7 +1884,18 @@ public class UwbServiceCoreTest {
         verify(mUwbSessionManager).rangingRoundsUpdateDtTag(sessionHandle, bundle);
     }
 
-    public CccSpecificationParams getTestCccSpecificationParams() {
+    @Test
+    public void testHybridSessionConfiguration() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        PersistableBundle bundle = new PersistableBundle();
+        mUwbServiceCore.setHybridSessionConfiguration(sessionHandle, bundle);
+
+        verify(mUwbSessionManager).setHybridSessionConfiguration(sessionHandle, bundle);
+    }
+
+    private CccSpecificationParams getTestCccSpecificationParams() {
         CccProtocolVersion[] protocolVersions =
                 new CccProtocolVersion[] {
                         new CccProtocolVersion(1, 0),
@@ -1550,6 +1930,7 @@ public class UwbServiceCoreTest {
                 new Integer[] {CccParams.HOPPING_SEQUENCE_AES, CccParams.HOPPING_SEQUENCE_DEFAULT};
 
         CccSpecificationParams.Builder paramsBuilder = new CccSpecificationParams.Builder();
+
         for (CccProtocolVersion p : protocolVersions) {
             paramsBuilder.addProtocolVersion(p);
         }
@@ -1559,6 +1940,79 @@ public class UwbServiceCoreTest {
         }
 
         for (CccPulseShapeCombo pulseShapeCombo : pulseShapeCombos) {
+            paramsBuilder.addPulseShapeCombo(pulseShapeCombo);
+        }
+
+        paramsBuilder.setRanMultiplier(ranMultiplier);
+
+        for (int chapsPerSlot : chapsPerSlots) {
+            paramsBuilder.addChapsPerSlot(chapsPerSlot);
+        }
+
+        for (int syncCode : syncCodes) {
+            paramsBuilder.addSyncCode(syncCode);
+        }
+
+        for (int channel : channels) {
+            paramsBuilder.addChannel(channel);
+        }
+
+        for (int hoppingConfigMode : hoppingConfigModes) {
+            paramsBuilder.addHoppingConfigMode(hoppingConfigMode);
+        }
+
+        for (int hoppingSequence : hoppingSequences) {
+            paramsBuilder.addHoppingSequence(hoppingSequence);
+        }
+        return paramsBuilder.build();
+    }
+
+    private AliroSpecificationParams getTestAliroSpecificationParams() {
+        AliroProtocolVersion[] protocolVersions =
+                new AliroProtocolVersion[] {
+                        new AliroProtocolVersion(1, 0),
+                        new AliroProtocolVersion(2, 0),
+                        new AliroProtocolVersion(2, 1)
+                };
+
+        Integer[] uwbConfigs = new Integer[] {AliroParams.UWB_CONFIG_0, AliroParams.UWB_CONFIG_1};
+        AliroPulseShapeCombo[] pulseShapeCombos =
+                new AliroPulseShapeCombo[] {
+                        new AliroPulseShapeCombo(
+                                AliroParams.PULSE_SHAPE_SYMMETRICAL_ROOT_RAISED_COSINE,
+                                AliroParams.PULSE_SHAPE_SYMMETRICAL_ROOT_RAISED_COSINE),
+                        new AliroPulseShapeCombo(
+                                AliroParams.PULSE_SHAPE_PRECURSOR_FREE,
+                                AliroParams.PULSE_SHAPE_PRECURSOR_FREE),
+                        new AliroPulseShapeCombo(
+                                AliroParams.PULSE_SHAPE_PRECURSOR_FREE_SPECIAL,
+                                AliroParams.PULSE_SHAPE_PRECURSOR_FREE_SPECIAL)
+                };
+        int ranMultiplier = 200;
+        Integer[] chapsPerSlots =
+                new Integer[] {AliroParams.CHAPS_PER_SLOT_4, AliroParams.CHAPS_PER_SLOT_12};
+        Integer[] syncCodes =
+                new Integer[] {10, 23};
+        Integer[] channels = new Integer[] {AliroParams.UWB_CHANNEL_5, AliroParams.UWB_CHANNEL_9};
+        Integer[] hoppingConfigModes =
+                new Integer[] {
+                        AliroParams.HOPPING_CONFIG_MODE_ADAPTIVE,
+                        AliroParams.HOPPING_CONFIG_MODE_CONTINUOUS };
+        Integer[] hoppingSequences =
+                new Integer[] {
+                        AliroParams.HOPPING_SEQUENCE_AES, AliroParams.HOPPING_SEQUENCE_DEFAULT};
+
+        AliroSpecificationParams.Builder paramsBuilder = new AliroSpecificationParams.Builder();
+
+        for (AliroProtocolVersion p : protocolVersions) {
+            paramsBuilder.addProtocolVersion(p);
+        }
+
+        for (int uwbConfig : uwbConfigs) {
+            paramsBuilder.addUwbConfig(uwbConfig);
+        }
+
+        for (AliroPulseShapeCombo pulseShapeCombo : pulseShapeCombos) {
             paramsBuilder.addPulseShapeCombo(pulseShapeCombo);
         }
 

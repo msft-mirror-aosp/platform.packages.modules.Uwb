@@ -20,6 +20,8 @@ import android.uwb.RangingChangeReason;
 
 import com.android.server.uwb.data.UwbUciConstants;
 
+import com.google.uwb.support.aliro.AliroParams;
+import com.google.uwb.support.aliro.AliroRangingError;
 import com.google.uwb.support.base.Params;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccRangingError;
@@ -46,10 +48,25 @@ public class UwbSessionNotificationHelper {
             case UwbUciConstants.REASON_ERROR_INVALID_RANGING_INTERVAL:
             case UwbUciConstants.REASON_ERROR_INVALID_STS_CONFIG:
             case UwbUciConstants.REASON_ERROR_INVALID_RFRAME_CONFIG:
+            case UwbUciConstants.REASON_ERROR_HUS_NOT_ENOUGH_SLOTS:
+            case UwbUciConstants.REASON_ERROR_HUS_CFP_PHASE_TOO_SHORT:
+            case UwbUciConstants.REASON_ERROR_HUS_CAP_PHASE_TOO_SHORT:
+            case UwbUciConstants.REASON_ERROR_HUS_OTHERS:
                 rangingChangeReason = RangingChangeReason.BAD_PARAMETERS;
                 break;
             case UwbUciConstants.REASON_REGULATION_UWB_OFF:
                 rangingChangeReason = RangingChangeReason.SYSTEM_REGULATION;
+                break;
+            case UwbUciConstants.REASON_SESSION_RESUMED_DUE_TO_INBAND_SIGNAL:
+                rangingChangeReason = RangingChangeReason.SESSION_RESUMED;
+                break;
+            case UwbUciConstants.REASON_SESSION_SUSPENDED_DUE_TO_INBAND_SIGNAL:
+                rangingChangeReason = RangingChangeReason.SESSION_SUSPENDED;
+                break;
+            case UwbUciConstants.REASON_SESSION_STOPPED_DUE_TO_INBAND_SIGNAL:
+                if (com.android.uwb.flags.Flags.reasonInbandSessionStop()) {
+                    rangingChangeReason = RangingChangeReason.INBAND_SESSION_STOP;
+                }
                 break;
         }
         return rangingChangeReason;
@@ -95,11 +112,25 @@ public class UwbSessionNotificationHelper {
         }
     }
 
+    private static @AliroParams.ProtocolError int convertUciStatusToApiAliroProtocolError(
+            int status) {
+        switch (status) {
+            case UwbUciConstants.STATUS_CODE_ERROR_SESSION_NOT_EXIST:
+                return AliroParams.PROTOCOL_ERROR_NOT_FOUND;
+            default:
+                return AliroParams.PROTOCOL_ERROR_UNKNOWN;
+        }
+    }
+
     public static PersistableBundle convertUciStatusToParam(String protocolName, int status) {
         Params c;
         if (protocolName.equals(CccParams.PROTOCOL_NAME)) {
             c = new CccRangingError.Builder()
                     .setError(convertUciStatusToApiCccProtocolError(status))
+                    .build();
+        } else if (protocolName.equals(AliroParams.PROTOCOL_NAME)) {
+            c = new AliroRangingError.Builder()
+                    .setError(convertUciStatusToApiAliroProtocolError(status))
                     .build();
         } else {
             c = new FiraStatusCode.Builder().setStatusCode(status).build();

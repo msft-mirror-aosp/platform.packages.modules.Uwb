@@ -19,10 +19,12 @@ package androidx.core.uwb.backend.impl;
 import static androidx.core.uwb.backend.impl.internal.Utils.STATUS_OK;
 import static androidx.core.uwb.backend.impl.internal.Utils.TAG;
 
+import android.annotation.TargetApi;
 import android.os.RemoteException;
 import android.util.Log;
 
 import androidx.core.uwb.backend.IRangingSessionCallback;
+import androidx.core.uwb.backend.RangingControleeParameters;
 import androidx.core.uwb.backend.RangingParameters;
 import androidx.core.uwb.backend.UwbAddress;
 import androidx.core.uwb.backend.UwbComplexChannel;
@@ -78,6 +80,23 @@ public class UwbControllerClient extends UwbClient {
         }
     }
 
+
+    @Override
+    public void addControleeWithSessionParams(RangingControleeParameters params)
+            throws RemoteException {
+        androidx.core.uwb.backend.impl.internal.UwbAddress uwbAddress =
+                androidx.core.uwb.backend.impl.internal.UwbAddress
+                        .fromBytes(params.address.address);
+        androidx.core.uwb.backend.impl.internal.RangingControleeParameters controleeParameters =
+                new androidx.core.uwb.backend.impl.internal.RangingControleeParameters(
+                        uwbAddress, params.subSessionId, params.subSessionKey);
+        int status = ((RangingController) mDevice)
+                .addControleeWithSessionParams(controleeParameters);
+        if (status != STATUS_OK) {
+            Log.w(TAG, String.format("Adding controlee failed with status %d", status));
+        }
+    }
+
     @Override
     public void removeControlee(UwbAddress address) throws RemoteException {
         androidx.core.uwb.backend.impl.internal.UwbAddress uwbAddress =
@@ -85,6 +104,16 @@ public class UwbControllerClient extends UwbClient {
         int status = ((RangingController) mDevice).removeControlee(uwbAddress);
         if (status != STATUS_OK) {
             Log.w(TAG, String.format("Removing controlee failed with status %d", status));
+        }
+    }
+
+    @Override
+    @TargetApi(31)
+    public void reconfigureRangingInterval(int intervalSkipCount) throws RemoteException {
+        int status = ((RangingController) mDevice).setBlockStriding(intervalSkipCount);
+        if (status != STATUS_OK) {
+            Log.w(TAG, String.format(
+                    "Reconfiguring ranging interval failed with status %d", status));
         }
     }
 

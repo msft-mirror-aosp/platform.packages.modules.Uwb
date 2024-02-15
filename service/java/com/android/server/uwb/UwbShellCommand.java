@@ -33,23 +33,44 @@ import static com.google.uwb.support.fira.FiraParams.AOA_RESULT_REQUEST_MODE_REQ
 import static com.google.uwb.support.fira.FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_AZIMUTH_ONLY;
 import static com.google.uwb.support.fira.FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_ELEVATION_ONLY;
 import static com.google.uwb.support.fira.FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_INTERLEAVED;
+import static com.google.uwb.support.fira.FiraParams.BPRF_PHR_DATA_RATE_6M81;
+import static com.google.uwb.support.fira.FiraParams.BPRF_PHR_DATA_RATE_850K;
 import static com.google.uwb.support.fira.FiraParams.HOPPING_MODE_DISABLE;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_MANY_TO_MANY;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_ONE_TO_MANY;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_UNICAST;
+import static com.google.uwb.support.fira.FiraParams.PRF_MODE_BPRF;
+import static com.google.uwb.support.fira.FiraParams.PRF_MODE_HPRF;
+import static com.google.uwb.support.fira.FiraParams.PSDU_DATA_RATE_27M2;
+import static com.google.uwb.support.fira.FiraParams.PSDU_DATA_RATE_31M2;
+import static com.google.uwb.support.fira.FiraParams.PSDU_DATA_RATE_6M81;
+import static com.google.uwb.support.fira.FiraParams.PSDU_DATA_RATE_7M80;
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_DT_TAG;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_INITIATOR;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_RESPONDER;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLEE;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_CONTROLLER;
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_TYPE_DT_TAG;
+import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_DL_TDOA;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE;
 import static com.google.uwb.support.fira.FiraParams.RANGING_ROUND_USAGE_SS_TWR_NON_DEFERRED_MODE;
+import static com.google.uwb.support.fira.FiraParams.RFRAME_CONFIG_SP0;
+import static com.google.uwb.support.fira.FiraParams.RFRAME_CONFIG_SP1;
+import static com.google.uwb.support.fira.FiraParams.SFD_ID_VALUE_2;
 import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_PROVISIONED;
 import static com.google.uwb.support.fira.FiraParams.STS_CONFIG_STATIC;
+import static com.google.uwb.support.radar.RadarParams.BITS_PER_SAMPLES_32;
+import static com.google.uwb.support.radar.RadarParams.NUMBER_OF_BURSTS_DEFAULT;
+import static com.google.uwb.support.radar.RadarParams.PREAMBLE_DURATION_T128_SYMBOLS;
+import static com.google.uwb.support.radar.RadarParams.RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES;
+import static com.google.uwb.support.radar.RadarParams.SAMPLES_PER_SWEEP_DEFAULT;
+import static com.google.uwb.support.radar.RadarParams.SESSION_PRIORITY_DEFAULT;
+import static com.google.uwb.support.radar.RadarParams.SWEEP_OFFSET_DEFAULT;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
@@ -85,10 +106,12 @@ import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccPulseShapeCombo;
 import com.google.uwb.support.ccc.CccStartRangingParams;
+import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
 import com.google.uwb.support.generic.GenericSpecificationParams;
+import com.google.uwb.support.radar.RadarOpenSessionParams;
 
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
@@ -132,14 +155,19 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             "get-log-mode",
             "enable-uwb",
             "disable-uwb",
+            "enable-uwb-hw",
+            "disable-uwb-hw",
             "simulate-app-state-change",
             "start-fira-ranging-session",
             "start-ccc-ranging-session",
+            "start-radar-session",
             "reconfigure-fira-ranging-session",
             "get-ranging-session-reports",
             "get-all-ranging-session-reports",
             "stop-ranging-session",
+            "stop-radar-session",
             "stop-all-ranging-sessions",
+            "stop-all-radar-sessions",
             "get-specification-info",
             "enable-diagnostics-notification",
             "disable-diagnostics-notification",
@@ -159,7 +187,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     .setDestAddressList(Arrays.asList(UwbAddress.fromBytes(new byte[] { 0x4, 0x6})))
                     .setMultiNodeMode(MULTI_NODE_MODE_UNICAST)
                     .setRangingRoundUsage(RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE)
-                    .setVendorId(new byte[]{0x7, 0x8})
+                    .setVendorId(new byte[]{0x8, 0x7})
                     .setStaticStsIV(new byte[]{0x1, 0x2, 0x3, 0x4, 0x5, 0x6});
 
     @VisibleForTesting
@@ -180,6 +208,24 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     .setSyncCodeIndex(1)
                     .setHoppingConfigMode(HOPPING_MODE_DISABLE)
                     .setHoppingSequence(HOPPING_SEQUENCE_DEFAULT);
+    @VisibleForTesting
+    public static final RadarOpenSessionParams.Builder DEFAULT_RADAR_OPEN_SESSION_PARAMS =
+            new RadarOpenSessionParams.Builder()
+                    .setSessionId(1)
+                        .setBurstPeriod(100)
+                        .setSweepPeriod(3000)
+                        .setSweepsPerBurst(16)
+                        .setSamplesPerSweep(SAMPLES_PER_SWEEP_DEFAULT)
+                        .setChannelNumber(FiraParams.UWB_CHANNEL_9)
+                        .setSweepOffset(SWEEP_OFFSET_DEFAULT)
+                        .setRframeConfig(RFRAME_CONFIG_SP0)
+                        .setPreambleDuration(PREAMBLE_DURATION_T128_SYMBOLS)
+                        .setPreambleCodeIndex(25)
+                        .setSessionPriority(SESSION_PRIORITY_DEFAULT)
+                        .setBitsPerSample(BITS_PER_SAMPLES_32)
+                        .setPrfMode(PRF_MODE_HPRF)
+                        .setNumberOfBursts(NUMBER_OF_BURSTS_DEFAULT)
+                        .setRadarDataType(RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES);
 
     private static final Map<Integer, SessionInfo> sSessionIdToInfo = new ArrayMap<>();
     private static int sSessionHandleIdNext = 0;
@@ -354,6 +400,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         public final int sessionId;
         public final Params openRangingParams;
         public final UwbRangingCallbacks uwbRangingCbs;
+        public final boolean isRadarSession;
         public final ArrayDeque<RangingReport> lastRangingReports =
                 new ArrayDeque<>(LAST_NUM_RANGING_REPORTS);
 
@@ -365,10 +412,11 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 new CompletableFuture<>();
 
         SessionInfo(int sessionId, SessionHandle sessionHandle, @NonNull Params openRangingParams,
-                @NonNull PrintWriter pw) {
+                @NonNull PrintWriter pw, boolean isRadarSession) {
             this.sessionId = sessionId;
             this.sessionHandle = sessionHandle;
             this.openRangingParams = openRangingParams;
+            this.isRadarSession = isRadarSession;
             uwbRangingCbs = new UwbRangingCallbacks(this, pw, rangingOpenedFuture,
                     rangingStartedFuture, rangingStoppedFuture, rangingClosedFuture,
                     rangingReconfiguredFuture);
@@ -611,6 +659,51 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 }
                 builder.setSessionPriority(sessionPriority);
             }
+            if (option.equals("-P")) {
+                String prfMode = getNextArgRequired();
+                if (prfMode.equals("bprf")) {
+                    builder.setPrfMode(PRF_MODE_BPRF);
+                } else if (prfMode.equals("hprf")) {
+                    builder.setPrfMode(PRF_MODE_HPRF);
+                } else {
+                    throw new IllegalArgumentException("Wrong arguments for prmMode");
+                }
+            }
+            if (option.equals("-D")) {
+                String psduDataRate = getNextArgRequired();
+                if (psduDataRate.equals("6m81")) {
+                    builder.setPsduDataRate(PSDU_DATA_RATE_6M81);
+                } else if (psduDataRate.equals("7m80")) {
+                    builder.setPsduDataRate(PSDU_DATA_RATE_7M80);
+                } else if (psduDataRate.equals("27m2")) {
+                    builder.setPsduDataRate(PSDU_DATA_RATE_27M2);
+                } else if (psduDataRate.equals("31m2")) {
+                    builder.setPsduDataRate(PSDU_DATA_RATE_31M2);
+                } else {
+                    throw new IllegalArgumentException("Wrong arguments for psduDataRate");
+                }
+            }
+            if (option.equals("-B")) {
+                String bprfPhrDataRate = getNextArgRequired();
+                if (bprfPhrDataRate.equals("850k")) {
+                    builder.setBprfPhrDataRate(BPRF_PHR_DATA_RATE_850K);
+                } else if (bprfPhrDataRate.equals("6m81")) {
+                    builder.setBprfPhrDataRate(BPRF_PHR_DATA_RATE_6M81);
+                } else {
+                    throw new IllegalArgumentException("Wrong arguments for bprfPhrDataRate");
+                }
+            }
+            if (option.equals("-A")) {
+                builder.setIsTxAdaptivePayloadPowerEnabled(
+                        getNextArgRequiredTrueOrFalse("enabled", "disabled"));
+            }
+            if (option.equals("-S")) {
+                int sfd_id = Integer.parseInt(getNextArgRequired());
+                if (sfd_id < 0 || sfd_id > 4) {
+                    throw new IllegalArgumentException("SFD_ID should be in range 0-4");
+                }
+                builder.setSfdId(sfd_id);
+            }
             option = getNextOption();
         }
         if (aoaResultReqEnabled && interleavingEnabled) {
@@ -633,6 +726,34 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         startRangingSession(
                 firaOpenSessionParams.first, null, firaOpenSessionParams.first.getSessionId(),
                 firaOpenSessionParams.second, pw);
+    }
+
+    private void startDlTDoaRangingSession(PrintWriter pw) throws Exception {
+        FiraOpenSessionParams.Builder builder = new FiraOpenSessionParams.Builder()
+                .setProtocolVersion(FiraParams.PROTOCOL_VERSION_1_1)
+                .setSessionId(1)
+                .setSessionType(FiraParams.SESSION_TYPE_RANGING)
+                .setSfdId(SFD_ID_VALUE_2)
+                .setDeviceType(RANGING_DEVICE_TYPE_DT_TAG)
+                .setDeviceRole(RANGING_DEVICE_DT_TAG)
+                .setDeviceAddress(UwbAddress.fromBytes(new byte[] { 0x4, 0x6}))
+                .setMultiNodeMode(MULTI_NODE_MODE_ONE_TO_MANY)
+                .setRangingRoundUsage(RANGING_ROUND_USAGE_DL_TDOA)
+                .setVendorId(new byte[]{0x8, 0x7})
+                .setRframeConfig(RFRAME_CONFIG_SP1)
+                .setStaticStsIV(new byte[]{0x1, 0x2, 0x3, 0x4, 0x5, 0x6});
+
+        String option = getNextOption();
+        while (option != null) {
+            if (option.equals("-i")) {
+                builder.setSessionId(Integer.parseInt(getNextArgRequired()));
+            }
+            option = getNextOption();
+        }
+        FiraOpenSessionParams firaOpenSessionParams = builder.build();
+        startRangingSession(
+                firaOpenSessionParams, null, firaOpenSessionParams.getSessionId(),
+                true, pw);
     }
 
     private Pair<CccOpenRangingParams, Boolean> buildCccOpenRangingParams() {
@@ -736,7 +857,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         SessionHandle sessionHandle =
                 new SessionHandle(sSessionHandleIdNext++, attributionSource, Process.myPid());
         SessionInfo sessionInfo =
-                new SessionInfo(sessionId, sessionHandle, openRangingSessionParams, pw);
+                new SessionInfo(sessionId, sessionHandle, openRangingSessionParams, pw, false);
         mUwbService.openRanging(
                 attributionSource,
                 sessionInfo.sessionHandle,
@@ -756,7 +877,30 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         }
         pw.println("Ranging session opened with params: "
                 + bundleToString(openRangingSessionParams.toBundle()));
+        sSessionIdToInfo.put(sessionId, sessionInfo);
 
+        if (openRangingSessionParams instanceof  FiraOpenSessionParams
+                && ((FiraOpenSessionParams) openRangingSessionParams).getDeviceRole()
+                == RANGING_DEVICE_DT_TAG) {
+            DlTDoARangingRoundsUpdate rangingRounds = new DlTDoARangingRoundsUpdate.Builder()
+                    .setSessionId(sessionId)
+                    .setNoOfRangingRounds(1)
+                    .setRangingRoundIndexes(new byte[]{0})
+                    .build();
+            mUwbService.updateRangingRoundsDtTag(sessionInfo.sessionHandle,
+                    rangingRounds.toBundle());
+            boolean setRangingRounds = false;
+            try {
+                setRangingRounds = sessionInfo.rangingOpenedFuture.get(
+                        RANGE_CTL_TIMEOUT_MILLIS, MILLISECONDS);
+            } catch (InterruptedException | CancellationException | TimeoutException
+                     | ExecutionException e) {
+            }
+            if (!setRangingRounds) {
+                pw.println("Failed to set ranging rounds for DT tag");
+                return;
+            }
+        }
         mUwbService.startRanging(
                 sessionInfo.sessionHandle,
                 startRangingSessionParams != null
@@ -774,7 +918,6 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             return;
         }
         pw.println("Ranging session started for sessionId: " + sessionId);
-        sSessionIdToInfo.put(sessionId, sessionInfo);
         while (shouldBlockCall) {
             Thread.sleep(RANGE_CTL_TIMEOUT_MILLIS);
         }
@@ -862,11 +1005,11 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 int rangeDataNtfConfig = Integer.parseInt(getNextArgRequired());
                 builder.setRangeDataNtfConfig(rangeDataNtfConfig);
             }
-            if (option.equals("-pn")) {
+            if (option.equals("-n")) {
                 int proximityNear = Integer.parseInt(getNextArgRequired());
                 builder.setRangeDataProximityNear(proximityNear);
             }
-            if (option.equals("-pf")) {
+            if (option.equals("-f")) {
                 int proximityFar = Integer.parseInt(getNextArgRequired());
                 builder.setRangeDataProximityFar(proximityFar);
             }
@@ -907,6 +1050,117 @@ public class UwbShellCommand extends BasicShellCommandHandler {
             Log.e(TAG, "Failed to send command", e);
         }
         return -1;
+    }
+
+    private Pair<RadarOpenSessionParams, Boolean> buildRadarOpenSessionParams() {
+        RadarOpenSessionParams.Builder builder =
+                new RadarOpenSessionParams.Builder(DEFAULT_RADAR_OPEN_SESSION_PARAMS);
+        boolean shouldBlockCall = false;
+
+        for (String option = getNextOption(); option != null; option = getNextOption()) {
+            switch (option) {
+                case "-b":
+                    shouldBlockCall = true;
+                    break;
+                case "-i":
+                    builder.setSessionId(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-c":
+                    builder.setChannelNumber(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-s":
+                    builder.setSweepPeriod(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-u":
+                    builder.setSweepsPerBurst(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-e":
+                    builder.setSamplesPerSweep(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-o":
+                    builder.setSweepOffset(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-r":
+                    builder.setRframeConfig(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-t":
+                    builder.setPreambleDuration(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-d":
+                    builder.setPreambleCodeIndex(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-x":
+                    builder.setSessionPriority(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-p":
+                    builder.setBitsPerSample(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-m":
+                    builder.setPrfMode(Integer.parseInt(getNextArgRequired()));
+                    break;
+                case "-n":
+                    builder.setNumberOfBursts(Integer.parseInt(getNextArgRequired()));
+                    break;
+            }
+        }
+        return Pair.create(builder.build(), shouldBlockCall);
+    }
+
+    private void startRadarSession(PrintWriter pw) throws Exception {
+        Pair<RadarOpenSessionParams, Boolean> radarOpenSessionParamsAndBlocking =
+                buildRadarOpenSessionParams();
+        RadarOpenSessionParams radarOpenSessionParams = radarOpenSessionParamsAndBlocking.first;
+        int sessionId = radarOpenSessionParams.getSessionId();
+
+        if (sSessionIdToInfo.containsKey(sessionId)) {
+            pw.println("Session with session ID: " + sessionId
+                    + " already ongoing. Stop that session before you start a new session");
+            return;
+        }
+        AttributionSource attributionSource = new AttributionSource.Builder(Process.SHELL_UID)
+                .setPackageName(SHELL_PACKAGE_NAME)
+                .build();
+        SessionHandle sessionHandle =
+                new SessionHandle(sSessionHandleIdNext++, attributionSource, Process.myPid());
+        SessionInfo sessionInfo =
+                new SessionInfo(sessionId, sessionHandle, radarOpenSessionParams, pw, true);
+        mUwbService.openRanging(
+                attributionSource,
+                sessionInfo.sessionHandle,
+                sessionInfo.uwbRangingCbs,
+                radarOpenSessionParams.toBundle(),
+                null);
+        boolean openCompleted = false;
+        try {
+            openCompleted = sessionInfo.rangingOpenedFuture.get(
+                    RANGE_CTL_TIMEOUT_MILLIS, MILLISECONDS);
+        } catch (InterruptedException | CancellationException | TimeoutException
+                | ExecutionException e) {
+        }
+        if (!openCompleted) {
+            pw.println("Failed to open radar session. Aborting!");
+            return;
+        }
+        pw.println("Radar session opened with params: "
+                + bundleToString(radarOpenSessionParams.toBundle()));
+
+        mUwbService.startRanging(sessionInfo.sessionHandle, new PersistableBundle());
+        boolean startCompleted = false;
+        try {
+            startCompleted = sessionInfo.rangingStartedFuture.get(
+                    RANGE_CTL_TIMEOUT_MILLIS, MILLISECONDS);
+        } catch (InterruptedException | CancellationException | TimeoutException
+                | ExecutionException e) {
+        }
+        if (!startCompleted) {
+            pw.println("Failed to start radar session. Aborting!");
+            return;
+        }
+        pw.println("Radar session started for sessionId: " + sessionId);
+        sSessionIdToInfo.put(sessionId, sessionInfo);
+        while (radarOpenSessionParamsAndBlocking.second) {
+            Thread.sleep(RANGE_CTL_TIMEOUT_MILLIS);
+        }
     }
 
     @Override
@@ -1003,11 +1257,33 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 case "disable-uwb":
                     mUwbService.setEnabled(false);
                     return 0;
+                case "enable-uwb-hw": {
+                    AttributionSource attributionSource = new AttributionSource.Builder(
+                            Process.SHELL_UID)
+                            .setPackageName(SHELL_PACKAGE_NAME)
+                            .build();
+                    mUwbService.requestHwEnabled(true, attributionSource, new Binder());
+                    return 0;
+                }
+                case "disable-uwb-hw": {
+                    AttributionSource attributionSource = new AttributionSource.Builder(
+                            Process.SHELL_UID)
+                            .setPackageName(SHELL_PACKAGE_NAME)
+                            .build();
+                    mUwbService.requestHwEnabled(false, attributionSource, new Binder());
+                    return 0;
+                }
+                case "start-dl-tdoa-ranging-session":
+                    startDlTDoaRangingSession(pw);
+                    return 0;
                 case "start-fira-ranging-session":
                     startFiraRangingSession(pw);
                     return 0;
                 case "start-ccc-ranging-session":
                     startCccRangingSession(pw);
+                    return 0;
+                case "start-radar-session":
+                    startRadarSession(pw);
                     return 0;
                 case "reconfigure-fira-ranging-session":
                     reconfigureFiraRangingSession(pw);
@@ -1036,11 +1312,22 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     return 0;
                 }
                 case "stop-ranging-session":
+                case "stop-radar-session":
                     stopRangingSession(pw);
                     return 0;
                 case "stop-all-ranging-sessions": {
                     for (int sessionId : sSessionIdToInfo.keySet()) {
-                        stopRangingSession(pw, sessionId);
+                        if (!sSessionIdToInfo.get(sessionId).isRadarSession) {
+                            stopRangingSession(pw, sessionId);
+                        }
+                    }
+                    return 0;
+                }
+                case "stop-all-radar-sessions": {
+                    for (int sessionId : sSessionIdToInfo.keySet()) {
+                        if (sSessionIdToInfo.get(sessionId).isRadarSession) {
+                            stopRangingSession(pw, sessionId);
+                        }
                     }
                     return 0;
                 }
@@ -1127,9 +1414,18 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     }
 
     private void printStatus(PrintWriter pw) throws RemoteException {
-        boolean uwbEnabled =
-                mUwbService.getAdapterState() != UwbManager.AdapterStateCallback.STATE_DISABLED;
-        pw.println("Uwb is " + (uwbEnabled ? "enabled" : "disabled"));
+        int adapterState = mUwbService.getAdapterState();
+        boolean uwbEnabled = adapterState != UwbManager.AdapterStateCallback.STATE_DISABLED;
+        boolean uwbHwIdle = adapterState == UwbManager.AdapterStateCallback.STATE_ENABLED_HW_IDLE;
+        String status;
+        if (uwbHwIdle) {
+            status = "enabled by user, but no clients have voted to enable hw";
+        } else if (uwbEnabled) {
+            status = "enabled";
+        } else {
+            status = "disabled";
+        }
+        pw.println("Uwb is " + status);
     }
 
     private void onHelpNonPrivileged(PrintWriter pw) {
@@ -1143,6 +1439,10 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("    Toggle UWB on");
         pw.println("  disable-uwb");
         pw.println("    Toggle UWB off");
+        pw.println("  enable-uwb-hw");
+        pw.println("    If 'hw_idle_turn_off_enabled' feature is enabled, vote for UWB on");
+        pw.println("  disable-uwb-hw");
+        pw.println("    If 'hw_idle_turn_off_enabled' feature is enabled, vote for UWB off");
         pw.println("  start-fira-ranging-session"
                 + " [-b](blocking call)"
                 + " [-i <sessionId>](session-id)"
@@ -1170,10 +1470,18 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-n <sessionKey>](sessionKey 16 or 32 bytes)"
                 + " [-k <subSessionKey>](subSessionKey 16 or 32 bytes)"
                 + " [-j <errorStreakTimeoutMs>](error streak timeout in millis, default=30000)"
-                + " [-q <sessionPriority>](sessionPriority 1-49 or 51-100)");
+                + " [-q <sessionPriority>](sessionPriority 1-49 or 51-100)"
+                + " [-P bprf|hprf](prfMode)"
+                + " [-D 6m81|7m80|27m2|31m2](psduDataRate)"
+                + " [-B 850k|6m81](bprfPhrDataRate)"
+                + " [-A enabled|disabled](TX adaptive power, default = disabled)"
+                + " [-S <sfd_id>](sfd_id 0-4, default = 2)");
         pw.println("    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
+        pw.println("  start-dl-tdoa-ranging-session"
+                        + " [-i <sessionId>](session-id)");
+        pw.println("    Starts a FIRA Dl-TDoA ranging session for DT-Tag");
         pw.println("  start-ccc-ranging-session"
                 + " [-b](blocking call)"
                 + " Ranging reports will be displayed on screen)"
@@ -1191,6 +1499,24 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("    Starts a CCC ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
+        pw.println("  start-radar-session"
+                + " [-b](blocking call)"
+                + " Radar data will be displayed on screen)"
+                + " [-i <sessionId>](session-id)"
+                + " [-c <channel>](channel)"
+                + " [-s <sweepPeriod>](sweep-period)"
+                + " [-u <sweepsPerBurst>](sweeps-per-burst)"
+                + " [-e <samplesPerSweep>](samples-per-sweep)"
+                + " [-p <bitsPerSample>](bits-per-sample)"
+                + " [-o <sweepOffset>](sweep-offset)"
+                + " [-r <rframeConfig>](rframe-config)"
+                + " [-t <preambleDuration>](preamble-duration)"
+                + " [-d <preambleCodeIndex>](preamble-code-index)"
+                + " [-x  <sessionPriority>](session-priority)"
+                + " [-m <prfMode>](prf-mode)"
+                + " [-n <numberOfBursts>](number-of-bursts)");
+        pw.println("    Starts a Radar session with the provided params defined in the radar UCI"
+                + "    spec.");
         pw.println("  reconfigure-fira-ranging-session"
                 + " <sessionId>"
                 + " [-a add|delete](action)"
@@ -1198,16 +1524,20 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-s <subSessionId-1, subSessionId-2,...>](sub-sessionIds)"
                 + " [-b <block-striding>](block-striding)"
                 + " [-c <range-data-ntf-cfg>](range-data-ntf-cfg)"
-                + " [-pn <proximity-near>(proximity-near)"
-                + " [-pf <proximity-far>](proximity-far)");
+                + " [-n <proximity-near>(proximity-near)"
+                + " [-f <proximity-far>](proximity-far)");
         pw.println("  get-ranging-session-reports <sessionId>");
         pw.println("    Displays latest cached ranging reports for an ongoing ranging session");
         pw.println("  get-all-ranging-session-reports");
         pw.println("    Displays latest cached ranging reports for all ongoing ranging session");
         pw.println("  stop-ranging-session <sessionId>");
         pw.println("    Stops an ongoing ranging session");
+        pw.println("  stop-radar-session <sessionId>");
+        pw.println("    Stops an ongoing radar session");
         pw.println("  stop-all-ranging-sessions");
         pw.println("    Stops all ongoing ranging sessions");
+        pw.println("  stop-all-radar-sessions");
+        pw.println("    Stops all ongoing radar sessions");
         pw.println("  get-specification-info");
         pw.println("    Gets specification info from uwb chip");
         pw.println("  enable-diagnostics-notification"

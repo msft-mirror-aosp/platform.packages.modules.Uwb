@@ -145,6 +145,18 @@ public class DeviceConfigFacadeTest {
                 .thenReturn(false);
         when(mResources.getBoolean(R.bool.ranging_error_streak_timer_enabled))
                 .thenReturn(true);
+        when(mResources.getBoolean(R.bool.ccc_ranging_stopped_params_send_enabled))
+                .thenReturn(false);
+        when(mResources.getBoolean(R.bool.ccc_absolute_uwb_initiation_time_enabled))
+                .thenReturn(false);
+        when(mResources.getBoolean(R.bool.location_use_for_country_code_enabled))
+                .thenReturn(true);
+        when(mResources.getBoolean(R.bool.uwb_disabled_until_first_toggle))
+                .thenReturn(false);
+        when(mResources.getBoolean(R.bool.persistent_cache_use_for_country_code_enabled))
+                .thenReturn(false);
+        when(mResources.getBoolean(R.bool.hw_idle_turn_off_enabled))
+                .thenReturn(false);
 
         when(mContext.getResources()).thenReturn(mResources);
 
@@ -219,6 +231,12 @@ public class DeviceConfigFacadeTest {
         assertEquals(10, mDeviceConfigFacade.getRxDataMaxPacketsToStore());
         assertEquals(false, mDeviceConfigFacade.isBackgroundRangingEnabled());
         assertEquals(true, mDeviceConfigFacade.isRangingErrorStreakTimerEnabled());
+        assertEquals(false, mDeviceConfigFacade.isCccRangingStoppedParamsSendEnabled());
+        assertEquals(false, mDeviceConfigFacade.isCccAbsoluteUwbInitiationTimeEnabled());
+        assertEquals(true, mDeviceConfigFacade.isLocationUseForCountryCodeEnabled());
+        assertEquals(false, mDeviceConfigFacade.isUwbDisabledUntilFirstToggle());
+        assertEquals(false, mDeviceConfigFacade.isPersistentCacheUseForCountryCodeEnabled());
+        assertEquals(false, mDeviceConfigFacade.isHwIdleTurnOffEnabled());
     }
 
     /**
@@ -239,6 +257,11 @@ public class DeviceConfigFacadeTest {
                 anyBoolean())).thenReturn(true);
         mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);
         assertEquals(true, mDeviceConfigFacade.isDeviceErrorBugreportEnabled());
+
+        when(DeviceConfig.getBoolean(anyString(), eq("session_init_error_bugreport_enabled"),
+                anyBoolean())).thenReturn(true);
+        mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);
+        assertEquals(true, mDeviceConfigFacade.isSessionInitErrorBugreportEnabled());
 
         when(DeviceConfig.getInt(anyString(), eq("bug_report_min_interval_ms"),
                 anyInt())).thenReturn(10 * 3600_000);
@@ -315,6 +338,19 @@ public class DeviceConfigFacadeTest {
                 anyBoolean())).thenReturn(true);
         when(DeviceConfig.getBoolean(anyString(), eq("ranging_error_streak_timer_enabled"),
                 anyBoolean())).thenReturn(false);
+        when(DeviceConfig.getBoolean(anyString(), eq("ccc_ranging_stopped_params_send_enabled"),
+                anyBoolean())).thenReturn(true);
+        when(DeviceConfig.getBoolean(anyString(), eq("ccc_absolute_uwb_initiation_time_enabled"),
+                anyBoolean())).thenReturn(true);
+        when(DeviceConfig.getBoolean(anyString(), eq("location_use_for_country_code_enabled"),
+                anyBoolean())).thenReturn(false);
+        when(DeviceConfig.getBoolean(anyString(), eq("uwb_disabled_until_first_toggle"),
+                anyBoolean())).thenReturn(true);
+        when(DeviceConfig.getBoolean(anyString(),
+                eq("persistent_cache_use_for_country_code_enabled"),
+                anyBoolean())).thenReturn(true);
+        when(DeviceConfig.getBoolean(anyString(), eq("hw_idle_turn_off_enabled"),
+                anyBoolean())).thenReturn(true);
 
         mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);
         assertEquals(0, mDeviceConfigFacade.getPrimerFovDegree());
@@ -330,6 +366,12 @@ public class DeviceConfigFacadeTest {
         assertEquals(20, mDeviceConfigFacade.getRxDataMaxPacketsToStore());
         assertEquals(true, mDeviceConfigFacade.isBackgroundRangingEnabled());
         assertEquals(false, mDeviceConfigFacade.isRangingErrorStreakTimerEnabled());
+        assertEquals(true, mDeviceConfigFacade.isCccRangingStoppedParamsSendEnabled());
+        assertEquals(true, mDeviceConfigFacade.isCccAbsoluteUwbInitiationTimeEnabled());
+        assertEquals(false, mDeviceConfigFacade.isLocationUseForCountryCodeEnabled());
+        assertEquals(true, mDeviceConfigFacade.isUwbDisabledUntilFirstToggle());
+        assertEquals(true, mDeviceConfigFacade.isPersistentCacheUseForCountryCodeEnabled());
+        assertEquals(true, mDeviceConfigFacade.isHwIdleTurnOffEnabled());
         when(DeviceConfig.getString(anyString(), eq("pose_source_type"),
                 anyString())).thenReturn("NONE");
         mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);

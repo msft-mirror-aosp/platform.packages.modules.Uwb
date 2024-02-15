@@ -23,11 +23,15 @@ import static androidx.core.uwb.backend.impl.internal.Utils.INVALID_API_CALL;
 import static androidx.core.uwb.backend.impl.internal.Utils.RANGING_ALREADY_STARTED;
 import static androidx.core.uwb.backend.impl.internal.Utils.STATUS_OK;
 import static androidx.core.uwb.backend.impl.internal.Utils.TAG;
+import static androidx.core.uwb.backend.impl.internal.Utils.UWB_RECONFIGURATION_FAILURE;
 import static androidx.core.uwb.backend.impl.internal.Utils.UWB_SYSTEM_CALLBACK_FAILURE;
+
+import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_DT_TAG;
 
 import static java.util.Objects.requireNonNull;
 
-import android.annotation.WorkerThread;
+import android.os.Build.VERSION;
+import android.os.Build.VERSION_CODES;
 import android.os.PersistableBundle;
 import android.util.Log;
 import android.uwb.RangingMeasurement;
@@ -37,13 +41,15 @@ import android.uwb.UwbManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-
-import com.android.internal.annotations.VisibleForTesting;
+import androidx.annotation.WorkerThread;
 
 import com.google.common.hash.Hashing;
+import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
+import com.google.uwb.support.multichip.ChipInfoParams;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -51,10 +57,11 @@ import java.util.concurrent.ExecutorService;
 /** Implements start/stop ranging operations. */
 public abstract class RangingDevice {
 
-    private static final int SESSION_ID_UNSET = 0;
+    public static final int SESSION_ID_UNSET = 0;
+    private static final String NO_MULTICHIP_SUPPORT = "NO_MULTICHIP_SUPPORT";
 
     /** Timeout value after ranging start call */
-    private static final int RANGING_START_TIMEOUT_MILLIS = 3000;
+    private static final int RANGING_START_TIMEOUT_MILLIS = 3100;
 
     protected final UwbManager mUwbManager;
 
@@ -96,6 +103,8 @@ public abstract class RangingDevice {
     @NonNull
     protected final UwbFeatureFlags mUwbFeatureFlags;
 
+    private final HashMap<String, UwbAddress> mMultiChipMap;
+
     RangingDevice(UwbManager manager, Executor executor,
             OpAsyncCallbackRunner<Boolean> opAsyncCallbackRunner, UwbFeatureFlags uwbFeatureFlags) {
         mUwbManager = manager;
@@ -103,6 +112,8 @@ public abstract class RangingDevice {
         mOpAsyncCallbackRunner = opAsyncCallbackRunner;
         mOpAsyncCallbackRunner.setOperationTimeoutMillis(RANGING_START_TIMEOUT_MILLIS);
         mUwbFeatureFlags = uwbFeatureFlags;
+        this.mMultiChipMap = new HashMap<>();
+        initializeUwbAddress();
     }
 
     /** Sets the chip ID. By default, the default chip is used. */
@@ -120,10 +131,29 @@ public abstract class RangingDevice {
 
     /** Gets local address. The first call will return a randomized short address. */
     public UwbAddress getLocalAddress() {
-        if (mLocalAddress == null) {
-            mLocalAddress = getRandomizedLocalAddress();
+        if (isLocalAddressSet()) {
+          return mLocalAddress;
         }
+        // UwbManager#getDefaultChipId is supported from Android T.
+        if (VERSION.SDK_INT < VERSION_CODES.TIRAMISU) {
+            return getLocalAddress(NO_MULTICHIP_SUPPORT);
+        }
+        String defaultChipId = mUwbManager.getDefaultChipId();
+        return getLocalAddress(defaultChipId);
+    }
+
+    /** Gets local address given chip ID. The first call will return a randomized short address. */
+    public UwbAddress getLocalAddress(String chipId) {
+        if (mMultiChipMap.get(chipId) == null) {
+            mMultiChipMap.put(chipId, getRandomizedLocalAddress());
+        }
+        mLocalAddress = mMultiChipMap.get(chipId);
         return mLocalAddress;
+    }
+
+    /** Check whether local address was previously set. */
+    public boolean isLocalAddressSet() {
+        return mLocalAddress != null;
     }
 
     /** Sets local address. */
@@ -138,7 +168,6 @@ public abstract class RangingDevice {
 
     protected abstract int hashSessionId(RangingParameters rangingParameters);
 
-    @VisibleForTesting
     static int calculateHashedSessionId(
             UwbAddress controllerAddress, UwbComplexChannel complexChannel) {
         return Hashing.sha256()
@@ -163,7 +192,9 @@ public abstract class RangingDevice {
                             rangingParameters.getComplexChannel(),
                             rangingParameters.getPeerAddresses(),
                             rangingParameters.getRangingUpdateRate(),
-                            rangingParameters.getUwbRangeDataNtfConfig());
+                            rangingParameters.getUwbRangeDataNtfConfig(),
+                            rangingParameters.getSlotDuration(),
+                            rangingParameters.isAoaDisabled());
         } else {
             mRangingParameters = rangingParameters;
         }
@@ -197,9 +228,15 @@ public abstract class RangingDevice {
         List<RangingMeasurement> measurements = rangingReport.getMeasurements();
         for (RangingMeasurement measurement : measurements) {
             byte[] remoteAddressBytes = measurement.getRemoteDeviceAddress().toBytes();
+            if (mUwbFeatureFlags.isReversedByteOrderFiraParams()) {
+                remoteAddressBytes = Conversions.getReverseBytes(remoteAddressBytes);
+            }
+
 
             UwbAddress peerAddress = UwbAddress.fromBytes(remoteAddressBytes);
-            if (!isKnownPeer(peerAddress)) {
+            if (!isKnownPeer(peerAddress) && !Conversions.isDlTdoaMeasurement(measurement)) {
+                Log.w(TAG,
+                        String.format("Received ranging data from unknown peer %s.", peerAddress));
                 continue;
             }
 
@@ -230,6 +267,19 @@ public abstract class RangingDevice {
         return UwbDevice.createForAddress(getLocalAddress().toBytes());
     }
 
+    private void initializeUwbAddress() {
+        // UwbManager#getChipInfos is supported from Android T.
+        if (VERSION.SDK_INT >= VERSION_CODES.TIRAMISU) {
+            List<PersistableBundle> chipInfoBundles = mUwbManager.getChipInfos();
+            for (PersistableBundle chipInfo : chipInfoBundles) {
+                mMultiChipMap.put(ChipInfoParams.fromBundle(chipInfo).getChipId(),
+                        getRandomizedLocalAddress());
+            }
+        } else {
+            mMultiChipMap.put(NO_MULTICHIP_SUPPORT, getRandomizedLocalAddress());
+        }
+    }
+
     protected RangingSession.Callback convertCallback(RangingSessionCallback callback) {
         return new RangingSession.Callback() {
 
@@ -248,11 +298,11 @@ public abstract class RangingDevice {
                 if (suspendedReason == REASON_UNKNOWN) {
                     suspendedReason = REASON_FAILED_TO_START;
                 }
-                mRangingSession = null;
-                mOpAsyncCallbackRunner.complete(false);
                 int finalSuspendedReason = suspendedReason;
                 runOnBackendCallbackThread(
                         () -> callback.onRangingSuspended(getUwbDevice(), finalSuspendedReason));
+                mRangingSession = null;
+                mOpAsyncCallbackRunner.complete(false);
             }
 
             @WorkerThread
@@ -284,13 +334,13 @@ public abstract class RangingDevice {
             @WorkerThread
             @Override
             public void onReconfigured(PersistableBundle params) {
-                mOpAsyncCallbackRunner.complete(true);
+                mOpAsyncCallbackRunner.completeIfActive(true);
             }
 
             @WorkerThread
             @Override
             public void onReconfigureFailed(int reason, PersistableBundle params) {
-                mOpAsyncCallbackRunner.complete(false);
+                mOpAsyncCallbackRunner.completeIfActive(false);
             }
 
             @WorkerThread
@@ -314,14 +364,14 @@ public abstract class RangingDevice {
             @WorkerThread
             @Override
             public void onStopFailed(int reason, PersistableBundle params) {
-                mOpAsyncCallbackRunner.complete(false);
+                mOpAsyncCallbackRunner.completeIfActive(false);
             }
 
             @WorkerThread
             @Override
             public void onClosed(int reason, PersistableBundle parameters) {
                 mRangingSession = null;
-                mOpAsyncCallbackRunner.complete(true);
+                mOpAsyncCallbackRunner.completeIfActive(true);
             }
 
             @WorkerThread
@@ -331,6 +381,37 @@ public abstract class RangingDevice {
                     runOnBackendCallbackThread(
                             () -> onRangingDataReceived(rangingReport, callback));
                 }
+            }
+
+            @WorkerThread
+            @Override
+            public void onRangingRoundsUpdateDtTagStatus(PersistableBundle params) {
+                // Failure to set ranging rounds is not handled.
+                mOpAsyncCallbackRunner.complete(true);
+            }
+
+            @WorkerThread
+            @Override
+            public void onControleeAdded(PersistableBundle params) {
+                mOpAsyncCallbackRunner.complete(true);
+            }
+
+            @WorkerThread
+            @Override
+            public void onControleeAddFailed(int reason, PersistableBundle params) {
+                mOpAsyncCallbackRunner.complete(false);
+            }
+
+            @WorkerThread
+            @Override
+            public void onControleeRemoved(PersistableBundle params) {
+                mOpAsyncCallbackRunner.complete(true);
+            }
+
+            @WorkerThread
+            @Override
+            public void onControleeRemoveFailed(int reason, PersistableBundle params) {
+                mOpAsyncCallbackRunner.complete(false);
             }
         };
     }
@@ -375,25 +456,25 @@ public abstract class RangingDevice {
             return RANGING_ALREADY_STARTED;
         }
 
-        if (mLocalAddress == null) {
+        if (getLocalAddress() == null) {
             return INVALID_API_CALL;
         }
 
-        PersistableBundle parameters = getOpenSessionParams().toBundle();
-        printStartRangingParameters(parameters);
+        FiraOpenSessionParams openSessionParams = getOpenSessionParams();
+        printStartRangingParameters(openSessionParams.toBundle());
         mBackendCallbackExecutor = backendCallbackExecutor;
         boolean success =
                 mOpAsyncCallbackRunner.execOperation(
                         () -> {
                             if (mChipId != null) {
                                 mUwbManager.openRangingSession(
-                                        parameters,
+                                        openSessionParams.toBundle(),
                                         mSystemCallbackExecutor,
                                         convertCallback(callback),
                                         mChipId);
                             } else {
                                 mUwbManager.openRangingSession(
-                                        parameters,
+                                        openSessionParams.toBundle(),
                                         mSystemCallbackExecutor,
                                         convertCallback(callback));
                             }
@@ -407,6 +488,21 @@ public abstract class RangingDevice {
             mBackendCallbackExecutor = null;
             // onRangingSuspended should have been called in the callback.
             return STATUS_OK;
+        }
+
+        if (openSessionParams.getDeviceRole() == RANGING_DEVICE_DT_TAG) {
+            // Setting default ranging rounds value.
+            DlTDoARangingRoundsUpdate rangingRounds =
+                    new DlTDoARangingRoundsUpdate.Builder()
+                            .setSessionId(openSessionParams.getSessionId())
+                            .setNoOfRangingRounds(1)
+                            .setRangingRoundIndexes(new byte[]{0})
+                            .build();
+            success =
+                    mOpAsyncCallbackRunner.execOperation(
+                            () -> mRangingSession.updateRangingRoundsDtTag(
+                                    rangingRounds.toBundle()),
+                            "Update ranging rounds for Dt Tag");
         }
 
         success =
@@ -467,6 +563,58 @@ public abstract class RangingDevice {
                         () -> mRangingSession.reconfigure(bundle), "Reconfigure Ranging");
         Boolean result = mOpAsyncCallbackRunner.getResult();
         return success && result != null && result;
+    }
+
+    /**
+     * Adds a controlee to the active UWB ranging session.
+     *
+     * @return true if controlee was successfully added.
+     */
+    protected synchronized boolean addControlee(PersistableBundle bundle) {
+        boolean success =
+                mOpAsyncCallbackRunner.execOperation(
+                        () -> mRangingSession.addControlee(bundle), "Add controlee");
+        Boolean result = mOpAsyncCallbackRunner.getResult();
+        return success && result != null && result;
+    }
+
+    /**
+     * Removes a controlee from active UWB ranging session.
+     *
+     * @return true if controlee was successfully removed.
+     */
+    protected synchronized boolean removeControlee(PersistableBundle bundle) {
+        boolean success =
+                mOpAsyncCallbackRunner.execOperation(
+                        () -> mRangingSession.removeControlee(bundle), "Remove controlee");
+        Boolean result = mOpAsyncCallbackRunner.getResult();
+        return success && result != null && result;
+    }
+
+
+    /**
+     * Reconfigures range data notification for an ongoing session.
+     *
+     * @return STATUS_OK if reconfigure was successful.
+     * @return UWB_RECONFIGURATION_FAILURE if reconfigure failed.
+     * @return INVALID_API_CALL if ranging session is not active.
+     */
+    public synchronized int reconfigureRangeDataNtfConfig(UwbRangeDataNtfConfig config) {
+        if (!isAlive()) {
+            Log.w(TAG, "Attempt to set range data notification while session is not active.");
+            return INVALID_API_CALL;
+        }
+
+        boolean success =
+                reconfigureRanging(
+                        ConfigurationManager.createReconfigureParamsRangeDataNtf(
+                                config).toBundle());
+
+        if (!success) {
+            Log.w(TAG, "Reconfiguring range data notification config failed.");
+            return UWB_RECONFIGURATION_FAILURE;
+        }
+        return STATUS_OK;
     }
 
     /** Notifies that a ranging round failed. We collect this info for Analytics only. */

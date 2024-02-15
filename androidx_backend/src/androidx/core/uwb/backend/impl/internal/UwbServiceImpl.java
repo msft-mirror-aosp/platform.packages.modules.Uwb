@@ -19,13 +19,17 @@ package androidx.core.uwb.backend.impl.internal;
 import static android.content.pm.PackageManager.FEATURE_UWB;
 import static android.uwb.UwbManager.AdapterStateCallback.STATE_DISABLED;
 
+import static androidx.core.uwb.backend.impl.internal.RangingCapabilities.DEFAULT_SUPPORTED_RANGING_UPDATE_RATE;
+import static androidx.core.uwb.backend.impl.internal.RangingCapabilities.DEFAULT_SUPPORTED_SLOT_DURATIONS;
 import static androidx.core.uwb.backend.impl.internal.RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CONFIG_IDS;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_DL_TDOA_DT_TAG;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_MULTICAST_DS_TWR;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_UNICAST_DS_TWR;
 import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA;
+import static androidx.core.uwb.backend.impl.internal.Utils.CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE_HPRF;
 import static androidx.core.uwb.backend.impl.internal.Utils.RANGE_DATA_NTF_ENABLE;
+import static androidx.core.uwb.backend.impl.internal.UwbAvailabilityCallback.REASON_UNKNOWN;
 
 import static java.util.Objects.requireNonNull;
 
@@ -38,6 +42,7 @@ import android.uwb.UwbManager;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.google.common.collect.ImmutableList;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraSpecificationParams;
 import com.google.uwb.support.multichip.ChipInfoParams;
@@ -61,21 +66,44 @@ public class UwbServiceImpl {
     private final UwbManager mUwbManager;
     @NonNull
     private final UwbFeatureFlags mUwbFeatureFlags;
+    @NonNull
+    private final UwbAvailabilityCallback mUwbAvailabilityCallback;
 
-    /** Adapter State callback used to update adapterState field */
-    private final UwbManager.AdapterStateCallback mAdapterStateCallback =
-            (state, reason) -> mAdapterState = state;
 
     /** A serial thread used to handle session callback */
     private final ExecutorService mSerialExecutor = Executors.newSingleThreadExecutor();
 
-    public UwbServiceImpl(Context context, @NonNull UwbFeatureFlags uwbFeatureFlags) {
+    /** Adapter State callback used to update adapterState field */
+    private final UwbManager.AdapterStateCallback mAdapterStateCallback;
+    @UwbAvailabilityCallback.UwbStateChangeReason
+    private int mLastStateChangeReason = REASON_UNKNOWN;
+
+    public UwbServiceImpl(Context context, @NonNull UwbFeatureFlags uwbFeatureFlags,
+            UwbAvailabilityCallback uwbAvailabilityCallback) {
         mHasUwbFeature = context.getPackageManager().hasSystemFeature(FEATURE_UWB);
         mUwbFeatureFlags = uwbFeatureFlags;
+        mUwbAvailabilityCallback = uwbAvailabilityCallback;
+        this.mAdapterStateCallback =
+                (newState, reason) -> {
+                    mLastStateChangeReason = Conversions.convertAdapterStateReason(reason);
+                    // Send update only if old or new state is disabled, ignore if state
+                    // changed from active
+                    // to inactive and vice-versa.
+                    int oldState = mAdapterState;
+                    mAdapterState = newState;
+                    if (newState == STATE_DISABLED || oldState == STATE_DISABLED) {
+                        mSerialExecutor.execute(
+                                () -> mUwbAvailabilityCallback.onUwbAvailabilityChanged(
+                                        isAvailable(), mLastStateChangeReason));
+                    }
+                };
         if (mHasUwbFeature) {
             mUwbManager = context.getSystemService(UwbManager.class);
             requireNonNull(mUwbManager);
-            mAdapterState = mUwbManager.getAdapterState();
+            // getAdapterState was added in Android T.
+            if (VERSION.SDK_INT >= VERSION_CODES.TIRAMISU) {
+                mAdapterState = mUwbManager.getAdapterState();
+            }
             mUwbManager.registerAdapterStateCallback(mSerialExecutor, mAdapterStateCallback);
         } else {
             mUwbManager = null;
@@ -87,7 +115,7 @@ public class UwbServiceImpl {
         UwbManager uwbManagerWithContext = context.getSystemService(UwbManager.class);
         return new RangingController(
                 uwbManagerWithContext, mSerialExecutor, new OpAsyncCallbackRunner<>(),
-                        mUwbFeatureFlags);
+                mUwbFeatureFlags);
     }
 
     /** Gets a Ranging Controlee session with given context. */
@@ -95,7 +123,7 @@ public class UwbServiceImpl {
         UwbManager uwbManagerWithContext = context.getSystemService(UwbManager.class);
         return new RangingControlee(
                 uwbManagerWithContext, mSerialExecutor, new OpAsyncCallbackRunner<>(),
-                        mUwbFeatureFlags);
+                mUwbFeatureFlags);
     }
 
     /** Returns multi-chip information. */
@@ -129,21 +157,30 @@ public class UwbServiceImpl {
         return mHasUwbFeature && mAdapterState != STATE_DISABLED;
     }
 
+    /** Gets the reason code for last state change. */
+    public int getLastStateChangeReason() {
+        return mLastStateChangeReason;
+    }
+
     /** Gets ranging capabilities of the device. */
     public RangingCapabilities getRangingCapabilities() {
         requireNonNull(mUwbManager);
         requireNonNull(mUwbFeatureFlags);
 
         if (mUwbFeatureFlags.skipRangingCapabilitiesCheck()
-                && VERSION.SDK_INT <= VERSION_CODES.S_V2) {
+                && VERSION.SDK_INT < VERSION_CODES.TIRAMISU) {
             return new RangingCapabilities(
                     /* supportsDistance= */ true,
                     mUwbFeatureFlags.hasAzimuthSupport(),
                     mUwbFeatureFlags.hasElevationSupport(),
+                    /* supportsRangingIntervalReconfigure */ false,
                     /* minRangingInterval= */ RangingCapabilities.FIRA_DEFAULT_RANGING_INTERVAL_MS,
                     new ArrayList<Integer>(RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CHANNEL),
                     new ArrayList<>(RANGE_DATA_NTF_ENABLE),
-                    FIRA_DEFAULT_SUPPORTED_CONFIG_IDS);
+                    FIRA_DEFAULT_SUPPORTED_CONFIG_IDS,
+                    DEFAULT_SUPPORTED_SLOT_DURATIONS,
+                    DEFAULT_SUPPORTED_RANGING_UPDATE_RATE,
+                    /* hasBackgroundRangingSupport */ false);
         }
 
         PersistableBundle bundle = mUwbManager.getSpecificationInfo();
@@ -158,9 +195,14 @@ public class UwbServiceImpl {
         if (minRangingInterval <= 0) {
             minRangingInterval = RangingCapabilities.FIRA_DEFAULT_RANGING_INTERVAL_MS;
         }
+        List<Integer> supportedRangingUpdateRates = new ArrayList<>(
+                DEFAULT_SUPPORTED_RANGING_UPDATE_RATE);
+        if (minRangingInterval <= 120) {
+            supportedRangingUpdateRates.add(Utils.FAST);
+        }
         if (supportedChannels == null || supportedChannels.isEmpty()) {
             supportedChannels =
-                    new ArrayList<Integer>(RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CHANNEL);
+                    new ArrayList<>(RangingCapabilities.FIRA_DEFAULT_SUPPORTED_CHANNEL);
         }
 
         Set<Integer> supportedNtfConfigsSet = new TreeSet<>();
@@ -188,15 +230,30 @@ public class UwbServiceImpl {
                 .HAS_OWR_DL_TDOA_SUPPORT)) {
             supportedConfigIds.add(CONFIG_DL_TDOA_DT_TAG);
         }
+        EnumSet<FiraParams.PrfCapabilityFlag> prfModeCapabilityFlags =
+                specificationParams.getPrfCapabilities();
+        if (prfModeCapabilityFlags.contains(FiraParams.PrfCapabilityFlag.HAS_HPRF_SUPPORT)) {
+            supportedConfigIds.add(CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE_HPRF);
+        }
+        int minSlotDurationUs = specificationParams.getMinSlotDurationUs();
+        List<Integer> supportedSlotDurations = new ArrayList<>(Utils.DURATION_2_MS);
+        if (minSlotDurationUs <= 1000) {
+            supportedSlotDurations.add(Utils.DURATION_1_MS);
+        }
 
         return new RangingCapabilities(
                 true,
                 aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_AZIMUTH_SUPPORT),
                 aoaCapabilityFlags.contains(FiraParams.AoaCapabilityFlag.HAS_ELEVATION_SUPPORT),
+                specificationParams.hasBlockStridingSupport(),
                 minRangingInterval,
-                supportedChannels,
-                supportedNtfConfigs,
-                supportedConfigIds);
+                ImmutableList.copyOf(supportedChannels),
+                ImmutableList.copyOf(supportedNtfConfigs),
+                ImmutableList.copyOf(supportedConfigIds),
+                ImmutableList.copyOf(supportedSlotDurations),
+                ImmutableList.copyOf(supportedRangingUpdateRates),
+                specificationParams.hasBackgroundRangingSupport()
+        );
     }
 
     /**
