@@ -182,8 +182,24 @@
     configured for the CCC ranging session. -->
     <bool name = "ccc_absolute_uwb_initiation_time_enabled">false</bool>
 
+    <!-- Whether to disable uwb until first toggle or not.
+    If enabled, UWB will remain disabled on boot until the user toggles UWB on for the first time.
+    -->
+    <bool name = "uwb_disabled_until_first_toggle">false</bool>
+
     <!-- Whether to interpret CCC supported sync codes value as little endian.
     If enabled, CCC supported sync codes value will be interpreted as little endian.
     -->
     <bool name = "ccc_supported_sync_codes_little_endian">false</bool>
+
+    <!-- Whether to use a persistent cache in the algorithm to determine country code or not.
+    If enabled, will fallback to the cache to determine device location for
+    UWB regulatory purposes when  other sources (telephony, wifi, location, etc) is not available.
+    -->
+    <bool name = "persistent_cache_use_for_country_code_enabled">false</bool>
+
+    <!-- Whether hardware idle turn off is enabled or not.
+    If enabled, some clients must explicitly request UWB to be enabled on top of user setting.
+    -->
+    <bool name = "hw_idle_turn_off_enabled">false</bool>
 </resources>
