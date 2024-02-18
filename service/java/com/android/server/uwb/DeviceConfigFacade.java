@@ -90,8 +90,12 @@ public class DeviceConfigFacade {
     private boolean mCccRangingStoppedParamsSendEnabled;
     // Flag to enable the UWB Initiation time as an absolute time, for a CCC ranging session.
     private boolean mCccAbsoluteUwbInitiationTimeEnabled;
+    // Flag to disable UWB until first toggle
+    private boolean mUwbDisabledUntilFirstToggle;
     // Flag to interpret CCC supported sync codes value as little endian
     private boolean mCccSupportedSyncCodesLittleEndian;
+    private boolean mPersistentCacheUseForCountryCodeEnabled;
+    private boolean mHwIdleTurnOffEnabled;
 
     public DeviceConfigFacade(Handler handler, Context context) {
         mContext = context;
@@ -268,10 +272,30 @@ public class DeviceConfigFacade {
                 mContext.getResources().getBoolean(R.bool.ccc_absolute_uwb_initiation_time_enabled)
         );
 
+        mUwbDisabledUntilFirstToggle = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "uwb_disabled_until_first_toggle",
+                mContext.getResources().getBoolean(R.bool.uwb_disabled_until_first_toggle)
+        );
+
+
         mCccSupportedSyncCodesLittleEndian = DeviceConfig.getBoolean(
                 DeviceConfig.NAMESPACE_UWB,
                 "ccc_supported_sync_codes_little_endian",
                 mContext.getResources().getBoolean(R.bool.ccc_supported_sync_codes_little_endian)
+        );
+
+        mPersistentCacheUseForCountryCodeEnabled = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "persistent_cache_use_for_country_code_enabled",
+                mContext.getResources().getBoolean(
+                        R.bool.persistent_cache_use_for_country_code_enabled)
+        );
+
+        mHwIdleTurnOffEnabled = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "hw_idle_turn_off_enabled",
+                mContext.getResources().getBoolean(R.bool.hw_idle_turn_off_enabled)
         );
 
         // A little parsing and cleanup:
@@ -533,9 +557,32 @@ public class DeviceConfigFacade {
     }
 
     /**
+     * Returns whether to disable uwb until first toggle or not.
+     * If enabled, UWB will remain disabled on boot until the user toggles UWB on for the
+     * first time.
+     */
+    public boolean isUwbDisabledUntilFirstToggle() {
+        return mUwbDisabledUntilFirstToggle;
+    }
+
+    /**
      * Returns whether CCC supported sync codes value is interpreted as little endian.
      */
     public boolean isCccSupportedSyncCodesLittleEndian() {
         return mCccSupportedSyncCodesLittleEndian;
+    }
+
+    /**
+     * Returns whether to use persistent cache in the algorithm to determine country code or not.
+     */
+    public boolean isPersistentCacheUseForCountryCodeEnabled() {
+        return mPersistentCacheUseForCountryCodeEnabled;
+    }
+
+    /**
+     * Returns whether hardware idle turn off is enabled or not.
+     */
+    public boolean isHwIdleTurnOffEnabled() {
+        return mHwIdleTurnOffEnabled;
     }
 }
