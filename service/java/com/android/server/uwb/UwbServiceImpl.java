@@ -27,6 +27,7 @@ import android.content.IntentFilter;
 import android.database.ContentObserver;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
 import android.os.PersistableBundle;
 import android.os.Process;
@@ -368,6 +369,17 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         mUwbServiceCore.sendData(sessionHandle, remoteDeviceAddress, params, data);
     }
 
+
+    @Override
+    public void setDataTransferPhaseConfig(SessionHandle sessionHandle, PersistableBundle params)
+            throws RemoteException {
+        if (!SdkLevel.isAtLeastV() || !mUwbInjector.getFeatureFlags().dataTransferPhaseConfig()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.setDataTransferPhaseConfig(sessionHandle, params);
+    }
+
     @Override
     public void updateRangingRoundsDtTag(SessionHandle sessionHandle,
             PersistableBundle parameters) throws RemoteException {
@@ -416,6 +428,31 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
             return;
         }
         mUwbServiceCore.setEnabled(isUwbEnabled());
+    }
+
+    @Override
+    public synchronized boolean isHwIdleTurnOffEnabled() throws RemoteException {
+        return mUwbInjector.getDeviceConfigFacade().isHwIdleTurnOffEnabled();
+    }
+
+    @Override
+    public synchronized boolean isHwEnableRequested(AttributionSource attributionSource)
+            throws RemoteException {
+        if (!mUwbInjector.getDeviceConfigFacade().isHwIdleTurnOffEnabled()) {
+            throw new IllegalStateException("Hw Idle turn off not enabled");
+        }
+        return mUwbServiceCore.isHwEnableRequested(attributionSource);
+    }
+
+    @Override
+    public synchronized void requestHwEnabled(
+            boolean enabled, AttributionSource attributionSource, IBinder binder)
+            throws RemoteException {
+        enforceUwbPrivilegedPermission();
+        if (!mUwbInjector.getDeviceConfigFacade().isHwIdleTurnOffEnabled()) {
+            throw new IllegalStateException("Hw Idle turn off not enabled");
+        }
+        mUwbServiceCore.requestHwEnabled(enabled, attributionSource, binder);
     }
 
     @Override

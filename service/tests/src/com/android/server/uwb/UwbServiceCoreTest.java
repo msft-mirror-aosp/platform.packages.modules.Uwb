@@ -271,6 +271,7 @@ public class UwbServiceCoreTest {
         when(mUwbInjector.getMultichipData()).thenReturn(uwbMultichipData);
         when(mDeviceConfigFacade.getBugReportMinIntervalMs())
                 .thenReturn(DeviceConfigFacade.DEFAULT_BUG_REPORT_MIN_INTERVAL_MS);
+        when(mDeviceConfigFacade.isHwIdleTurnOffEnabled()).thenReturn(false);
         when(mUwbInjector.getProfileManager()).thenReturn(mProfileManager);
         doAnswer(invocation -> {
             FutureTask t = invocation.getArgument(0);
@@ -1386,6 +1387,31 @@ public class UwbServiceCoreTest {
 
         try {
             mUwbServiceCore.sendData(sessionHandle, uwbAddress, params, data);
+            fail();
+        } catch (IllegalStateException e) { }
+    }
+
+    @Test
+    public void testSetDataTransferPhaseConfig_success() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        PersistableBundle params = mock(PersistableBundle.class);
+
+        mUwbServiceCore.setDataTransferPhaseConfig(sessionHandle, params);
+        verify(mUwbSessionManager).setDataTransferPhaseConfig(
+                eq(sessionHandle), eq(params));
+    }
+
+    @Test
+    public void testSetDataTransferPhaseConfig_whenUwbIsDisabled() throws Exception {
+        disableUwb();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        PersistableBundle params = mock(PersistableBundle.class);
+
+        try {
+            mUwbServiceCore.setDataTransferPhaseConfig(sessionHandle, params);
             fail();
         } catch (IllegalStateException e) { }
     }
