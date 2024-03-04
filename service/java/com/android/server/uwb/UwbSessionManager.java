@@ -446,10 +446,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                 && state == UwbUciConstants.UWB_SESSION_STATE_IDLE
                 && reasonCode != REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS)) {
             Log.d(TAG, "Session status NTF is received due to in-band session state change");
-        } else {
-            synchronized (uwbSession.getWaitObj()) {
-                uwbSession.getWaitObj().blockingNotify();
-            }
+        }
+
+        // Store the reasonCode before notifying on the waitObj.
+        synchronized (uwbSession.getWaitObj()) {
+            uwbSession.setLastSessionStatusNtfReasonCode(reasonCode);
+            uwbSession.getWaitObj().blockingNotify();
         }
 
         //TODO : process only error handling in this switch function, b/218921154
@@ -1459,9 +1461,12 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
                                     uwbSession.reconfigureFiraSessionOnFgStateChange();
                                 }
                             } else {
-                                status = UwbUciConstants.STATUS_CODE_FAILED;
-                                mSessionNotificationManager.onRangingStartFailed(uwbSession,
-                                        status);
+                                int reasonCode = uwbSession.getLastSessionStatusNtfReasonCode();
+                                status =
+                                        UwbSessionNotificationHelper.convertUciReasonCodeToUciStatusCode(
+                                               reasonCode);
+                                mSessionNotificationManager.onRangingStartFailedWithUciReasonCode(
+                                        uwbSession, reasonCode);
                             }
                         }
                         return status;
@@ -1986,6 +1991,9 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
         // Store a Map<SequenceNumber, SendDataInfo>, for every Data packet (sent to UWBS). It's
         // used when the corresponding DataTransferStatusNtf is received (from UWBS).
         private final ConcurrentHashMap<Long, SendDataInfo> mSendDataInfoMap;
+
+        // reasonCode from the last received SESSION_STATUS_NTF for this session.
+        private int mLastSessionStatusNtfReasonCode = -1;
 
         @VisibleForTesting
         public List<UwbControlee> mControleeList;
@@ -2680,6 +2688,14 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
 
         public void setOperationType(int type) {
             mOperationType = type;
+        }
+
+        public int getLastSessionStatusNtfReasonCode() {
+            return mLastSessionStatusNtfReasonCode;
+        }
+
+        public void setLastSessionStatusNtfReasonCode(int lastSessionStatusNtfReasonCode) {
+            mLastSessionStatusNtfReasonCode = lastSessionStatusNtfReasonCode;
         }
 
         /** Creates a filter engine based on the device configuration. */
