@@ -834,7 +834,6 @@ public class UwbSessionNotificationManager {
                         .setActiveRangingRounds(uwbDlTDoAMeasurements[i].getActiveRangingRounds())
                         .setRoundIndex(uwbDlTDoAMeasurements[i].getRoundIndex())
                         .build();
-
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(
                         dlTDoAMeasurement.toBundle());
 

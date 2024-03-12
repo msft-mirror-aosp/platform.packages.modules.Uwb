@@ -19,6 +19,7 @@ package com.android.server.uwb;
 import static android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_BACKGROUND;
 import static android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND;
 
+import static com.android.modules.utils.build.SdkLevel.isAtLeastV;
 import static com.android.server.uwb.UwbSessionManager.SESSION_OPEN_RANGING;
 import static com.android.server.uwb.UwbTestUtils.DATA_PAYLOAD;
 import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
@@ -86,6 +87,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
+import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.app.ActivityManager;
 import android.app.ActivityManager.OnUidImportanceListener;
 import android.app.AlarmManager;
@@ -95,6 +98,7 @@ import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.test.TestLooper;
+import android.permission.flags.Flags;
 import android.util.Pair;
 import android.uwb.IUwbAdapter;
 import android.uwb.IUwbRangingCallbacks;
@@ -134,7 +138,6 @@ import com.google.uwb.support.ccc.CccSpecificationParams;
 import com.google.uwb.support.ccc.CccStartRangingParams;
 import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate;
 import com.google.uwb.support.fira.FiraDataTransferPhaseConfig;
-import com.google.uwb.support.fira.FiraDataTransferPhaseConfigStatusCode;
 import com.google.uwb.support.fira.FiraHybridSessionControleeConfig;
 import com.google.uwb.support.fira.FiraHybridSessionControllerConfig;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
@@ -2147,18 +2150,28 @@ public class UwbSessionManagerTest {
         assertThat(mTestLooper.isIdle()).isFalse();
     }
 
+    private AttributionSource.Builder setNextAttributionSource(
+            @NonNull AttributionSource.Builder builder,
+            @Nullable AttributionSource nextAttributionSource) {
+        if (isAtLeastV() && Flags.setNextAttributionSource()) {
+            return builder.setNextAttributionSource(nextAttributionSource);
+        } else {
+            return builder.setNext(nextAttributionSource);
+        }
+    }
+
     private UwbSession initUwbSessionForNonSystemAppInFgInChain() throws Exception {
         when(mUwbInjector.isSystemApp(UID_2, PACKAGE_NAME_2)).thenReturn(false);
         when(mUwbInjector.isForegroundAppOrService(UID_2, PACKAGE_NAME_2))
                 .thenReturn(true);
 
         // simulate system app triggered the request on behalf of a fg app in fg.
-        AttributionSource attributionSource = new AttributionSource.Builder(UID)
-                .setPackageName(PACKAGE_NAME)
-                .setNext(new AttributionSource.Builder(UID_2)
+        AttributionSource.Builder builder = new AttributionSource.Builder(UID)
+                .setPackageName(PACKAGE_NAME);
+        builder = setNextAttributionSource(builder, new AttributionSource.Builder(UID_2)
                         .setPackageName(PACKAGE_NAME_2)
-                        .build())
-                .build();
+                        .build());
+        AttributionSource attributionSource = builder.build();
 
         UwbSession uwbSession = setUpUwbSessionForExecution(attributionSource);
         mUwbSessionManager.initSession(attributionSource, uwbSession.getSessionHandle(),
@@ -2396,12 +2409,12 @@ public class UwbSessionManagerTest {
                 .thenReturn(false);
 
         // simulate system app triggered the request on behalf of a fg app not in fg.
-        AttributionSource attributionSource = new AttributionSource.Builder(UID)
-                .setPackageName(PACKAGE_NAME)
-                .setNext(new AttributionSource.Builder(UID_2)
+        AttributionSource.Builder builder = new AttributionSource.Builder(UID)
+                .setPackageName(PACKAGE_NAME);
+        builder = setNextAttributionSource(builder, new AttributionSource.Builder(UID_2)
                         .setPackageName(PACKAGE_NAME_2)
-                        .build())
-                .build();
+                        .build());
+        AttributionSource attributionSource = builder.build();
         UwbSession uwbSession = setUpUwbSessionForExecution(attributionSource);
         mUwbSessionManager.initSession(attributionSource, uwbSession.getSessionHandle(),
                 TEST_SESSION_ID, TEST_SESSION_TYPE, FiraParams.PROTOCOL_NAME,
@@ -4499,7 +4512,24 @@ public class UwbSessionManagerTest {
 
     @Test
     public void testSetDataTransferPhaseConfig() throws Exception {
-        UwbSession uwbSession = prepareExistingUwbSession();
+        FiraOpenSessionParams params = new FiraOpenSessionParams.Builder()
+                .setDeviceAddress(UwbAddress.fromBytes(new byte[] {(byte) 0x01, (byte) 0x02 }))
+                .setVendorId(new byte[] { (byte) 0x00, (byte) 0x01 })
+                .setStaticStsIV(new byte[] { (byte) 0x01, (byte) 0x02, (byte) 0x03,
+                        (byte) 0x04, (byte) 0x05, (byte) 0x06 })
+                .setDestAddressList(Arrays.asList(
+                        UWB_DEST_ADDRESS))
+                .setProtocolVersion(new FiraProtocolVersion(1, 0))
+                .setSessionId(10)
+                .setSessionType(FiraParams.SESSION_TYPE_DATA_TRANSFER)
+                .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_CONTROLLER)
+                .setDeviceRole(FiraParams.RANGING_DEVICE_ROLE_INITIATOR)
+                .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
+                .setRangingIntervalMs(TEST_RANGING_INTERVAL_MS)
+                .setDataRepetitionCount(0)
+                .build();
+        UwbSession uwbSession = prepareExistingUwbSessionWithSessionType(
+                (byte) FiraParams.SESSION_TYPE_DATA_TRANSFER, params);
         byte dtpcmRepetition = 0;
         byte dataTransferControl = 0;
         byte dtpmlSize = 2;
@@ -4523,7 +4553,7 @@ public class UwbSessionManagerTest {
                 new FiraDataTransferPhaseConfig.Builder()
                    .setDtpcmRepetition((byte) dtpcmRepetition)
                    .setMacAddressMode((byte) 0)
-                   .setSlotBitmapSize((byte) 1)
+                   .setSlotBitmapSize((byte) 0)
                    .setDataTransferPhaseManagementList(firaDataTransferPhaseManagementList)
                    .build();
 
@@ -4536,14 +4566,31 @@ public class UwbSessionManagerTest {
                 uwbSession.getSessionHandle(), firaDataTransferPhaseConfig.toBundle());
         mTestLooper.dispatchNext();
 
-        assertThat(mNativeUwbManager.setDataTransferPhaseConfig(TEST_SESSION_ID,
+        verify(mNativeUwbManager).setDataTransferPhaseConfig(TEST_SESSION_ID,
                 dtpcmRepetition, dataTransferControl, dtpmlSize, macAddressBytes,
-                slotBitmapBytes, TEST_CHIP_ID)).isEqualTo(UwbUciConstants.STATUS_CODE_OK);
+                slotBitmapBytes, TEST_CHIP_ID);
     }
 
     @Test
     public void testSetDataTransferPhaseConfigNonZeroslotBitMap() throws Exception {
-        UwbSession uwbSession = prepareExistingUwbSession();
+        FiraOpenSessionParams params = new FiraOpenSessionParams.Builder()
+                .setDeviceAddress(UwbAddress.fromBytes(new byte[] {(byte) 0x01, (byte) 0x02 }))
+                .setVendorId(new byte[] { (byte) 0x00, (byte) 0x01 })
+                .setStaticStsIV(new byte[] { (byte) 0x01, (byte) 0x02, (byte) 0x03,
+                        (byte) 0x04, (byte) 0x05, (byte) 0x06 })
+                .setDestAddressList(Arrays.asList(
+                        UWB_DEST_ADDRESS))
+                .setProtocolVersion(new FiraProtocolVersion(1, 0))
+                .setSessionId(10)
+                .setSessionType(FiraParams.SESSION_TYPE_RANGING_AND_IN_BAND_DATA)
+                .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_CONTROLLER)
+                .setDeviceRole(FiraParams.RANGING_DEVICE_ROLE_INITIATOR)
+                .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
+                .setRangingIntervalMs(TEST_RANGING_INTERVAL_MS)
+                .setDataRepetitionCount(0)
+                .build();
+        UwbSession uwbSession = prepareExistingUwbSessionWithSessionType(
+                (byte) FiraParams.SESSION_TYPE_RANGING_AND_IN_BAND_DATA, params);
         byte dtpcmRepetition = 0;
         byte dataTransferControl = 4;
         byte dtpmlSize = 2;
@@ -4568,7 +4615,7 @@ public class UwbSessionManagerTest {
                 new FiraDataTransferPhaseConfig.Builder()
                    .setDtpcmRepetition((byte) dtpcmRepetition)
                    .setMacAddressMode((byte) 0)
-                   .setSlotBitmapSize((byte) 4)
+                   .setSlotBitmapSize((byte) 2)
                    .setDataTransferPhaseManagementList(firaDataTransferPhaseManagementList)
                    .build();
 
@@ -4581,9 +4628,9 @@ public class UwbSessionManagerTest {
                 uwbSession.getSessionHandle(), firaDataTransferPhaseConfig.toBundle());
         mTestLooper.dispatchNext();
 
-        assertThat(mNativeUwbManager.setDataTransferPhaseConfig(TEST_SESSION_ID,
+        verify(mNativeUwbManager).setDataTransferPhaseConfig(TEST_SESSION_ID,
                 dtpcmRepetition, dataTransferControl, dtpmlSize, macAddressBytes,
-                slotBitmapBytes, TEST_CHIP_ID)).isEqualTo(UwbUciConstants.STATUS_CODE_OK);
+                slotBitmapBytes, TEST_CHIP_ID);
     }
 
     @Test
@@ -4593,24 +4640,10 @@ public class UwbSessionManagerTest {
         byte dtpmlSize = 2;
         byte[] macAddressBytes = new byte[] { 0x22, 0x11, 0x44, 0x33 };
         byte[] slotBitmapBytes = new byte[] { 0x10, 0x20 };
-        FiraOpenSessionParams params = new FiraOpenSessionParams.Builder()
-                .setDeviceAddress(UwbAddress.fromBytes(new byte[] {(byte) 0x01, (byte) 0x02 }))
-                .setVendorId(new byte[] { (byte) 0x00, (byte) 0x01 })
-                .setStaticStsIV(new byte[] { (byte) 0x01, (byte) 0x02, (byte) 0x03,
-                        (byte) 0x04, (byte) 0x05, (byte) 0x06 })
-                .setDestAddressList(Arrays.asList(
-                        UWB_DEST_ADDRESS))
-                .setProtocolVersion(new FiraProtocolVersion(1, 0))
-                .setSessionId(10)
-                /* Invalid session type for data transfer phase config */
-                .setSessionType(FiraParams.SESSION_TYPE_RANGING)
-                .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_CONTROLLER)
-                .setDeviceRole(FiraParams.RANGING_DEVICE_ROLE_INITIATOR)
-                .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
-                .setRangingIntervalMs(TEST_RANGING_INTERVAL_MS)
-                .setDataRepetitionCount(0)
-                .build();
-        UwbSession uwbSession = prepareExistingUwbSessionActive(params);
+        /** By default SESSION_TYPE_RANGING is used, so testcase is expected to
+         *  fail due to Invalid session type for data transfer phase config
+         */
+        UwbSession uwbSession = prepareExistingUwbSessionActive();
 
         List<FiraDataTransferPhaseConfig.FiraDataTransferPhaseManagementList>
                     firaDataTransferPhaseManagementList =  new ArrayList<>();
@@ -5429,10 +5462,6 @@ public class UwbSessionManagerTest {
     public void onDataTransferPhaseConfigNotificationReceived()
             throws Exception {
         UwbSession uwbSession = prepareExistingUwbSession();
-        PersistableBundle bundle = new FiraDataTransferPhaseConfigStatusCode.Builder()
-                 .setStatusCode(
-                 UwbUciConstants.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS)
-                 .build().toBundle();
         //successfully setting the configuration
         mUwbSessionManager.onDataTransferPhaseConfigNotificationReceived(uwbSession.getSessionId(),
                 UwbUciConstants.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS);
