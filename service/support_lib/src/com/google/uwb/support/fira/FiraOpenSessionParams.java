@@ -56,7 +56,11 @@ public class FiraOpenSessionParams extends FiraParams {
     // Dest address list
     private final List<UwbAddress> mDestAddressList;
 
-    private final long mInitiationTimeMs;
+    // FiRa 1.0: Relative time (in milli-seconds).
+    // FiRa 2.0: Relative time (in milli-seconds).
+    private final long mInitiationTime;
+    // FiRa 2.0: Absolute time in UWB time domain, as specified in CR-272 (in micro-seconds).
+    private final long mAbsoluteInitiationTime;
     private final int mSlotDurationRstu;
     private final int mSlotsPerRangingRound;
     private final int mRangingIntervalMs;
@@ -68,8 +72,11 @@ public class FiraOpenSessionParams extends FiraParams {
 
     private final int mSessionPriority;
     @MacAddressMode final int mMacAddressMode;
-    private final boolean mHasResultReportPhase;
+    private final boolean mHasRangingResultReportMessage;
+    private final boolean mHasControlMessage;
+    private final boolean mHasRangingControlPhase;
     @MeasurementReportType private final int mMeasurementReportType;
+    @MeasurementReportPhase private final int mMeasurementReportPhase;
 
     @IntRange(from = 1, to = 10)
     private final int mInBandTerminationAttemptCount;
@@ -107,7 +114,7 @@ public class FiraOpenSessionParams extends FiraParams {
 
     private final boolean mIsRssiReportingEnabled;
     private final boolean mIsDiagnosticsEnabled;
-    private final int mDiagramsFrameReportsFieldsFlags;
+    private final byte mDiagramsFrameReportsFieldsFlags;
     private final boolean mIsKeyRotationEnabled;
     private final int mKeyRotationRate;
     @AoaResultRequestMode private final int mAoaResultRequest;
@@ -127,14 +134,25 @@ public class FiraOpenSessionParams extends FiraParams {
     private final int mNumOfMsrmtFocusOnAoaElevation;
     private final Long mRangingErrorStreakTimeoutMs;
     private final int mLinkLayerMode;
+    private final int mDataRepetitionCount;
+    @RangingTimeStruct
+    private final int mRangingTimeStruct;
     private final int mMinFramesPerRr;
     private final int mMtuSize;
     private final int mInterFrameInterval;
+    private final int mDlTdoaBlockStriding;
     private final int mUlTdoaTxIntervalMs;
     private final int mUlTdoaRandomWindowMs;
     @UlTdoaDeviceIdType private final int mUlTdoaDeviceIdType;
     @Nullable private final byte[] mUlTdoaDeviceId;
     @UlTdoaTxTimestampType private final int mUlTdoaTxTimestampType;
+    @FilterType private final int mFilterType;
+    private final int mMaxNumberOfMeasurements;
+    private final boolean mSessionDataTransferStatusNtfConfig;
+    @Nullable private final int mReferenceTimeBase;
+    @Nullable private final int mReferenceSessionHandle;
+    @Nullable private final int mSessionOffsetInMicroSeconds;
+    private final int mApplicationDataEndpoint;
 
     private static final int BUNDLE_VERSION_1 = 1;
     private static final int BUNDLE_VERSION_CURRENT = BUNDLE_VERSION_1;
@@ -149,6 +167,7 @@ public class FiraOpenSessionParams extends FiraParams {
     private static final String KEY_DEVICE_ADDRESS = "device_address";
     private static final String KEY_DEST_ADDRESS_LIST = "dest_address_list";
     private static final String KEY_INITIATION_TIME_MS = "initiation_time_ms";
+    private static final String KEY_ABSOLUTE_INITIATION_TIME_US = "absolute_initiation_time_us";
     private static final String KEY_SLOT_DURATION_RSTU = "slot_duration_rstu";
     private static final String KEY_SLOTS_PER_RANGING_ROUND = "slots_per_ranging_round";
     private static final String KEY_RANGING_INTERVAL_MS = "ranging_interval_ms";
@@ -205,8 +224,12 @@ public class FiraOpenSessionParams extends FiraParams {
             "has_angle_of_arrival_elevation_report";
     private static final String KEY_HAS_ANGLE_OF_ARRIVAL_FIGURE_OF_MERIT_REPORT =
             "has_angle_of_arrival_figure_of_merit_report";
-    private static final String KEY_HAS_RESULT_REPORT_PHASE = "has_result_report_phase";
+    // key value not the same as constant name to maintain backwards compatibility.
+    private static final String KEY_HAS_RANGING_RESULT_REPORT_MESSAGE = "has_result_report_phase";
+    private static final String KEY_HAS_CONTROL_MESSAGE = "has_control_message";
+    private static final String KEY_HAS_RANGING_CONTROL_PHASE = "has_ranging_control_phase";
     private static final String KEY_MEASUREMENT_REPORT_TYPE = "measurement_report_type";
+    private static final String KEY_MEASUREMENT_REPORT_PHASE = "measurement_report_phase";
     private static final String KEY_AOA_TYPE = "aoa_type";
     private static final String KEY_NUM_OF_MSRMT_FOCUS_ON_RANGE =
             "num_of_msrmt_focus_on_range";
@@ -218,17 +241,29 @@ public class FiraOpenSessionParams extends FiraParams {
             "ranging_error_streak_timeout_ms";
     private static final String KEY_LINK_LAYER_MODE =
             "link_layer_mode";
+    private static final String KEY_DATA_REPETITION_COUNT = "data_repetition_count";
+    private static final String KEY_RANGING_TIME_STRUCT = "ranging_time_struct";
     private static final String KEY_MIN_FRAMES_PER_RR =
             "min_frames_per_rr";
     private static final String KEY_MTU_SIZE =
             "mtu_size";
     private static final String KEY_INTER_FRAME_INTERVAL =
             "inter_frame_interval";
+    private static final String KEY_DLTDOA_BLOCK_STRIDING = "dltdoa_block_striding";
     private static final String UL_TDOA_TX_INTERVAL = "ul_tdoa_tx_interval";
     private static final String UL_TDOA_RANDOM_WINDOW = "ul_tdoa_random_window";
     private static final String UL_TDOA_DEVICE_ID_TYPE = "ul_tdoa_device_id_type";
     private static final String UL_TDOA_DEVICE_ID = "ul_tdoa_device_id";
     private static final String UL_TDOA_TX_TIMESTAMP_TYPE = "ul_tdoa_tx_timestamp_type";
+    private static final String KEY_FILTER_TYPE = "filter_type";
+    private static final String KEY_MAX_NUMBER_OF_MEASUREMENTS = "max_number_of_measurements";
+    private static final String KEY_SESSION_DATA_TRANSFER_STATUS_NTF_CONFIG =
+            "session_data_transfer_status_ntf_config";
+    private static final String KEY_REFERENCE_TIME_BASE = "reference_time_base";
+    private static final String KEY_REFERENCE_SESSION_HANDLE = "reference_session_handle";
+    private static final String KEY_SESSION_OFFSET_IN_MICRO_SECONDS =
+                "session_offset_in_micro_seconds";
+    private static final String KEY_APPLICATION_DATA_ENDPOINT = "application_data_endpoint";
 
     private FiraOpenSessionParams(
             FiraProtocolVersion protocolVersion,
@@ -240,7 +275,8 @@ public class FiraOpenSessionParams extends FiraParams {
             @MultiNodeMode int multiNodeMode,
             UwbAddress deviceAddress,
             List<UwbAddress> destAddressList,
-            long initiationTimeMs,
+            long initiationTime,
+            long absoluteInitiationTime,
             int slotDurationRstu,
             int slotsPerRangingRound,
             int rangingIntervalMs,
@@ -249,8 +285,11 @@ public class FiraOpenSessionParams extends FiraParams {
             @IntRange(from = 0, to = 65535) int maxRangingRoundRetries,
             int sessionPriority,
             @MacAddressMode int macAddressMode,
-            boolean hasResultReportPhase,
+            boolean hasRangingResultReportMessage,
+            boolean hasControlMessage,
+            boolean hasRangingControlPhase,
             @MeasurementReportType int measurementReportType,
+            @MeasurementReportPhase int measurementReportPhase,
             @IntRange(from = 1, to = 10) int inBandTerminationAttemptCount,
             @UwbChannel int channelNumber,
             int preambleCodeIndex,
@@ -274,7 +313,7 @@ public class FiraOpenSessionParams extends FiraParams {
             @Nullable byte[] staticStsIV,
             boolean isRssiReportingEnabled,
             boolean isDiagnosticsEnabled,
-            int diagramsFrameReportsFieldsFlags,
+            byte diagramsFrameReportsFieldsFlags,
             boolean isKeyRotationEnabled,
             int keyRotationRate,
             @AoaResultRequestMode int aoaResultRequest,
@@ -295,14 +334,24 @@ public class FiraOpenSessionParams extends FiraParams {
             int numOfMsrmtFocusOnAoaElevation,
             Long rangingErrorStreakTimeoutMs,
             int linkLayerMode,
+            int dataRepetitionCount,
+            @RangingTimeStruct int rangingTimeStruct,
             int minFramePerRr,
             int mtuSize,
             int interFrameInterval,
+            int dlTdoaBlockStriding,
             int ulTdoaTxIntervalMs,
             int ulTdoaRandomWindowMs,
             int ulTdoaDeviceIdType,
             @Nullable byte[] ulTdoaDeviceId,
-            int ulTdoaTxTimestampType) {
+            int ulTdoaTxTimestampType,
+            int filterType,
+            int maxNumberOfMeasurements,
+            boolean sessionDataTransferStatusNtfConfig,
+            int referenceTimeBase,
+            int referenceSessionHandle,
+            int sessionOffsetInMicroSecond,
+            int applicationDataEndpoint) {
         mProtocolVersion = protocolVersion;
         mSessionId = sessionId;
         mSessionType = sessionType;
@@ -312,7 +361,8 @@ public class FiraOpenSessionParams extends FiraParams {
         mMultiNodeMode = multiNodeMode;
         mDeviceAddress = deviceAddress;
         mDestAddressList = destAddressList;
-        mInitiationTimeMs = initiationTimeMs;
+        mInitiationTime = initiationTime;
+        mAbsoluteInitiationTime = absoluteInitiationTime;
         mSlotDurationRstu = slotDurationRstu;
         mSlotsPerRangingRound = slotsPerRangingRound;
         mRangingIntervalMs = rangingIntervalMs;
@@ -321,8 +371,11 @@ public class FiraOpenSessionParams extends FiraParams {
         mMaxRangingRoundRetries = maxRangingRoundRetries;
         mSessionPriority = sessionPriority;
         mMacAddressMode = macAddressMode;
-        mHasResultReportPhase = hasResultReportPhase;
+        mHasRangingResultReportMessage = hasRangingResultReportMessage;
+        mHasControlMessage = hasControlMessage;
+        mHasRangingControlPhase = hasRangingControlPhase;
         mMeasurementReportType = measurementReportType;
+        mMeasurementReportPhase = measurementReportPhase;
         mInBandTerminationAttemptCount = inBandTerminationAttemptCount;
         mChannelNumber = channelNumber;
         mPreambleCodeIndex = preambleCodeIndex;
@@ -367,14 +420,24 @@ public class FiraOpenSessionParams extends FiraParams {
         mNumOfMsrmtFocusOnAoaElevation = numOfMsrmtFocusOnAoaElevation;
         mRangingErrorStreakTimeoutMs = rangingErrorStreakTimeoutMs;
         mLinkLayerMode = linkLayerMode;
+        mDataRepetitionCount = dataRepetitionCount;
+        mRangingTimeStruct = rangingTimeStruct;
         mMinFramesPerRr = minFramePerRr;
         mMtuSize = mtuSize;
         mInterFrameInterval = interFrameInterval;
+        mDlTdoaBlockStriding = dlTdoaBlockStriding;
         mUlTdoaTxIntervalMs = ulTdoaTxIntervalMs;
         mUlTdoaRandomWindowMs = ulTdoaRandomWindowMs;
         mUlTdoaDeviceIdType = ulTdoaDeviceIdType;
         mUlTdoaDeviceId = ulTdoaDeviceId;
         mUlTdoaTxTimestampType = ulTdoaTxTimestampType;
+        mFilterType = filterType;
+        mMaxNumberOfMeasurements = maxNumberOfMeasurements;
+        mSessionDataTransferStatusNtfConfig = sessionDataTransferStatusNtfConfig;
+        mReferenceTimeBase = referenceTimeBase;
+        mReferenceSessionHandle = referenceSessionHandle;
+        mSessionOffsetInMicroSeconds = sessionOffsetInMicroSecond;
+        mApplicationDataEndpoint = applicationDataEndpoint;
     }
 
     @Override
@@ -416,11 +479,15 @@ public class FiraOpenSessionParams extends FiraParams {
     }
 
     public List<UwbAddress> getDestAddressList() {
-        return Collections.unmodifiableList(mDestAddressList);
+        return mDestAddressList != null ? Collections.unmodifiableList(mDestAddressList) : null;
     }
 
-    public long getInitiationTimeMs() {
-        return mInitiationTimeMs;
+    public long getInitiationTime() {
+        return mInitiationTime;
+    }
+
+    public long getAbsoluteInitiationTime() {
+        return mAbsoluteInitiationTime;
     }
 
     public int getSlotDurationRstu() {
@@ -457,13 +524,26 @@ public class FiraOpenSessionParams extends FiraParams {
         return mMacAddressMode;
     }
 
-    public boolean hasResultReportPhase() {
-        return mHasResultReportPhase;
+    public boolean hasRangingResultReportMessage() {
+        return mHasRangingResultReportMessage;
+    }
+
+    public boolean hasControlMessage() {
+        return mHasControlMessage;
+    }
+
+    public boolean hasRangingControlPhase() {
+        return mHasRangingControlPhase;
     }
 
     @MeasurementReportType
     public int getMeasurementReportType() {
         return mMeasurementReportType;
+    }
+
+    @MeasurementReportPhase
+    public int getMeasurementReportPhase() {
+        return mMeasurementReportPhase;
     }
 
     @IntRange(from = 1, to = 10)
@@ -575,7 +655,7 @@ public class FiraOpenSessionParams extends FiraParams {
         return mIsDiagnosticsEnabled;
     }
 
-    public int getDiagramsFrameReportsFieldsFlags() {
+    public byte getDiagramsFrameReportsFieldsFlags() {
         return mDiagramsFrameReportsFieldsFlags;
     }
 
@@ -662,6 +742,15 @@ public class FiraOpenSessionParams extends FiraParams {
         return mLinkLayerMode;
     }
 
+    public int getDataRepetitionCount() {
+        return mDataRepetitionCount;
+    }
+
+    @RangingTimeStruct
+    public int getRangingTimeStruct() {
+        return mRangingTimeStruct;
+    }
+
     public int getMinFramesPerRr() {
         return mMinFramesPerRr;
     }
@@ -672,6 +761,10 @@ public class FiraOpenSessionParams extends FiraParams {
 
     public int getInterFrameInterval() {
         return mInterFrameInterval;
+    }
+
+    public int getDlTdoaBlockStriding() {
+        return mDlTdoaBlockStriding;
     }
 
     public int getUlTdoaTxIntervalMs() {
@@ -693,6 +786,33 @@ public class FiraOpenSessionParams extends FiraParams {
 
     public int getUlTdoaTxTimestampType() {
         return mUlTdoaTxTimestampType;
+    }
+
+    @FilterType
+    public int getFilterType() {
+        return mFilterType;
+    }
+
+    public int getMaxNumberOfMeasurements() { return mMaxNumberOfMeasurements; }
+
+    public boolean getSessionDataTransferStatusNtfConfig() {
+        return mSessionDataTransferStatusNtfConfig;
+    }
+
+    public int getReferenceTimeBase() {
+        return mReferenceTimeBase;
+    }
+
+    public int getReferenceSessionHandle() {
+        return mReferenceSessionHandle;
+    }
+
+    public int getSessionOffsetInMicroSeconds() {
+        return mSessionOffsetInMicroSeconds;
+    }
+
+    public int getApplicationDataEndpoint() {
+        return mApplicationDataEndpoint;
     }
 
     @Nullable
@@ -733,15 +853,21 @@ public class FiraOpenSessionParams extends FiraParams {
         // Always store address as long in bundle.
         bundle.putLong(KEY_DEVICE_ADDRESS, uwbAddressToLong(mDeviceAddress));
 
-        // Dest Address list needs to be converted to long array.
-        long[] destAddressList = new long[mDestAddressList.size()];
-        int i = 0;
-        for (UwbAddress destAddress : mDestAddressList) {
-            destAddressList[i++] = uwbAddressToLong(destAddress);
+        if (mDeviceRole != RANGING_DEVICE_DT_TAG &&
+            mScheduledMode != CONTENTION_BASED_RANGING) {
+            // Dest Address list needs to be converted to long array.
+            long[] destAddressList = new long[mDestAddressList.size()];
+            int i = 0;
+            for (UwbAddress destAddress : mDestAddressList) {
+                destAddressList[i++] = uwbAddressToLong(destAddress);
+            }
+            bundle.putLongArray(KEY_DEST_ADDRESS_LIST, destAddressList);
+        } else {
+            bundle.putInt(KEY_DLTDOA_BLOCK_STRIDING, mDlTdoaBlockStriding);
         }
-        bundle.putLongArray(KEY_DEST_ADDRESS_LIST, destAddressList);
 
-        bundle.putLong(KEY_INITIATION_TIME_MS, mInitiationTimeMs);
+        bundle.putLong(KEY_INITIATION_TIME_MS, mInitiationTime);
+        bundle.putLong(KEY_ABSOLUTE_INITIATION_TIME_US, mAbsoluteInitiationTime);
         bundle.putInt(KEY_SLOT_DURATION_RSTU, mSlotDurationRstu);
         bundle.putInt(KEY_SLOTS_PER_RANGING_ROUND, mSlotsPerRangingRound);
         bundle.putInt(KEY_RANGING_INTERVAL_MS, mRangingIntervalMs);
@@ -750,8 +876,11 @@ public class FiraOpenSessionParams extends FiraParams {
         bundle.putInt(KEY_MAX_RANGING_ROUND_RETRIES, mMaxRangingRoundRetries);
         bundle.putInt(KEY_SESSION_PRIORITY, mSessionPriority);
         bundle.putInt(KEY_MAC_ADDRESS_MODE, mMacAddressMode);
-        bundle.putBoolean(KEY_HAS_RESULT_REPORT_PHASE, mHasResultReportPhase);
+        bundle.putBoolean(KEY_HAS_RANGING_RESULT_REPORT_MESSAGE, mHasRangingResultReportMessage);
+        bundle.putBoolean(KEY_HAS_CONTROL_MESSAGE, mHasControlMessage);
+        bundle.putBoolean(KEY_HAS_RANGING_CONTROL_PHASE, mHasRangingControlPhase);
         bundle.putInt(KEY_MEASUREMENT_REPORT_TYPE, mMeasurementReportType);
+        bundle.putInt(KEY_MEASUREMENT_REPORT_PHASE, mMeasurementReportPhase);
         bundle.putInt(KEY_IN_BAND_TERMINATION_ATTEMPT_COUNT, mInBandTerminationAttemptCount);
         bundle.putInt(KEY_CHANNEL_NUMBER, mChannelNumber);
         bundle.putInt(KEY_PREAMBLE_CODE_INDEX, mPreambleCodeIndex);
@@ -765,19 +894,21 @@ public class FiraOpenSessionParams extends FiraParams {
         bundle.putInt(KEY_SFD_ID, mSfdId);
         bundle.putInt(KEY_STS_SEGMENT_COUNT, mStsSegmentCount);
         bundle.putInt(KEY_STS_LENGTH, mStsLength);
-        bundle.putIntArray(KEY_SESSION_KEY, byteArrayToIntArray(mSessionKey));
-        bundle.putIntArray(KEY_SUBSESSION_KEY, byteArrayToIntArray(mSubSessionKey));
         bundle.putInt(KEY_PSDU_DATA_RATE, mPsduDataRate);
         bundle.putInt(KEY_BPRF_PHR_DATA_RATE, mBprfPhrDataRate);
         bundle.putInt(KEY_FCS_TYPE, mFcsType);
         bundle.putBoolean(
                 KEY_IS_TX_ADAPTIVE_PAYLOAD_POWER_ENABLED, mIsTxAdaptivePayloadPowerEnabled);
         bundle.putInt(KEY_STS_CONFIG, mStsConfig);
-        if (mStsConfig == STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY) {
+        if (mStsConfig == STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY
+            || mStsConfig == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
             bundle.putInt(KEY_SUB_SESSION_ID, mSubSessionId);
         }
-        if (mStsConfig == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
-            bundle.putInt(KEY_SUB_SESSION_ID, mSubSessionId);
+        if (mSessionKey != null) {
+            bundle.putIntArray(KEY_SESSION_KEY, byteArrayToIntArray(mSessionKey));
+        }
+        if (mSubSessionKey != null) {
+            bundle.putIntArray(KEY_SUBSESSION_KEY, byteArrayToIntArray(mSubSessionKey));
         }
         bundle.putIntArray(KEY_VENDOR_ID, byteArrayToIntArray(mVendorId));
         bundle.putIntArray(KEY_STATIC_STS_IV, byteArrayToIntArray(mStaticStsIV));
@@ -807,6 +938,8 @@ public class FiraOpenSessionParams extends FiraParams {
         bundle.putInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_ELEVATION, mNumOfMsrmtFocusOnAoaElevation);
         bundle.putLong(RANGING_ERROR_STREAK_TIMEOUT_MS, mRangingErrorStreakTimeoutMs);
         bundle.putInt(KEY_LINK_LAYER_MODE, mLinkLayerMode);
+        bundle.putInt(KEY_DATA_REPETITION_COUNT, mDataRepetitionCount);
+        bundle.putInt(KEY_RANGING_TIME_STRUCT, mRangingTimeStruct);
         bundle.putInt(KEY_MIN_FRAMES_PER_RR, mMinFramesPerRr);
         bundle.putInt(KEY_MTU_SIZE, mMtuSize);
         bundle.putInt(KEY_INTER_FRAME_INTERVAL, mInterFrameInterval);
@@ -815,6 +948,16 @@ public class FiraOpenSessionParams extends FiraParams {
         bundle.putInt(UL_TDOA_DEVICE_ID_TYPE, mUlTdoaDeviceIdType);
         bundle.putIntArray(UL_TDOA_DEVICE_ID, byteArrayToIntArray(mUlTdoaDeviceId));
         bundle.putInt(UL_TDOA_TX_TIMESTAMP_TYPE, mUlTdoaTxTimestampType);
+        bundle.putInt(KEY_FILTER_TYPE, mFilterType);
+        bundle.putInt(KEY_MAX_NUMBER_OF_MEASUREMENTS, mMaxNumberOfMeasurements);
+        bundle.putBoolean(
+                KEY_SESSION_DATA_TRANSFER_STATUS_NTF_CONFIG, mSessionDataTransferStatusNtfConfig);
+        if (mDeviceType == FiraParams.RANGING_DEVICE_TYPE_CONTROLLER) {
+            bundle.putInt(KEY_REFERENCE_TIME_BASE, mReferenceTimeBase);
+            bundle.putInt(KEY_REFERENCE_SESSION_HANDLE, mReferenceSessionHandle);
+            bundle.putInt(KEY_SESSION_OFFSET_IN_MICRO_SECONDS, mSessionOffsetInMicroSeconds);
+        }
+        bundle.putInt(KEY_APPLICATION_DATA_ENDPOINT, mApplicationDataEndpoint);
         return bundle;
     }
 
@@ -841,13 +984,7 @@ public class FiraOpenSessionParams extends FiraParams {
         UwbAddress deviceAddress =
                 longToUwbAddress(bundle.getLong(KEY_DEVICE_ADDRESS), addressByteLength);
 
-        long[] destAddresses = bundle.getLongArray(KEY_DEST_ADDRESS_LIST);
-        List<UwbAddress> destAddressList = new ArrayList<>();
-        for (long address : destAddresses) {
-            destAddressList.add(longToUwbAddress(address, addressByteLength));
-        }
-
-        return new FiraOpenSessionParams.Builder()
+        FiraOpenSessionParams.Builder builder = new FiraOpenSessionParams.Builder()
                 .setProtocolVersion(
                         FiraProtocolVersion.fromString(
                                 requireNonNull(bundle.getString(KEY_PROTOCOL_VERSION))))
@@ -858,10 +995,10 @@ public class FiraOpenSessionParams extends FiraParams {
                 .setRangingRoundUsage(bundle.getInt(KEY_RANGING_ROUND_USAGE))
                 .setMultiNodeMode(bundle.getInt(KEY_MULTI_NODE_MODE))
                 .setDeviceAddress(deviceAddress)
-                .setDestAddressList(destAddressList)
                 // Changed from int to long. Look for int value, if long value not found to
                 // maintain backwards compatibility.
-                .setInitiationTimeMs(bundle.getLong(KEY_INITIATION_TIME_MS))
+                .setInitiationTime(bundle.getLong(KEY_INITIATION_TIME_MS))
+                .setAbsoluteInitiationTime(bundle.getLong(KEY_ABSOLUTE_INITIATION_TIME_US))
                 .setSlotDurationRstu(bundle.getInt(KEY_SLOT_DURATION_RSTU))
                 .setSlotsPerRangingRound(bundle.getInt(KEY_SLOTS_PER_RANGING_ROUND))
                 .setRangingIntervalMs(bundle.getInt(KEY_RANGING_INTERVAL_MS))
@@ -870,8 +1007,14 @@ public class FiraOpenSessionParams extends FiraParams {
                 .setMaxRangingRoundRetries(bundle.getInt(KEY_MAX_RANGING_ROUND_RETRIES))
                 .setSessionPriority(bundle.getInt(KEY_SESSION_PRIORITY))
                 .setMacAddressMode(bundle.getInt(KEY_MAC_ADDRESS_MODE))
-                .setHasResultReportPhase(bundle.getBoolean(KEY_HAS_RESULT_REPORT_PHASE))
+                .setHasRangingResultReportMessage(
+                        bundle.getBoolean(KEY_HAS_RANGING_RESULT_REPORT_MESSAGE))
+                .setHasControlMessage(
+                        bundle.getBoolean(KEY_HAS_CONTROL_MESSAGE, true))
+                .setHasRangingControlPhase(
+                        bundle.getBoolean(KEY_HAS_RANGING_CONTROL_PHASE, false))
                 .setMeasurementReportType(bundle.getInt(KEY_MEASUREMENT_REPORT_TYPE))
+                .setMeasurementReportPhase(bundle.getInt(KEY_MEASUREMENT_REPORT_PHASE))
                 .setInBandTerminationAttemptCount(
                         bundle.getInt(KEY_IN_BAND_TERMINATION_ATTEMPT_COUNT))
                 .setChannelNumber(bundle.getInt(KEY_CHANNEL_NUMBER))
@@ -897,7 +1040,7 @@ public class FiraOpenSessionParams extends FiraParams {
                 .setStaticStsIV(intArrayToByteArray(bundle.getIntArray(KEY_STATIC_STS_IV)))
                 .setIsRssiReportingEnabled(bundle.getBoolean(KEY_IS_RSSI_REPORTING_ENABLED))
                 .setIsDiagnosticsEnabled(bundle.getBoolean(KEY_IS_DIAGNOSTICS_ENABLED, false))
-                .setDiagramsFrameReportsFieldsFlags(
+                .setDiagramsFrameReportsFieldsFlags((byte)
                         bundle.getInt(KEY_DIAGRAMS_FRAME_REPORTS_FIELDS_FLAGS, 0))
                 .setIsKeyRotationEnabled(bundle.getBoolean(KEY_IS_KEY_ROTATION_ENABLED))
                 .setKeyRotationRate(bundle.getInt(KEY_KEY_ROTATION_RATE))
@@ -930,21 +1073,51 @@ public class FiraOpenSessionParams extends FiraParams {
                         bundle.getInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_AZIMUTH),
                         bundle.getInt(KEY_NUM_OF_MSRMT_FOCUS_ON_AOA_ELEVATION))
                 .setRangingErrorStreakTimeoutMs(bundle
-                        .getLong(RANGING_ERROR_STREAK_TIMEOUT_MS, 30_000L))
+                        .getLong(RANGING_ERROR_STREAK_TIMEOUT_MS, 10_000L))
                 .setLinkLayerMode(bundle.getInt(KEY_LINK_LAYER_MODE, 0))
+                .setDataRepetitionCount(bundle.getInt(KEY_DATA_REPETITION_COUNT, 0))
+                .setRangingTimeStruct(bundle.getInt(KEY_RANGING_TIME_STRUCT,
+                    BLOCK_BASED_SCHEDULING))
                 .setMinFramePerRr(bundle.getInt(KEY_MIN_FRAMES_PER_RR, 1))
                 .setMtuSize(bundle.getInt(KEY_MTU_SIZE, 1048))
                 .setInterFrameInterval(bundle.getInt(KEY_INTER_FRAME_INTERVAL, 1))
+                .setDlTdoaBlockStriding(bundle.getInt(KEY_DLTDOA_BLOCK_STRIDING))
                 .setUlTdoaTxIntervalMs(bundle.getInt(UL_TDOA_TX_INTERVAL))
                 .setUlTdoaRandomWindowMs(bundle.getInt(UL_TDOA_RANDOM_WINDOW))
                 .setUlTdoaDeviceIdType(bundle.getInt(UL_TDOA_DEVICE_ID_TYPE))
                 .setUlTdoaDeviceId(intArrayToByteArray(bundle.getIntArray(UL_TDOA_DEVICE_ID)))
                 .setUlTdoaTxTimestampType(bundle.getInt(UL_TDOA_TX_TIMESTAMP_TYPE))
-                .build();
+                .setFilterType(bundle.getInt(KEY_FILTER_TYPE, FILTER_TYPE_DEFAULT))
+                .setMaxNumberOfMeasurements(bundle.getInt(
+                        KEY_MAX_NUMBER_OF_MEASUREMENTS, MAX_NUMBER_OF_MEASUREMENTS_DEFAULT))
+                .setSessionDataTransferStatusNtfConfig(bundle.getBoolean(
+                        KEY_SESSION_DATA_TRANSFER_STATUS_NTF_CONFIG))
+                .setSessionTimeBase(bundle.getInt(KEY_REFERENCE_TIME_BASE),
+                        bundle.getInt(KEY_REFERENCE_SESSION_HANDLE),
+                        bundle.getInt(KEY_SESSION_OFFSET_IN_MICRO_SECONDS))
+                .setApplicationDataEndpoint(bundle.getInt(
+                        KEY_APPLICATION_DATA_ENDPOINT, APPLICATION_DATA_ENDPOINT_DEFAULT));
+
+        if (builder.isTimeScheduledTwrSession()) {
+            long[] destAddresses = bundle.getLongArray(KEY_DEST_ADDRESS_LIST);
+            if (destAddresses != null) {
+                List<UwbAddress> destAddressList = new ArrayList<>();
+                for (long address : destAddresses) {
+                    destAddressList.add(longToUwbAddress(address, addressByteLength));
+                }
+                builder.setDestAddressList(destAddressList);
+            }
+        }
+        return builder.build();
     }
 
     public FiraProtocolVersion getProtocolVersion() {
         return mProtocolVersion;
+    }
+
+    /** Returns a builder from the params. */
+    public Builder toBuilder() {
+        return new Builder(this);
     }
 
     /** Builder */
@@ -966,7 +1139,8 @@ public class FiraOpenSessionParams extends FiraParams {
         private List<UwbAddress> mDestAddressList = null;
 
         /** UCI spec default: 0ms */
-        private long mInitiationTimeMs = 0;
+        private long mInitiationTime = 0;
+        private long mAbsoluteInitiationTime = 0;
 
         /** UCI spec default: 2400 RSTU (2 ms). */
         private int mSlotDurationRstu = 2400;
@@ -974,7 +1148,7 @@ public class FiraOpenSessionParams extends FiraParams {
         /** UCI spec default: 25 slots per ranging round. */
         private int mSlotsPerRangingRound = SLOTS_PER_RR;
 
-        /** UCI spec default: RANGING_INTERVAL 200 ms */
+        /** UCI spec default: RANGING_INTERVAL(Fira 2.0: RANGING_DURATION) 200 ms */
         private int mRangingIntervalMs = 200;
 
         /** UCI spec default: no block striding. */
@@ -994,11 +1168,21 @@ public class FiraOpenSessionParams extends FiraParams {
         @MacAddressMode private int mMacAddressMode = MAC_ADDRESS_MODE_2_BYTES;
 
         /** UCI spec default: RANGING_ROUND_CONTROL bit 0 default 1 */
-        private boolean mHasResultReportPhase = true;
+        private boolean mHasRangingResultReportMessage = true;
+
+        /** UCI spec default: RANGING_ROUND_CONTROL bit 1 default 1 */
+        private boolean mHasControlMessage = true;
+
+        /** UCI spec default: RANGING_ROUND_CONTROL bit 2 default 0 */
+        private boolean mHasRangingControlPhase = false;
 
         /** UCI spec default: RANGING_ROUND_CONTROL bit 7 default 0 */
         @MeasurementReportType
         private int mMeasurementReportType = MEASUREMENT_REPORT_TYPE_INITIATOR_TO_RESPONDER;
+
+        /** UCI spec default: RANGING_ROUND_CONTROL bit 6 default 0 */
+        @MeasurementReportPhase
+        private int mMeasurementReportPhase = MEASUREMENT_REPORT_PHASE_NOTSET;
 
         /** UCI spec default: in-band termination signal will be sent once. */
         @IntRange(from = 1, to = 10)
@@ -1074,7 +1258,7 @@ public class FiraOpenSessionParams extends FiraParams {
         private boolean mIsDiagnosticsEnabled = false;
 
         /** All fields are set to 0 by default */
-        private int mDiagramsFrameReportsFieldsFlags = 0;
+        private byte mDiagramsFrameReportsFieldsFlags = 0;
 
         /** UCI spec default: no key rotation */
         private boolean mIsKeyRotationEnabled = false;
@@ -1128,10 +1312,16 @@ public class FiraOpenSessionParams extends FiraParams {
         private int mNumOfMsrmtFocusOnAoaElevation = 0;
 
         /** Ranging result error streak timeout in Milliseconds*/
-        private long mRangingErrorStreakTimeoutMs = 30_000L;
+        private long mRangingErrorStreakTimeoutMs = 10_000L;
 
         /** UCI spec default: 0 */
         private int mLinkLayerMode = 0;
+
+        /** UCI spec default: 0x00(No repetition) */
+        private int mDataRepetitionCount = 0;
+
+        /** UCI spec default: 0x01 */
+        private int mRangingTimeStruct = BLOCK_BASED_SCHEDULING;
 
         /** UCI spec default: 1 */
         public int mMinFramesPerRr = 1;
@@ -1141,6 +1331,9 @@ public class FiraOpenSessionParams extends FiraParams {
 
         /** UCI spec default: 1 */
         public int mInterFrameInterval = 1;
+
+        /** UCI spec default: no dltdoa block striding. */
+        private int mDlTdoaBlockStriding = 0;
 
         /** Ul-TDoA Tx Interval in Milliseconds */
         private int mUlTdoaTxIntervalMs = 2000;
@@ -1157,6 +1350,23 @@ public class FiraOpenSessionParams extends FiraParams {
         /** Ul-TDoA Tx Timestamp Type */
         @UlTdoaTxTimestampType private int mUlTdoaTxTimestampType = TX_TIMESTAMP_NONE;
 
+        /** AoA/distance filtering type */
+        @FilterType private int mFilterType = FILTER_TYPE_DEFAULT;
+
+        private int mMaxNumberOfMeasurements = MAX_NUMBER_OF_MEASUREMENTS_DEFAULT;
+
+        /** UCI spec default: 0x00(Disable) */
+        private boolean mSessionDataTransferStatusNtfConfig = false;
+
+        /** UCI spec default: 9 Octets of SESSION_TIME_BASE as per UCI spec*/
+        private int mReferenceTimeBase = 0;
+
+        private int mReferenceSessionHandle = 0;
+
+        private int mSessionOffsetInMicroSeconds = 0;
+
+        private int mApplicationDataEndpoint = APPLICATION_DATA_ENDPOINT_DEFAULT;
+
         public Builder() {}
 
         public Builder(@NonNull Builder builder) {
@@ -1169,7 +1379,8 @@ public class FiraOpenSessionParams extends FiraParams {
             mMultiNodeMode.set(builder.mMultiNodeMode.get());
             mDeviceAddress = builder.mDeviceAddress;
             mDestAddressList = builder.mDestAddressList;
-            mInitiationTimeMs = builder.mInitiationTimeMs;
+            mInitiationTime = builder.mInitiationTime;
+            mAbsoluteInitiationTime = builder.mAbsoluteInitiationTime;
             mSlotDurationRstu = builder.mSlotDurationRstu;
             mSlotsPerRangingRound = builder.mSlotsPerRangingRound;
             mRangingIntervalMs = builder.mRangingIntervalMs;
@@ -1178,8 +1389,11 @@ public class FiraOpenSessionParams extends FiraParams {
             mMaxRangingRoundRetries = builder.mMaxRangingRoundRetries;
             mSessionPriority = builder.mSessionPriority;
             mMacAddressMode = builder.mMacAddressMode;
-            mHasResultReportPhase = builder.mHasResultReportPhase;
+            mHasRangingResultReportMessage = builder.mHasRangingResultReportMessage;
+            mHasControlMessage = builder.mHasControlMessage;
+            mHasRangingControlPhase = builder.mHasRangingControlPhase;
             mMeasurementReportType = builder.mMeasurementReportType;
+            mMeasurementReportPhase = builder.mMeasurementReportPhase;
             mInBandTerminationAttemptCount = builder.mInBandTerminationAttemptCount;
             mChannelNumber = builder.mChannelNumber;
             mPreambleCodeIndex = builder.mPreambleCodeIndex;
@@ -1226,14 +1440,23 @@ public class FiraOpenSessionParams extends FiraParams {
             mNumOfMsrmtFocusOnAoaElevation = builder.mNumOfMsrmtFocusOnAoaElevation;
             mRangingErrorStreakTimeoutMs = builder.mRangingErrorStreakTimeoutMs;
             mLinkLayerMode = builder.mLinkLayerMode;
+            mDataRepetitionCount = builder.mDataRepetitionCount;
+            mRangingTimeStruct = builder.mRangingTimeStruct;
             mMinFramesPerRr = builder.mMinFramesPerRr;
             mMtuSize = builder.mMtuSize;
             mInterFrameInterval = builder.mInterFrameInterval;
+            mDlTdoaBlockStriding = builder.mDlTdoaBlockStriding;
             mUlTdoaTxIntervalMs = builder.mUlTdoaTxIntervalMs;
             mUlTdoaRandomWindowMs = builder.mUlTdoaRandomWindowMs;
             mUlTdoaDeviceIdType = builder.mUlTdoaDeviceIdType;
             mUlTdoaDeviceId = builder.mUlTdoaDeviceId;
             mUlTdoaTxTimestampType = builder.mUlTdoaTxTimestampType;
+            mMaxNumberOfMeasurements = builder.mMaxNumberOfMeasurements;
+            mSessionDataTransferStatusNtfConfig = builder.mSessionDataTransferStatusNtfConfig;
+            mReferenceTimeBase = builder.mReferenceTimeBase;
+            mReferenceSessionHandle = builder.mReferenceSessionHandle;
+            mSessionOffsetInMicroSeconds = builder.mSessionOffsetInMicroSeconds;
+            mApplicationDataEndpoint = builder.mApplicationDataEndpoint;
         }
 
         public Builder(@NonNull FiraOpenSessionParams params) {
@@ -1246,7 +1469,8 @@ public class FiraOpenSessionParams extends FiraParams {
             mMultiNodeMode.set(params.mMultiNodeMode);
             mDeviceAddress = params.mDeviceAddress;
             mDestAddressList = params.mDestAddressList;
-            mInitiationTimeMs = params.mInitiationTimeMs;
+            mInitiationTime = params.mInitiationTime;
+            mAbsoluteInitiationTime = params.mAbsoluteInitiationTime;
             mSlotDurationRstu = params.mSlotDurationRstu;
             mSlotsPerRangingRound = params.mSlotsPerRangingRound;
             mRangingIntervalMs = params.mRangingIntervalMs;
@@ -1255,8 +1479,11 @@ public class FiraOpenSessionParams extends FiraParams {
             mMaxRangingRoundRetries = params.mMaxRangingRoundRetries;
             mSessionPriority = params.mSessionPriority;
             mMacAddressMode = params.mMacAddressMode;
-            mHasResultReportPhase = params.mHasResultReportPhase;
+            mHasRangingResultReportMessage = params.mHasRangingResultReportMessage;
+            mHasControlMessage = params.mHasControlMessage;
+            mHasRangingControlPhase = params.mHasRangingControlPhase;
             mMeasurementReportType = params.mMeasurementReportType;
+            mMeasurementReportPhase = params.mMeasurementReportPhase;
             mInBandTerminationAttemptCount = params.mInBandTerminationAttemptCount;
             mChannelNumber = params.mChannelNumber;
             mPreambleCodeIndex = params.mPreambleCodeIndex;
@@ -1303,14 +1530,24 @@ public class FiraOpenSessionParams extends FiraParams {
             mNumOfMsrmtFocusOnAoaElevation = params.mNumOfMsrmtFocusOnAoaElevation;
             mRangingErrorStreakTimeoutMs = params.mRangingErrorStreakTimeoutMs;
             mLinkLayerMode = params.mLinkLayerMode;
+            mDataRepetitionCount = params.mDataRepetitionCount;
+            mRangingTimeStruct = params.mRangingTimeStruct;
             mMinFramesPerRr = params.mMinFramesPerRr;
             mMtuSize = params.mMtuSize;
             mInterFrameInterval = params.mInterFrameInterval;
+            mDlTdoaBlockStriding = params.mDlTdoaBlockStriding;
             mUlTdoaTxIntervalMs = params.mUlTdoaTxIntervalMs;
             mUlTdoaRandomWindowMs = params.mUlTdoaRandomWindowMs;
             mUlTdoaDeviceIdType = params.mUlTdoaDeviceIdType;
             mUlTdoaDeviceId = params.mUlTdoaDeviceId;
             mUlTdoaTxTimestampType = params.mUlTdoaTxTimestampType;
+            mFilterType = params.mFilterType;
+            mMaxNumberOfMeasurements = params.mMaxNumberOfMeasurements;
+            mSessionDataTransferStatusNtfConfig = params.mSessionDataTransferStatusNtfConfig;
+            mReferenceTimeBase = params.mReferenceTimeBase;
+            mReferenceSessionHandle = params.mReferenceSessionHandle;
+            mSessionOffsetInMicroSeconds = params.mSessionOffsetInMicroSeconds;
+            mApplicationDataEndpoint = params.mApplicationDataEndpoint;
         }
 
         public FiraOpenSessionParams.Builder setProtocolVersion(FiraProtocolVersion version) {
@@ -1359,8 +1596,30 @@ public class FiraOpenSessionParams extends FiraParams {
             return this;
         }
 
-        public FiraOpenSessionParams.Builder setInitiationTimeMs(long initiationTimeMs) {
-            mInitiationTimeMs = initiationTimeMs;
+        /**
+         * Sets the UWB initiation time.
+         *
+         * @param initiationTime UWB initiation time:
+         *        FiRa 1.0: Relative time (in milli-seconds).
+         *        FiRa 2.0: Relative time (in milli-seconds).
+         *            For a FiRa 2.0 device, the UWB Service will query the absolute UWBS timestamp
+         *            and add the relative time (in milli-seconds) configured here, to compute the
+         *            absolute time that will be configured in the UWB_INITIATION_TIME parameter.
+         */
+        public FiraOpenSessionParams.Builder setInitiationTime(long initiationTime) {
+            mInitiationTime = initiationTime;
+            return this;
+        }
+
+        /**
+         * Sets the Absolute UWB initiation time.
+         *
+         * @param absoluteInitiationTime Absolute UWB initiation time (in micro-seconds). This is
+         *        applicable only for FiRa 2.0+ devices, as specified in CR-272.
+         */
+        public FiraOpenSessionParams.Builder setAbsoluteInitiationTime(
+                long absoluteInitiationTime) {
+            mAbsoluteInitiationTime = absoluteInitiationTime;
             return this;
         }
 
@@ -1405,14 +1664,32 @@ public class FiraOpenSessionParams extends FiraParams {
             return this;
         }
 
-        public FiraOpenSessionParams.Builder setHasResultReportPhase(boolean hasResultReportPhase) {
-            mHasResultReportPhase = hasResultReportPhase;
+        public FiraOpenSessionParams.Builder setHasRangingResultReportMessage(
+                boolean hasRangingResultReportMessage) {
+            mHasRangingResultReportMessage = hasRangingResultReportMessage;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setHasControlMessage(boolean hasControlMessage) {
+            mHasControlMessage = hasControlMessage;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setHasRangingControlPhase(
+                boolean hasRangingControlPhase) {
+            mHasRangingControlPhase = hasRangingControlPhase;
             return this;
         }
 
         public FiraOpenSessionParams.Builder setMeasurementReportType(
                 @MeasurementReportType int measurementReportType) {
             mMeasurementReportType = measurementReportType;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setMeasurementReportPhase(
+                @MeasurementReportPhase int measurementReportPhase) {
+            mMeasurementReportPhase = measurementReportPhase;
             return this;
         }
 
@@ -1549,7 +1826,7 @@ public class FiraOpenSessionParams extends FiraParams {
          *  b3 - b7: RFU
          */
         public FiraOpenSessionParams.Builder
-                setDiagramsFrameReportsFieldsFlags(int diagramsFrameReportsFieldsFlags) {
+                setDiagramsFrameReportsFieldsFlags(byte diagramsFrameReportsFieldsFlags) {
             mDiagramsFrameReportsFieldsFlags = diagramsFrameReportsFieldsFlags;
             return this;
         }
@@ -1664,6 +1941,17 @@ public class FiraOpenSessionParams extends FiraParams {
             return this;
         }
 
+        public FiraOpenSessionParams.Builder setDataRepetitionCount(int dataRepetitionCount) {
+            mDataRepetitionCount = dataRepetitionCount;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setRangingTimeStruct(
+                @RangingTimeStruct int rangingTimeStruct) {
+            mRangingTimeStruct = rangingTimeStruct;
+            return this;
+        }
+
         public FiraOpenSessionParams.Builder setMinFramePerRr(int minFramePerRr) {
             mMinFramesPerRr = minFramePerRr;
             return this;
@@ -1676,6 +1964,11 @@ public class FiraOpenSessionParams extends FiraParams {
 
         public FiraOpenSessionParams.Builder setInterFrameInterval(int interFrameInterval) {
             mInterFrameInterval = interFrameInterval;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setDlTdoaBlockStriding(int dlTdoaBlockStriding) {
+            mDlTdoaBlockStriding = dlTdoaBlockStriding;
             return this;
         }
 
@@ -1731,6 +2024,32 @@ public class FiraOpenSessionParams extends FiraParams {
             return this;
         }
 
+        public FiraOpenSessionParams.Builder setMaxNumberOfMeasurements(
+                int maxNumberOfMeasurements) {
+            mMaxNumberOfMeasurements = maxNumberOfMeasurements;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setSessionDataTransferStatusNtfConfig(
+                boolean sessionDataTransferStatusNtfConfig) {
+            mSessionDataTransferStatusNtfConfig = sessionDataTransferStatusNtfConfig;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setSessionTimeBase(int referenceTimeBase,
+                int referenceSessionHandle, int sessionOffsetInMicroSecond) {
+            mReferenceTimeBase = referenceTimeBase;
+            mReferenceSessionHandle = referenceSessionHandle;
+            mSessionOffsetInMicroSeconds = sessionOffsetInMicroSecond;
+            return this;
+        }
+
+        public FiraOpenSessionParams.Builder setApplicationDataEndpoint(
+                int applicationDataEndpoint) {
+            mApplicationDataEndpoint = applicationDataEndpoint;
+            return this;
+        }
+
         private void checkAddress() {
             checkArgument(
                     mMacAddressMode == MAC_ADDRESS_MODE_2_BYTES
@@ -1742,9 +2061,12 @@ public class FiraOpenSessionParams extends FiraParams {
 
             // Make sure address length matches the address mode
             checkArgument(mDeviceAddress != null && mDeviceAddress.size() == addressByteLength);
-            checkNotNull(mDestAddressList);
-            for (UwbAddress destAddress : mDestAddressList) {
-                checkArgument(destAddress != null && destAddress.size() == addressByteLength);
+            if (isTimeScheduledTwrSession()) {
+                checkNotNull(mDestAddressList);
+                for (UwbAddress destAddress : mDestAddressList) {
+                    checkArgument(destAddress != null
+                            && destAddress.size() == addressByteLength);
+                }
             }
         }
 
@@ -1755,26 +2077,25 @@ public class FiraOpenSessionParams extends FiraParams {
                 checkArgument(mStaticStsIV != null && mStaticStsIV.length == 6);
             }
 
-            if (mStsConfig != STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY) {
-                // Sub Session ID is used for dynamic individual key STS only.
-                if (!mSubSessionId.isSet()) {
-                    mSubSessionId.set(0);
-                }
+            if ((mStsConfig == STS_CONFIG_DYNAMIC_FOR_CONTROLEE_INDIVIDUAL_KEY ||
+                 mStsConfig == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) &&
+                 (mDeviceType.get() == RANGING_DEVICE_TYPE_CONTROLEE)) {
+                // Sub Session ID is used for dynamic/Provisional individual key and
+                // for controlee device.
+                checkArgument(mSubSessionId.isSet());
+            } else {
+                mSubSessionId.set(0);
             }
 
-            if (mStsConfig == STS_CONFIG_PROVISIONED) {
-                checkArgument(mSessionKey != null
-                        && (mSessionKey.length == 16 || mSessionKey.length == 32));
+            if (mStsConfig == STS_CONFIG_PROVISIONED && mSessionKey != null) {
+                checkArgument(mSessionKey.length == 16 || mSessionKey.length == 32);
             }
 
-            if (mStsConfig == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY) {
-                if (!mSubSessionId.isSet()) {
-                    mSubSessionId.set(0);
-                }
-                checkArgument(mSessionKey != null
-                        && (mSessionKey.length == 16 || mSessionKey.length == 32));
-                checkArgument(mSubsessionKey != null
-                        && (mSubsessionKey.length == 16 || mSubsessionKey.length == 32));
+            if (mStsConfig == STS_CONFIG_PROVISIONED_FOR_CONTROLEE_INDIVIDUAL_KEY
+                && mDeviceType.get() == RANGING_DEVICE_TYPE_CONTROLEE && mSubsessionKey != null) {
+                checkArgument(mSessionKey != null &&
+                        (mSessionKey.length == 16 || mSessionKey.length == 32));
+                checkArgument(mSubsessionKey.length == 16 || mSubsessionKey.length == 32);
             }
         }
 
@@ -1848,12 +2169,42 @@ public class FiraOpenSessionParams extends FiraParams {
                             != RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT);
             }
         }
+        private void checkDlTdoaParameters() {
+            if (mDeviceRole.get() == RANGING_DEVICE_DT_TAG) {
+                checkArgument(mStsConfig == STS_CONFIG_STATIC
+                            && mMultiNodeMode.get() == MULTI_NODE_MODE_ONE_TO_MANY
+                            && mRframeConfig == RFRAME_CONFIG_SP1);
+            }
+        }
+
+        /** Sets the type of filtering used by the session. Defaults to FILTER_TYPE_DEFAULT */
+        public FiraOpenSessionParams.Builder setFilterType(@FilterType int filterType) {
+            this.mFilterType = filterType;
+            return this;
+        }
+
+        /**
+         * Returns true when (RangingRoundUsage = 1, 2, 3, 4) and
+         * SCHEDULED_MODE == 0x01 (TIME_SCHEDULED_RANGING)
+         **/
+        public boolean isTimeScheduledTwrSession() {
+            if (mScheduledMode == FiraParams.TIME_SCHEDULED_RANGING) {
+                if (mRangingRoundUsage == RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE
+                        || mRangingRoundUsage == RANGING_ROUND_USAGE_DS_TWR_DEFERRED_MODE
+                        || mRangingRoundUsage == RANGING_ROUND_USAGE_SS_TWR_NON_DEFERRED_MODE
+                        || mRangingRoundUsage == RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         public FiraOpenSessionParams build() {
             checkAddress();
             checkStsConfig();
             checkInterleavingRatio();
             checkRangeDataNtfConfig();
+            checkDlTdoaParameters();
             return new FiraOpenSessionParams(
                     mProtocolVersion.get(),
                     mSessionId.get(),
@@ -1864,7 +2215,8 @@ public class FiraOpenSessionParams extends FiraParams {
                     mMultiNodeMode.get(),
                     mDeviceAddress,
                     mDestAddressList,
-                    mInitiationTimeMs,
+                    mInitiationTime,
+                    mAbsoluteInitiationTime,
                     mSlotDurationRstu,
                     mSlotsPerRangingRound,
                     mRangingIntervalMs,
@@ -1873,8 +2225,11 @@ public class FiraOpenSessionParams extends FiraParams {
                     mMaxRangingRoundRetries,
                     mSessionPriority,
                     mMacAddressMode,
-                    mHasResultReportPhase,
+                    mHasRangingResultReportMessage,
+                    mHasControlMessage,
+                    mHasRangingControlPhase,
                     mMeasurementReportType,
+                    mMeasurementReportPhase,
                     mInBandTerminationAttemptCount,
                     mChannelNumber,
                     mPreambleCodeIndex,
@@ -1919,14 +2274,24 @@ public class FiraOpenSessionParams extends FiraParams {
                     mNumOfMsrmtFocusOnAoaElevation,
                     mRangingErrorStreakTimeoutMs,
                     mLinkLayerMode,
+                    mDataRepetitionCount,
+                    mRangingTimeStruct,
                     mMinFramesPerRr,
                     mMtuSize,
                     mInterFrameInterval,
+                    mDlTdoaBlockStriding,
                     mUlTdoaTxIntervalMs,
                     mUlTdoaRandomWindowMs,
                     mUlTdoaDeviceIdType,
                     mUlTdoaDeviceId,
-                    mUlTdoaTxTimestampType);
+                    mUlTdoaTxTimestampType,
+                    mFilterType,
+                    mMaxNumberOfMeasurements,
+                    mSessionDataTransferStatusNtfConfig,
+                    mReferenceTimeBase,
+                    mReferenceSessionHandle,
+                    mSessionOffsetInMicroSeconds,
+                    mApplicationDataEndpoint);
         }
     }
 }

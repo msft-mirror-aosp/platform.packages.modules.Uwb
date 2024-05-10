@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -23,11 +24,6 @@ java_defaults {
     errorprone: {
         javacflags: ["-Xep:CheckReturnValue:ERROR"],
     },
-    product_variables: {
-        pdk: {
-            enabled: false,
-        },
-    },
 }
 
 filegroup {
@@ -35,7 +31,7 @@ filegroup {
     srcs: [
         "java/**/*.java",
         ":statslog-uwb-java-gen",
-        ":uwb_config"
+        ":uwb_config",
     ],
 }
 
@@ -44,7 +40,7 @@ java_library {
     name: "service-uwb-pre-jarjar",
     installable: false,
     defaults: ["service-uwb-common-defaults"],
-    srcs: [ ":service-uwb-srcs" ],
+    srcs: [":service-uwb-srcs"],
     required: ["libuwb_uci_jni_rust"],
     sdk_version: "system_server_current",
 
@@ -52,17 +48,20 @@ java_library {
         strict_updatability_linting: true,
     },
     libs: [
+        "androidx.annotation_annotation",
         "framework-annotations-lib",
+        "framework-configinfrastructure",
         "framework-uwb-pre-jarjar",
         "ServiceUwbResources",
         "framework-statsd.stubs.module_lib",
         "framework-wifi.stubs.module_lib",
         "framework-bluetooth.stubs.module_lib",
+        "framework-location.stubs.module_lib",
     ],
 
     static_libs: [
-        "androidx.annotation_annotation",
-        "android.hardware.uwb.fira_android-V2-java",
+        "android.hardware.uwb.fira_android-V3-java",
+        "com.uwb.support.aliro",
         "com.uwb.support.ccc",
         "com.uwb.support.fira",
         "com.uwb.support.generic",
@@ -70,6 +69,7 @@ java_library {
         "com.uwb.support.profile",
         "com.uwb.support.oemextension",
         "com.uwb.support.dltdoa",
+        "com.uwb.support.radar",
         "guava",
         "modules-utils-shell-command-handler",
         "modules-utils-handlerexecutor",
@@ -79,6 +79,7 @@ java_library {
         "modules-utils-build",
         "cbor-java",
         "bouncycastle-uwb",
+        "uwb_flags_lib",
     ],
 
     apex_available: [
@@ -119,8 +120,6 @@ java_library {
     visibility: [
         "//packages/modules/Uwb/apex",
         "//packages/modules/Uwb/service/tests/uwbtests/apex",
-        "//packages/modules/Uwb/indev_uwb_adaptation",
-        "//packages/modules/Uwb/indev_uwb_adaptation/tests",
     ],
     apex_available: [
         "com.android.uwb",
@@ -133,7 +132,7 @@ genrule {
     name: "statslog-uwb-java-gen",
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module uwb " +
-         " --javaPackage com.android.server.uwb.proto --javaClass UwbStatsLog" +
-         " --minApiLevel 33",
+        " --javaPackage com.android.server.uwb.proto --javaClass UwbStatsLog" +
+        " --minApiLevel 33",
     out: ["com/android/server/uwb/proto/UwbStatsLog.java"],
 }

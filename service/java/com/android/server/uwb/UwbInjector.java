@@ -19,6 +19,8 @@ package com.android.server.uwb;
 import static android.Manifest.permission.UWB_RANGING;
 import static android.permission.PermissionManager.PERMISSION_GRANTED;
 
+import static java.lang.Math.toRadians;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityManager;
@@ -28,6 +30,9 @@ import android.content.AttributionSource;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.database.ContentObserver;
+import android.location.Geocoder;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -54,15 +59,19 @@ import com.android.server.uwb.correction.pose.IntegPoseSource;
 import com.android.server.uwb.correction.pose.RotationPoseSource;
 import com.android.server.uwb.correction.pose.SixDofPoseSource;
 import com.android.server.uwb.correction.primers.AoaPrimer;
+import com.android.server.uwb.correction.primers.BackAzimuthPrimer;
 import com.android.server.uwb.correction.primers.ElevationPrimer;
 import com.android.server.uwb.correction.primers.FovPrimer;
 import com.android.server.uwb.data.ServiceProfileData;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
 import com.android.server.uwb.pm.ProfileManager;
+import com.android.uwb.flags.FeatureFlags;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -105,11 +114,12 @@ public class UwbInjector {
     private final UwbMultichipData mUwbMultichipData;
     private final SystemBuildProperties mSystemBuildProperties;
     private final UwbDiagnostics mUwbDiagnostics;
-    private IPoseSource mPoseSource;
+    private IPoseSource mDefaultPoseSource;
     private final ReentrantLock mPoseLock = new ReentrantLock();
     private int mPoseSourceRefCount = 0;
 
     private final UwbSessionManager mUwbSessionManager;
+    private final FeatureFlags mFeatureFlags;
 
     public UwbInjector(@NonNull UwbContext context) {
         // Create UWB service thread.
@@ -136,10 +146,11 @@ public class UwbInjector {
         mUwbMetrics = new UwbMetrics(this);
         mDeviceConfigFacade = new DeviceConfigFacade(new Handler(mLooper), mContext);
         UwbConfigurationManager uwbConfigurationManager =
-                new UwbConfigurationManager(mNativeUwbManager);
+                new UwbConfigurationManager(mNativeUwbManager, this);
         UwbSessionNotificationManager uwbSessionNotificationManager =
                 new UwbSessionNotificationManager(this);
-        UwbAdvertiseManager uwbAdvertiseManager = new UwbAdvertiseManager(this);
+        UwbAdvertiseManager uwbAdvertiseManager = new UwbAdvertiseManager(this,
+                mDeviceConfigFacade);
         mUwbSessionManager =
                 new UwbSessionManager(uwbConfigurationManager, mNativeUwbManager, mUwbMetrics,
                         uwbAdvertiseManager, uwbSessionNotificationManager, this,
@@ -150,6 +161,11 @@ public class UwbInjector {
                 mUwbCountryCode, mUwbSessionManager, uwbConfigurationManager, this, mLooper);
         mSystemBuildProperties = new SystemBuildProperties();
         mUwbDiagnostics = new UwbDiagnostics(mContext, this, mSystemBuildProperties);
+        mFeatureFlags = new com.android.uwb.flags.FeatureFlagsImpl();
+    }
+
+    public FeatureFlags getFeatureFlags() {
+        return mFeatureFlags;
     }
 
     public Looper getUwbServiceLooper() {
@@ -223,6 +239,21 @@ public class UwbInjector {
     }
 
     /**
+     * Creates a Geocoder.
+     */
+    @Nullable
+    public Geocoder makeGeocoder() {
+        return new Geocoder(mContext);
+    }
+
+    /**
+     * Returns whether geocoder is supported on this device or not.
+     */
+    public boolean isGeocoderPresent() {
+        return Geocoder.isPresent();
+    }
+
+    /**
      * Throws security exception if the UWB_RANGING permission is not granted for the calling app.
      *
      * <p>Should be used in situations where the app op should not be noted.
@@ -243,14 +274,19 @@ public class UwbInjector {
     /**
      * Returns true if the UWB_RANGING permission is granted for the calling app.
      *
-     * <p>Should be used in situations where data will be delivered and hence the app op should
-     * be noted.
+     * <p>Used for checking permission before first data delivery for the session.
      */
-    public boolean checkUwbRangingPermissionForDataDelivery(
+    public boolean checkUwbRangingPermissionForStartDataDelivery(
             @NonNull AttributionSource attributionSource, @NonNull String message) {
-        int permissionCheckResult = mPermissionManager.checkPermissionForDataDelivery(
+        int permissionCheckResult = mPermissionManager.checkPermissionForStartDataDelivery(
                 UWB_RANGING, attributionSource, message);
         return permissionCheckResult == PERMISSION_GRANTED;
+    }
+
+    /** Indicate permission manager that the ranging session is done or stopped. */
+    public void finishUwbRangingPermissionForDataDelivery(
+            @NonNull AttributionSource attributionSource) {
+        mPermissionManager.finishDataDelivery(UWB_RANGING, attributionSource);
     }
 
     /**
@@ -266,15 +302,41 @@ public class UwbInjector {
      *
      * @throws Settings.SettingNotFoundException
      */
-    public int getSettingsInt(@NonNull String key) throws Settings.SettingNotFoundException {
+    public int getGlobalSettingsInt(@NonNull String key) throws Settings.SettingNotFoundException {
         return Settings.Global.getInt(mContext.getContentResolver(), key);
     }
 
     /**
      * Get integer value from Settings.
      */
-    public int getSettingsInt(@NonNull String key, int defValue) {
+    public int getGlobalSettingsInt(@NonNull String key, int defValue) {
         return Settings.Global.getInt(mContext.getContentResolver(), key, defValue);
+    }
+
+    /**
+     * Get string value from Settings.
+     */
+    @Nullable
+    public String getGlobalSettingsString(@NonNull String key) {
+        return Settings.Global.getString(mContext.getContentResolver(), key);
+    }
+
+    /**
+     * Helper method for classes to register a ContentObserver
+     * {@see ContentResolver#registerContentObserver(Uri,boolean,ContentObserver)}.
+     */
+    public void registerContentObserver(Uri uri, boolean notifyForDescendants,
+            ContentObserver contentObserver) {
+        mContext.getContentResolver().registerContentObserver(uri, notifyForDescendants,
+                contentObserver);
+    }
+
+    /**
+     * Helper method for classes to unregister a ContentObserver
+     * {@see ContentResolver#unregisterContentObserver(ContentObserver)}.
+     */
+    public void unregisterContentObserver(ContentObserver contentObserver) {
+        mContext.getContentResolver().unregisterContentObserver(contentObserver);
     }
 
     /**
@@ -383,8 +445,20 @@ public class UwbInjector {
                 == PackageManager.SIGNATURE_MATCH;
     }
 
+    private static Map<String, Integer> sOverridePackageImportance = new HashMap();
+    public void setOverridePackageImportance(String packageName, int importance) {
+        sOverridePackageImportance.put(packageName, importance);
+    }
+    public void resetOverridePackageImportance(String packageName) {
+        sOverridePackageImportance.remove(packageName);
+    }
+
     /** Helper method to retrieve app importance. */
     private int getPackageImportance(int uid, @NonNull String packageName) {
+        if (sOverridePackageImportance.containsKey(packageName)) {
+            Log.w(TAG, "Overriding package importance for testing");
+            return sOverridePackageImportance.get(packageName);
+        }
         try {
             return createPackageContextAsUser(uid)
                     .getSystemService(ActivityManager.class)
@@ -402,11 +476,14 @@ public class UwbInjector {
 
     /** Helper method to check if the app is from foreground app/service. */
     public boolean isForegroundAppOrService(int uid, @NonNull String packageName) {
+        long identity = Binder.clearCallingIdentity();
         try {
             return isForegroundAppOrServiceImportance(getPackageImportance(uid, packageName));
         } catch (SecurityException e) {
             Log.e(TAG, "Failed to retrieve the app importance", e);
             return false;
+        } finally {
+            Binder.restoreCallingIdentity(identity);
         }
     }
 
@@ -421,6 +498,11 @@ public class UwbInjector {
             executor.shutdownNow();
             throw e;
         }
+    }
+
+    public boolean isMulticastListNtfV2Supported() {
+        return mContext.getResources().getBoolean(
+                        com.android.uwb.resources.R.bool.is_multicast_list_update_ntf_v2_supported);
     }
 
     /**
@@ -438,30 +520,30 @@ public class UwbInjector {
                 return null;
             }
 
-            if (mPoseSource != null) {
+            if (mDefaultPoseSource != null) {
                 // Already have a pose source.
-                return mPoseSource;
+                return mDefaultPoseSource;
             }
 
             switch (mDeviceConfigFacade.getPoseSourceType()) {
                 case NONE:
-                    mPoseSource = null;
+                    mDefaultPoseSource = null;
                     break;
                 case ROTATION_VECTOR:
-                    mPoseSource = new RotationPoseSource(mContext, 100);
+                    mDefaultPoseSource = new RotationPoseSource(mContext, 100);
                     break;
                 case GYRO:
-                    mPoseSource = new GyroPoseSource(mContext, 100);
+                    mDefaultPoseSource = new GyroPoseSource(mContext, 100);
                     break;
                 case SIXDOF:
-                    mPoseSource = new SixDofPoseSource(mContext, 100);
+                    mDefaultPoseSource = new SixDofPoseSource(mContext, 100);
                     break;
                 case DOUBLE_INTEGRATE:
-                    mPoseSource = new IntegPoseSource(mContext, 100);
+                    mDefaultPoseSource = new IntegPoseSource(mContext, 100);
                     break;
             }
 
-            return mPoseSource;
+            return mDefaultPoseSource;
         } catch (Exception ex) {
             Log.e(TAG, "Unable to create the configured UWB pose source: "
                     + ex.getMessage());
@@ -481,9 +563,9 @@ public class UwbInjector {
         try {
             // Keep our ref counts accurate because isEnableFilters can change at runtime.
             --mPoseSourceRefCount;
-            if (mPoseSourceRefCount <= 0) {
-                mPoseSource.close();
-                mPoseSource = null;
+            if (mPoseSourceRefCount <= 0 && mDefaultPoseSource != null) {
+                mDefaultPoseSource.close();
+                mDefaultPoseSource = null;
             }
         } finally {
             mPoseLock.unlock();
@@ -496,7 +578,7 @@ public class UwbInjector {
      *
      * @return A fully configured filter engine, or null if filtering is disabled.
      */
-    public UwbFilterEngine createFilterEngine() {
+    public UwbFilterEngine createFilterEngine(IPoseSource poseSource) {
         DeviceConfigFacade cfg = getDeviceConfigFacade();
         if (!cfg.isEnableFilters()) {
             return null;
@@ -521,8 +603,8 @@ public class UwbInjector {
 
             UwbFilterEngine.Builder builder = new UwbFilterEngine.Builder().setFilter(posFilter);
 
-            if (mPoseSource != null) {
-                builder.setPoseSource(mPoseSource);
+            if (poseSource != null) {
+                builder.setPoseSource(poseSource);
             }
 
             // Order is important.
@@ -537,7 +619,18 @@ public class UwbInjector {
 
             // Fov requires an elevation and a spherical coord.
             if (cfg.isEnablePrimerFov()) {
-                builder.addPrimer(new FovPrimer(cfg.getPrimerFovDegree()));
+                builder.addPrimer(new FovPrimer((float) toRadians(cfg.getPrimerFovDegree())));
+            }
+
+            // Back azimuth detection requires true spherical.
+            if (cfg.isEnableBackAzimuth()) {
+                builder.addPrimer(new BackAzimuthPrimer(
+                        cfg.getFrontAzimuthRadiansPerSecond(),
+                        cfg.getBackAzimuthRadiansPerSecond(),
+                        cfg.getBackAzimuthWindow(),
+                        cfg.isEnableBackAzimuthMasking(),
+                        cfg.getMirrorScoreStdRadians(),
+                        cfg.getBackNoiseInfluenceCoeff()));
             }
 
             return builder.build();

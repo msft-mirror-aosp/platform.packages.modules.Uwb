@@ -17,6 +17,7 @@
 package android.uwb;
 
 import android.content.AttributionSource;
+import android.os.IBinder;
 import android.os.PersistableBundle;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbAdfProvisionStateCallbacks;
@@ -276,6 +277,22 @@ interface IUwbAdapter {
           in PersistableBundle params, in byte[] data);
 
   /**
+    * Set data transfer phase configuration during ranging as well as dedicated data transfer.
+    * <p>This is only functional on a FIRA 2.0 compliant device.
+    *
+    * <p>On successfully sending the data transfer phase config,
+    * {@link RangingSession.Callback#onDataTransferPhaseConfigured(PersistableBundle)} is
+    * invoked.
+    *
+    * <p>On failure to send the data transfer phase config,
+    * {@link RangingSession.Callback#onDataTransferPhaseConfigFailed(int, PersistableBundle)} is
+    * invoked.
+    *
+    * @param params Protocol specific data transfer phase configuration parameters
+    */
+  void setDataTransferPhaseConfig(in SessionHandle sessionHandle, in PersistableBundle params);
+
+  /**
    * Disables or enables UWB for a user
    *
    * The provided callback's IUwbAdapterStateCallbacks#onAdapterStateChanged
@@ -299,6 +316,10 @@ interface IUwbAdapter {
    * @return value representing enabled/disabled UWB state.
    */
   int getAdapterState();
+
+  boolean isHwIdleTurnOffEnabled();
+  void requestHwEnabled(boolean enabled, in AttributionSource attributionSource, IBinder binder);
+  boolean isHwEnableRequested(in AttributionSource attributionSource);
 
   /**
    * Returns a list of UWB chip infos in a {@link PersistableBundle}.
@@ -346,22 +367,51 @@ interface IUwbAdapter {
 
   int removeProfileAdf(in PersistableBundle serviceProfileBundle);
 
+  /**
+   * Updates the device pose. This helps the filter engine distinguish position noise from device
+   * motion. The device pose would typically come from ARCore. This requires that an application
+   * pose source was indicated in the call to openSession.
+   */
+  void updatePose(in SessionHandle sessionHandle, in PersistableBundle params);
+
   int sendVendorUciMessage(int mt, int gid, int oid, in byte[] payload);
+
+  /**
+   * @hide
+   * Sets the Hybrid UWB Session Controller Configuration
+   *
+   * @param SessionHandle Primary session handle
+   * @param params protocol specific parameters to initiate the hybrid session for controller.
+   */
+  void setHybridSessionControllerConfiguration(in SessionHandle sessionHandle,
+        in PersistableBundle params);
+
+  /**
+   * @hide
+   * Sets the Hybrid UWB Session Controlee Configuration
+   *
+   * @param SessionHandle Primary session handle
+   * @param params protocol specific parameters to initiate the hybrid session for controlee.
+   */
+  void setHybridSessionControleeConfiguration(in SessionHandle sessionHandle,
+        in PersistableBundle params);
 
   void updateRangingRoundsDtTag(in SessionHandle sessionHandle, in PersistableBundle parameters);
 
-  /**
-   * @hide
-   */
   void getUwbActivityEnergyInfoAsync(in IOnUwbActivityEnergyInfoListener listener);
 
   /**
-   * @hide
-   *
    * Returns the max Application Data payload size that can be sent by the UWBS in one ranging
    * round.
    */
   int queryMaxDataSizeBytes(in SessionHandle sessionHandle);
+
+  /**
+   * @hide
+   *
+   * @return timestamp in microseconds
+   */
+   long queryUwbsTimestampMicros();
 
   /**
    * The maximum allowed time to open a ranging session.
@@ -383,4 +433,14 @@ interface IUwbAdapter {
    * The maximum allowed time to configure ranging rounds update for DT Tag
    */
   const int RANGING_ROUNDS_UPDATE_DT_TAG_THRESHOLD_MS = 3000; // Value TBD
+
+  /**
+   * The maximum allowed time to configure session data transfer phase config
+   */
+  const int SESSION_DATA_TRANSFER_PHASE_CONFIG_THRESHOLD_MS = 3000; // Value TBD
+
+  /**
+   * The maximum allowed time to configure hybrid session
+   */
+  const int SESSION_CONFIGURATION_THRESHOLD_MS = 3000; // Value TBD
 }

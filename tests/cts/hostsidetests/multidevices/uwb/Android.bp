@@ -13,6 +13,7 @@
 // limitations under the License.
 
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -20,6 +21,10 @@ python_defaults {
     name: "CtsUwbMultiDevicePythonDefaults",
     libs: [
         "mobly",
+    ],
+    test_suites: [
+        "cts",
+        "general-tests",
     ],
     version: {
         py3: {
@@ -30,17 +35,13 @@ python_defaults {
 
 python_test_host {
     name: "CtsUwbMultiDeviceTestCase_UwbManagerTests",
-    main: "uwb_manager_test.py",
+    main: "UwbManagerTests/uwb_manager_test.py",
     srcs: [
-        "uwb_manager_test.py",
+        "UwbManagerTests/uwb_manager_test.py",
         "lib/uwb_base_test.py",
         "lib/uwb_ranging_decorator.py",
         "lib/uwb_ranging_params.py",
         "test_utils/uwb_test_utils.py",
-    ],
-    test_suites: [
-        "cts",
-        "general-tests",
     ],
     test_config: "UwbManagerTests/AndroidTest.xml",
     test_options: {
@@ -49,23 +50,20 @@ python_test_host {
     data: [
         // Package the snippet with the mobly test
         ":uwb_snippet",
+        "README.md",
     ],
     defaults: ["CtsUwbMultiDevicePythonDefaults"],
 }
 
 python_test_host {
     name: "CtsUwbMultiDeviceTestCase_FiraRangingTests",
-    main: "ranging_test.py",
+    main: "FiraRangingTests/ranging_test.py",
     srcs: [
-        "ranging_test.py",
+        "FiraRangingTests/ranging_test.py",
         "lib/uwb_base_test.py",
         "lib/uwb_ranging_decorator.py",
         "lib/uwb_ranging_params.py",
         "test_utils/uwb_test_utils.py",
-    ],
-    test_suites: [
-        "cts",
-        "general-tests",
     ],
     test_config: "FiraRangingTests/AndroidTest.xml",
     test_options: {
@@ -74,6 +72,7 @@ python_test_host {
     data: [
         // Package the snippet with the mobly test
         ":uwb_snippet",
+        "README.md",
     ],
     defaults: ["CtsUwbMultiDevicePythonDefaults"],
 }

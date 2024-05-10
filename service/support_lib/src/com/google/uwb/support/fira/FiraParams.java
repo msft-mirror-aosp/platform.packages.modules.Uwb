@@ -46,6 +46,7 @@ public abstract class FiraParams extends Params {
     }
 
     public static final FiraProtocolVersion PROTOCOL_VERSION_1_1 = new FiraProtocolVersion(1, 1);
+    public static final FiraProtocolVersion PROTOCOL_VERSION_2_0 = new FiraProtocolVersion(2, 0);
 
     /** Service ID for FiRa profile */
     @IntDef(
@@ -183,6 +184,7 @@ public abstract class FiraParams extends Params {
                 RANGING_ROUND_USAGE_DS_TWR_NON_DEFERRED_MODE,
                 RANGING_ROUND_USAGE_OWR_AOA_MEASUREMENT,
                 RANGING_ROUND_USAGE_DL_TDOA,
+                RANGING_ROUND_USAGE_DATA_TRANSFER_MODE,
             })
     public @interface RangingRoundUsage {}
 
@@ -207,6 +209,9 @@ public abstract class FiraParams extends Params {
     /** OWR for AoA measurement */
     public static final int RANGING_ROUND_USAGE_OWR_AOA_MEASUREMENT = 6;
 
+    /** Data transfer mode */
+    public static final int RANGING_ROUND_USAGE_DATA_TRANSFER_MODE = 9;
+
     /** Multi-Node mode */
     @IntDef(
             value = {
@@ -228,12 +233,15 @@ public abstract class FiraParams extends Params {
             value = {
                 CONTENTION_BASED_RANGING,
                 TIME_SCHEDULED_RANGING,
+                HYBRID_SCHEDULED_RANGING,
             })
     public @interface SchedulingMode {}
 
     public static final int CONTENTION_BASED_RANGING = 0;
 
     public static final int TIME_SCHEDULED_RANGING = 1;
+
+    public static final int HYBRID_SCHEDULED_RANGING = 2;
 
     /** Ranging Time Struct */
     @IntDef(
@@ -247,6 +255,24 @@ public abstract class FiraParams extends Params {
 
     public static final int BLOCK_BASED_SCHEDULING = 1;
 
+    /** Hybrid session controller phase participation */
+    @IntDef(
+            value = {
+                PARTICIPATION_AS_DEFINED_DEVICE_ROLE,
+                NO_PARTICIPATION_IN_THE_PHASE,
+                PARTICIPATION_AS_INITIATOR,
+                PARTICIPATION_AS_RESPONDER,
+            })
+    public @interface PhaseParticipationHybridSessionController {}
+
+    public static final int PARTICIPATION_AS_DEFINED_DEVICE_ROLE = 0;
+
+    public static final int NO_PARTICIPATION_IN_THE_PHASE = 1;
+
+    public static final int PARTICIPATION_AS_INITIATOR = 2;
+
+    public static final int PARTICIPATION_AS_RESPONDER = 3;
+
     /** Cc Constraint Length */
     @IntDef(
             value = {
@@ -259,7 +285,7 @@ public abstract class FiraParams extends Params {
 
     public static final int CONSTRAINT_LENGTH_7 = 7;
 
-    /** Measurement Report */
+    /** Measurement Report Type */
     @IntDef(
             value = {
                 MEASUREMENT_REPORT_TYPE_INITIATOR_TO_RESPONDER,
@@ -271,17 +297,32 @@ public abstract class FiraParams extends Params {
 
     public static final int MEASUREMENT_REPORT_TYPE_RESPONDER_TO_INITIATOR = 1;
 
+    /** Measurement Report Phase */
+    @IntDef(
+            value = {
+                MEASUREMENT_REPORT_PHASE_NOTSET,
+                MEASUREMENT_REPORT_PHASE_SET,
+            })
+    public @interface MeasurementReportPhase {}
+
+    public static final int MEASUREMENT_REPORT_PHASE_NOTSET = 0;
+
+    public static final int MEASUREMENT_REPORT_PHASE_SET = 1;
+
     /** PRF Mode */
     @IntDef(
             value = {
                 PRF_MODE_BPRF,
                 PRF_MODE_HPRF,
+                PRF_MODE_HPRF_HIGH_DATA_RATE,
             })
     public @interface PrfMode {}
 
     public static final int PRF_MODE_BPRF = 0;
 
     public static final int PRF_MODE_HPRF = 1;
+
+    public static final int PRF_MODE_HPRF_HIGH_DATA_RATE = 2;
 
     /** Preamble duration: BPRF always uses 64 symbols */
     @IntDef(
@@ -404,6 +445,7 @@ public abstract class FiraParams extends Params {
     /** SFD ID */
     @IntDef(
             value = {
+                SFD_ID_VALUE_0,
                 SFD_ID_VALUE_1,
                 SFD_ID_VALUE_2,
                 SFD_ID_VALUE_3,
@@ -411,6 +453,7 @@ public abstract class FiraParams extends Params {
             })
     public @interface SfdIdValue {}
 
+    public static final int SFD_ID_VALUE_0 = 0;
     public static final int SFD_ID_VALUE_1 = 1;
     public static final int SFD_ID_VALUE_2 = 2;
     public static final int SFD_ID_VALUE_3 = 3;
@@ -516,6 +559,7 @@ public abstract class FiraParams extends Params {
                 STATUS_CODE_UNKNOWN_OID,
                 STATUS_CODE_READ_ONLY,
                 STATUS_CODE_COMMAND_RETRY,
+                STATUS_CODE_UNKNOWN,
                 STATUS_CODE_ERROR_SESSION_NOT_EXIST,
                 STATUS_CODE_ERROR_SESSION_DUPLICATE,
                 STATUS_CODE_ERROR_SESSION_ACTIVE,
@@ -552,6 +596,7 @@ public abstract class FiraParams extends Params {
     public static final int STATUS_CODE_UNKNOWN_OID = 0x08;
     public static final int STATUS_CODE_READ_ONLY = 0x09;
     public static final int STATUS_CODE_COMMAND_RETRY = 0x0A;
+    public static final int STATUS_CODE_UNKNOWN = 0x0B;
     public static final int STATUS_CODE_ERROR_SESSION_NOT_EXIST = 0x11;
     public static final int STATUS_CODE_ERROR_SESSION_DUPLICATE = 0x12;
     public static final int STATUS_CODE_ERROR_SESSION_ACTIVE = 0x13;
@@ -576,6 +621,45 @@ public abstract class FiraParams extends Params {
     public static final int
             STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST = 0X2B;
 
+    /**
+     * Table 28: Status codes in the DATA_TRANSFER_STATUS_NTF.
+     */
+    @IntDef(
+            value = {
+                    STATUS_CODE_DATA_TRANSFER_NTF_REPETITION_OK,
+                    STATUS_CODE_DATA_TRANSFER_NTF_OK,
+                    STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER,
+                    STATUS_CODE_DATA_TRANSFER_NTF_ERROR_NO_CREDIT_AVAILABLE,
+                    STATUS_CODE_DATA_TRANSFER_NTF_ERROR_REJECTED,
+                    STATUS_CODE_DATA_TRANSFER_NTF_SESSION_TYPE_NOT_SUPPORTED,
+                    STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER_IS_ONGOING,
+                    STATUS_CODE_DATA_TRANSFER_NTF_STATUS_INVALID_FORMAT
+            })
+    public @interface DataTransferStatusNtfCode {}
+
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_REPETITION_OK = 0;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_OK = 1;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER = 2;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_NO_CREDIT_AVAILABLE = 3;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_REJECTED = 4;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_SESSION_TYPE_NOT_SUPPORTED = 5;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER_IS_ONGOING = 6;
+    public static final int STATUS_CODE_DATA_TRANSFER_NTF_STATUS_INVALID_FORMAT = 7;
+
+    /**
+     * Table TBD: Status codes in the SESSION_DATA_TRANSFER_PHASE_CONFIGURATION_NTF.
+     */
+    @IntDef(
+            value = {
+                    STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS,
+                    STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGNMENT
+            })
+    public @interface DataTransferPhaseConfigNtfStatusCode {}
+
+    public static final int STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS = 0;
+    public static final int
+            STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGNMENT = 1;
+
     /** State change reason codes defined in UCI table-15 */
     @IntDef(
             value = {
@@ -587,6 +671,10 @@ public abstract class FiraParams extends Params {
                 STATE_CHANGE_REASON_CODE_ERROR_INVALID_RANGING_INTERVAL,
                 STATE_CHANGE_REASON_CODE_ERROR_INVALID_STS_CONFIG,
                 STATE_CHANGE_REASON_CODE_ERROR_INVALID_RFRAME_CONFIG,
+                STATE_CHANGE_REASON_CODE_ERROR_HUS_NOT_ENOUGH_SLOTS,
+                STATE_CHANGE_REASON_CODE_ERROR_HUS_CFP_PHASE_TOO_SHORT,
+                STATE_CHANGE_REASON_CODE_ERROR_HUS_CAP_PHASE_TOO_SHORT,
+                STATE_CHANGE_REASON_CODE_ERROR_HUS_OTHERS,
             })
     public @interface StateChangeReasonCode {}
 
@@ -598,6 +686,10 @@ public abstract class FiraParams extends Params {
     public static final int STATE_CHANGE_REASON_CODE_ERROR_INVALID_RANGING_INTERVAL = 0x23;
     public static final int STATE_CHANGE_REASON_CODE_ERROR_INVALID_STS_CONFIG = 0x24;
     public static final int STATE_CHANGE_REASON_CODE_ERROR_INVALID_RFRAME_CONFIG = 0x25;
+    public static final int STATE_CHANGE_REASON_CODE_ERROR_HUS_NOT_ENOUGH_SLOTS = 0x26;
+    public static final int STATE_CHANGE_REASON_CODE_ERROR_HUS_CFP_PHASE_TOO_SHORT = 0x27;
+    public static final int STATE_CHANGE_REASON_CODE_ERROR_HUS_CAP_PHASE_TOO_SHORT = 0x28;
+    public static final int STATE_CHANGE_REASON_CODE_ERROR_HUS_OTHERS = 0x29;
 
     /** Multicast controlee add/delete actions defined in UCI */
     @IntDef(
@@ -620,6 +712,11 @@ public abstract class FiraParams extends Params {
                 MULTICAST_LIST_UPDATE_STATUS_ERROR_MULTICAST_LIST_FULL,
                 MULTICAST_LIST_UPDATE_STATUS_ERROR_KEY_FETCH_FAIL,
                 MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_ID_NOT_FOUND,
+                MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_FOUND,
+                MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_APPLICABLE,
+                MULTICAST_LIST_UPDATE_STATUS_ERROR_SESSION_KEY_NOT_FOUND,
+                MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_NOT_FOUND,
+                MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_ALREADY_PRESENT,
             })
     public @interface MulticastListUpdateStatus {}
 
@@ -627,6 +724,11 @@ public abstract class FiraParams extends Params {
     public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_MULTICAST_LIST_FULL = 1;
     public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_KEY_FETCH_FAIL = 2;
     public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_ID_NOT_FOUND = 3;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_FOUND = 4;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_APPLICABLE = 5;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SESSION_KEY_NOT_FOUND = 6;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_NOT_FOUND = 7;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_ALREADY_PRESENT = 8;
 
     /** Capability related definitions starts from here */
     @IntDef(
@@ -1025,6 +1127,31 @@ public abstract class FiraParams extends Params {
     public static final int SESSION_TYPE_RANGING_WITH_DATA_PHASE = 5;
     public static final int SESSION_TYPE_DEVICE_TEST_MODE = 0xD0;
 
+    /** Which type of filter to use for filtering AoA/distance readings. */
+    @IntDef(
+            value = {
+                    FILTER_TYPE_NONE,
+                    FILTER_TYPE_DEFAULT,
+                    FILTER_TYPE_APPLICATION,
+            })
+    public @interface FilterType {}
+    public static final int FILTER_TYPE_NONE = 0;
+    public static final int FILTER_TYPE_DEFAULT = 1;
+    public static final int FILTER_TYPE_APPLICATION = 2;
+
+    // Default value (Unlimited)
+    public static final int MAX_NUMBER_OF_MEASUREMENTS_DEFAULT = 0;
+
+    public static final int SESSION_TIME_BASE_PARAM_LEN = 9;
+    public static final int SESSION_HANDLE_LEN = 4;
+    public static final int SESSION_OFFSET_TIME_LEN = 4;
+
+    // Default value (Host as the both secure & non-secure endpoint).
+    public static final int APPLICATION_DATA_ENDPOINT_DEFAULT = 0;
+
+    //Reference time base feature mask.
+    public static final int SESSION_TIME_BASE_REFERENCE_FEATURE_ENABLED = 1;
+
     // Helper functions
     protected static UwbAddress longToUwbAddress(long value, int length) {
         ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
@@ -1032,7 +1159,8 @@ public abstract class FiraParams extends Params {
         return UwbAddress.fromBytes(Arrays.copyOf(buffer.array(), length));
     }
 
-    protected static long uwbAddressToLong(UwbAddress address) {
+    /** Helper functions to convert UwbAdrress in long value. */
+    public static long uwbAddressToLong(UwbAddress address) {
         ByteBuffer buffer = ByteBuffer.wrap(Arrays.copyOf(address.toBytes(), Long.BYTES));
         return buffer.getLong();
     }

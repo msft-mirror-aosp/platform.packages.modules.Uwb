@@ -16,7 +16,9 @@
 package com.android.server.uwb.jni;
 
 import com.android.server.uwb.data.UwbMulticastListUpdateStatus;
+import com.android.server.uwb.data.UwbRadarData;
 import com.android.server.uwb.data.UwbRangingData;
+
 /*import com.android.server.uwb.test.UwbTestLoopBackTestResult;
 import com.android.server.uwb.test.UwbTestPeriodicTxResult;
 import com.android.server.uwb.test.UwbTestRxPacketErrorRateResult;
@@ -39,11 +41,12 @@ public interface INativeUwbManager {
          * Interface for receiving Session Status Notification
          *
          * @param id         : Session ID
+         * @param token      : Session Token
          * @param state      : Session State
          * @param reasonCode : Reason Code - UCI GENERIC SPECIFICATION Table 15 : state change with
          *                   reason codes
          */
-        void onSessionStatusNotificationReceived(long id, int state, int reasonCode);
+        void onSessionStatusNotificationReceived(long id, int token, int state, int reasonCode);
 
         /**
          * Interface for receiving Multicast List Update Data
@@ -60,14 +63,40 @@ public interface INativeUwbManager {
          * @param status      : Status
          * @param sequenceNum : Sequence Number
          * @param address     : Address of remote address
-         * @param sourceEndPoint   : SourceEndPoint
-         * @param destEndPoint   : DestEndPoint
          * @param data        : Data received from remote address
          */
         // TODO(b/261762781): Change the type of sessionID & sequenceNum parameters to int (to match
         // their 4-octet size in the UCI spec).
-        void onDataReceived(long sessionID, int status, long sequenceNum, byte[] address,
-                int sourceEndPoint, int destEndPoint, byte[] data);
+        void onDataReceived(
+                long sessionID, int status, long sequenceNum, byte[] address, byte[] data);
+
+        /**
+         * Interface for receiving the data transfer status, corresponding to a Data packet
+         * earlier sent from the host to UWBS.
+         *
+         * @param sessionId          : Session ID
+         * @param dataTransferStatus : Status codes in the DATA_TRANSFER_STATUS_NTF packet
+         * @param sequenceNum        : Sequence Number
+         * @param txCount            : Transmission count
+         */
+        void onDataSendStatus(long sessionId, int dataTransferStatus, long sequenceNum,
+                int txCount);
+
+        /**
+         * Interface for receiving Radar Data Message
+         *
+         * @param radarData : refer to Android UWB Radar UCI Specification: radar Data Message
+         */
+        void onRadarDataMessageReceived(UwbRadarData radarData);
+
+        /**
+         * Interface for receiving the data transfer phase config notification
+         *
+         * @param sessionId                     : Session ID
+         * @param dataTransferPhaseConfigStatus  : DATA_TRANSFER_PHASE_CONFIG_STATUS_NTF status code
+         */
+        void onDataTransferPhaseConfigNotificationReceived(long sessionId,
+                int dataTransferPhaseConfigStatus);
     }
 
     interface DeviceNotification {

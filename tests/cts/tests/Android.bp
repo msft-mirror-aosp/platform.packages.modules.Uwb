@@ -13,6 +13,7 @@
 // limitations under the License.
 
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -37,6 +38,8 @@ android_test {
         "com.uwb.support.multichip",
         "com.uwb.support.oemextension",
         "com.uwb.support.dltdoa",
+        "flag-junit",
+        "uwb_flags_lib",
     ],
     srcs: ["src/**/*.java"],
     platform_apis: true,

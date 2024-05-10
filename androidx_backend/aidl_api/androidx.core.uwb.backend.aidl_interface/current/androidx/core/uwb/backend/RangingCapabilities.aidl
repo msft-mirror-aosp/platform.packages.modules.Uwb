@@ -36,4 +36,12 @@ parcelable RangingCapabilities {
   boolean supportsDistance;
   boolean supportsAzimuthalAngle;
   boolean supportsElevationAngle;
+  int minRangingInterval;
+  int[] supportedChannels;
+  int[] supportedNtfConfigs;
+  int[] supportedConfigIds;
+  @nullable int[] supportedSlotDurations;
+  @nullable int[] supportedRangingUpdateRates;
+  boolean supportsRangingIntervalReconfigure;
+  boolean hasBackgroundRangingSupport;
 }

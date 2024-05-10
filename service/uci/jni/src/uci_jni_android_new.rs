@@ -18,7 +18,7 @@ use crate::dispatcher::Dispatcher;
 use crate::helper::{boolean_result_helper, byte_result_helper, option_result_helper};
 use crate::jclass_name::{
     CONFIG_STATUS_DATA_CLASS, DT_RANGING_ROUNDS_STATUS_CLASS, POWER_STATS_CLASS, TLV_DATA_CLASS,
-    UWB_RANGING_DATA_CLASS, VENDOR_RESPONSE_CLASS,
+    UWB_DEVICE_INFO_RESPONSE_CLASS, UWB_RANGING_DATA_CLASS, VENDOR_RESPONSE_CLASS,
 };
 use crate::unique_jvm;
 
@@ -29,21 +29,21 @@ use jni::errors::Error as JNIError;
 use jni::objects::{GlobalRef, JObject, JString, JValue};
 use jni::signature::ReturnType;
 use jni::sys::{
-    jboolean, jbyte, jbyteArray, jint, jintArray, jlong, jobject, jobjectArray, jshort,
-    jshortArray, jvalue,
+    jboolean, jbyte, jbyteArray, jint, jintArray, jlong, jobject, jobjectArray, jshort, jvalue,
 };
 use jni::JNIEnv;
 use log::{debug, error};
-use num_traits::cast::FromPrimitive;
 use uwb_core::error::{Error, Result};
 use uwb_core::params::{
-    AppConfigTlv, CountryCode, RawAppConfigTlv, RawUciMessage,
-    SessionUpdateActiveRoundsDtTagResponse, SetAppConfigResponse,
+    AndroidRadarConfigResponse, AppConfigTlv, CountryCode, GetDeviceInfoResponse, PhaseList,
+    RadarConfigTlv, RawAppConfigTlv, RawUciMessage, SessionUpdateDtTagRangingRoundsResponse,
+    SetAppConfigResponse, UpdateTime,
 };
 use uwb_uci_packets::{
-    AppConfigTlvType, CapTlv, Controlee, Controlee_V2_0_16_Byte_Version,
-    Controlee_V2_0_32_Byte_Version, Controlees, FiraComponent, PowerStats, ResetConfig,
-    SessionState, SessionType, StatusCode, UpdateMulticastListAction,
+    AppConfigTlvType, CapTlv, Controlee, ControleePhaseList, Controlee_V2_0_16_Byte_Version,
+    Controlee_V2_0_32_Byte_Version, Controlees, MacAddressIndicator, PhaseListExtendedMacAddress,
+    PhaseListShortMacAddress, PowerStats, ResetConfig, SessionState, SessionType, StatusCode,
+    UpdateMulticastListAction,
 };
 
 /// Macro capturing the name of the function calling this macro.
@@ -77,7 +77,7 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeIn
     logger::init(
         logger::Config::default()
             .with_tag_on_device("uwb")
-            .with_min_level(log::Level::Trace)
+            .with_max_level(log::LevelFilter::Trace)
             .with_filter("trace,jni=info"),
     );
     debug!("{}: enter", function_name!());
@@ -89,14 +89,32 @@ fn native_init(env: JNIEnv) -> Result<()> {
     unique_jvm::set_once(jvm)
 }
 
-/// Get max session number
-#[no_mangle]
-pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGetMaxSessionNumber(
-    _env: JNIEnv,
-    _obj: JObject,
-) -> jint {
-    debug!("{}: enter", function_name!());
-    5
+fn create_device_info_response(rsp: GetDeviceInfoResponse, env: JNIEnv) -> Result<jobject> {
+    let device_info_response_class = env
+        .find_class(UWB_DEVICE_INFO_RESPONSE_CLASS)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+
+    let vendor_spec_info_jbytearray = env
+        .byte_array_from_slice(rsp.vendor_spec_info.as_ref())
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    // Safety: vendor_spec_info_jbytearray is safely instantiated above.
+    let vendor_spec_info_jobject = unsafe { JObject::from_raw(vendor_spec_info_jbytearray) };
+
+    match env.new_object(
+        device_info_response_class,
+        "(IIIII[B)V",
+        &[
+            JValue::Int(i32::from(rsp.status)),
+            JValue::Int(rsp.uci_version as i32),
+            JValue::Int(rsp.mac_version as i32),
+            JValue::Int(rsp.phy_version as i32),
+            JValue::Int(rsp.uci_test_version as i32),
+            JValue::Object(vendor_spec_info_jobject),
+        ],
+    ) {
+        Ok(o) => Ok(*o),
+        Err(_) => Err(Error::ForeignFunctionInterface),
+    }
 }
 
 /// Turn on Single UWB chip.
@@ -105,12 +123,24 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeDo
     env: JNIEnv,
     obj: JObject,
     chip_id: JString,
-) -> jboolean {
+) -> jobject {
     debug!("{}: enter", function_name!());
-    boolean_result_helper(native_do_initialize(env, obj, chip_id), function_name!())
+    match option_result_helper(native_do_initialize(env, obj, chip_id), function_name!()) {
+        Some(rsp) => create_device_info_response(rsp, env)
+            .map_err(|e| {
+                error!("{} failed with {:?}", function_name!(), &e);
+                e
+            })
+            .unwrap_or(*JObject::null()),
+        None => *JObject::null(),
+    }
 }
 
-fn native_do_initialize(env: JNIEnv, obj: JObject, chip_id: JString) -> Result<()> {
+fn native_do_initialize(
+    env: JNIEnv,
+    obj: JObject,
+    chip_id: JString,
+) -> Result<GetDeviceInfoResponse> {
     let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
     uci_manager.open_hal()
 }
@@ -182,7 +212,8 @@ fn native_session_init(
     session_type: jbyte,
     chip_id: JString,
 ) -> Result<()> {
-    let session_type = SessionType::from_u8(session_type as u8).ok_or(Error::BadParameters)?;
+    let session_type =
+        SessionType::try_from(session_type as u8).map_err(|_| Error::BadParameters)?;
     let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
     uci_manager.session_init(session_id as u32, session_type)
 }
@@ -321,13 +352,38 @@ fn parse_app_config_tlv_vec(no_of_params: i32, mut byte_array: &[u8]) -> Result<
     Ok(tlvs)
 }
 
-fn create_set_config_response(response: SetAppConfigResponse, env: JNIEnv) -> Result<jbyteArray> {
+fn parse_radar_config_tlv_vec(
+    no_of_params: i32,
+    mut byte_array: &[u8],
+) -> Result<Vec<RadarConfigTlv>> {
+    let mut parsed_tlvs_len = 0;
+    let received_tlvs_len = byte_array.len();
+    let mut tlvs = Vec::<RadarConfigTlv>::new();
+    for _ in 0..no_of_params {
+        // The tlv consists of the type of payload in 1 byte, the length of payload as u8
+        // in 1 byte, and the payload.
+        const TLV_HEADER_SIZE: usize = 2;
+        let tlv = RadarConfigTlv::parse(byte_array).map_err(|_| Error::BadParameters)?;
+        byte_array = byte_array.get(tlv.v.len() + TLV_HEADER_SIZE..).ok_or(Error::BadParameters)?;
+        parsed_tlvs_len += tlv.v.len() + TLV_HEADER_SIZE;
+        tlvs.push(tlv);
+    }
+    if parsed_tlvs_len != received_tlvs_len {
+        return Err(Error::BadParameters);
+    };
+    Ok(tlvs)
+}
+
+fn create_radar_config_response(
+    response: AndroidRadarConfigResponse,
+    env: JNIEnv,
+) -> Result<jbyteArray> {
     let uwb_config_status_class =
         env.find_class(CONFIG_STATUS_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
     let mut buf = Vec::<u8>::new();
     for config_status in &response.config_status {
-        buf.push(config_status.cfg_id as u8);
-        buf.push(config_status.status as u8);
+        buf.push(u8::from(config_status.cfg_id));
+        buf.push(u8::from(config_status.status));
     }
     let config_status_jbytearray =
         env.byte_array_from_slice(&buf).map_err(|_| Error::ForeignFunctionInterface)?;
@@ -339,7 +395,34 @@ fn create_set_config_response(response: SetAppConfigResponse, env: JNIEnv) -> Re
             uwb_config_status_class,
             "(II[B)V",
             &[
-                JValue::Int(response.status as i32),
+                JValue::Int(i32::from(response.status)),
+                JValue::Int(response.config_status.len() as i32),
+                JValue::Object(config_status_jobject),
+            ],
+        )
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    Ok(*config_status_jobject)
+}
+
+fn create_set_config_response(response: SetAppConfigResponse, env: JNIEnv) -> Result<jbyteArray> {
+    let uwb_config_status_class =
+        env.find_class(CONFIG_STATUS_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
+    let mut buf = Vec::<u8>::new();
+    for config_status in &response.config_status {
+        buf.push(u8::from(config_status.cfg_id));
+        buf.push(u8::from(config_status.status));
+    }
+    let config_status_jbytearray =
+        env.byte_array_from_slice(&buf).map_err(|_| Error::ForeignFunctionInterface)?;
+
+    // Safety: config_status_jbytearray is safely instantiated above.
+    let config_status_jobject = unsafe { JObject::from_raw(config_status_jbytearray) };
+    let config_status_jobject = env
+        .new_object(
+            uwb_config_status_class,
+            "(II[B)V",
+            &[
+                JValue::Int(i32::from(response.status)),
                 JValue::Int(response.config_status.len() as i32),
                 JValue::Object(config_status_jobject),
             ],
@@ -396,6 +479,245 @@ fn native_set_app_configurations(
     uci_manager.session_set_app_config(session_id as u32, tlvs)
 }
 
+/// Set radar app configurations on a single UWB device. Return null JObject if failed.
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSetRadarAppConfigurations(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    no_of_params: jint,
+    _radar_config_param_len: jint,
+    radar_config_params: jbyteArray,
+    chip_id: JString,
+) -> jbyteArray {
+    debug!("{}: enter", function_name!());
+    match option_result_helper(
+        native_set_radar_app_configurations(
+            env,
+            obj,
+            session_id,
+            no_of_params,
+            radar_config_params,
+            chip_id,
+        ),
+        function_name!(),
+    ) {
+        Some(config_response) => create_radar_config_response(config_response, env)
+            .map_err(|e| {
+                error!("{} failed with {:?}", function_name!(), &e);
+                e
+            })
+            .unwrap_or(*JObject::null()),
+        None => *JObject::null(),
+    }
+}
+
+fn native_set_radar_app_configurations(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    no_of_params: jint,
+    radar_config_params: jbyteArray,
+    chip_id: JString,
+) -> Result<AndroidRadarConfigResponse> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    let config_byte_array =
+        env.convert_byte_array(radar_config_params).map_err(|_| Error::ForeignFunctionInterface)?;
+    let tlvs = parse_radar_config_tlv_vec(no_of_params, &config_byte_array)?;
+    uci_manager.android_set_radar_config(session_id as u32, tlvs)
+}
+
+fn parse_hybrid_controller_config_phase_list(
+    number_of_phases: usize,
+    message_control: u8,
+    byte_array: &[u8],
+) -> Result<PhaseList> {
+    const MAC_ADDRESS_BIT_MASK: u8 = 0x01;
+    let phase_list = match MacAddressIndicator::try_from(message_control & MAC_ADDRESS_BIT_MASK)
+        .map_err(|_| Error::BadParameters)?
+    {
+        MacAddressIndicator::ShortAddress => {
+            const PHASE_LIST_SHORT_ADDRESS_SIZE: usize = 11;
+
+            let phase_list_short = byte_array
+                .chunks(PHASE_LIST_SHORT_ADDRESS_SIZE)
+                .filter(|chunk| chunk.len() == PHASE_LIST_SHORT_ADDRESS_SIZE)
+                .map(|chunk| {
+                    let session_token = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
+                    let start_slot_index = u16::from_le_bytes(chunk[4..6].try_into().unwrap());
+                    let end_slot_index = u16::from_le_bytes(chunk[6..8].try_into().unwrap());
+                    let phase_participation = chunk[8];
+                    let mac_address = [chunk[9], chunk[10]];
+                    PhaseListShortMacAddress {
+                        session_token,
+                        start_slot_index,
+                        end_slot_index,
+                        phase_participation,
+                        mac_address,
+                    }
+                })
+                .collect::<Vec<PhaseListShortMacAddress>>();
+            if phase_list_short.len() != number_of_phases {
+                return Err(Error::BadParameters);
+            }
+            PhaseList::ShortMacAddress(phase_list_short)
+        }
+        MacAddressIndicator::ExtendedAddress => {
+            const PHASE_LIST_EXTENDED_ADDRESS_SIZE: usize = 17;
+            let phase_list_extended = byte_array
+                .chunks(PHASE_LIST_EXTENDED_ADDRESS_SIZE)
+                .filter(|chunk| chunk.len() == PHASE_LIST_EXTENDED_ADDRESS_SIZE)
+                .map(|chunk| {
+                    let session_token = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
+                    let start_slot_index = u16::from_le_bytes(chunk[4..6].try_into().unwrap());
+                    let end_slot_index = u16::from_le_bytes(chunk[6..8].try_into().unwrap());
+                    let phase_participation = chunk[8];
+                    let mut mac_address = [0; 8];
+                    mac_address.copy_from_slice(&chunk[9..17]);
+                    PhaseListExtendedMacAddress {
+                        session_token,
+                        start_slot_index,
+                        end_slot_index,
+                        phase_participation,
+                        mac_address,
+                    }
+                })
+                .collect::<Vec<PhaseListExtendedMacAddress>>();
+            if phase_list_extended.len() != number_of_phases {
+                return Err(Error::BadParameters);
+            }
+            PhaseList::ExtendedMacAddress(phase_list_extended)
+        }
+    };
+
+    Ok(phase_list)
+}
+
+/// Set hybrid session controller configurations. Return null JObject if failed.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSetHybridSessionControllerConfigurations(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    message_control: jbyte,
+    number_of_phases: jint,
+    update_time: jbyteArray,
+    phase_list: jbyteArray,
+    chip_id: JString,
+) -> jbyte {
+    debug!("{}: enter", function_name!());
+    byte_result_helper(
+        native_set_hybrid_session_controller_configurations(
+            env,
+            obj,
+            session_id,
+            message_control,
+            number_of_phases,
+            update_time,
+            phase_list,
+            chip_id,
+        ),
+        function_name!(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn native_set_hybrid_session_controller_configurations(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    message_control: jbyte,
+    number_of_phases: jint,
+    update_time: jbyteArray,
+    phase_list: jbyteArray,
+    chip_id: JString,
+) -> Result<()> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    let phase_list_bytes =
+        env.convert_byte_array(phase_list).map_err(|_| Error::ForeignFunctionInterface)?;
+    let phase_list = parse_hybrid_controller_config_phase_list(
+        number_of_phases as usize,
+        message_control as u8,
+        &phase_list_bytes,
+    )?;
+
+    let update_time_bytes =
+        env.convert_byte_array(update_time).map_err(|_| Error::ForeignFunctionInterface)?;
+    let update_time_array: [u8; 8] =
+        TryFrom::try_from(&update_time_bytes[..]).map_err(|_| Error::BadParameters)?;
+
+    uci_manager.session_set_hybrid_controller_config(
+        session_id as u32,
+        message_control as u8,
+        number_of_phases as u8,
+        UpdateTime::new(&update_time_array).unwrap(),
+        phase_list,
+    )
+}
+
+fn parse_hybrid_controlee_config_phase_list(
+    number_of_phases: usize,
+    byte_array: &[u8],
+) -> Result<Vec<ControleePhaseList>> {
+    const CONTROLEE_PHASE_LIST_SIZE: usize = 5;
+    let controlee_phase_list = byte_array
+        .chunks(CONTROLEE_PHASE_LIST_SIZE)
+        .filter(|chunk| chunk.len() == CONTROLEE_PHASE_LIST_SIZE)
+        .map(|chunk| {
+            let session_token = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
+            let phase_participation = chunk[4];
+            ControleePhaseList { session_token, phase_participation }
+        })
+        .collect::<Vec<ControleePhaseList>>();
+    if controlee_phase_list.len() != number_of_phases {
+        return Err(Error::BadParameters);
+    }
+
+    Ok(controlee_phase_list)
+}
+
+/// Set hybrid session controlee configurations. Return null JObject if failed.
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSetHybridSessionControleeConfigurations(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    number_of_phases: jint,
+    phase_list: jbyteArray,
+    chip_id: JString,
+) -> jbyte {
+    debug!("{}: enter", function_name!());
+    byte_result_helper(
+        native_set_hybrid_session_controlee_configurations(
+            env,
+            obj,
+            session_id,
+            number_of_phases,
+            phase_list,
+            chip_id,
+        ),
+        function_name!(),
+    )
+}
+
+fn native_set_hybrid_session_controlee_configurations(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    number_of_phases: jint,
+    phase_list: jbyteArray,
+    chip_id: JString,
+) -> Result<()> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
+    let phase_list_bytes =
+        env.convert_byte_array(phase_list).map_err(|_| Error::ForeignFunctionInterface)?;
+    let controlee_phase_list =
+        parse_hybrid_controlee_config_phase_list(number_of_phases as usize, &phase_list_bytes)?;
+
+    uci_manager.session_set_hybrid_controlee_config(session_id as u32, controlee_phase_list)
+}
+
 fn create_get_config_response(tlvs: Vec<AppConfigTlv>, env: JNIEnv) -> Result<jbyteArray> {
     let tlv_data_class =
         env.find_class(TLV_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
@@ -403,7 +725,7 @@ fn create_get_config_response(tlvs: Vec<AppConfigTlv>, env: JNIEnv) -> Result<jb
     let mut buf = Vec::<u8>::new();
     for tlv in tlvs.into_iter() {
         let tlv = tlv.into_inner();
-        buf.push(tlv.cfg_id as u8);
+        buf.push(u8::from(tlv.cfg_id));
         buf.push(tlv.v.len() as u8);
         buf.extend(&tlv.v);
     }
@@ -417,7 +739,7 @@ fn create_get_config_response(tlvs: Vec<AppConfigTlv>, env: JNIEnv) -> Result<jb
             tlv_data_class,
             "(II[B)V",
             &[
-                JValue::Int(StatusCode::UciStatusOk as i32),
+                JValue::Int(i32::from(StatusCode::UciStatusOk)),
                 JValue::Int(tlvs_len as i32),
                 JValue::Object(tlvs_jobject),
             ],
@@ -467,7 +789,8 @@ fn native_get_app_configurations(
         session_id as u32,
         app_config_bytearray
             .into_iter()
-            .map(AppConfigTlvType::from_u8)
+            .map(AppConfigTlvType::try_from)
+            .map(std::result::Result::ok)
             .collect::<Option<Vec<_>>>()
             .ok_or(Error::BadParameters)?,
     )
@@ -478,7 +801,7 @@ fn create_cap_response(tlvs: Vec<CapTlv>, env: JNIEnv) -> Result<jbyteArray> {
         env.find_class(TLV_DATA_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
     let mut buf = Vec::<u8>::new();
     for tlv in &tlvs {
-        buf.push(tlv.t as u8);
+        buf.push(u8::from(tlv.t));
         buf.push(tlv.v.len() as u8);
         buf.extend(&tlv.v);
     }
@@ -492,7 +815,7 @@ fn create_cap_response(tlvs: Vec<CapTlv>, env: JNIEnv) -> Result<jbyteArray> {
             tlv_data_class,
             "(II[B)V",
             &[
-                JValue::Int(StatusCode::UciStatusOk as i32),
+                JValue::Int(i32::from(StatusCode::UciStatusOk)),
                 JValue::Int(tlvs.len() as i32),
                 JValue::Object(tlvs_jobject),
             ],
@@ -533,10 +856,11 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeCo
     session_id: jint,
     action: jbyte,
     no_of_controlee: jbyte,
-    addresses: jshortArray,
+    addresses: jbyteArray,
     sub_session_ids: jintArray,
     sub_session_keys: jbyteArray,
     chip_id: JString,
+    is_multicast_list_ntf_v2_supported: jboolean,
 ) -> jbyte {
     debug!("{}: enter", function_name!());
     byte_result_helper(
@@ -550,6 +874,7 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeCo
             sub_session_ids,
             sub_session_keys,
             chip_id,
+            is_multicast_list_ntf_v2_supported,
         ),
         function_name!(),
     )
@@ -563,21 +888,20 @@ fn native_controller_multicast_list_update(
     session_id: jint,
     action: jbyte,
     no_of_controlee: jbyte,
-    addresses: jshortArray,
+    addresses: jbyteArray,
     sub_session_ids: jintArray,
     sub_session_keys: jbyteArray,
     chip_id: JString,
+    is_multicast_list_ntf_v2_supported: jboolean,
 ) -> Result<()> {
     let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
-    let mut address_list = vec![
-        0i16;
-        env.get_array_length(addresses)
-            .map_err(|_| Error::ForeignFunctionInterface)?
-            .try_into()
-            .map_err(|_| { Error::BadParameters })?
-    ];
-    env.get_short_array_region(addresses, 0, &mut address_list)
-        .map_err(|_| Error::ForeignFunctionInterface)?;
+
+    let addresses_bytes =
+        env.convert_byte_array(addresses).map_err(|_| Error::ForeignFunctionInterface)?;
+
+    let address_list: Vec<[u8; 2]> =
+        addresses_bytes.chunks_exact(2).map(|chunk| [chunk[0], chunk[1]]).collect();
+
     let mut sub_session_id_list = vec![
         0i32;
         env.get_array_length(sub_session_ids)
@@ -592,55 +916,74 @@ fn native_controller_multicast_list_update(
     {
         return Err(Error::BadParameters);
     }
-    let controlee_list = match UpdateMulticastListAction::from_u8(action as u8)
-        .ok_or(Error::BadParameters)?
+    let controlee_list = match UpdateMulticastListAction::try_from(action as u8)
+        .map_err(|_| Error::BadParameters)?
     {
         UpdateMulticastListAction::AddControlee | UpdateMulticastListAction::RemoveControlee => {
             Controlees::NoSessionKey(
                 zip(address_list, sub_session_id_list)
-                    .map(|(a, s)| Controlee { short_address: a as u16, subsession_id: s as u32 })
+                    .map(|(a, s)| Controlee { short_address: a, subsession_id: s as u32 })
                     .collect::<Vec<Controlee>>(),
             )
         }
         UpdateMulticastListAction::AddControleeWithShortSubSessionKey => {
-            Controlees::ShortSessionKey(
-                zip(
-                    zip(address_list, sub_session_id_list),
-                    env.convert_byte_array(sub_session_keys)
-                        .map_err(|_| Error::ForeignFunctionInterface)?
-                        .chunks(16),
+            if sub_session_keys.is_null() {
+                Controlees::NoSessionKey(
+                    zip(address_list, sub_session_id_list)
+                        .map(|(a, s)| Controlee { short_address: a, subsession_id: s as u32 })
+                        .collect::<Vec<Controlee>>(),
                 )
-                .map(|((address, id), key)| {
-                    Ok(Controlee_V2_0_16_Byte_Version {
-                        short_address: address as u16,
-                        subsession_id: id as u32,
-                        subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
+            } else {
+                Controlees::ShortSessionKey(
+                    zip(
+                        zip(address_list, sub_session_id_list),
+                        env.convert_byte_array(sub_session_keys)
+                            .map_err(|_| Error::ForeignFunctionInterface)?
+                            .chunks(16),
+                    )
+                    .map(|((address, id), key)| {
+                        Ok(Controlee_V2_0_16_Byte_Version {
+                            short_address: address,
+                            subsession_id: id as u32,
+                            subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
+                        })
                     })
-                })
-                .collect::<Result<Vec<Controlee_V2_0_16_Byte_Version>>>()?,
-            )
+                    .collect::<Result<Vec<Controlee_V2_0_16_Byte_Version>>>()?,
+                )
+            }
         }
-        UpdateMulticastListAction::AddControleeWithLongSubSessionKey => Controlees::LongSessionKey(
-            zip(
-                zip(address_list, sub_session_id_list),
-                env.convert_byte_array(sub_session_keys)
-                    .map_err(|_| Error::ForeignFunctionInterface)?
-                    .chunks(32),
-            )
-            .map(|((address, id), key)| {
-                Ok(Controlee_V2_0_32_Byte_Version {
-                    short_address: address as u16,
-                    subsession_id: id as u32,
-                    subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
-                })
-            })
-            .collect::<Result<Vec<Controlee_V2_0_32_Byte_Version>>>()?,
-        ),
+        UpdateMulticastListAction::AddControleeWithLongSubSessionKey => {
+            if sub_session_keys.is_null() {
+                Controlees::NoSessionKey(
+                    zip(address_list, sub_session_id_list)
+                        .map(|(a, s)| Controlee { short_address: a, subsession_id: s as u32 })
+                        .collect::<Vec<Controlee>>(),
+                )
+            } else {
+                Controlees::LongSessionKey(
+                    zip(
+                        zip(address_list, sub_session_id_list),
+                        env.convert_byte_array(sub_session_keys)
+                            .map_err(|_| Error::ForeignFunctionInterface)?
+                            .chunks(32),
+                    )
+                    .map(|((address, id), key)| {
+                        Ok(Controlee_V2_0_32_Byte_Version {
+                            short_address: address,
+                            subsession_id: id as u32,
+                            subsession_key: key.try_into().map_err(|_| Error::BadParameters)?,
+                        })
+                    })
+                    .collect::<Result<Vec<Controlee_V2_0_32_Byte_Version>>>()?,
+                )
+            }
+        }
     };
     uci_manager.session_update_controller_multicast_list(
         session_id as u32,
-        UpdateMulticastListAction::from_u8(action as u8).ok_or(Error::BadParameters)?,
+        UpdateMulticastListAction::try_from(action as u8).map_err(|_| Error::BadParameters)?,
         controlee_list,
+        is_multicast_list_ntf_v2_supported != 0,
     )
 }
 
@@ -702,16 +1045,18 @@ unsafe fn create_vendor_response(msg: RawUciMessage, env: JNIEnv) -> Result<jobj
     let vendor_response_class =
         env.find_class(VENDOR_RESPONSE_CLASS).map_err(|_| Error::ForeignFunctionInterface)?;
 
-    // Unsafe from_raw call
-    let payload_jobject = JObject::from_raw(
-        env.byte_array_from_slice(&msg.payload).map_err(|_| Error::ForeignFunctionInterface)?,
-    );
+    // Safety: the byte array jobject is just constructed so it must be valid.
+    let payload_jobject = unsafe {
+        JObject::from_raw(
+            env.byte_array_from_slice(&msg.payload).map_err(|_| Error::ForeignFunctionInterface)?,
+        )
+    };
 
     match env.new_object(
         vendor_response_class,
         "(BII[B)V",
         &[
-            JValue::Byte(StatusCode::UciStatusOk as i8),
+            JValue::Byte(u8::from(StatusCode::UciStatusOk) as i8),
             JValue::Int(msg.gid as i32),
             JValue::Int(msg.oid as i32),
             JValue::Object(payload_jobject),
@@ -729,7 +1074,7 @@ fn create_invalid_vendor_response(env: JNIEnv) -> Result<jobject> {
         vendor_response_class,
         "(BII[B)V",
         &[
-            JValue::Byte(StatusCode::UciStatusFailed as i8),
+            JValue::Byte(u8::from(StatusCode::UciStatusFailed) as i8),
             JValue::Int(-1),
             JValue::Int(-1),
             JValue::Object(JObject::null()),
@@ -740,11 +1085,11 @@ fn create_invalid_vendor_response(env: JNIEnv) -> Result<jobject> {
     }
 }
 
-/// Safety:
+/// # Safety
 ///
-/// response should be checked before calling to ensure safety.
+/// `response` should be checked before calling to ensure safety.
 unsafe fn create_ranging_round_status(
-    response: SessionUpdateActiveRoundsDtTagResponse,
+    response: SessionUpdateDtTagRangingRoundsResponse,
     env: JNIEnv,
 ) -> Result<jobject> {
     let dt_ranging_rounds_update_status_class = env
@@ -752,16 +1097,19 @@ unsafe fn create_ranging_round_status(
         .map_err(|_| Error::ForeignFunctionInterface)?;
     let indexes = response.ranging_round_indexes;
 
-    // Unsafe from_raw call
-    let indexes_jobject = JObject::from_raw(
-        env.byte_array_from_slice(indexes.as_ref()).map_err(|_| Error::ForeignFunctionInterface)?,
-    );
+    // Safety: the byte array jobject is just constructed so it must be valid.
+    let indexes_jobject = unsafe {
+        JObject::from_raw(
+            env.byte_array_from_slice(indexes.as_ref())
+                .map_err(|_| Error::ForeignFunctionInterface)?,
+        )
+    };
 
     match env.new_object(
         dt_ranging_rounds_update_status_class,
         "(II[B)V",
         &[
-            JValue::Int(response.status as i32),
+            JValue::Int(i32::from(response.status)),
             JValue::Int(indexes.len() as i32),
             JValue::Object(indexes_jobject),
         ],
@@ -861,9 +1209,9 @@ fn native_get_power_stats(env: JNIEnv, obj: JObject, chip_id: JString) -> Result
     uci_manager.android_get_power_stats()
 }
 
-/// Update active ranging rounds for DT-TAG
+/// Update ranging rounds for DT-TAG
 #[no_mangle]
-pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSessionUpdateActiveRoundsDtTag(
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSessionUpdateDtTagRangingRounds(
     env: JNIEnv,
     obj: JObject,
     session_id: jint,
@@ -901,12 +1249,12 @@ fn native_set_ranging_rounds_dt_tag(
     session_id: u32,
     ranging_round_indexes: jbyteArray,
     chip_id: JString,
-) -> Result<SessionUpdateActiveRoundsDtTagResponse> {
+) -> Result<SessionUpdateDtTagRangingRoundsResponse> {
     let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
     let indexes = env
         .convert_byte_array(ranging_round_indexes)
         .map_err(|_| Error::ForeignFunctionInterface)?;
-    uci_manager.session_update_active_rounds_dt_tag(session_id, indexes)
+    uci_manager.session_update_dt_tag_ranging_rounds(session_id, indexes)
 }
 
 /// Send a data packet to the remote device.
@@ -916,8 +1264,7 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
     obj: JObject,
     session_id: jint,
     address: jbyteArray,
-    dest_fira_component: jbyte,
-    uci_sequence_number: jbyte,
+    uci_sequence_number: jshort,
     app_payload_data: jbyteArray,
     chip_id: JString,
 ) -> jbyte {
@@ -928,7 +1275,6 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
             obj,
             session_id,
             address,
-            dest_fira_component,
             uci_sequence_number,
             app_payload_data,
             chip_id,
@@ -943,8 +1289,7 @@ fn native_send_data(
     obj: JObject,
     session_id: jint,
     address: jbyteArray,
-    dest_fira_component: jbyte,
-    uci_sequence_number: jbyte,
+    uci_sequence_number: jshort,
     app_payload_data: jbyteArray,
     chip_id: JString,
 ) -> Result<()> {
@@ -954,13 +1299,10 @@ fn native_send_data(
         env.convert_byte_array(address).map_err(|_| Error::ForeignFunctionInterface)?;
     let app_payload_data_bytearray =
         env.convert_byte_array(app_payload_data).map_err(|_| Error::ForeignFunctionInterface)?;
-    let destination_fira_component =
-        FiraComponent::from_u8(dest_fira_component as u8).ok_or(Error::BadParameters)?;
     uci_manager.send_data_packet(
         session_id as u32,
         address_bytearray,
-        destination_fira_component,
-        uci_sequence_number as u8,
+        uci_sequence_number as u16,
         app_payload_data_bytearray,
     )
 }
@@ -984,13 +1326,117 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeQu
 }
 
 fn native_query_data_size(
-    _env: JNIEnv,
-    _obj: JObject,
-    _session_id: jint,
-    _chip_id: JString,
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    chip_id: JString,
 ) -> Result<u16> {
-    // TODO(b/251477752): Implement the Rust command (in UciManager) to support this.
-    Ok(0)
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.session_query_max_data_size(session_id as u32)
+}
+
+/// Set data transfer phase configuration
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSessionDataTransferPhaseConfig(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    dtpcm_repetition: jbyte,
+    data_transfer_control: jbyte,
+    dtpml_size: jbyte,
+    mac_address: jbyteArray,
+    slot_bitmap: jbyteArray,
+    chip_id: JString,
+) -> jbyte {
+    debug!("{}: enter", function_name!());
+    byte_result_helper(
+        native_session_data_transfer_phase_config(
+            env,
+            obj,
+            session_id,
+            dtpcm_repetition,
+            data_transfer_control,
+            dtpml_size,
+            mac_address,
+            slot_bitmap,
+            chip_id,
+        ),
+        function_name!(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn native_session_data_transfer_phase_config(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    dtpcm_repetition: jbyte,
+    data_transfer_control: jbyte,
+    dtpml_size: jbyte,
+    mac_address: jbyteArray,
+    slot_bitmap: jbyteArray,
+    chip_id: JString,
+) -> Result<()> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.session_data_transfer_phase_config(
+        session_id as u32,
+        dtpcm_repetition as u8,
+        data_transfer_control as u8,
+        dtpml_size as u8,
+        env.convert_byte_array(mac_address).map_err(|_| Error::ForeignFunctionInterface)?,
+        env.convert_byte_array(slot_bitmap).map_err(|_| Error::ForeignFunctionInterface)?,
+    )
+}
+
+/// Get UWBS timestamp, Return 0 if failed.
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeQueryUwbTimestamp(
+    env: JNIEnv,
+    obj: JObject,
+    chip_id: JString,
+) -> jlong {
+    debug!("{}: enter", function_name!());
+    match option_result_helper(native_query_time_stamp(env, obj, chip_id), function_name!()) {
+        Some(s) => s.try_into().unwrap(),
+        None => 0,
+    }
+}
+
+fn native_query_time_stamp(env: JNIEnv, obj: JObject, chip_id: JString) -> Result<u64> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.core_query_uwb_timestamp()
+}
+
+/// Get session token for the UWB session.
+#[no_mangle]
+pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGetSessionToken(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    chip_id: JString,
+) -> jlong {
+    debug!("{}: enter", function_name!());
+    match option_result_helper(
+        native_get_session_token(env, obj, session_id, chip_id),
+        function_name!(),
+    ) {
+        Some(s) => s.try_into().unwrap(),
+        None => 0,
+    }
+}
+
+fn native_get_session_token(
+    env: JNIEnv,
+    obj: JObject,
+    session_id: jint,
+    chip_id: JString,
+) -> Result<u32> {
+    let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)
+        .map_err(|_| Error::ForeignFunctionInterface)?;
+    uci_manager.get_session_token(session_id as u32)
 }
 
 /// Get the class loader object. Has to be called from a JNIEnv where the local java classes are
@@ -1086,7 +1532,10 @@ mod tests {
     use uwb_core::uci::uci_manager_sync::{
         NotificationManager, NotificationManagerBuilder, UciManagerSync,
     };
-    use uwb_core::uci::{CoreNotification, DataRcvNotification, SessionNotification};
+    use uwb_core::uci::{
+        CoreNotification, DataRcvNotification, RadarDataRcvNotification, SessionNotification,
+    };
+    use uwb_uci_packets::RadarConfigTlvType;
 
     struct NullNotificationManager {}
     impl NotificationManager for NullNotificationManager {
@@ -1103,6 +1552,13 @@ mod tests {
             Ok(())
         }
         fn on_data_rcv_notification(&mut self, _data_rcv_notf: DataRcvNotification) -> Result<()> {
+            Ok(())
+        }
+        /// Callback for RadarDataRcvNotification.
+        fn on_radar_data_rcv_notification(
+            &mut self,
+            _radar_data_rcv_notification: RadarDataRcvNotification,
+        ) -> Result<()> {
             Ok(())
         }
     }
@@ -1157,5 +1613,81 @@ mod tests {
         ];
         let tlvs = parse_app_config_tlv_vec(2, &app_config_byte_array).unwrap();
         assert!(uci_manager_sync.session_set_app_config(42, tlvs).is_ok());
+    }
+
+    #[test]
+    fn test_parse_radar_config_tlv_vec() {
+        let radar_config_tlv_vec: Vec<u8> = vec![
+            0x0, 0x2, 0x0, 0x1, // The first tlv
+            0x1, 0x1, 0x1, // The second tlv
+        ];
+        let tlvs = parse_radar_config_tlv_vec(2, &radar_config_tlv_vec).unwrap();
+        assert_eq!(
+            tlvs[0],
+            RadarConfigTlv { cfg_id: RadarConfigTlvType::RadarTimingParams, v: vec![0x0, 0x1] }
+        );
+        assert_eq!(
+            tlvs[1],
+            RadarConfigTlv { cfg_id: RadarConfigTlvType::SamplesPerSweep, v: vec![0x1] }
+        );
+    }
+
+    #[test]
+    fn test_parse_hybrid_controller_config_phase_list() {
+        let mut raw_controller_config_phase_list = vec![
+            0x1, 0x0, 0x0, 0x0, // session token
+            0x1, 0x0, // start slot index
+            0x2, 0x0, // end slot index
+            0x1, // phase participation
+            0x1, 0x2, // mac address
+        ];
+        let mut phase_list =
+            parse_hybrid_controller_config_phase_list(1, 0, &raw_controller_config_phase_list)
+                .unwrap();
+        assert_eq!(
+            PhaseList::ShortMacAddress(vec![PhaseListShortMacAddress {
+                session_token: 1,
+                start_slot_index: 1,
+                end_slot_index: 2,
+                phase_participation: 1,
+                mac_address: [0x1, 0x2]
+            }]),
+            phase_list
+        );
+
+        raw_controller_config_phase_list = vec![
+            0x1, 0x0, 0x0, 0x0, // session token
+            0x1, 0x0, // start slot index
+            0x2, 0x0, // end slot index
+            0x1, // phase participation
+            0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, // mac address
+        ];
+        phase_list =
+            parse_hybrid_controller_config_phase_list(1, 1, &raw_controller_config_phase_list)
+                .unwrap();
+        assert_eq!(
+            PhaseList::ExtendedMacAddress(vec![PhaseListExtendedMacAddress {
+                session_token: 1,
+                start_slot_index: 1,
+                end_slot_index: 2,
+                phase_participation: 1,
+                mac_address: [0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8]
+            }]),
+            phase_list
+        );
+    }
+
+    #[test]
+    fn test_parse_hybrid_controlee_config_phase_list() {
+        let raw_controlee_config_phase_list = vec![
+            0x1, 0x0, 0x0, 0x0, // session token
+            0x1, // phase participation
+        ];
+        let phase_list =
+            parse_hybrid_controlee_config_phase_list(1, &raw_controlee_config_phase_list).unwrap();
+        assert_eq!(
+            vec![ControleePhaseList { session_token: 1, phase_participation: 1 }],
+            phase_list
+        );
     }
 }

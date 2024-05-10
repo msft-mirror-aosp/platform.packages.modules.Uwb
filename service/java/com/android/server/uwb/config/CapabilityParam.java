@@ -70,6 +70,9 @@ public class CapabilityParam {
     public static final int SUPPORTED_EXTENDED_MAC_ADDRESS_VER_2_0  = 0x14;
     public static final int SUPPORTED_SUSPEND_RANGING_VER_2_0  = 0x15;
     public static final int SUPPORTED_SESSION_KEY_LENGTH_VER_2_0  = 0x16;
+    public static final int SUPPORTED_DT_TAG_MAX_ACTIVE_RR_2_0 = 0x18;
+    public static final int SUPPORTED_DT_TAG_BLOCK_SKIPPING_2_0 = 0x19;
+    public static final int SUPPORTED_PSDU_LENGTH_2_0 = 0x1A;
 
     /**
      * CR 287 params common across versions
@@ -84,7 +87,7 @@ public class CapabilityParam {
             UwbVendorCapabilityTlvTypes.SUPPORTED_RSSI_REPORTING;
     public static final int SUPPORTED_DIAGNOSTICS =
             UwbVendorCapabilityTlvTypes.SUPPORTED_DIAGNOSTICS;
-    public static final int SUPPORTED_MIN_SLOT_DURATION =
+    public static final int SUPPORTED_MIN_SLOT_DURATION_RSTU =
             UwbVendorCapabilityTlvTypes.SUPPORTED_MIN_SLOT_DURATION_RSTU;
     public static final int SUPPORTED_MAX_RANGING_SESSION_NUMBER =
             UwbVendorCapabilityTlvTypes.SUPPORTED_MAX_RANGING_SESSION_NUMBER;
@@ -108,6 +111,12 @@ public class CapabilityParam {
             UwbVendorCapabilityTlvTypes.CCC_SUPPORTED_CHANNELS;
     public static final int CCC_SUPPORTED_HOPPING_CONFIG_MODES_AND_SEQUENCES =
             UwbVendorCapabilityTlvTypes.CCC_SUPPORTED_HOPPING_CONFIG_MODES_AND_SEQUENCES;
+    public static final int CCC_SUPPORTED_MIN_UWB_INITIATION_TIME_MS =
+            UwbVendorCapabilityTlvTypes.CCC_SUPPORTED_MIN_UWB_INITIATION_TIME_MS;
+    public static final int CCC_PRIORITIZED_CHANNEL_LIST =
+            UwbVendorCapabilityTlvTypes.CCC_PRIORITIZED_CHANNEL_LIST;
+    public static final int CCC_SUPPORTED_UWBS_MAX_PPM =
+            UwbVendorCapabilityTlvTypes.CCC_SUPPORTED_UWBS_MAX_PPM;
 
     public static final int RESPONDER = 0x01;
     public static final int INITIATOR = 0x02;
@@ -194,6 +203,12 @@ public class CapabilityParam {
     public static final int NO_DIAGNOSTICS = 0x0;
     public static final int DIAGNOSTICS = 0x1;
 
+    public static final int NO_DT_TAG_BLOCK_SKIPPING = 0x0;
+    public static final int DT_TAG_BLOCK_SKIPPING = 0x1;
+
+    public static final int NO_PSDU_LENGTH_SUPPORT = 0x0;
+    public static final int PSDU_LENGTH_SUPPORT = 0x1;
+
     public static final int CCC_CHANNEL_5 = (int) UwbVendorCapabilityTlvValues.CCC_CHANNEL_5;
     public static final int CCC_CHANNEL_9 = (int) UwbVendorCapabilityTlvValues.CCC_CHANNEL_9;
 
@@ -235,4 +250,9 @@ public class CapabilityParam {
     public static final int RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_EDGE_TRIG = 1 << 5;
     public static final int RANGE_DATA_NTF_CONFIG_ENABLE_AOA_EDGE_TRIG = 1 << 6;
     public static final int RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_EDGE_TRIG = 1 << 7;
+
+    // Radar specific
+    public static final int RADAR_SUPPORT = (int) UwbVendorCapabilityTlvTypes.RADAR_SUPPORT;
+    public static final int RADAR_SWEEP_SAMPLES_SUPPORTED =
+            (int) UwbVendorCapabilityTlvValues.RADAR_SWEEP_SAMPLES_SUPPORTED;
 }

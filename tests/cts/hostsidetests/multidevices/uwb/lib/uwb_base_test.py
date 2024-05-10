@@ -4,9 +4,11 @@ import logging
 import re
 
 from mobly import base_test
-from mobly import test_runner
 from mobly import records
+from mobly import test_runner
 from mobly.controllers import android_device
+
+from test_utils import uwb_test_utils
 
 RELEASE_ID_REGEX = re.compile(r"\w+\.\d+\.\d+")
 
@@ -21,11 +23,39 @@ class UwbBaseTest(base_test.BaseTestClass):
                                                     min_number=2)
     for ad in self.android_devices:
       ad.load_snippet("uwb", "com.google.snippet.uwb")
-      ad.adb.shell(["cmd", "uwb", "force-country-code", "enabled", "US"])
+
+    for ad in self.android_devices:
+      uwb_test_utils.initialize_uwb_country_code_if_not_set(ad)
+
+  def setup_test(self):
+    super().setup_test()
+    for ad in self.android_devices:
+      ad.uwb.logInfo("*** TEST START: " + self.current_test_info.name + " ***")
+
+  def teardown_test(self):
+    super().teardown_test()
+    for ad in self.android_devices:
+      ad.uwb.logInfo("*** TEST END: " + self.current_test_info.name + " ***")
 
   def teardown_class(self):
     super().teardown_class()
     self._record_all()
+
+  def on_fail(self, record):
+    test_name = record.test_name
+    # Single device test
+    if hasattr(self, "dut"):
+      self.dut.take_bug_report(
+          test_name=test_name, destination=self.current_test_info.output_path
+      )
+    else:
+      for count, ad in enumerate(self.android_devices):
+        device_name = "initiator" if not count else "responder"
+        test_device_name = test_name + "_" + device_name
+        ad.take_bug_report(
+            test_name=test_device_name,
+            destination=self.current_test_info.output_path,
+        )
 
   def _get_effort_name(self) -> str:
     """Gets the TestTracker effort name from the Android build ID.

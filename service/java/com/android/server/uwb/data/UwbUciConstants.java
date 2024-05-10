@@ -17,7 +17,11 @@ package com.android.server.uwb.data;
 
 import static android.hardware.uwb.fira_android.UwbVendorStatusCodes.STATUS_ERROR_CCC_LIFECYCLE;
 import static android.hardware.uwb.fira_android.UwbVendorStatusCodes.STATUS_ERROR_CCC_SE_BUSY;
+import static android.hardware.uwb.fira_android.UwbVendorStatusCodes.STATUS_REGULATION_UWB_OFF;
 
+import android.hardware.uwb.fira_android.UwbVendorReasonCodes;
+
+import com.google.uwb.support.aliro.AliroParams;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.fira.FiraParams;
 
@@ -38,6 +42,7 @@ public class UwbUciConstants {
     public static final byte SESSION_TYPE_RANGING = FiraParams.SESSION_TYPE_RANGING;
     public static final byte SESSION_TYPE_DATA_TRANSFER =
             FiraParams.SESSION_TYPE_RANGING_AND_IN_BAND_DATA;
+    public static final byte SESSION_TYPE_ALIRO = (byte) AliroParams.SESSION_TYPE_ALIRO;
     public static final byte SESSION_TYPE_CCC = (byte) CccParams.SESSION_TYPE_CCC;
     public static final byte SESSION_TYPE_DEVICE_TEST_MODE =
             (byte) FiraParams.SESSION_TYPE_DEVICE_TEST_MODE;
@@ -53,12 +58,15 @@ public class UwbUciConstants {
     public static final int UWB_SESSION_STATE_ERROR = 0xFF;
 
     /**
-     * Table 15: state change with reason codes
+     * Table 16: state change with reason codes
      */
     public static final int REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS = 0x00;
     /* Below reason codes shall be reported with SESSION_STATE_IDLE state only. */
     public static final int REASON_MAX_RANGING_ROUND_RETRY_COUNT_REACHED = 0x01;
     public static final int REASON_MAX_NUMBER_OF_MEASUREMENTS_REACHED = 0x02;
+    public static final int REASON_SESSION_SUSPENDED_DUE_TO_INBAND_SIGNAL = 0x03;
+    public static final int REASON_SESSION_RESUMED_DUE_TO_INBAND_SIGNAL = 0x04;
+    public static final int REASON_SESSION_STOPPED_DUE_TO_INBAND_SIGNAL = 0X05;
     public static final int REASON_ERROR_INVALID_UL_TDOA_RANDOM_WINDOW = 0x1D;
     public static final int REASON_ERROR_SLOT_LENGTH_NOT_SUPPORTED = 0x20;
     public static final int REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR = 0x21;
@@ -66,16 +74,38 @@ public class UwbUciConstants {
     public static final int REASON_ERROR_INVALID_RANGING_INTERVAL = 0x23;
     public static final int REASON_ERROR_INVALID_STS_CONFIG = 0x24;
     public static final int REASON_ERROR_INVALID_RFRAME_CONFIG = 0x25;
+    public static final int REASON_ERROR_HUS_NOT_ENOUGH_SLOTS = 0x26;
+    public static final int REASON_ERROR_HUS_CFP_PHASE_TOO_SHORT = 0x27;
+    public static final int REASON_ERROR_HUS_CAP_PHASE_TOO_SHORT = 0x28;
+    public static final int REASON_ERROR_HUS_OTHERS = 0x29;
+    public static final int REASON_ERROR_SESSION_KEY_NOT_FOUND = 0x2A;
+    public static final int REASON_ERROR_SUB_SESSION_KEY_NOT_FOUND = 0x2B;
+    /* Vendor Specific reason codes */
+    public static final int REASON_REGULATION_UWB_OFF =
+            UwbVendorReasonCodes.REASON_REGULATION_UWB_OFF;
 
     /**
      * Table 27: Multicast list update status codes
      */
     /* Multicast update status codes */
-    public static final int MULTICAST_LIST_UPDATE_STATUS_OK = 0x00;
-    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_FULL = 0x01;
-    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_KEY_FETCH_FAIL = 0x02;
-    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_ID_NOT_FOUND = 0x03;
-
+    public static final int MULTICAST_LIST_UPDATE_STATUS_OK =
+            FiraParams.MULTICAST_LIST_UPDATE_STATUS_OK;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_FULL =
+            FiraParams.MULTICAST_LIST_UPDATE_STATUS_ERROR_MULTICAST_LIST_FULL;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_KEY_FETCH_FAIL =
+            FiraParams.MULTICAST_LIST_UPDATE_STATUS_ERROR_KEY_FETCH_FAIL;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_ID_NOT_FOUND =
+            FiraParams.MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_ID_NOT_FOUND;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_FOUND =
+            FiraParams.MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_FOUND;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_APPLICABLE =
+            FiraParams.MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_APPLICABLE;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SESSION_KEY_NOT_FOUND =
+            FiraParams.MULTICAST_LIST_UPDATE_STATUS_ERROR_SESSION_KEY_NOT_FOUND;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_NOT_FOUND =
+            FiraParams.MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_NOT_FOUND;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_ALREADY_PRESENT =
+            FiraParams.MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_ALREADY_PRESENT;
     /**
      * Table 29:APP Configuration Parameters IDs
      */
@@ -102,6 +132,8 @@ public class UwbUciConstants {
 
     public static final int CONTENTION_BASED_RANGING = FiraParams.CONTENTION_BASED_RANGING;
     public static final int TIME_SCHEDULED_RANGING = FiraParams.TIME_SCHEDULED_RANGING;
+    public static final int HYBRID_SCHEDULED_RANGING =
+            FiraParams.HYBRID_SCHEDULED_RANGING;
 
     public static final int CONSTRAINT_LENGTH_3 = FiraParams.CONSTRAINT_LENGTH_3;
     public static final int CONSTRAINT_LENGTH_7 = FiraParams.CONSTRAINT_LENGTH_7;
@@ -165,6 +197,7 @@ public class UwbUciConstants {
     public static final int STATUS_CODE_UNKNOWN_OID = FiraParams.STATUS_CODE_UNKNOWN_OID;
     public static final int STATUS_CODE_READ_ONLY = FiraParams.STATUS_CODE_READ_ONLY;
     public static final int STATUS_CODE_COMMAND_RETRY = FiraParams.STATUS_CODE_COMMAND_RETRY;
+    public static final int STATUS_CODE_UNKNOWN = FiraParams.STATUS_CODE_UNKNOWN;
     /* UWB Session Specific Status Codes */
     public static final int STATUS_CODE_ERROR_SESSION_NOT_EXIST =
             FiraParams.STATUS_CODE_ERROR_SESSION_NOT_EXIST;
@@ -213,8 +246,28 @@ public class UwbUciConstants {
                 STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST =
             FiraParams.STATUS_CODE_ERROR_DL_TDOA_DEVICE_ADDRESS_NOT_MATCHING_IN_REPLY_TIME_LIST;
 
+    /* Vendor-dependent UCI status codes */
     public static final int STATUS_CODE_CCC_SE_BUSY = STATUS_ERROR_CCC_SE_BUSY;
     public static final int STATUS_CODE_CCC_LIFECYCLE = STATUS_ERROR_CCC_LIFECYCLE;
+    public static final int STATUS_CODE_ANDROID_REGULATION_UWB_OFF = STATUS_REGULATION_UWB_OFF;
+
+    /**
+     * Table 28: Status codes in the DATA_TRANSFER_STATUS_NTF.
+     */
+    public static final int STATUS_CODE_DATA_TRANSFER_REPETITION_OK =
+            FiraParams.STATUS_CODE_DATA_TRANSFER_NTF_REPETITION_OK;
+    public static final int STATUS_CODE_DATA_TRANSFER_OK =
+            FiraParams.STATUS_CODE_DATA_TRANSFER_NTF_OK;
+    public static final int STATUS_CODE_DATA_TRANSFER_ERROR_DATA_TRANSFER =
+            FiraParams.STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER;
+
+    /**
+     * Table TBD: Status codes in the DATA_TRANSFER_PHASE_CONFIGURATION_NTF
+     */
+    public static final int STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS =
+            FiraParams.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS;
+    public static final int STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGNMENT =
+            FiraParams.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGNMENT;
 
     /* UWB Device Extended Mac address length */
     public static final int UWB_DEVICE_SHORT_MAC_ADDRESS_LEN = 2;
@@ -229,15 +282,11 @@ public class UwbUciConstants {
     public static final int STS_MODE_DYNAMIC = 0x01;
 
     /**
-     * UWB LL Spec Table 3: Endpoints field
-     */
-    public static final byte UWB_DESTINATION_END_POINT_UWBS = 0x00;
-    public static final byte UWB_DESTINATION_END_POINT_HOST = 0x01;
-    public static final byte UWB_DESTINATION_END_POINT_SECURE_ELEMENT = 0x02;
-
-    /**
      * FiRa Major versions
      */
     public static final int FIRA_VERSION_MAJOR_1 = 1;
     public static final int FIRA_VERSION_MAJOR_2 = 2;
+
+    /* Used by DATA_TRANSFER_PHASE_CONFIG and Hybrid config updates */
+    public static final int SHORT_MAC_ADDRESS = 0;
 }

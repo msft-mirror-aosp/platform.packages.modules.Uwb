@@ -21,6 +21,8 @@ import static java.util.Objects.requireNonNull;
 import android.os.PersistableBundle;
 import android.uwb.UwbManager;
 
+import androidx.annotation.NonNull;
+
 import com.google.uwb.support.base.FlagEnum;
 
 import java.util.ArrayList;
@@ -65,7 +67,7 @@ public class FiraSpecificationParams extends FiraParams {
 
     private final int mMinRangingInterval;
 
-    private final int mMinSlotDuration;
+    private final int mMinSlotDurationUs;
 
     private final int mMaxRangingSessionNumber;
 
@@ -102,6 +104,16 @@ public class FiraSpecificationParams extends FiraParams {
     private final boolean mSuspendRangingSupport;
 
     private final int mSessionKeyLength;
+
+    private final int mDtTagMaxActiveRr;
+
+    private final boolean mHasBackgroundRangingSupport;
+
+    private final boolean mHasDtTagBlockSkippingSupport;
+
+    private final boolean mHasPsduLengthSupport;
+
+    private final int mUciVersion;
 
     private static final String KEY_MIN_PHY_VERSION = "min_phy_version";
     private static final String KEY_MAX_PHY_VERSION = "max_phy_version";
@@ -147,6 +159,17 @@ public class FiraSpecificationParams extends FiraParams {
             "suspend_ranging_support";
     private static final String KEY_SESSION_KEY_LENGTH =
             "session_key_length";
+    public static final String DT_TAG_MAX_ACTIVE_RR = "dt_tag_max_active_rr";
+
+    public static final String KEY_BACKGROUND_RANGING_SUPPORT = "background_ranging_support";
+
+    public static final String KEY_DT_TAG_BLOCK_SKIPPING_SUPPORT = "dt_tag_block_skipping";
+
+    public static final String KEY_PSDU_LENGTH_SUPPORT = "psdu_length_support";
+
+    public static final String KEY_UCI_VERSION = "uci_version";
+
+    public static final int DEFAULT_MAX_RANGING_SESSIONS_NUMBER = 5;
 
     private FiraSpecificationParams(
             FiraProtocolVersion minPhyVersionSupported,
@@ -164,7 +187,7 @@ public class FiraSpecificationParams extends FiraParams {
             boolean hasRssiReportingSupport,
             boolean hasDiagnosticsSupport,
             int minRangingInterval,
-            int minSlotDuration,
+            int minSlotDurationUs,
             int maxRangingSessionNumber,
             EnumSet<MultiNodeCapabilityFlag> multiNodeCapabilities,
             EnumSet<RangingTimeStructCapabilitiesFlag> rangingTimeStructCapabilities,
@@ -180,7 +203,10 @@ public class FiraSpecificationParams extends FiraParams {
             Integer maxMessageSize,
             Integer maxDataPacketPayloadSize,
             EnumSet<RangeDataNtfConfigCapabilityFlag> rangeDataNtfConfigCapabilities,
-            int deviceType, boolean suspendRangingSupport, int sessionKeyLength) {
+            int deviceType, boolean suspendRangingSupport, int sessionKeyLength,
+            int dtTagMaxActiveRr, boolean hasBackgroundRangingSupport,
+            boolean hasDtTagBlockSkippingSupport, boolean hasPsduLengthSupport,
+            int uciVersion) {
         mMinPhyVersionSupported = minPhyVersionSupported;
         mMaxPhyVersionSupported = maxPhyVersionSupported;
         mMinMacVersionSupported = minMacVersionSupported;
@@ -196,7 +222,7 @@ public class FiraSpecificationParams extends FiraParams {
         mHasRssiReportingSupport = hasRssiReportingSupport;
         mHasDiagnosticsSupport = hasDiagnosticsSupport;
         mMinRangingInterval = minRangingInterval;
-        mMinSlotDuration = minSlotDuration;
+        mMinSlotDurationUs = minSlotDurationUs;
         mMaxRangingSessionNumber = maxRangingSessionNumber;
         mMultiNodeCapabilities = multiNodeCapabilities;
         mRangingTimeStructCapabilities = rangingTimeStructCapabilities;
@@ -215,6 +241,11 @@ public class FiraSpecificationParams extends FiraParams {
         mDeviceType = deviceType;
         mSuspendRangingSupport = suspendRangingSupport;
         mSessionKeyLength = sessionKeyLength;
+        mDtTagMaxActiveRr = dtTagMaxActiveRr;
+        mHasBackgroundRangingSupport = hasBackgroundRangingSupport;
+        mHasDtTagBlockSkippingSupport = hasDtTagBlockSkippingSupport;
+        mHasPsduLengthSupport = hasPsduLengthSupport;
+        mUciVersion = uciVersion;
     }
 
     @Override
@@ -284,8 +315,8 @@ public class FiraSpecificationParams extends FiraParams {
         return mMinRangingInterval;
     }
 
-    public int getMinSlotDuration() {
-        return mMinSlotDuration;
+    public int getMinSlotDurationUs() {
+        return mMinSlotDurationUs;
     }
 
     public int getMaxRangingSessionNumber() {
@@ -360,6 +391,26 @@ public class FiraSpecificationParams extends FiraParams {
         return mSessionKeyLength;
     }
 
+    public int getDtTagMaxActiveRr() {
+        return mDtTagMaxActiveRr;
+    }
+
+    public boolean hasBackgroundRangingSupport() {
+        return mHasBackgroundRangingSupport;
+    }
+
+    public boolean hasDtTagBlockSkippingSupport() {
+        return mHasDtTagBlockSkippingSupport;
+    }
+
+    public boolean hasPsduLengthSupport() {
+        return mHasPsduLengthSupport;
+    }
+
+    public int getUciVersionSupported() {
+        return mUciVersion;
+    }
+
     private static int[] toIntArray(List<Integer> data) {
         int[] res = new int[data.size()];
         for (int i = 0; i < data.size(); i++) {
@@ -386,7 +437,7 @@ public class FiraSpecificationParams extends FiraParams {
         bundle.putBoolean(KEY_RSSI_REPORTING_SUPPORT, mHasRssiReportingSupport);
         bundle.putBoolean(KEY_DIAGNOSTICS_SUPPORT, mHasDiagnosticsSupport);
         bundle.putInt(KEY_MIN_RANGING_INTERVAL, mMinRangingInterval);
-        bundle.putInt(KEY_MIN_SLOT_DURATION, mMinSlotDuration);
+        bundle.putInt(KEY_MIN_SLOT_DURATION, mMinSlotDurationUs);
         bundle.putInt(KEY_MAX_RANGING_SESSION_NUMBER, mMaxRangingSessionNumber);
         bundle.putInt(KEY_MULTI_NODE_CAPABILITIES, FlagEnum.toInt(mMultiNodeCapabilities));
         bundle.putInt(KEY_RANGING_TIME_STRUCT_CAPABILITIES,
@@ -411,6 +462,11 @@ public class FiraSpecificationParams extends FiraParams {
         bundle.putInt(KEY_DEVICE_TYPE, mDeviceType);
         bundle.putBoolean(KEY_SUSPEND_RANGING_SUPPORT, mSuspendRangingSupport);
         bundle.putInt(KEY_SESSION_KEY_LENGTH, mSessionKeyLength);
+        bundle.putInt(DT_TAG_MAX_ACTIVE_RR, mDtTagMaxActiveRr);
+        bundle.putBoolean(KEY_BACKGROUND_RANGING_SUPPORT, mHasBackgroundRangingSupport);
+        bundle.putBoolean(KEY_DT_TAG_BLOCK_SKIPPING_SUPPORT, mHasDtTagBlockSkippingSupport);
+        bundle.putBoolean(KEY_PSDU_LENGTH_SUPPORT, mHasPsduLengthSupport);
+        bundle.putInt(KEY_UCI_VERSION, mUciVersion);
         return bundle;
     }
 
@@ -442,6 +498,11 @@ public class FiraSpecificationParams extends FiraParams {
         builder.setDeviceType(bundle.getInt(KEY_DEVICE_TYPE));
         builder.setSuspendRangingSupport(bundle.getBoolean(KEY_SUSPEND_RANGING_SUPPORT));
         builder.setSessionKeyLength(bundle.getInt(KEY_SESSION_KEY_LENGTH));
+        builder.setDtTagMaxActiveRr(bundle.getInt(DT_TAG_MAX_ACTIVE_RR, 0));
+        builder.setBackgroundRangingSupport(bundle.getBoolean(KEY_BACKGROUND_RANGING_SUPPORT));
+        builder.setDtTagBlockSkippingSupport(bundle.getBoolean(KEY_DT_TAG_BLOCK_SKIPPING_SUPPORT));
+        builder.setPsduLengthSupport(bundle.getBoolean(KEY_PSDU_LENGTH_SUPPORT));
+        builder.setUciVersionSupported(bundle.getInt(KEY_UCI_VERSION, 1));
         return builder;
     }
 
@@ -471,7 +532,7 @@ public class FiraSpecificationParams extends FiraParams {
                 .hasNonDeferredModeSupport(bundle.getBoolean(KEY_NON_DEFERRED_MODE_SUPPORT))
                 .hasInitiationTimeSupport(bundle.getBoolean(KEY_INITIATION_TIME_SUPPORT))
                 .setMinRangingIntervalSupported(bundle.getInt(KEY_MIN_RANGING_INTERVAL, -1))
-                .setMinSlotDurationSupported(bundle.getInt(KEY_MIN_SLOT_DURATION, -1))
+                .setMinSlotDurationSupportedUs(bundle.getInt(KEY_MIN_SLOT_DURATION, -1))
                 .setMultiNodeCapabilities(
                         FlagEnum.toEnumSet(
                                 bundle.getInt(KEY_MULTI_NODE_CAPABILITIES),
@@ -527,7 +588,7 @@ public class FiraSpecificationParams extends FiraParams {
             builder.hasRssiReportingSupport(bundle.getBoolean(KEY_RSSI_REPORTING_SUPPORT));
         }
         if (bundle.containsKey(KEY_DIAGNOSTICS_SUPPORT)) {
-            builder.hasBlockStridingSupport(bundle.getBoolean(KEY_DIAGNOSTICS_SUPPORT));
+            builder.hasDiagnosticsSupport(bundle.getBoolean(KEY_DIAGNOSTICS_SUPPORT));
         }
         if (bundle.containsKey(KEY_MAX_RANGING_SESSION_NUMBER)) {
             builder.setMaxRangingSessionNumberSupported(
@@ -546,17 +607,17 @@ public class FiraSpecificationParams extends FiraParams {
 
         private List<Integer> mSupportedChannels = new ArrayList<>();
 
-        private final EnumSet<AoaCapabilityFlag> mAoaCapabilities =
+        private EnumSet<AoaCapabilityFlag> mAoaCapabilities =
                 EnumSet.noneOf(AoaCapabilityFlag.class);
 
         // Controller-intiator, Cotrolee-responder are mandatory.
-        private final EnumSet<DeviceRoleCapabilityFlag> mDeviceRoleCapabilities =
+        private EnumSet<DeviceRoleCapabilityFlag> mDeviceRoleCapabilities =
                 EnumSet.of(
                         DeviceRoleCapabilityFlag.HAS_CONTROLLER_INITIATOR_SUPPORT,
                         DeviceRoleCapabilityFlag.HAS_CONTROLEE_RESPONDER_SUPPORT);
 
         // Enable/Disable ntf config is mandatory.
-        private final EnumSet<RangeDataNtfConfigCapabilityFlag> mRangeDataNtfConfigCapabilities =
+        private EnumSet<RangeDataNtfConfigCapabilityFlag> mRangeDataNtfConfigCapabilities =
                 EnumSet.noneOf(RangeDataNtfConfigCapabilityFlag.class);
 
         private boolean mHasBlockStridingSupport = false;
@@ -575,53 +636,55 @@ public class FiraSpecificationParams extends FiraParams {
 
         private int mMinRangingInterval = -1;
 
-        private int mMinSlotDuration = -1;
+        private int mMinSlotDurationUs = -1;
 
-        private int mMaxRangingSessionNumber = -1;
+        private int mMaxRangingSessionNumber = DEFAULT_MAX_RANGING_SESSIONS_NUMBER;
+
+        private int mUciVersion = 1;
 
         // Unicast support is mandatory
-        private final EnumSet<MultiNodeCapabilityFlag> mMultiNodeCapabilities =
+        private EnumSet<MultiNodeCapabilityFlag> mMultiNodeCapabilities =
                 EnumSet.of(MultiNodeCapabilityFlag.HAS_UNICAST_SUPPORT);
 
-        private final EnumSet<RangingTimeStructCapabilitiesFlag> mRangingTimeStructCapabilities =
+        private EnumSet<RangingTimeStructCapabilitiesFlag> mRangingTimeStructCapabilities =
                 EnumSet.of(
                         RangingTimeStructCapabilitiesFlag.HAS_INTERVAL_BASED_SCHEDULING_SUPPORT,
                         RangingTimeStructCapabilitiesFlag.HAS_BLOCK_BASED_SCHEDULING_SUPPORT);
 
-        private final EnumSet<SchedulingModeCapabilitiesFlag> mSchedulingModeCapabilities =
+        private EnumSet<SchedulingModeCapabilitiesFlag> mSchedulingModeCapabilities =
                 EnumSet.of(
                         SchedulingModeCapabilitiesFlag.HAS_CONTENTION_BASED_RANGING_SUPPORT,
                         SchedulingModeCapabilitiesFlag.HAS_TIME_SCHEDULED_RANGING_SUPPORT);
 
-        private final EnumSet<CcConstraintLengthCapabilitiesFlag> mCcConstraintLengthCapabilities =
+        private EnumSet<CcConstraintLengthCapabilitiesFlag> mCcConstraintLengthCapabilities =
                 EnumSet.of(
                         CcConstraintLengthCapabilitiesFlag.HAS_CONSTRAINT_LENGTH_3_SUPPORT,
                         CcConstraintLengthCapabilitiesFlag.HAS_CONSTRAINT_LENGTH_7_SUPPORT);
 
         // BPRF mode is mandatory
-        private final EnumSet<PrfCapabilityFlag> mPrfCapabilities =
+        private EnumSet<PrfCapabilityFlag> mPrfCapabilities =
                 EnumSet.of(PrfCapabilityFlag.HAS_BPRF_SUPPORT);
 
         // DS-TWR is mandatory
-        private final EnumSet<RangingRoundCapabilityFlag> mRangingRoundCapabilities =
+        private EnumSet<RangingRoundCapabilityFlag> mRangingRoundCapabilities =
                 EnumSet.of(RangingRoundCapabilityFlag.HAS_DS_TWR_SUPPORT);
 
         // SP3 RFrame is mandatory
-        private final EnumSet<RframeCapabilityFlag> mRframeCapabilities =
+        private EnumSet<RframeCapabilityFlag> mRframeCapabilities =
                 EnumSet.of(RframeCapabilityFlag.HAS_SP3_RFRAME_SUPPORT);
 
         // STATIC STS is mandatory
-        private final EnumSet<StsCapabilityFlag> mStsCapabilities =
+        private EnumSet<StsCapabilityFlag> mStsCapabilities =
                 EnumSet.of(StsCapabilityFlag.HAS_STATIC_STS_SUPPORT);
 
         // 6.81Mb/s PSDU data rate is mandatory
-        private final EnumSet<PsduDataRateCapabilityFlag> mPsduDataRateCapabilities =
+        private EnumSet<PsduDataRateCapabilityFlag> mPsduDataRateCapabilities =
                 EnumSet.of(PsduDataRateCapabilityFlag.HAS_6M81_SUPPORT);
 
-        private final EnumSet<BprfParameterSetCapabilityFlag> mBprfParameterSetCapabilities =
+        private EnumSet<BprfParameterSetCapabilityFlag> mBprfParameterSetCapabilities =
                 EnumSet.noneOf(BprfParameterSetCapabilityFlag.class);
 
-        private final EnumSet<HprfParameterSetCapabilityFlag> mHprfParameterSetCapabilities =
+        private EnumSet<HprfParameterSetCapabilityFlag> mHprfParameterSetCapabilities =
                 EnumSet.noneOf(HprfParameterSetCapabilityFlag.class);
 
         private Integer mMaxMessageSize = 0;
@@ -636,6 +699,18 @@ public class FiraSpecificationParams extends FiraParams {
 
         // Default to 256 bits key length not supported
         private int mSessionKeyLength = 0;
+
+        //Default to 0 i.e., DT tag role not supported.
+        private int mDtTagMaxActiveRr = 0;
+
+        //Default is false. i.e., no background ranging support.
+        private boolean mHasBackgroundRangingSupport = false;
+
+        // DT_TAG_BLOCK_SKIPPING.
+        private boolean mHasDtTagBlockSkippingSupport = false;
+
+        // PSDU_LENGTH_SUPPORT.
+        private boolean mHasPsduLengthSupport = false;
 
         public FiraSpecificationParams.Builder setMinPhyVersionSupported(
                 FiraProtocolVersion version) {
@@ -727,12 +802,12 @@ public class FiraSpecificationParams extends FiraParams {
         }
 
         /**
-         * Set minimum supported slot duration
-         * @param value : minimum slot duration supported
+         * Set minimum supported slot duration in microsecond
+         * @param value : minimum slot duration supported in microsecond
          * @return FiraSpecificationParams builder
          */
-        public FiraSpecificationParams.Builder setMinSlotDurationSupported(int value) {
-            mMinSlotDuration = value;
+        public FiraSpecificationParams.Builder setMinSlotDurationSupportedUs(int value) {
+            mMinSlotDurationUs = value;
             return this;
         }
 
@@ -844,6 +919,75 @@ public class FiraSpecificationParams extends FiraParams {
             return this;
         }
 
+        public FiraSpecificationParams.Builder setDtTagMaxActiveRr(int value) {
+            mDtTagMaxActiveRr = value;
+            return this;
+        }
+
+        public FiraSpecificationParams.Builder setBackgroundRangingSupport(boolean value) {
+            mHasBackgroundRangingSupport = value;
+            return this;
+        }
+
+        public FiraSpecificationParams.Builder setDtTagBlockSkippingSupport(boolean value) {
+            mHasDtTagBlockSkippingSupport = value;
+            return this;
+        }
+
+        public FiraSpecificationParams.Builder setPsduLengthSupport(boolean value) {
+            mHasPsduLengthSupport = value;
+            return this;
+        }
+
+        public FiraSpecificationParams.Builder setUciVersionSupported(
+                int uciVersion) {
+            mUciVersion = uciVersion;
+            return this;
+        }
+
+        public Builder() {}
+
+        public Builder(@NonNull FiraSpecificationParams params) {
+            mMinPhyVersionSupported = params.mMinPhyVersionSupported;
+            mMaxPhyVersionSupported = params.mMaxPhyVersionSupported;
+            mMinMacVersionSupported = params.mMinMacVersionSupported;
+            mMaxMacVersionSupported = params.mMaxMacVersionSupported;
+            mSupportedChannels = params.mSupportedChannels;
+            mAoaCapabilities = params.mAoaCapabilities;
+            mDeviceRoleCapabilities = params.mDeviceRoleCapabilities;
+            mHasBlockStridingSupport = params.mHasBlockStridingSupport;
+            mHasHoppingPreferenceSupport = params.mHasHoppingPreferenceSupport;
+            mHasExtendedMacAddressSupport = params.mHasExtendedMacAddressSupport;
+            mHasNonDeferredModeSupport = params.mHasNonDeferredModeSupport;
+            mHasInitiationTimeSupport = params.mHasInitiationTimeSupport;
+            mHasRssiReportingSupport = params.mHasRssiReportingSupport;
+            mHasDiagnosticsSupport = params.mHasDiagnosticsSupport;
+            mMinRangingInterval = params.mMinRangingInterval;
+            mMinSlotDurationUs = params.mMinSlotDurationUs;
+            mMaxRangingSessionNumber = params.mMaxRangingSessionNumber;
+            mMultiNodeCapabilities = params.mMultiNodeCapabilities;
+            mRangingTimeStructCapabilities = params.mRangingTimeStructCapabilities;
+            mSchedulingModeCapabilities = params.mSchedulingModeCapabilities;
+            mCcConstraintLengthCapabilities = params.mCcConstraintLengthCapabilities;
+            mPrfCapabilities = params.mPrfCapabilities;
+            mRangingRoundCapabilities = params.mRangingRoundCapabilities;
+            mRframeCapabilities = params.mRframeCapabilities;
+            mStsCapabilities = params.mStsCapabilities;
+            mPsduDataRateCapabilities = params.mPsduDataRateCapabilities;
+            mBprfParameterSetCapabilities = params.mBprfParameterSetCapabilities;
+            mHprfParameterSetCapabilities = params.mHprfParameterSetCapabilities;
+            mMaxMessageSize = params.mMaxMessageSize;
+            mMaxDataPacketPayloadSize = params.mMaxDataPacketPayloadSize;
+            mRangeDataNtfConfigCapabilities = params.mRangeDataNtfConfigCapabilities;
+            mDeviceType = params.mDeviceType;
+            mSuspendRangingSupport = params.mSuspendRangingSupport;
+            mSessionKeyLength = params.mSessionKeyLength;
+            mDtTagMaxActiveRr = params.mDtTagMaxActiveRr;
+            mHasBackgroundRangingSupport = params.mHasBackgroundRangingSupport;
+            mHasDtTagBlockSkippingSupport = params.mHasDtTagBlockSkippingSupport;
+            mHasPsduLengthSupport = params.mHasPsduLengthSupport;
+        }
+
         public FiraSpecificationParams build() {
             return new FiraSpecificationParams(
                     mMinPhyVersionSupported,
@@ -861,7 +1005,7 @@ public class FiraSpecificationParams extends FiraParams {
                     mHasRssiReportingSupport,
                     mHasDiagnosticsSupport,
                     mMinRangingInterval,
-                    mMinSlotDuration,
+                    mMinSlotDurationUs,
                     mMaxRangingSessionNumber,
                     mMultiNodeCapabilities,
                     mRangingTimeStructCapabilities,
@@ -879,7 +1023,12 @@ public class FiraSpecificationParams extends FiraParams {
                     mRangeDataNtfConfigCapabilities,
                     mDeviceType,
                     mSuspendRangingSupport,
-                    mSessionKeyLength);
+                    mSessionKeyLength,
+                    mDtTagMaxActiveRr,
+                    mHasBackgroundRangingSupport,
+                    mHasDtTagBlockSkippingSupport,
+                    mHasPsduLengthSupport,
+                    mUciVersion);
         }
     }
 }

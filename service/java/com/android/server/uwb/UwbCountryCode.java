@@ -16,12 +16,19 @@
 
 package com.android.server.uwb;
 
+import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_OK;
+
 import android.annotation.NonNull;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.ContextParams;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.location.Address;
+import android.location.Geocoder;
+import android.location.Location;
+import android.location.LocationManager;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.ActiveCountryCodeChangedCallback;
 import android.os.Handler;
@@ -29,16 +36,15 @@ import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
-import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
+import android.util.Pair;
 
 import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.Keep;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.HandlerExecutor;
-import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
 
 import java.io.FileDescriptor;
@@ -50,7 +56,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
 /**
@@ -69,24 +77,41 @@ public class UwbCountryCode {
      * Copied from {@link TelephonyManager} because it's @hide.
      * TODO (b/242326831): Use @SystemApi.
      */
+    @VisibleForTesting
     public static final String EXTRA_LAST_KNOWN_NETWORK_COUNTRY =
             "android.telephony.extra.LAST_KNOWN_NETWORK_COUNTRY";
+
+    // Wait 1 hour between updates
+    private static final long TIME_BETWEEN_UPDATES_MS = 1000L * 60 * 60 * 1;
+    // Minimum distance before an update is triggered, in meters. We don't need this to be too
+    // exact because all we care about is what country the user is in.
+    private static final float DISTANCE_BETWEEN_UPDATES_METERS = 5_000.0f;
+
+    // The last SIM slot index, used when the slot is not known, so that the corresponding
+    // country code has the lowest priority (in the sorted mTelephonyCountryCodeInfoPerSlot map).
+    private static final int LAST_SIM_SLOT_INDEX = Integer.MAX_VALUE;
 
     private final Context mContext;
     private final Handler mHandler;
     private final TelephonyManager mTelephonyManager;
     private final SubscriptionManager mSubscriptionManager;
+    private final LocationManager mLocationManager;
+    private final Geocoder mGeocoder;
     private final NativeUwbManager mNativeUwbManager;
     private final UwbInjector mUwbInjector;
     private final Set<CountryCodeChangedListener> mListeners = new ArraySet<>();
 
     private Map<Integer, TelephonyCountryCodeSlotInfo> mTelephonyCountryCodeInfoPerSlot =
-            new ArrayMap();
+            new ConcurrentSkipListMap();
     private String mWifiCountryCode = null;
+    private String mLocationCountryCode = null;
+    private String mCachedCountryCode = null;
     private String mOverrideCountryCode = null;
     private String mCountryCode = null;
+    private Optional<Integer> mCountryCodeStatus = Optional.empty();
     private String mCountryCodeUpdatedTimestamp = null;
     private String mWifiCountryTimestamp = null;
+    private String mLocationCountryTimestamp = null;
 
     /**
      * Container class to store country code per sim slot.
@@ -107,15 +132,27 @@ public class UwbCountryCode {
     }
 
     public interface CountryCodeChangedListener {
-        void onCountryCodeChanged(@Nullable String newCountryCode);
+        /**
+         * Notify listeners about a country code change.
+         * @param statusCode - Status of the UWBS controller configuring the {@code newCountryCode}:
+         *         - STATUS_CODE_OK: The country code was successfully configured by UWBS.
+         *         - STATUS_CODE_ANDROID_REGULATION_UWB_OFF: UWB is not supported in the configured
+         *                   country code.
+         *         - Other status codes returned by the UWBS controller.
+         * @param newCountryCode - The new UWB country code configured in the UWBS controller.
+         */
+        void onCountryCodeChanged(int statusCode, @Nullable String newCountryCode);
     }
 
     public UwbCountryCode(
             Context context, NativeUwbManager nativeUwbManager, Handler handler,
             UwbInjector uwbInjector) {
-        mContext = context;
-        mTelephonyManager = context.getSystemService(TelephonyManager.class);
-        mSubscriptionManager = context.getSystemService(SubscriptionManager.class);
+        mContext = context.createContext(
+                new ContextParams.Builder().setAttributionTag(TAG).build());
+        mTelephonyManager = mContext.getSystemService(TelephonyManager.class);
+        mSubscriptionManager = mContext.getSystemService(SubscriptionManager.class);
+        mLocationManager = mContext.getSystemService(LocationManager.class);
+        mGeocoder = uwbInjector.makeGeocoder();
         mNativeUwbManager = nativeUwbManager;
         mHandler = handler;
         mUwbInjector = uwbInjector;
@@ -132,44 +169,108 @@ public class UwbCountryCode {
         }
     }
 
+    private void setCountryCodeFromGeocodingLocation(@Nullable Location location) {
+        if (location == null) return;
+        Geocoder.GeocodeListener geocodeListener = (List<Address> addresses) -> {
+            if (addresses != null && !addresses.isEmpty()) {
+                String countryCode = addresses.get(0).getCountryCode();
+                mHandler.post(() -> setLocationCountryCode(countryCode));
+            }
+        };
+        try {
+            mGeocoder.getFromLocation(
+                    location.getLatitude(), location.getLongitude(), 1, geocodeListener);
+        } catch (IllegalArgumentException e) {
+            // Wrong Type of Latitude and Longitude return from getFromLocation.
+            Log.e(TAG, "Exception while fetching latitude/longitude from location", e);
+
+            // Call setCountryCode() to update country code from other sources.
+            mLocationCountryCode = null;
+            setCountryCode(false);
+        }
+    }
+
     /**
      * Initialize the module.
      */
     public void initialize() {
+        // Read the cached country code first (if caching is enabled on the device)
+        if (mUwbInjector.getDeviceConfigFacade().isPersistentCacheUseForCountryCodeEnabled()) {
+            String cachedCountryCode = mUwbInjector.getUwbSettingsStore().get(
+                    UwbSettingsStore.SETTINGS_CACHED_COUNTRY_CODE);
+            if (isValid(cachedCountryCode)) mCachedCountryCode = cachedCountryCode;
+        }
         mContext.registerReceiver(
                 new BroadcastReceiver() {
                     @Override
                     public void onReceive(Context context, Intent intent) {
                         int slotIdx = intent.getIntExtra(
                                 SubscriptionManager.EXTRA_SLOT_INDEX,
-                                SubscriptionManager.INVALID_SIM_SLOT_INDEX);
+                                LAST_SIM_SLOT_INDEX);
                         String countryCode = intent.getStringExtra(
                                 TelephonyManager.EXTRA_NETWORK_COUNTRY);
                         String lastKnownCountryCode = intent.getStringExtra(
                                 EXTRA_LAST_KNOWN_NETWORK_COUNTRY);
-                        Log.d(TAG, "Country code changed to: " + countryCode);
+                        Log.d(TAG, "Telephony Country code changed to: " + countryCode);
                         setTelephonyCountryCodeAndLastKnownCountryCode(
                                 slotIdx, countryCode, lastKnownCountryCode);
                     }
                 },
                 new IntentFilter(TelephonyManager.ACTION_NETWORK_COUNTRY_CHANGED),
                 null, mHandler);
-        if (mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI)) {
-            mContext.getSystemService(WifiManager.class).registerActiveCountryCodeChangedCallback(
-                    new HandlerExecutor(mHandler), new WifiCountryCodeCallback());
+        try {
+            if (mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI)) {
+                mContext.getSystemService(WifiManager.class)
+                        .registerActiveCountryCodeChangedCallback(
+                            new HandlerExecutor(mHandler), new WifiCountryCodeCallback());
+            }
+        } catch (SecurityException e) {
+            // failed to register WifiCountryCodeCallback
+            Log.e(TAG, "failed to register WifiCountryCodeCallback", e);
+            mWifiCountryCode = null;
+        }
+        if (mUwbInjector.getDeviceConfigFacade().isLocationUseForCountryCodeEnabled() &&
+                mUwbInjector.isGeocoderPresent()) {
+            mLocationManager.requestLocationUpdates(
+                    LocationManager.PASSIVE_PROVIDER,
+                    TIME_BETWEEN_UPDATES_MS,
+                    DISTANCE_BETWEEN_UPDATES_METERS,
+                    location -> setCountryCodeFromGeocodingLocation(location));
+
         }
         Log.d(TAG, "Default country code from system property is "
                 + mUwbInjector.getOemDefaultCountryCode());
         List<SubscriptionInfo> subscriptionInfoList =
                 mSubscriptionManager.getActiveSubscriptionInfoList();
-        if (subscriptionInfoList == null) return; // No sim
-        Set<Integer> slotIdxs = subscriptionInfoList
-                .stream()
-                .map(SubscriptionInfo::getSimSlotIndex)
-                .collect(Collectors.toSet());
-        for (Integer slotIdx : slotIdxs) {
-            setTelephonyCountryCodeAndLastKnownCountryCode(
-                    slotIdx, mTelephonyManager.getNetworkCountryIso(slotIdx), null);
+        if (subscriptionInfoList != null && !subscriptionInfoList.isEmpty()) {
+            Set<Integer> slotIdxs = subscriptionInfoList
+                    .stream()
+                    .map(SubscriptionInfo::getSimSlotIndex)
+                    .collect(Collectors.toSet());
+            for (Integer slotIdx : slotIdxs) {
+                String countryCode;
+                try {
+                    countryCode = mTelephonyManager.getNetworkCountryIso(slotIdx);
+                } catch (IllegalArgumentException e) {
+                    Log.e(TAG, "Failed to get country code for slot id:" + slotIdx, e);
+                    continue;
+                }
+                setTelephonyCountryCodeAndLastKnownCountryCode(slotIdx, countryCode, null);
+            }
+        } else {
+            // Fetch and configure the networkCountryIso() when the subscriptionInfoList is either
+            // null or empty. This is done only when the country code is valid.
+            String countryCode = mTelephonyManager.getNetworkCountryIso();
+            if (isValid(countryCode)) {
+                setTelephonyCountryCodeAndLastKnownCountryCode(
+                        LAST_SIM_SLOT_INDEX, countryCode, null);
+            }
+        }
+
+        if (mUwbInjector.getDeviceConfigFacade().isLocationUseForCountryCodeEnabled() &&
+                mUwbInjector.isGeocoderPresent()) {
+            setCountryCodeFromGeocodingLocation(
+                    mLocationManager.getLastKnownLocation(LocationManager.FUSED_PROVIDER));
         }
         // Current Wifi country code update is sent immediately on registration.
     }
@@ -178,7 +279,7 @@ public class UwbCountryCode {
         mListeners.add(listener);
     }
 
-    private boolean setTelephonyCountryCodeAndLastKnownCountryCode(int slotIdx, String countryCode,
+    private void setTelephonyCountryCodeAndLastKnownCountryCode(int slotIdx, String countryCode,
             String lastKnownCountryCode) {
         Log.d(TAG, "Set telephony country code to: " + countryCode
                 + ", last country code to: " + lastKnownCountryCode + " for slotIdx: " + slotIdx);
@@ -188,33 +289,46 @@ public class UwbCountryCode {
         telephonyCountryCodeInfoSlot.slotIdx = slotIdx;
         telephonyCountryCodeInfoSlot.timestamp = LocalDateTime.now().format(FORMATTER);
         // Empty country code.
-        if (TextUtils.isEmpty(countryCode)) {
+        if (!isValid(countryCode)) {
             Log.d(TAG, "Received empty telephony country code");
             telephonyCountryCodeInfoSlot.countryCode = null;
         } else {
             telephonyCountryCodeInfoSlot.countryCode = countryCode.toUpperCase(Locale.US);
         }
-        if (TextUtils.isEmpty(lastKnownCountryCode)) {
+        if (!isValid(lastKnownCountryCode)) {
             Log.d(TAG, "Received empty telephony last known country code");
             telephonyCountryCodeInfoSlot.lastKnownCountryCode = null;
         } else {
             telephonyCountryCodeInfoSlot.lastKnownCountryCode =
                     lastKnownCountryCode.toUpperCase(Locale.US);
         }
-        return setCountryCode(false);
+        setCountryCode(false);
     }
 
-    private boolean setWifiCountryCode(String countryCode) {
+    private void setWifiCountryCode(String countryCode) {
         Log.d(TAG, "Set wifi country code to: " + countryCode);
         mWifiCountryTimestamp = LocalDateTime.now().format(FORMATTER);
         // Empty country code.
-        if (TextUtils.isEmpty(countryCode) || TextUtils.equals(countryCode, DEFAULT_COUNTRY_CODE)) {
+        if (!isValid(countryCode)) {
             Log.d(TAG, "Received empty wifi country code");
             mWifiCountryCode = null;
         } else {
             mWifiCountryCode = countryCode.toUpperCase(Locale.US);
         }
-        return setCountryCode(false);
+        setCountryCode(false);
+    }
+
+    private void setLocationCountryCode(String countryCode) {
+        Log.d(TAG, "Set location country code to: " + countryCode);
+        mLocationCountryTimestamp = LocalDateTime.now().format(FORMATTER);
+        // Empty country code.
+        if (!isValid(countryCode)) {
+            Log.d(TAG, "Received empty location country code");
+            mLocationCountryCode = null;
+        } else {
+            mLocationCountryCode = countryCode.toUpperCase(Locale.US);
+        }
+        setCountryCode(false);
     }
 
     /**
@@ -226,27 +340,46 @@ public class UwbCountryCode {
      * 4. Last known telephony country code - Last known country code retrieved via cellular. If
      * there are multiple SIM's, the country code chosen is non-deterministic if they return
      * different codes.
-     * 5. OEM default country code - If set by the OEM, then we default to this country code.
+     * 5. Location Country code - If enabled, country code retrieved from LocationManager Fused
+     * location provider.
+     * 6. Cached Country code - If enabled (only enabled on non-phone form factors), uses last
+     * valid country code retrieved from any of the sources above (cache cleared on APM mode
+     * toggle).
+     * 7. OEM default country code - If set by the OEM, then we default to this country code.
      * @return
      */
     private String pickCountryCode() {
         if (mOverrideCountryCode != null) {
             return mOverrideCountryCode;
         }
-        for (TelephonyCountryCodeSlotInfo telephonyCountryCodeInfoSlot :
-                mTelephonyCountryCodeInfoPerSlot.values()) {
-            if (telephonyCountryCodeInfoSlot.countryCode != null) {
-                return telephonyCountryCodeInfoSlot.countryCode;
+        if (mTelephonyCountryCodeInfoPerSlot != null) {
+            for (TelephonyCountryCodeSlotInfo telephonyCountryCodeInfoSlot :
+                    mTelephonyCountryCodeInfoPerSlot.values()) {
+                if (telephonyCountryCodeInfoSlot != null
+                        && telephonyCountryCodeInfoSlot.countryCode != null) {
+                    return telephonyCountryCodeInfoSlot.countryCode;
+                }
             }
         }
         if (mWifiCountryCode != null) {
             return mWifiCountryCode;
         }
-        for (TelephonyCountryCodeSlotInfo telephonyCountryCodeInfoSlot :
-                mTelephonyCountryCodeInfoPerSlot.values()) {
-            if (telephonyCountryCodeInfoSlot.lastKnownCountryCode != null) {
-                return telephonyCountryCodeInfoSlot.lastKnownCountryCode;
+        if (mTelephonyCountryCodeInfoPerSlot != null) {
+            for (TelephonyCountryCodeSlotInfo telephonyCountryCodeInfoSlot :
+                    mTelephonyCountryCodeInfoPerSlot.values()) {
+                if (telephonyCountryCodeInfoSlot != null
+                        && telephonyCountryCodeInfoSlot.lastKnownCountryCode != null) {
+                    return telephonyCountryCodeInfoSlot.lastKnownCountryCode;
+                }
             }
+        }
+        if (mLocationCountryCode != null) {
+            return mLocationCountryCode;
+        }
+        if (mUwbInjector.getDeviceConfigFacade().isPersistentCacheUseForCountryCodeEnabled()
+                && mCachedCountryCode != null) {
+            Log.d(TAG, "Using cached country code");
+            return mCachedCountryCode;
         }
         return mUwbInjector.getOemDefaultCountryCode();
     }
@@ -256,9 +389,10 @@ public class UwbCountryCode {
      *
      * @param forceUpdate Force update the country code even if it was the same as previously cached
      *                    value.
-     * @return true if the country code is set successfully, false otherwise.
+     * @return Pair<UWBS StatusCode from setting the country code,
+     *              Country code that was attempted to be set in UWBS>
      */
-    public boolean setCountryCode(boolean forceUpdate) {
+    public Pair<Integer, String> setCountryCode(boolean forceUpdate) {
         String country = pickCountryCode();
         if (country == null) {
             Log.i(TAG, "No valid country code, reset to " + DEFAULT_COUNTRY_CODE);
@@ -266,30 +400,46 @@ public class UwbCountryCode {
         }
         if (!forceUpdate && Objects.equals(country, mCountryCode)) {
             Log.i(TAG, "Ignoring already set country code: " + country);
-            return false;
+            return new Pair<>(STATUS_CODE_OK, mCountryCode);
         }
         Log.d(TAG, "setCountryCode to " + country);
         int status = mNativeUwbManager.setCountryCode(country.getBytes(StandardCharsets.UTF_8));
-        boolean success = (status == UwbUciConstants.STATUS_CODE_OK);
-        if (!success) {
-            Log.i(TAG, "Failed to set country code");
-            return false;
+        if (status != STATUS_CODE_OK) {
+            Log.i(TAG, "Failed to set country code, with status code: " + status);
         }
         mCountryCode = country;
         mCountryCodeUpdatedTimestamp = LocalDateTime.now().format(FORMATTER);
-        for (CountryCodeChangedListener listener : mListeners) {
-            listener.onCountryCodeChanged(country);
+        mCountryCodeStatus = Optional.of(status);
+        // Cache the country code (if caching is enabled on the device)
+        if (mUwbInjector.getDeviceConfigFacade().isPersistentCacheUseForCountryCodeEnabled()
+                && isValid(country)) {
+            mCachedCountryCode = country;
+            mUwbInjector.getUwbSettingsStore().put(
+                    UwbSettingsStore.SETTINGS_CACHED_COUNTRY_CODE, country);
         }
-        return true;
+
+        for (CountryCodeChangedListener listener : mListeners) {
+            listener.onCountryCodeChanged(status, country);
+        }
+        return new Pair<>(status, country);
     }
 
     /**
-     * Get country code
+     * Get country code.
      *
-     * @return true if the country code is set successfully, false otherwise.
+     * @return the country code that was last configured in the UWBS.
      */
     public String getCountryCode() {
         return mCountryCode;
+    }
+
+    /**
+     * Get country code configuration status.
+     *
+     * @return Status of the last attempt to configure a country code in the UWBS.
+     */
+    public Optional<Integer> getCountryCodeStatus() {
+        return mCountryCodeStatus;
     }
 
     /**
@@ -328,6 +478,18 @@ public class UwbCountryCode {
     }
 
     /**
+     * This is for clearing the cached country code when Airplane mode is toggled
+     */
+    public synchronized void clearCachedCountryCode() {
+        if (mUwbInjector.getDeviceConfigFacade().isPersistentCacheUseForCountryCodeEnabled()) {
+            Log.d(TAG, "Clearing cached country code");
+            mCachedCountryCode = null;
+            mUwbInjector.getUwbSettingsStore().put(
+                    UwbSettingsStore.SETTINGS_CACHED_COUNTRY_CODE, "");
+        }
+    }
+
+    /**
      * Method to dump the current state of this UwbCountryCode object.
      */
     public synchronized void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
@@ -338,8 +500,13 @@ public class UwbCountryCode {
         pw.println("mTelephonyCountryCodeInfoSlot: " + mTelephonyCountryCodeInfoPerSlot);
         pw.println("mWifiCountryCode: " + mWifiCountryCode);
         pw.println("mWifiCountryTimestamp: " + mWifiCountryTimestamp);
+        pw.println("mLocationCountryCode: " + mLocationCountryCode);
+        pw.println("mLocationCountryTimestamp: " + mLocationCountryTimestamp);
         pw.println("mCountryCode: " + mCountryCode);
+        pw.println("mCountryCodeStatus: "
+                + (mCountryCodeStatus.isEmpty() ? "none" : mCountryCodeStatus.get()));
         pw.println("mCountryCodeUpdatedTimestamp: " + mCountryCodeUpdatedTimestamp);
+        pw.println("mCachedCountryCode: " + mCachedCountryCode);
         pw.println("---- Dump of UwbCountryCode ----");
     }
 }

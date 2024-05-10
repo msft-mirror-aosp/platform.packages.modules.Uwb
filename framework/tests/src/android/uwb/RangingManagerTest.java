@@ -244,6 +244,15 @@ public class RangingManagerTest {
         rangingManager.onDataSendFailed(handle, ADDRESS, REASON, PARAMS);
         verify(callback, times(1)).onDataSendFailed(eq(ADDRESS), eq(REASON), eq(PARAMS));
 
+        // Test should only run on V+ devices.
+        if (SdkLevel.isAtLeastV()) {
+            rangingManager.onDataTransferPhaseConfigured(handle, PARAMS);
+            verify(callback, times(1)).onDataTransferPhaseConfigured(eq(PARAMS));
+
+            rangingManager.onDataTransferPhaseConfigFailed(handle, REASON, PARAMS);
+            verify(callback, times(1)).onDataTransferPhaseConfigFailed(eq(REASON), eq(PARAMS));
+        }
+
         rangingManager.onDataReceived(handle, ADDRESS, PARAMS, DATA);
         verify(callback, times(1)).onDataReceived(eq(ADDRESS), eq(PARAMS), eq(DATA));
 
@@ -261,6 +270,25 @@ public class RangingManagerTest {
             rangingManager.onRangingRoundsUpdateDtTagStatus(handle, PARAMS);
             verify(callback, times(1))
                     .onRangingRoundsUpdateDtTagStatus(eq(PARAMS));
+        }
+
+        // Test should only run on V+ devices.
+        if (SdkLevel.isAtLeastV()) {
+            rangingManager.onHybridSessionControllerConfigured(handle, PARAMS);
+            verify(callback, times(1))
+                    .onHybridSessionControllerConfigured(eq(PARAMS));
+
+            rangingManager.onHybridSessionControllerConfigurationFailed(handle, REASON, PARAMS);
+            verify(callback, times(1))
+                    .onHybridSessionControllerConfigurationFailed(eq(REASON), eq(PARAMS));
+
+            rangingManager.onHybridSessionControleeConfigured(handle, PARAMS);
+            verify(callback, times(1))
+                    .onHybridSessionControleeConfigured(eq(PARAMS));
+
+            rangingManager.onHybridSessionControleeConfigurationFailed(handle, REASON, PARAMS);
+            verify(callback, times(1))
+                    .onHybridSessionControleeConfigurationFailed(eq(REASON), eq(PARAMS));
         }
 
         rangingManager.onRangingClosed(handle, REASON, PARAMS);
@@ -350,11 +378,36 @@ public class RangingManagerTest {
         rangingManager.onDataReceiveFailed(handle, ADDRESS, REASON, PARAMS);
         verify(callback, never()).onDataReceiveFailed(eq(ADDRESS), eq(REASON), eq(PARAMS));
 
+        // Test should only run on V+ devices.
+        if (SdkLevel.isAtLeastV()) {
+            rangingManager.onDataTransferPhaseConfigured(handle, PARAMS);
+            verify(callback, never()).onDataTransferPhaseConfigured(eq(PARAMS));
+
+            rangingManager.onDataTransferPhaseConfigFailed(handle, REASON, PARAMS);
+            verify(callback, never()).onDataTransferPhaseConfigFailed(eq(REASON), eq(PARAMS));
+        }
+
         rangingManager.onServiceDiscovered(handle, PARAMS);
         verify(callback, never()).onServiceDiscovered(eq(PARAMS));
 
         rangingManager.onServiceConnected(handle, PARAMS);
         verify(callback, never()).onServiceConnected(eq(PARAMS));
+
+        if (SdkLevel.isAtLeastV()) {
+            rangingManager.onHybridSessionControllerConfigured(handle, PARAMS);
+            verify(callback, never()).onHybridSessionControllerConfigured(eq(PARAMS));
+
+            rangingManager.onHybridSessionControllerConfigurationFailed(handle, REASON, PARAMS);
+            verify(callback, never()).onHybridSessionControllerConfigurationFailed(
+                    eq(REASON), eq(PARAMS));
+
+            rangingManager.onHybridSessionControleeConfigured(handle, PARAMS);
+            verify(callback, never()).onHybridSessionControleeConfigured(eq(PARAMS));
+
+            rangingManager.onHybridSessionControleeConfigurationFailed(handle, REASON, PARAMS);
+            verify(callback, never()).onHybridSessionControleeConfigurationFailed(
+                    eq(REASON), eq(PARAMS));
+        }
 
         rangingManager.onRangingClosed(handle, REASON, PARAMS);
         verify(callback, times(1)).onClosed(eq(REASON), eq(PARAMS));

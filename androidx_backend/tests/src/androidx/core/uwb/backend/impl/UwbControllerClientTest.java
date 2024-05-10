@@ -16,6 +16,8 @@
 
 package androidx.core.uwb.backend.impl;
 
+import static androidx.core.uwb.backend.impl.internal.Utils.RANGE_DATA_NTF_ENABLE;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,8 +29,10 @@ import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import androidx.core.uwb.backend.IRangingSessionCallback;
+import androidx.core.uwb.backend.RangingControleeParameters;
 import androidx.core.uwb.backend.RangingParameters;
 import androidx.core.uwb.backend.UwbAddress;
+import androidx.core.uwb.backend.UwbRangeDataNtfConfig;
 import androidx.core.uwb.backend.impl.internal.RangingController;
 import androidx.core.uwb.backend.impl.internal.RangingSessionCallback;
 import androidx.core.uwb.backend.impl.internal.UwbComplexChannel;
@@ -56,6 +60,9 @@ public class UwbControllerClientTest {
     @Mock private IRangingSessionCallback mRangingSessionCallback;
     @Captor
     ArgumentCaptor<androidx.core.uwb.backend.impl.internal.UwbAddress> mAddressCaptor;
+    @Captor
+    ArgumentCaptor<androidx.core.uwb.backend.impl.internal.RangingControleeParameters>
+            mControleeParamCaptor;
     private UwbControllerClient mUwbControllerClient;
 
     @Before
@@ -81,6 +88,11 @@ public class UwbControllerClientTest {
         params.complexChannel.channel = 9;
         params.complexChannel.preambleIndex = 9;
         params.peerDevices = new ArrayList<>();
+        params.uwbRangeDataNtfConfig = new UwbRangeDataNtfConfig();
+        params.uwbRangeDataNtfConfig.rangeDataNtfConfigType = RANGE_DATA_NTF_ENABLE;
+        params.uwbRangeDataNtfConfig.ntfProximityNearCm = 100;
+        params.uwbRangeDataNtfConfig.ntfProximityFarCm = 300;
+        params.slotDuration = 1;
         mUwbControllerClient.startRanging(params, mRangingSessionCallback);
         verify(mRangingController).setRangingParameters(any(
                 androidx.core.uwb.backend.impl.internal.RangingParameters.class));
@@ -98,9 +110,11 @@ public class UwbControllerClientTest {
     public void testAddControlee() throws RemoteException {
         UwbAddress address = new UwbAddress();
         address.address = new byte[] {0x1, 0x2};
-        mUwbControllerClient.addControlee(address);
-        verify(mRangingController).addControlee(mAddressCaptor.capture());
-        assertArrayEquals(address.address, mAddressCaptor.getValue().toBytes());
+        RangingControleeParameters params = new RangingControleeParameters();
+        params.address = address;
+        mUwbControllerClient.addControleeWithSessionParams(params);
+        verify(mRangingController).addControleeWithSessionParams(mControleeParamCaptor.capture());
+        assertArrayEquals(address.address, mControleeParamCaptor.getValue().getAddress().toBytes());
     }
 
     @Test

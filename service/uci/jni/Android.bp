@@ -1,4 +1,5 @@
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -24,7 +25,6 @@ rust_defaults {
     apex_available: [
         "com.android.uwb",
     ],
-    host_supported: true,
 }
 
 rust_ffi_shared {
@@ -34,9 +34,6 @@ rust_ffi_shared {
         "libuci_hal_android",
         "libuwb_core",
     ],
-    sanitize: {
-        hwaddress: false,
-    },
 }
 
 rust_test {
@@ -50,23 +47,9 @@ rust_test {
         android: {
             test_suites: [
                 "general-tests",
-                "mts-uwb"
+                "mts-uwb",
             ],
             test_config_template: "uwb_rust_test_config_template.xml",
-        },
-        host: {
-            test_suites: [
-                "general-tests",
-            ],
-            data_libs: [
-                "libandroid_runtime_lazy",
-                "libbase",
-                "libbinder",
-                "libbinder_ndk",
-                "libcutils",
-                "liblog",
-                "libutils",
-            ],
         },
     },
     test_options: {
@@ -85,4 +68,5 @@ rust_test {
         },
     },
     auto_gen_config: true,
+    native_coverage: false,
 }

@@ -93,14 +93,16 @@ public class FiraTests {
         List<UwbAddress> destAddressList = new ArrayList<>();
         destAddressList.add(destAddress1);
         destAddressList.add(destAddress2);
-        int initiationTimeMs = 100;
+        int initiationTime = 100;
         int slotDurationRstu = 2400;
         int slotsPerRangingRound = 10;
         int rangingIntervalMs = 100;
         int blockStrideLength = 2;
         int maxRangingRoundRetries = 3;
         int sessionPriority = 100;
-        boolean hasResultReportPhase = true;
+        boolean hasRangingResultReportMessage = true;
+        boolean hasControlMessage = true;
+        boolean hasRangingControlPhase = false;
         int measurementReportType = MEASUREMENT_REPORT_TYPE_INITIATOR_TO_RESPONDER;
         int inBandTerminationAttemptCount = 8;
         int channelNumber = 10;
@@ -146,6 +148,7 @@ public class FiraTests {
         int ulTdoaDeviceIdType = UL_TDOA_DEVICE_ID_16_BIT;
         byte[] ulTdoaDeviceId = new byte[] {(byte) 0x0C, (byte) 0x0B};
         int ulTdoaTxTimestampType = TX_TIMESTAMP_40_BIT;
+        int maxNumberOfMeasurements = 1;
 
         FiraOpenSessionParams params =
                 new FiraOpenSessionParams.Builder()
@@ -158,7 +161,7 @@ public class FiraTests {
                         .setMultiNodeMode(multiNodeMode)
                         .setDeviceAddress(deviceAddress)
                         .setDestAddressList(destAddressList)
-                        .setInitiationTimeMs(initiationTimeMs)
+                        .setInitiationTime(initiationTime)
                         .setSlotDurationRstu(slotDurationRstu)
                         .setSlotsPerRangingRound(slotsPerRangingRound)
                         .setRangingIntervalMs(rangingIntervalMs)
@@ -166,7 +169,9 @@ public class FiraTests {
                         .setMaxRangingRoundRetries(maxRangingRoundRetries)
                         .setSessionPriority(sessionPriority)
                         .setMacAddressMode(addressMode)
-                        .setHasResultReportPhase(hasResultReportPhase)
+                        .setHasRangingResultReportMessage(hasRangingResultReportMessage)
+                        .setHasControlMessage(hasControlMessage)
+                        .setHasRangingControlPhase(hasRangingControlPhase)
                         .setMeasurementReportType(measurementReportType)
                         .setInBandTerminationAttemptCount(inBandTerminationAttemptCount)
                         .setChannelNumber(channelNumber)
@@ -212,6 +217,7 @@ public class FiraTests {
                         .setUlTdoaDeviceIdType(ulTdoaDeviceIdType)
                         .setUlTdoaDeviceId(ulTdoaDeviceId)
                         .setUlTdoaTxTimestampType(ulTdoaTxTimestampType)
+                        .setMaxNumberOfMeasurements(maxNumberOfMeasurements)
                         .build();
 
         assertEquals(params.getProtocolVersion(), protocolVersion);
@@ -227,7 +233,7 @@ public class FiraTests {
             assertEquals(params.getDestAddressList().get(i), destAddressList.get(i));
         }
 
-        assertEquals(params.getInitiationTimeMs(), initiationTimeMs);
+        assertEquals(params.getInitiationTime(), initiationTime);
         assertEquals(params.getSlotDurationRstu(), slotDurationRstu);
         assertEquals(params.getSlotsPerRangingRound(), slotsPerRangingRound);
         assertEquals(params.getRangingIntervalMs(), rangingIntervalMs);
@@ -235,7 +241,9 @@ public class FiraTests {
         assertEquals(params.getMaxRangingRoundRetries(), maxRangingRoundRetries);
         assertEquals(params.getSessionPriority(), sessionPriority);
         assertEquals(params.getMacAddressMode(), addressMode);
-        assertEquals(params.hasResultReportPhase(), hasResultReportPhase);
+        assertEquals(params.hasRangingResultReportMessage(), hasRangingResultReportMessage);
+        assertEquals(params.hasControlMessage(), hasControlMessage);
+        assertEquals(params.hasRangingControlPhase(), hasRangingControlPhase);
         assertEquals(params.getMeasurementReportType(), measurementReportType);
         assertEquals(params.getInBandTerminationAttemptCount(), inBandTerminationAttemptCount);
         assertEquals(params.getChannelNumber(), channelNumber);
@@ -283,6 +291,7 @@ public class FiraTests {
         assertEquals(params.getUlTdoaDeviceIdType(), ulTdoaDeviceIdType);
         assertArrayEquals(params.getUlTdoaDeviceId(), ulTdoaDeviceId);
         assertEquals(params.getUlTdoaTxTimestampType(), ulTdoaTxTimestampType);
+        assertEquals(params.getMaxNumberOfMeasurements(), maxNumberOfMeasurements);
 
         FiraOpenSessionParams fromBundle = FiraOpenSessionParams.fromBundle(params.toBundle());
 
@@ -295,7 +304,7 @@ public class FiraTests {
             assertEquals(fromBundle.getDestAddressList().get(i), destAddressList.get(i));
         }
 
-        assertEquals(fromBundle.getInitiationTimeMs(), initiationTimeMs);
+        assertEquals(fromBundle.getInitiationTime(), initiationTime);
         assertEquals(fromBundle.getSlotDurationRstu(), slotDurationRstu);
         assertEquals(fromBundle.getSlotsPerRangingRound(), slotsPerRangingRound);
         assertEquals(fromBundle.getRangingIntervalMs(), rangingIntervalMs);
@@ -303,7 +312,9 @@ public class FiraTests {
         assertEquals(fromBundle.getMaxRangingRoundRetries(), maxRangingRoundRetries);
         assertEquals(fromBundle.getSessionPriority(), sessionPriority);
         assertEquals(fromBundle.getMacAddressMode(), addressMode);
-        assertEquals(fromBundle.hasResultReportPhase(), hasResultReportPhase);
+        assertEquals(fromBundle.hasRangingResultReportMessage(), hasRangingResultReportMessage);
+        assertEquals(fromBundle.hasControlMessage(), hasControlMessage);
+        assertEquals(fromBundle.hasRangingControlPhase(), hasRangingControlPhase);
         assertEquals(fromBundle.getMeasurementReportType(), measurementReportType);
         assertEquals(fromBundle.getInBandTerminationAttemptCount(), inBandTerminationAttemptCount);
         assertEquals(fromBundle.getChannelNumber(), channelNumber);
@@ -354,6 +365,7 @@ public class FiraTests {
         assertEquals(fromBundle.getUlTdoaDeviceIdType(), ulTdoaDeviceIdType);
         assertArrayEquals(fromBundle.getUlTdoaDeviceId(), ulTdoaDeviceId);
         assertEquals(fromBundle.getUlTdoaTxTimestampType(), ulTdoaTxTimestampType);
+        assertEquals(fromBundle.getMaxNumberOfMeasurements(), maxNumberOfMeasurements);
 
         verifyProtocolPresent(fromBundle);
         verifyBundlesEqual(params, fromBundle);
@@ -369,7 +381,7 @@ public class FiraTests {
             assertEquals(fromCopy.getDestAddressList().get(i), destAddressList.get(i));
         }
 
-        assertEquals(fromCopy.getInitiationTimeMs(), initiationTimeMs);
+        assertEquals(fromCopy.getInitiationTime(), initiationTime);
         assertEquals(fromCopy.getSlotDurationRstu(), slotDurationRstu);
         assertEquals(fromCopy.getSlotsPerRangingRound(), slotsPerRangingRound);
         assertEquals(fromCopy.getRangingIntervalMs(), rangingIntervalMs);
@@ -377,7 +389,9 @@ public class FiraTests {
         assertEquals(fromCopy.getMaxRangingRoundRetries(), maxRangingRoundRetries);
         assertEquals(fromCopy.getSessionPriority(), sessionPriority);
         assertEquals(fromCopy.getMacAddressMode(), addressMode);
-        assertEquals(fromCopy.hasResultReportPhase(), hasResultReportPhase);
+        assertEquals(fromCopy.hasRangingResultReportMessage(), hasRangingResultReportMessage);
+        assertEquals(fromCopy.hasControlMessage(), hasControlMessage);
+        assertEquals(fromCopy.hasRangingControlPhase(), hasRangingControlPhase);
         assertEquals(fromCopy.getMeasurementReportType(), measurementReportType);
         assertEquals(fromCopy.getInBandTerminationAttemptCount(), inBandTerminationAttemptCount);
         assertEquals(fromCopy.getChannelNumber(), channelNumber);
@@ -428,6 +442,7 @@ public class FiraTests {
         assertEquals(fromCopy.getUlTdoaDeviceIdType(), ulTdoaDeviceIdType);
         assertArrayEquals(fromCopy.getUlTdoaDeviceId(), ulTdoaDeviceId);
         assertEquals(fromCopy.getUlTdoaTxTimestampType(), ulTdoaTxTimestampType);
+        assertEquals(fromCopy.getMaxNumberOfMeasurements(), maxNumberOfMeasurements);
 
         verifyProtocolPresent(fromCopy);
         verifyBundlesEqual(params, fromCopy);
@@ -622,6 +637,7 @@ public class FiraTests {
         int deviceType = RANGING_DEVICE_TYPE_CONTROLLER;
         boolean suspendRangingSupport = true;
         int sessionKeyLength = 1;
+        boolean hasBackgroundSupport = true;
 
         FiraSpecificationParams params =
                 new FiraSpecificationParams.Builder()
@@ -649,6 +665,7 @@ public class FiraTests {
                         .setDeviceType(deviceType)
                         .setSuspendRangingSupport(suspendRangingSupport)
                         .setSessionKeyLength(sessionKeyLength)
+                        .setBackgroundRangingSupport(false)
                         .build();
         assertEquals(minPhyVersionSupported, params.getMinPhyVersionSupported());
         assertEquals(maxPhyVersionSupported, params.getMaxPhyVersionSupported());
@@ -674,6 +691,7 @@ public class FiraTests {
         assertEquals(deviceType, params.getDeviceType());
         assertEquals(suspendRangingSupport, params.hasSuspendRangingSupport());
         assertEquals(sessionKeyLength, params.getSessionKeyLength());
+        assertEquals(false, params.hasBackgroundRangingSupport());
 
         FiraSpecificationParams fromBundle = FiraSpecificationParams.fromBundle(params.toBundle());
         assertEquals(minPhyVersionSupported, fromBundle.getMinPhyVersionSupported());
@@ -699,8 +717,40 @@ public class FiraTests {
         assertEquals(deviceType, fromBundle.getDeviceType());
         assertEquals(suspendRangingSupport, fromBundle.hasSuspendRangingSupport());
         assertEquals(sessionKeyLength, fromBundle.getSessionKeyLength());
+        assertEquals(false, fromBundle.hasBackgroundRangingSupport());
         verifyProtocolPresent(params);
         verifyBundlesEqual(params, fromBundle);
+
+        FiraSpecificationParams fromCopy = new FiraSpecificationParams.Builder(params)
+                .setBackgroundRangingSupport(hasBackgroundSupport)
+                .build();
+
+        assertEquals(minPhyVersionSupported, fromCopy.getMinPhyVersionSupported());
+        assertEquals(maxPhyVersionSupported, fromCopy.getMaxPhyVersionSupported());
+        assertEquals(minMacVersionSupported, fromCopy.getMinMacVersionSupported());
+        assertEquals(maxMacVersionSupported, fromCopy.getMaxMacVersionSupported());
+        assertEquals(supportedChannels, fromCopy.getSupportedChannels());
+        assertEquals(aoaCapabilities, fromCopy.getAoaCapabilities());
+        assertEquals(deviceRoleCapabilities, fromCopy.getDeviceRoleCapabilities());
+        assertEquals(hasBlockStridingSupport, fromCopy.hasBlockStridingSupport());
+        assertEquals(hasNonDeferredModeSupport, fromCopy.hasNonDeferredModeSupport());
+        assertEquals(hasInitiationTimeSupport, params.hasInitiationTimeSupport());
+        assertEquals(multiNodeCapabilities, fromCopy.getMultiNodeCapabilities());
+        assertEquals(prfCapabilities, fromCopy.getPrfCapabilities());
+        assertEquals(rangingRoundCapabilities, fromCopy.getRangingRoundCapabilities());
+        assertEquals(rframeCapabilities, fromCopy.getRframeCapabilities());
+        assertEquals(stsCapabilities, fromCopy.getStsCapabilities());
+        assertEquals(psduDataRateCapabilities, fromCopy.getPsduDataRateCapabilities());
+        assertEquals(bprfCapabilities, fromCopy.getBprfParameterSetCapabilities());
+        assertEquals(hprfCapabilities, fromCopy.getHprfParameterSetCapabilities());
+        assertEquals(rangeDataNtfConfigCapabilities,
+                fromCopy.getRangeDataNtfConfigCapabilities());
+        assertEquals(deviceType, fromCopy.getDeviceType());
+        assertEquals(suspendRangingSupport, fromCopy.hasSuspendRangingSupport());
+        assertEquals(sessionKeyLength, fromCopy.getSessionKeyLength());
+        assertEquals(hasBackgroundSupport, fromCopy.hasBackgroundRangingSupport());
+        verifyProtocolPresent(params);
+        verifyBundlesEqual(params, fromCopy);
     }
 
     @Test
@@ -712,5 +762,24 @@ public class FiraTests {
 
         FiraSpecificationParams fromBundle = FiraSpecificationParams.fromBundle(params.toBundle());
         assertEquals(List.of(), fromBundle.getSupportedChannels());
+    }
+
+    @Test
+    public void testFiraProtocolVersion() {
+        FiraProtocolVersion firaVersion = new FiraProtocolVersion(1, 2);
+        assertEquals(1, firaVersion.getMajor());
+        assertEquals(2, firaVersion.getMinor());
+
+        firaVersion = FiraProtocolVersion.fromString("1.3");
+        assertEquals(1, firaVersion.getMajor());
+        assertEquals(3, firaVersion.getMinor());
+
+        firaVersion = FiraProtocolVersion.fromBytes(new byte[]{0x1, 0x4}, 0);
+        assertEquals(1, firaVersion.getMajor());
+        assertEquals(4, firaVersion.getMinor());
+
+        firaVersion = FiraProtocolVersion.fromLEShort((short) 0x1002);
+        assertEquals(2, firaVersion.getMajor());
+        assertEquals(1, firaVersion.getMinor());
     }
 }

@@ -23,6 +23,7 @@ import android.os.RemoteException;
 import android.util.Log;
 
 import androidx.core.uwb.backend.IRangingSessionCallback;
+import androidx.core.uwb.backend.RangingControleeParameters;
 import androidx.core.uwb.backend.RangingParameters;
 import androidx.core.uwb.backend.UwbAddress;
 import androidx.core.uwb.backend.UwbComplexChannel;
@@ -67,7 +68,16 @@ public class UwbControleeClient extends UwbClient {
     }
 
     @Override
+    public void addControleeWithSessionParams(RangingControleeParameters params)
+            throws RemoteException {
+    }
+
+    @Override
     public void removeControlee(UwbAddress address) throws RemoteException {
+    }
+
+    @Override
+    public void reconfigureRangingInterval(int intervalSkipCount) {
     }
 
     @Override

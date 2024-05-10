@@ -20,6 +20,7 @@ import androidx.annotation.Nullable;
 
 import com.android.server.uwb.correction.math.AoaVector;
 import com.android.server.uwb.correction.math.SphericalVector;
+import com.android.server.uwb.correction.math.SphericalVector.Annotated;
 import com.android.server.uwb.correction.pose.IPoseSource;
 
 /**
@@ -35,25 +36,31 @@ public class AoaPrimer implements IPrimer {
      * Applies corrections to a raw position.
      *
      * @param input      The original UWB reading.
-     * @param prediction A prediction of where the signal probably came from.
+     * @param prediction The previous filtered UWB result adjusted by the pose change since then.
      * @param poseSource A pose source that may indicate phone orientation.
+     * @param timeMs When the input occurred, in ms since boot.
      * @return A replacement value for the UWB input that has been corrected for  the situation.
      */
     @Override
-    public SphericalVector.Sparse prime(
-            @NonNull SphericalVector.Sparse input,
+    public SphericalVector.Annotated prime(
+            @NonNull SphericalVector.Annotated input,
             @Nullable SphericalVector prediction,
-            @Nullable IPoseSource poseSource) {
+            @Nullable IPoseSource poseSource,
+            long timeMs) {
         if (input.hasElevation && input.hasAzimuth) {
             // Reinterpret the SphericalVector as an AoAVector, then convert it to a
             // SphericalVector.
-            return AoaVector.fromRadians(
-                            input.vector.azimuth,
-                            input.vector.elevation,
-                            input.vector.distance)
-                    .toSphericalVector()
-                    .toSparse(true, true, input.hasDistance);
+            return new Annotated(
+                    AoaVector.fromRadians(
+                            input.azimuth,
+                            input.elevation,
+                            input.distance).toSphericalVector(),
+                    true,
+                    true,
+                    input.hasDistance)
+                    .copyFomFrom(input);
         }
+        // Elevation is the same in both units. If only elevation is known, no conversion needed.
         return input;
     }
 }

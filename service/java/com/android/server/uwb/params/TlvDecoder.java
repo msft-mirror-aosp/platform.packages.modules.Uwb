@@ -16,24 +16,36 @@
 
 package com.android.server.uwb.params;
 
+import com.android.server.uwb.UwbInjector;
+
+import com.google.uwb.support.aliro.AliroParams;
 import com.google.uwb.support.base.Params;
+import com.google.uwb.support.base.ProtocolVersion;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.generic.GenericParams;
+import com.google.uwb.support.radar.RadarParams;
 
 public abstract class TlvDecoder {
-    public static TlvDecoder getDecoder(String protocolName) {
+    public static TlvDecoder getDecoder(String protocolName, UwbInjector uwbInjector) {
         if (protocolName.equals(FiraParams.PROTOCOL_NAME)) {
-            return new FiraDecoder();
+            return new FiraDecoder(uwbInjector);
         }
         if (protocolName.equals(CccParams.PROTOCOL_NAME)) {
-            return new CccDecoder();
+            return new CccDecoder(uwbInjector);
+        }
+        if (protocolName.equals(AliroParams.PROTOCOL_NAME)) {
+            return new AliroDecoder(uwbInjector);
+        }
+        if (protocolName.equals(RadarParams.PROTOCOL_NAME)) {
+            return new RadarDecoder();
         }
         if (protocolName.equals(GenericParams.PROTOCOL_NAME)) {
-            return new GenericDecoder();
+            return new GenericDecoder(uwbInjector);
         }
         return null;
     }
 
-    public abstract <T extends Params> T getParams(TlvDecoderBuffer tlvs, Class<T> paramType);
+    public abstract <T extends Params> T getParams(TlvDecoderBuffer tlvs, Class<T> paramType,
+            ProtocolVersion protocolVersion);
 }

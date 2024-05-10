@@ -31,6 +31,29 @@
             <item name="enable_primer_est_elevation" type="bool" />
             <item name="enable_primer_aoa" type="bool" />
             <item name="primer_fov_degrees" type="integer" />
+            <item name="enable_azimuth_mirroring" type="bool" />
+            <item name="predict_rear_azimuths" type="bool" />
+            <item name="mirror_detection_window" type="integer" />
+            <item name="front_mirror_dps" type="integer" />
+            <item name="back_mirror_dps" type="integer" />
+            <item name="prediction_timeout_seconds" type="integer" />
+            <item name="advertise_aoa_criteria_angle" type="integer" />
+            <item name="advertise_time_threshold_millis" type="integer" />
+            <item name="advertise_array_size_to_check" type="integer" />
+            <item name="advertise_array_start_index_to_cal_variance" type="integer" />
+            <item name="advertise_array_end_index_to_cal_variance" type="integer" />
+            <item name="advertise_trusted_variance_value" type="integer" />
+            <item name="rx_data_max_packets_to_store" type="integer" />
+            <item name="background_ranging_enabled" type="bool" />
+            <item name="ranging_error_streak_timer_enabled" type="bool" />
+            <item name="ccc_ranging_stopped_params_send_enabled" type="bool" />
+            <item name="location_use_for_country_code_enabled" type="bool" />
+            <item name="uwb_disabled_until_first_toggle" type="bool" />
+            <item name="ccc_supported_sync_codes_little_endian" type="bool" />
+            <item name="ccc_supported_range_data_ntf_config" type="bool" />
+            <item name="persistent_cache_use_for_country_code_enabled" type="bool" />
+            <item name="hw_idle_turn_off_enabled" type="bool" />
+            <item name="is_multicast_list_update_ntf_v2_supported" type="bool" />
           <!-- Params from config.xml that can be overlaid -->
 
           <!-- Params from strings.xml that can be overlaid -->

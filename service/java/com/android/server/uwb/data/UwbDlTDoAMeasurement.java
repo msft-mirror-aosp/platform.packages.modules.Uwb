@@ -59,11 +59,11 @@ public class UwbDlTDoAMeasurement {
         mAoaAzimuthFom = aoaAzimuthFom;
         mAoaElevation = toFloatFromQ9_7_Format(aoaElevation);
         mAoaElevationFom = aoaElevationFom;
-        mRssi = rssi;
+        mRssi = -(rssi / 2);
         mTxTimestamp = txTimestamp;
         mRxTimestamp = rxTimestamp;
-        mAnchorCfo = toFloatFromQ5_11_Format(anchorCfo);
-        mCfo = toFloatFromQ5_11_Format(cfo);
+        mAnchorCfo = toFloatFromQ6_10_Format(anchorCfo);
+        mCfo = toFloatFromQ6_10_Format(cfo);
         mInitiatorReplyTime = initiatorReplyTime;
         mResponderReplyTime = responderReplyTime;
         mInitiatorResponderTof = initiatorResponderTof;
@@ -160,9 +160,9 @@ public class UwbDlTDoAMeasurement {
                 9, 7);
     }
 
-    private float toFloatFromQ5_11_Format(int value) {
+    private float toFloatFromQ6_10_Format(int value) {
         return UwbUtil.convertQFormatToFloat(UwbUtil.twos_compliment(value, 16),
-                5, 11);
+                6, 10);
     }
 
     @Override

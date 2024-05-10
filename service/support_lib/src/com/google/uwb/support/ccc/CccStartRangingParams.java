@@ -40,13 +40,28 @@ public class CccStartRangingParams extends CccParams {
 
     private static final String KEY_SESSION_ID = "session_id";
     private static final String KEY_RAN_MULTIPLIER = "ran_multiplier";
+    private static final String KEY_INITIATION_TIME_MS = "initiation_time_ms";
+    private static final String KEY_ABSOLUTE_INITIATION_TIME_US = "absolute_initiation_time_us";
+    private static final String KEY_STS_INDEX = "sts_index";
 
     private final int mSessionId;
     private final int mRanMultiplier;
 
+    // FiRa 1.0: Relative time (in milli-seconds).
+    // FiRa 2.0: Relative time (in milli-seconds).
+    private final long mInitiationTimeMs;
+
+    // FiRa 2.0: Absolute time in UWB time domain, as specified in CR-272 (in micro-seconds).
+    private final long mAbsoluteInitiationTimeUs;
+    private final int mStsIndex;
+
+
     private CccStartRangingParams(Builder builder) {
         this.mSessionId = builder.mSessionId.get();
         this.mRanMultiplier = builder.mRanMultiplier.get();
+        this.mInitiationTimeMs = builder.mInitiationTimeMs;
+        this.mAbsoluteInitiationTimeUs = builder.mAbsoluteInitiationTimeUs;
+        this.mStsIndex = builder.mStsIndex;
     }
 
     @Override
@@ -59,6 +74,9 @@ public class CccStartRangingParams extends CccParams {
         PersistableBundle bundle = super.toBundle();
         bundle.putInt(KEY_SESSION_ID, mSessionId);
         bundle.putInt(KEY_RAN_MULTIPLIER, mRanMultiplier);
+        bundle.putLong(KEY_INITIATION_TIME_MS, mInitiationTimeMs);
+        bundle.putLong(KEY_ABSOLUTE_INITIATION_TIME_US, mAbsoluteInitiationTimeUs);
+        bundle.putInt(KEY_STS_INDEX, mStsIndex);
         return bundle;
     }
 
@@ -84,10 +102,25 @@ public class CccStartRangingParams extends CccParams {
         return mRanMultiplier;
     }
 
+    public long getInitiationTimeMs() {
+        return mInitiationTimeMs;
+    }
+
+    public long getAbsoluteInitiationTimeUs() {
+        return mAbsoluteInitiationTimeUs;
+    }
+
+    public int getStsIndex() {
+        return mStsIndex;
+    }
+
     private static CccStartRangingParams parseVersion1(PersistableBundle bundle) {
         return new Builder()
             .setSessionId(bundle.getInt(KEY_SESSION_ID))
             .setRanMultiplier(bundle.getInt(KEY_RAN_MULTIPLIER))
+            .setInitiationTimeMs(bundle.getLong(KEY_INITIATION_TIME_MS))
+            .setAbsoluteInitiationTimeUs(bundle.getLong(KEY_ABSOLUTE_INITIATION_TIME_US))
+            .setStsIndex(bundle.getInt(KEY_STS_INDEX, 0))
             .build();
     }
 
@@ -95,6 +128,9 @@ public class CccStartRangingParams extends CccParams {
     public static class Builder {
         private RequiredParam<Integer> mSessionId = new RequiredParam<>();
         private RequiredParam<Integer> mRanMultiplier = new RequiredParam<>();
+        private long mInitiationTimeMs = 0;
+        private long mAbsoluteInitiationTimeUs = 0;
+        private int mStsIndex = 0;
 
         public Builder setSessionId(int sessionId) {
             mSessionId.set(sessionId);
@@ -103,6 +139,28 @@ public class CccStartRangingParams extends CccParams {
 
         public Builder setRanMultiplier(int ranMultiplier) {
             mRanMultiplier.set(ranMultiplier);
+            return this;
+        }
+
+        /** Set initiation time in ms */
+        public Builder setInitiationTimeMs(long initiationTimeMs) {
+            mInitiationTimeMs = initiationTimeMs;
+            return this;
+        }
+
+        public Builder setStsIndex(int stsIndex) {
+            mStsIndex = stsIndex;
+            return this;
+        }
+
+        /**
+         * Sets the UWB absolute initiation time.
+         *
+         * @param absoluteInitiationTimeUs Absolute UWB initiation time (in micro-seconds). This is
+         *        applicable only for FiRa 2.0+ devices, as specified in CR-272.
+         */
+        public Builder setAbsoluteInitiationTimeUs(long absoluteInitiationTimeUs) {
+            mAbsoluteInitiationTimeUs = absoluteInitiationTimeUs;
             return this;
         }
 

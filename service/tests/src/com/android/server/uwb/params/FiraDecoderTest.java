@@ -30,6 +30,8 @@ import static com.google.uwb.support.fira.FiraParams.DeviceRoleCapabilityFlag.HA
 import static com.google.uwb.support.fira.FiraParams.KEY_LENGTH_256_BITS_SUPPORTED;
 import static com.google.uwb.support.fira.FiraParams.MultiNodeCapabilityFlag.HAS_ONE_TO_MANY_SUPPORT;
 import static com.google.uwb.support.fira.FiraParams.MultiNodeCapabilityFlag.HAS_UNICAST_SUPPORT;
+import static com.google.uwb.support.fira.FiraParams.PROTOCOL_VERSION_1_1;
+import static com.google.uwb.support.fira.FiraParams.PROTOCOL_VERSION_2_0;
 import static com.google.uwb.support.fira.FiraParams.PrfCapabilityFlag.HAS_BPRF_SUPPORT;
 import static com.google.uwb.support.fira.FiraParams.PrfCapabilityFlag.HAS_HPRF_SUPPORT;
 import static com.google.uwb.support.fira.FiraParams.PsduDataRateCapabilityFlag.HAS_27M2_SUPPORT;
@@ -49,12 +51,18 @@ import static com.google.uwb.support.fira.FiraParams.RframeCapabilityFlag.HAS_SP
 import static com.google.uwb.support.fira.FiraParams.StsCapabilityFlag.HAS_DYNAMIC_STS_SUPPORT;
 import static com.google.uwb.support.fira.FiraParams.StsCapabilityFlag.HAS_STATIC_STS_SUPPORT;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.mockito.Mockito.when;
+
 import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.util.UwbUtil;
+import com.android.uwb.flags.FeatureFlags;
 
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraParams.BprfParameterSetCapabilityFlag;
@@ -63,11 +71,11 @@ import com.google.uwb.support.fira.FiraParams.RangeDataNtfConfigCapabilityFlag;
 import com.google.uwb.support.fira.FiraProtocolVersion;
 import com.google.uwb.support.fira.FiraSpecificationParams;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.util.EnumSet;
 import java.util.List;
@@ -133,6 +141,9 @@ public class FiraDecoderTest {
                     + "140101" // Extended mac
                     + "150100" // Suspend ranging
                     + "160101" // Session key length
+                    + "180110" // Dt tag max active ranging rounds
+                    + "190101" //Dt tag block skipping
+                    + "1A0100" //Psdu length support
                     + "E30101"
                     + "E40401010101"
                     + "E50403000000"
@@ -142,9 +153,22 @@ public class FiraDecoderTest {
                     + "E90401000000";
     private static final byte[] TEST_FIRA_SPECIFICATION_TLV_DATA_VER_2 =
             UwbUtil.getByteArray(TEST_FIRA_SPECIFICATION_TLV_STRING_VER_2);
-    public static final int TEST_FIRA_SPECIFICATION_TLV_NUM_PARAMS_VER_2 = 30;
+    public static final int TEST_FIRA_SPECIFICATION_TLV_NUM_PARAMS_VER_2 = 33;
 
-    private final FiraDecoder mFiraDecoder = new FiraDecoder();
+    private FiraDecoder mFiraDecoder;
+
+    @Mock
+    private UwbInjector mUwbInjector;
+    @Mock private FeatureFlags mFeatureFlags;
+
+    @Before
+    public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
+
+        when(mUwbInjector.getFeatureFlags()).thenReturn(mFeatureFlags);
+
+        mFiraDecoder = new FiraDecoder(mUwbInjector);
+    }
 
     public static void verifyFiraSpecificationVersion2(
             FiraSpecificationParams firaSpecificationParams) {
@@ -212,6 +236,7 @@ public class FiraDecoderTest {
         assertEquals(firaSpecificationParams.getDeviceType(), RANGING_DEVICE_TYPE_CONTROLLER);
         assertFalse(firaSpecificationParams.hasSuspendRangingSupport());
         assertEquals(firaSpecificationParams.getSessionKeyLength(), KEY_LENGTH_256_BITS_SUPPORTED);
+        assertEquals(firaSpecificationParams.getDtTagMaxActiveRr(), 16);
 
     }
 
@@ -224,7 +249,7 @@ public class FiraDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         FiraSpecificationParams firaSpecificationParams = mFiraDecoder.getParams(
-                tlvDecoderBuffer, FiraSpecificationParams.class);
+                tlvDecoderBuffer, FiraSpecificationParams.class, PROTOCOL_VERSION_2_0);
         verifyFiraSpecificationVersion2(firaSpecificationParams);
     }
 
@@ -237,8 +262,8 @@ public class FiraDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         FiraSpecificationParams firaSpecificationParams = TlvDecoder
-                .getDecoder(FiraParams.PROTOCOL_NAME)
-                .getParams(tlvDecoderBuffer, FiraSpecificationParams.class);
+                .getDecoder(FiraParams.PROTOCOL_NAME, mUwbInjector)
+                .getParams(tlvDecoderBuffer, FiraSpecificationParams.class, PROTOCOL_VERSION_2_0);
         verifyFiraSpecificationVersion2(firaSpecificationParams);
     }
 
@@ -314,7 +339,7 @@ public class FiraDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         FiraSpecificationParams firaSpecificationParams = mFiraDecoder.getParams(
-                tlvDecoderBuffer, FiraSpecificationParams.class);
+                tlvDecoderBuffer, FiraSpecificationParams.class, PROTOCOL_VERSION_1_1);
         verifyFiraSpecificationVersion1(firaSpecificationParams);
     }
 
@@ -327,8 +352,8 @@ public class FiraDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         FiraSpecificationParams firaSpecificationParams = TlvDecoder
-                .getDecoder(FiraParams.PROTOCOL_NAME)
-                .getParams(tlvDecoderBuffer, FiraSpecificationParams.class);
+                .getDecoder(FiraParams.PROTOCOL_NAME, mUwbInjector)
+                .getParams(tlvDecoderBuffer, FiraSpecificationParams.class, PROTOCOL_VERSION_1_1);
         verifyFiraSpecificationVersion1(firaSpecificationParams);
     }
 }

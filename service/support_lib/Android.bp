@@ -14,23 +14,30 @@
 // limitations under the License.
 //
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
 java_defaults {
     name: "support-lib-uwb-common-defaults",
     sdk_version: "system_31",
-    static_libs: [
+    min_sdk_version: "30",
+    libs: [
         "androidx.annotation_annotation",
-        "guava"
+    ],
+    static_libs: [
+        "guava",
     ],
     apex_available: [
         "com.android.uwb",
+        "com.android.tethering",
+        "//apex_available:platform",
     ],
-    visibility : [
+    visibility: [
         "//external/sl4a/Common",
         "//packages/modules/Uwb:__subpackages__",
-    ]
+        "//packages/modules/Connectivity/remoteauth:__subpackages__",
+    ],
 }
 
 java_library {
@@ -38,6 +45,17 @@ java_library {
     defaults: ["support-lib-uwb-common-defaults"],
     srcs: [
         "src/com/google/uwb/support/base/**/*.java",
+    ],
+}
+
+java_library {
+    name: "com.uwb.support.aliro",
+    defaults: ["support-lib-uwb-common-defaults"],
+    srcs: [
+        "src/com/google/uwb/support/aliro/**/*.java",
+    ],
+    static_libs: [
+        "com.uwb.support.base",
     ],
 }
 
@@ -70,9 +88,11 @@ java_library {
         "src/com/google/uwb/support/generic/**/*.java",
     ],
     static_libs: [
+        "com.uwb.support.aliro",
         "com.uwb.support.base",
         "com.uwb.support.ccc",
         "com.uwb.support.fira",
+        "com.uwb.support.radar",
     ],
 }
 
@@ -112,6 +132,18 @@ java_library {
     defaults: ["support-lib-uwb-common-defaults"],
     srcs: [
         "src/com/google/uwb/support/dltdoa/**/*.java",
+    ],
+    static_libs: [
+        "com.uwb.support.base",
+        "com.uwb.support.fira",
+    ],
+}
+
+java_library {
+    name: "com.uwb.support.radar",
+    defaults: ["support-lib-uwb-common-defaults"],
+    srcs: [
+        "src/com/google/uwb/support/radar/**/*.java",
     ],
     static_libs: [
         "com.uwb.support.base",

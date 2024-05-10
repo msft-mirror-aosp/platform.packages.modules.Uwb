@@ -17,23 +17,32 @@ package com.android.server.uwb.correction.filtering;
 
 import androidx.annotation.NonNull;
 
-import java.time.Instant;
-
 /**
  * Represents a data sample and when it was acquired.
  */
 public class Sample implements Comparable<Sample> {
+    /** The value of the sample. */
     public float value;
-    public Instant instant;
+
+    /** The time of the sample. */
+    public long timeMs;
+
+    /**
+     * A value between 0 and 1 indicating how likely the measurement is to be based on good
+     * information.
+     */
+    public double fom;
 
     /**
      * Creates a new instance of the Sample class.
      * @param value The value of the sample.
-     * @param instant The time at which the value was relevant.
+     * @param timeMs The time at which the value was relevant, in ms since boot.
+     * @param fom The confidence (figure of merit) of the reading.
      */
-    Sample(float value, Instant instant) {
+    Sample(float value, long timeMs, double fom) {
         this.value = value;
-        this.instant = instant;
+        this.timeMs = timeMs;
+        this.fom = fom;
     }
 
     /**

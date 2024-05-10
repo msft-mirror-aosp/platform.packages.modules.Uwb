@@ -16,6 +16,9 @@
 
 package androidx.core.uwb.backend.impl.internal;
 
+import static android.uwb.UwbManager.AdapterStateCallback.STATE_CHANGED_REASON_SYSTEM_POLICY;
+import static android.uwb.UwbManager.AdapterStateCallback.STATE_CHANGED_REASON_SYSTEM_REGULATION;
+
 import android.os.Build;
 import android.os.Build.VERSION_CODES;
 import android.uwb.AngleMeasurement;
@@ -33,7 +36,8 @@ import java.util.List;
 @RequiresApi(api = VERSION_CODES.S)
 final class Conversions {
 
-    private static RangingMeasurement createMeasurement(double value, double confidence) {
+    private static RangingMeasurement createMeasurement(double value, double confidence,
+            boolean valid) {
         @RangingMeasurement.Confidence int confidenceLevel;
         if (confidence > 0.9) {
             confidenceLevel = RangingMeasurement.CONFIDENCE_HIGH;
@@ -42,38 +46,82 @@ final class Conversions {
         } else {
             confidenceLevel = RangingMeasurement.CONFIDENCE_LOW;
         }
-        return new RangingMeasurement(confidenceLevel, (float) value);
+        return new RangingMeasurement(confidenceLevel, (float) value, valid);
+    }
+
+    public static boolean isDlTdoaMeasurement(android.uwb.RangingMeasurement measurement) {
+        if (Build.VERSION.SDK_INT <= VERSION_CODES.TIRAMISU) {
+            return false;
+        }
+        try {
+            return com.google.uwb.support.dltdoa.DlTDoAMeasurement.isDlTDoAMeasurement(
+                    measurement.getRangingMeasurementMetadata());
+        } catch (NoSuchMethodError e) {
+            return false;
+        }
     }
 
     /** Convert system API's {@link android.uwb.RangingMeasurement} to {@link RangingPosition} */
     @Nullable
     static RangingPosition convertToPosition(android.uwb.RangingMeasurement measurement) {
-        DistanceMeasurement distanceMeasurement = measurement.getDistanceMeasurement();
-        if (distanceMeasurement == null) {
-            return null;
+        RangingMeasurement distance;
+        DlTdoaMeasurement dlTdoaMeasurement = null;
+        if (isDlTdoaMeasurement(measurement)) {
+            com.google.uwb.support.dltdoa.DlTDoAMeasurement
+                    dlTDoAMeasurement = com.google.uwb.support.dltdoa.DlTDoAMeasurement.fromBundle(
+                    measurement.getRangingMeasurementMetadata());
+            // Return null if Dl-TDoA measurement is not valid.
+            if (dlTDoAMeasurement.getMessageControl() == 0) {
+                return null;
+            }
+            dlTdoaMeasurement = new DlTdoaMeasurement(
+                    dlTDoAMeasurement.getMessageType(),
+                    dlTDoAMeasurement.getMessageControl(),
+                    dlTDoAMeasurement.getBlockIndex(),
+                    dlTDoAMeasurement.getRoundIndex(),
+                    dlTDoAMeasurement.getNLoS(),
+                    dlTDoAMeasurement.getTxTimestamp(),
+                    dlTDoAMeasurement.getRxTimestamp(),
+                    dlTDoAMeasurement.getAnchorCfo(),
+                    dlTDoAMeasurement.getCfo(),
+                    dlTDoAMeasurement.getInitiatorReplyTime(),
+                    dlTDoAMeasurement.getResponderReplyTime(),
+                    dlTDoAMeasurement.getInitiatorResponderTof(),
+                    dlTDoAMeasurement.getAnchorLocation(),
+                    dlTDoAMeasurement.getActiveRangingRounds()
+            );
+            // No distance measurement for DL-TDoa, make it invalid.
+            distance = createMeasurement(0.0, 0.0, false);
+        } else {
+            DistanceMeasurement distanceMeasurement = measurement.getDistanceMeasurement();
+            if (distanceMeasurement == null) {
+                return null;
+            }
+            distance = createMeasurement(
+                    distanceMeasurement.getMeters(),
+                    distanceMeasurement.getConfidenceLevel(),
+                    true);
         }
-        RangingMeasurement distance =
-                createMeasurement(
-                        distanceMeasurement.getMeters(), distanceMeasurement.getConfidenceLevel());
-
         AngleOfArrivalMeasurement aoaMeasurement = measurement.getAngleOfArrivalMeasurement();
 
         RangingMeasurement azimuth = null;
         RangingMeasurement altitude = null;
         if (aoaMeasurement != null) {
             AngleMeasurement azimuthMeasurement = aoaMeasurement.getAzimuth();
-            if (azimuthMeasurement != null) {
+            if (azimuthMeasurement != null && !isMeasurementAllZero(azimuthMeasurement)) {
                 azimuth =
                         createMeasurement(
                                 Math.toDegrees(azimuthMeasurement.getRadians()),
-                                azimuthMeasurement.getConfidenceLevel());
+                                azimuthMeasurement.getConfidenceLevel(),
+                                true);
             }
             AngleMeasurement altitudeMeasurement = aoaMeasurement.getAltitude();
-            if (altitudeMeasurement != null) {
+            if (altitudeMeasurement != null && !isMeasurementAllZero(altitudeMeasurement)) {
                 altitude =
                         createMeasurement(
                                 Math.toDegrees(altitudeMeasurement.getRadians()),
-                                altitudeMeasurement.getConfidenceLevel());
+                                altitudeMeasurement.getConfidenceLevel(),
+                                true);
             }
         }
         if (Build.VERSION.SDK_INT >= VERSION_CODES.TIRAMISU) {
@@ -81,11 +129,18 @@ final class Conversions {
                     distance,
                     azimuth,
                     altitude,
+                    dlTdoaMeasurement,
                     measurement.getElapsedRealtimeNanos(),
                     measurement.getRssiDbm());
         }
         return new RangingPosition(
                 distance, azimuth, altitude, measurement.getElapsedRealtimeNanos());
+    }
+
+    private static boolean isMeasurementAllZero(AngleMeasurement measurement) {
+        return measurement.getRadians() == 0
+                && measurement.getErrorRadians() == 0
+                && measurement.getConfidenceLevel() == 0;
     }
 
     @RangingSessionCallback.RangingSuspendedReason
@@ -110,19 +165,43 @@ final class Conversions {
             return RangingSessionCallback.REASON_MAX_RANGING_ROUND_RETRY_REACHED;
         }
 
+        if (reason == RangingSession.Callback.REASON_SYSTEM_POLICY) {
+            return RangingSessionCallback.REASON_SYSTEM_POLICY;
+        }
+
         return RangingSessionCallback.REASON_UNKNOWN;
     }
 
-    static android.uwb.UwbAddress convertUwbAddress(UwbAddress address) {
-        return android.uwb.UwbAddress.fromBytes(address.toBytes());
+    @UwbAvailabilityCallback.UwbStateChangeReason
+    static int convertAdapterStateReason(int reason) {
+        return switch (reason) {
+            case STATE_CHANGED_REASON_SYSTEM_POLICY -> UwbAvailabilityCallback.REASON_SYSTEM_POLICY;
+            case STATE_CHANGED_REASON_SYSTEM_REGULATION ->
+                    UwbAvailabilityCallback.REASON_COUNTRY_CODE_ERROR;
+            default -> UwbAvailabilityCallback.REASON_UNKNOWN;
+        };
+    }
+    static android.uwb.UwbAddress convertUwbAddress(UwbAddress address, boolean reverseMacAddress) {
+        return reverseMacAddress
+                ? android.uwb.UwbAddress.fromBytes(getReverseBytes(address.toBytes()))
+                : android.uwb.UwbAddress.fromBytes(address.toBytes());
     }
 
-    static List<android.uwb.UwbAddress> convertUwbAddressList(UwbAddress[] addressList) {
+    static List<android.uwb.UwbAddress> convertUwbAddressList(
+            UwbAddress[] addressList, boolean reverseMacAddress) {
         List<android.uwb.UwbAddress> list = new ArrayList<>();
         for (UwbAddress address : addressList) {
-            list.add(convertUwbAddress(address));
+            list.add(convertUwbAddress(address, reverseMacAddress));
         }
         return list;
+    }
+
+    static byte[] getReverseBytes(byte[] data) {
+        byte[] buffer = new byte[data.length];
+        for (int i = 0; i < data.length; i++) {
+            buffer[i] = data[data.length - 1 - i];
+        }
+        return buffer;
     }
 
     private Conversions() {}

@@ -16,20 +16,29 @@
 
 package androidx.core.uwb.backend.impl.internal;
 
+import androidx.annotation.NonNull;
+
 import com.google.common.collect.ImmutableList;
 
 import java.util.List;
 
 /** Ranging parameters that exposed through public API. */
 public class RangingParameters {
-    @Utils.UwbConfigId private final int mUwbConfigId;
+    @Utils.UwbConfigId
+    private final int mUwbConfigId;
     private final int mSessionId;
     private final int mSubSessionId;
     private final byte[] mSessionKeyInfo;
     private final byte[] mSubSessionKeyInfo;
     private final UwbComplexChannel mComplexChannel;
     private final ImmutableList<UwbAddress> mPeerAddresses;
-    @Utils.RangingUpdateRate private final int mRangingUpdateRate;
+    @Utils.RangingUpdateRate
+    private final int mRangingUpdateRate;
+    @NonNull
+    private final UwbRangeDataNtfConfig mUwbRangeDataNtfConfig;
+    @Utils.SlotDuration
+    private final int mSlotDuration;
+    private final boolean mIsAoaDisabled;
 
     public RangingParameters(
             @Utils.UwbConfigId int uwbConfigId,
@@ -39,7 +48,10 @@ public class RangingParameters {
             byte[] subSessionKeyInfo,
             UwbComplexChannel complexChannel,
             List<UwbAddress> peerAddresses,
-            @Utils.RangingUpdateRate int rangingUpdateRate) {
+            @Utils.RangingUpdateRate int rangingUpdateRate,
+            @NonNull UwbRangeDataNtfConfig uwbRangeDataNtfConfig,
+            @Utils.SlotDuration int slotDuration,
+            boolean isAoaDisabled) {
         mUwbConfigId = uwbConfigId;
         mSessionId = sessionId;
         mSubSessionId = subSessionId;
@@ -48,6 +60,9 @@ public class RangingParameters {
         mComplexChannel = complexChannel;
         mPeerAddresses = ImmutableList.copyOf(peerAddresses);
         mRangingUpdateRate = rangingUpdateRate;
+        mUwbRangeDataNtfConfig = uwbRangeDataNtfConfig;
+        mSlotDuration = slotDuration;
+        mIsAoaDisabled = isAoaDisabled;
     }
 
     public int getSessionId() {
@@ -81,5 +96,18 @@ public class RangingParameters {
 
     public int getRangingUpdateRate() {
         return mRangingUpdateRate;
+    }
+
+    public UwbRangeDataNtfConfig getUwbRangeDataNtfConfig() {
+        return mUwbRangeDataNtfConfig;
+    }
+
+    @Utils.SlotDuration
+    public int getSlotDuration() {
+        return mSlotDuration;
+    }
+
+    public boolean isAoaDisabled() {
+        return mIsAoaDisabled;
     }
 }

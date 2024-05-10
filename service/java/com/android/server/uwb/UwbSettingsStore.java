@@ -87,6 +87,11 @@ public class UwbSettingsStore {
     public static final Key<String> SETTINGS_LOG_MODE =
             new Key<>("settings_log_mode", UciLogModeStore.Mode.DISABLED.getMode());
 
+    public static final Key<Boolean> SETTINGS_FIRST_TOGGLE_DONE =
+            new Key<>("settings_first_toggle_done", false);
+
+    public static final Key<String> SETTINGS_CACHED_COUNTRY_CODE =
+            new Key<>("settings_cached_country_code", "");
     /******** Uwb shared pref keys ***************/
 
     private final Context mContext;
@@ -138,7 +143,7 @@ public class UwbSettingsStore {
         if (isStoreEmpty) {
             try {
                 boolean toggleEnabled =
-                        mUwbInjector.getSettingsInt(SETTINGS_TOGGLE_STATE_KEY_FOR_MIGRATION)
+                        mUwbInjector.getGlobalSettingsInt(SETTINGS_TOGGLE_STATE_KEY_FOR_MIGRATION)
                                 == STATE_ENABLED_ACTIVE;
                 Log.i(TAG, "Migrate settings toggle from older release: " + toggleEnabled);
                 put(SETTINGS_TOGGLE_STATE, toggleEnabled);

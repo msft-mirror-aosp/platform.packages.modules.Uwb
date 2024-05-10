@@ -16,13 +16,14 @@
 
 package com.android.server.uwb;
 
+import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.uwb.AngleMeasurement;
 import android.uwb.AngleOfArrivalMeasurement;
 import android.uwb.DistanceMeasurement;
 import android.uwb.RangingMeasurement;
 import android.uwb.UwbAddress;
 
-import com.android.server.uwb.UwbSessionManager.UwbSession;
 import com.android.server.uwb.correction.UwbFilterEngine;
 import com.android.server.uwb.correction.math.SphericalVector;
 
@@ -30,25 +31,34 @@ import com.android.server.uwb.correction.math.SphericalVector;
  * Represents a remote controlee that is involved in a session.
  */
 public class UwbControlee implements AutoCloseable {
+    private static final long SEC_TO_MILLI = 1000;
     private final UwbAddress mUwbAddress;
-    private final UwbSession mSession;
+    private final UwbInjector mUwbInjector;
     private final UwbFilterEngine mEngine;
-    /** Confidence to use when the engine produces a result that wasn't in the original reading. */
-    private static final double DEFAULT_CONFIDENCE = 0.0;
-    /** Error value to use when the engine produces a result that wasn't in the original reading. */
-    private static final double DEFAULT_ERROR_RADIANS = 0.0;
     /** Error value to use when the engine produces a result that wasn't in the original reading. */
     private static final double DEFAULT_ERROR_DISTANCE = 0.0;
+    private long mLastMeasurementInstant;
+    private long mPredictionTimeoutMilli = 3000;
 
     /**
      * Creates a new UwbControlee.
      *
      * @param uwbAddress The address of the controlee.
      */
-    public UwbControlee(UwbAddress uwbAddress, UwbSessionManager.UwbSession session) {
+    public UwbControlee(
+            @NonNull UwbAddress uwbAddress,
+            @Nullable UwbFilterEngine engine,
+            @Nullable UwbInjector uwbInjector) {
         mUwbAddress = uwbAddress;
-        mSession = session;
-        mEngine = session.createFilterEngine();
+        mEngine = engine;
+        mUwbInjector = uwbInjector;
+        if (mUwbInjector != null
+                && mUwbInjector.getDeviceConfigFacade() != null) {
+            // Injector or deviceConfigFacade might be null during tests and this is fine.
+            mPredictionTimeoutMilli = mUwbInjector
+                    .getDeviceConfigFacade()
+                    .getPredictionTimeoutSeconds() * SEC_TO_MILLI;
+        }
     }
 
     /**
@@ -60,19 +70,12 @@ public class UwbControlee implements AutoCloseable {
         return mUwbAddress;
     }
 
-    /**
-     * Gets the session that created this Controlee.
-     *
-     * @return A UwbSession.
-     */
-    public UwbSession getSession() {
-        return mSession;
-    }
-
     /** Shuts down any controlee-specific work. */
     @Override
-    public void close() throws Exception {
-        mEngine.close();
+    public void close() {
+        if (mEngine != null) {
+            mEngine.close();
+        }
     }
 
     /**
@@ -87,6 +90,15 @@ public class UwbControlee implements AutoCloseable {
         }
         RangingMeasurement rawMeasurement = rmBuilder.build();
 
+        if (rawMeasurement.getStatus() != RangingMeasurement.RANGING_STATUS_SUCCESS) {
+            if (getTime() - mPredictionTimeoutMilli > mLastMeasurementInstant) {
+                // It's been some time since we last got a good report. Stop reporting values.
+                return;
+            }
+        } else {
+            mLastMeasurementInstant = getTime();
+        }
+
         // Gather az/el/dist
         AngleOfArrivalMeasurement aoaMeasurement = rawMeasurement.getAngleOfArrivalMeasurement();
         DistanceMeasurement distMeasurement = rawMeasurement.getDistanceMeasurement();
@@ -96,27 +108,40 @@ public class UwbControlee implements AutoCloseable {
         float azimuth = 0;
         float elevation = 0;
         float distance = 0;
+        double azimuthFom = 1;
+        double elevationFom = 1;
+        double distanceFom = 1;
+        long nowMs = mUwbInjector.getElapsedSinceBootMillis();
         if (aoaMeasurement != null) {
-            if (aoaMeasurement.getAzimuth() != null) {
+            if (aoaMeasurement.getAzimuth() != null
+                    && aoaMeasurement.getAzimuth().getConfidenceLevel() > 0) {
                 hasAzimuth = true;
                 azimuth = (float) aoaMeasurement.getAzimuth().getRadians();
+                azimuthFom = aoaMeasurement.getAzimuth().getConfidenceLevel();
             }
-            if (aoaMeasurement.getAltitude() != null) {
+            if (aoaMeasurement.getAltitude() != null
+                    && aoaMeasurement.getAltitude().getConfidenceLevel() > 0) {
                 hasElevation = true;
                 elevation = (float) aoaMeasurement.getAltitude().getRadians();
+                elevationFom = aoaMeasurement.getAltitude().getConfidenceLevel();
             }
         }
         if (distMeasurement != null) {
             hasDistance = true;
             distance = (float) distMeasurement.getMeters();
+            distanceFom = distMeasurement.getConfidenceLevel();
         }
-        SphericalVector.Sparse sv = SphericalVector.fromRadians(azimuth, elevation, distance)
-                .toSparse(hasAzimuth, hasElevation, hasDistance);
+        SphericalVector.Annotated sv = SphericalVector.fromRadians(azimuth, elevation, distance)
+                .toAnnotated(hasAzimuth, hasElevation, hasDistance);
+
+        sv.azimuthFom = azimuthFom;
+        sv.elevationFom = elevationFom;
+        sv.distanceFom = distanceFom;
 
         // Give to the engine.
-        mEngine.add(sv);
+        mEngine.add(sv, nowMs);
 
-        SphericalVector engineResult = mEngine.compute();
+        SphericalVector.Annotated engineResult = mEngine.compute(nowMs);
         if (engineResult == null) {
             // Bail early - the engine didn't compute a result, so just leave the builder alone.
             return;
@@ -124,6 +149,13 @@ public class UwbControlee implements AutoCloseable {
 
         // Now re-generate the az/el/dist readings based on engine result.
         updateBuilder(rmBuilder, rawMeasurement, engineResult);
+    }
+
+    private long getTime() {
+        if (mUwbInjector == null) {
+            return 0; // Can happen during testing; no time tracking will be supported.
+        }
+        return mUwbInjector.getElapsedSinceBootMillis();
     }
 
     /**
@@ -134,61 +166,68 @@ public class UwbControlee implements AutoCloseable {
      */
     private static void updateBuilder(RangingMeasurement.Builder rmBuilder,
             RangingMeasurement rawMeasurement,
-            SphericalVector replacement) {
+            SphericalVector.Annotated replacement) {
         // This is fairly verbose because of how nested data is, the risk of nulls, and the
         // fact that that azimuth is required up-front, even in the builder. Refactoring so the
         // RangingMeasurement can be cloned and changed would be nice, but it would change
         // (or at least add to) an external API.
+
+        // Switch to success - error statuses cannot have any values.
+        rmBuilder.setStatus(RangingMeasurement.RANGING_STATUS_SUCCESS);
 
         AngleOfArrivalMeasurement aoaMeasurement = rawMeasurement.getAngleOfArrivalMeasurement();
         DistanceMeasurement distMeasurement = rawMeasurement.getDistanceMeasurement();
 
         AngleMeasurement azimuthMeasurement = null;
         AngleMeasurement elevationMeasurement = null;
+
+        // Any AoA in the original measurement?
         if (aoaMeasurement != null) {
+            // Any azimuth in the original measurement?
             if (aoaMeasurement.getAzimuth() != null) {
+                // Yes - create a new azimuth based on the filter's output.
                 azimuthMeasurement = new AngleMeasurement(
                         replacement.azimuth,
                         aoaMeasurement.getAzimuth().getErrorRadians(),
-                        aoaMeasurement.getAzimuth().getConfidenceLevel()
+                        replacement.azimuthFom
                 );
             }
+            // Any elevation in the original measurement?
             if (aoaMeasurement.getAltitude() != null) {
+                // Yes - create a new elevation based on the filter's output.
                 elevationMeasurement = new AngleMeasurement(
                         replacement.elevation,
                         aoaMeasurement.getAltitude().getErrorRadians(),
-                        aoaMeasurement.getAltitude().getConfidenceLevel()
+                        replacement.elevationFom
                 );
             }
         }
-        if (azimuthMeasurement == null) {
-            // There was no azimuth in the original reading. It may have been distance only.
-            // Use the azimuth the engine computed.
-            azimuthMeasurement = new AngleMeasurement(
-                    replacement.azimuth, DEFAULT_ERROR_RADIANS, DEFAULT_CONFIDENCE);
+
+        AngleOfArrivalMeasurement.Builder aoaBuilder = null;
+        // Only create the aoaBuilder if there was an azimuth in the original measurement.
+        if (azimuthMeasurement != null) {
+            aoaBuilder = new AngleOfArrivalMeasurement.Builder(azimuthMeasurement);
+            if (elevationMeasurement != null) {
+                aoaBuilder.setAltitude(elevationMeasurement);
+            }
         }
-        if (elevationMeasurement == null) {
-            // There was no elevation in the original reading.
-            // Use the elevation the engine computed.
-            elevationMeasurement = new AngleMeasurement(
-                    replacement.elevation, DEFAULT_ERROR_RADIANS, DEFAULT_CONFIDENCE);
-        }
-        AngleOfArrivalMeasurement.Builder aoaBuilder =
-                new AngleOfArrivalMeasurement.Builder(azimuthMeasurement);
-        aoaBuilder.setAltitude(elevationMeasurement);
 
         DistanceMeasurement.Builder distanceBuilder = new DistanceMeasurement.Builder();
         if (distMeasurement == null) {
             // No distance value. Might have been a one-way AoA.
+
+            // RangingMeasurement.Build requires that any non-error status has a valid
+            //  DistanceMeasurement, so we will create one.
             distanceBuilder.setErrorMeters(DEFAULT_ERROR_DISTANCE);
-            distanceBuilder.setConfidenceLevel(DEFAULT_CONFIDENCE);
         } else {
             distanceBuilder.setErrorMeters(distMeasurement.getErrorMeters());
-            distanceBuilder.setConfidenceLevel(distMeasurement.getConfidenceLevel());
         }
+        distanceBuilder.setConfidenceLevel(replacement.distanceFom);
         distanceBuilder.setMeters(replacement.distance);
 
         rmBuilder.setDistanceMeasurement(distanceBuilder.build());
-        rmBuilder.setAngleOfArrivalMeasurement(aoaBuilder.build());
+        if (aoaBuilder != null) {
+            rmBuilder.setAngleOfArrivalMeasurement(aoaBuilder.build());
+        }
     }
 }

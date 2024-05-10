@@ -16,17 +16,19 @@
 
 package androidx.core.uwb.backend.impl.internal;
 
-import android.annotation.IntDef;
+import androidx.annotation.IntDef;
 
 /** Measurement providing the value and confidence of the ranging. */
 public class RangingMeasurement {
 
     @Confidence private final int mConfidence;
     private final float mValue;
+    private final boolean mValid;
 
-    public RangingMeasurement(@Confidence int confidence, float value) {
+    public RangingMeasurement(@Confidence int confidence, float value, boolean valid) {
         this.mConfidence = confidence;
         this.mValue = value;
+        mValid = valid;
     }
 
     /** Gets Confidence of this measurement. */
@@ -38,6 +40,11 @@ public class RangingMeasurement {
     /** Gets value of this measurement. */
     public float getValue() {
         return mValue;
+    }
+
+    /** Gets validity of this measurement. */
+    public boolean isValid() {
+        return mValid;
     }
 
     /** Possible confidence values for a {@link RangingMeasurement}. */

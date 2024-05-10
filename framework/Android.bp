@@ -13,6 +13,7 @@
 // limitations under the License.
 
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -40,15 +41,12 @@ filegroup {
 
 filegroup {
     name: "framework-uwb-updatable-sources",
+    defaults: ["framework-sources-module-defaults"],
     srcs: [
         ":framework-uwb-updatable-java-sources",
         ":framework-uwb-updatable-exported-aidl-sources",
     ],
-    visibility: [
-        "//frameworks/base",
-    ],
 }
-
 
 // defaults shared between `framework-uwb` & `framework-uwb-pre-jarjar`
 // java_sdk_library `framework-uwb` needs sources to generate stubs, so it cannot reuse
@@ -56,7 +54,7 @@ filegroup {
 java_defaults {
     name: "framework-uwb-defaults",
     defaults: ["uwb-module-sdk-version-defaults"],
-    static_libs : [
+    static_libs: [
         "modules-utils-preconditions",
         "modules-utils-build",
     ],
@@ -75,7 +73,7 @@ java_library {
     name: "framework-uwb-pre-jarjar",
     defaults: ["framework-uwb-defaults"],
     sdk_version: "module_current",
-    libs: ["framework-annotations-lib",],
+    libs: ["framework-annotations-lib"],
     installable: false,
 }
 
@@ -90,7 +88,7 @@ java_sdk_library {
 
     installable: true,
     optimize: {
-        enabled: false
+        enabled: false,
     },
     hostdex: true, // for hiddenapi check
 
@@ -129,13 +127,4 @@ java_defaults {
 filegroup {
     name: "uwb-jarjar-rules",
     srcs: ["jarjar-rules.txt"],
-}
-
-java_api_contribution {
-    name: "framework-uwb-public-stubs",
-    api_surface: "public",
-    api_file: "api/current.txt",
-    visibility: [
-        "//build/orchestrator/apis",
-    ],
 }

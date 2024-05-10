@@ -34,10 +34,16 @@ public class SessionStatus {
     private final long mSessionId;
     private final int mState;
     private final int mReasonCode;
+    private final String mAppPackageName;
+    private final int mSessionToken;
+    private final String mProtocolName;
     public static final String KEY_BUNDLE_VERSION = "bundle_version";
     public static final String SESSION_ID = "session_id";
     public static final String STATE = "state";
     public static final String REASON_CODE = "reason_code";
+    public static final String APP_PACKAGE_NAME = "app_package_name";
+    public static final String SESSION_TOKEN = "session_token";
+    public static final String PROTOCOL_NAME = "protocol_name";
 
     public static int getBundleVersion() {
         return BUNDLE_VERSION_CURRENT;
@@ -55,10 +61,27 @@ public class SessionStatus {
         return mReasonCode;
     }
 
-    private SessionStatus(long sessionId, int state, int reasonCode) {
+    public String getAppPackageName() {
+        return mAppPackageName;
+    }
+
+    // Gets session handle for FiRa 2.0+ device or gets session id for FiRa 1.0 device.
+    public int getSessionToken() {
+        return mSessionToken;
+    }
+
+    public String getProtocolName() {
+        return mProtocolName;
+    }
+
+    private SessionStatus(long sessionId, int state, int reasonCode, String appPackageName,
+            int sessionToken, String protocolName) {
         mSessionId = sessionId;
         mState = state;
         mReasonCode = reasonCode;
+        mAppPackageName = appPackageName;
+        mSessionToken = sessionToken;
+        mProtocolName = protocolName;
     }
 
     public PersistableBundle toBundle() {
@@ -67,6 +90,9 @@ public class SessionStatus {
         bundle.putLong(SESSION_ID, mSessionId);
         bundle.putInt(STATE, mState);
         bundle.putInt(REASON_CODE, mReasonCode);
+        bundle.putString(APP_PACKAGE_NAME, mAppPackageName);
+        bundle.putInt(SESSION_TOKEN, mSessionToken);
+        bundle.putString(PROTOCOL_NAME, mProtocolName);
         return bundle;
     }
 
@@ -84,6 +110,9 @@ public class SessionStatus {
                 .setSessionId(bundle.getLong(SESSION_ID))
                 .setState(bundle.getInt(STATE))
                 .setReasonCode(bundle.getInt(REASON_CODE))
+                .setAppPackageName(bundle.getString(APP_PACKAGE_NAME))
+                .setSessiontoken(bundle.getInt(SESSION_TOKEN))
+                .setProtocolName(bundle.getString(PROTOCOL_NAME, "UnknownProtocolName"))
                 .build();
     }
 
@@ -92,6 +121,9 @@ public class SessionStatus {
         private final RequiredParam<Long> mSessionId = new RequiredParam<>();
         private final RequiredParam<Integer> mState = new RequiredParam<>();
         private final RequiredParam<Integer> mReasonCode = new RequiredParam<>();
+        private String mAppPackageName = "UnknownPackageName";
+        private int mSessionToken = 0;
+        private String mProtocolName = "UnknownProtocolName";
 
         public SessionStatus.Builder setSessionId(long sessionId) {
             mSessionId.set(sessionId);
@@ -108,11 +140,29 @@ public class SessionStatus {
             return this;
         }
 
+        public SessionStatus.Builder setAppPackageName(String appPackageName) {
+            mAppPackageName = appPackageName;
+            return this;
+        }
+
+        public SessionStatus.Builder setSessiontoken(int sessionToken) {
+            mSessionToken = sessionToken;
+            return this;
+        }
+
+        public SessionStatus.Builder setProtocolName(String protocolName) {
+            mProtocolName = protocolName;
+            return this;
+        }
+
         public SessionStatus build() {
             return new SessionStatus(
                     mSessionId.get(),
                     mState.get(),
-                    mReasonCode.get());
+                    mReasonCode.get(),
+                    mAppPackageName,
+                    mSessionToken,
+                    mProtocolName);
         }
     }
 }

@@ -26,17 +26,24 @@ import com.android.server.uwb.correction.pose.IPoseSource;
  * missing data or other hardware limitations.
  */
 public interface IPrimer {
+    /** How quickly the FOM falls when readings are predicted. Use by implementing classes. */
+    double FALLOFF_FOM_PER_SEC = 0.2f;
+    /** The worst possible FOM from falloff. */
+    double MINIMUM_FOM = 0.1f;
+
     /**
      * Applies corrections to a raw position.
      *
      * @param input The original UWB reading.
-     * @param prediction A prediction of where the signal probably came from.
+     * @param prediction The previous filtered UWB result adjusted by the pose change since then.
      * @param poseSource A pose source that may indicate phone orientation.
+     * @param timeMs When the input occurred, in ms since boot.
      * @return A replacement value for the UWB input that has been corrected for  the situation.
      */
-    SphericalVector.Sparse prime(
-            @NonNull SphericalVector.Sparse input,
+    SphericalVector.Annotated prime(
+            @NonNull SphericalVector.Annotated input,
             @Nullable SphericalVector prediction,
-            @Nullable IPoseSource poseSource
+            @Nullable IPoseSource poseSource,
+            long timeMs
     );
 }
