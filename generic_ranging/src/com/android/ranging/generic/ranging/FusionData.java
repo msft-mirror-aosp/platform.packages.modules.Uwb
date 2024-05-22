@@ -16,9 +16,10 @@
 
 package com.android.ranging.generic.ranging;
 
+import com.android.sensor.Estimate;
+import com.android.sensor.Status;
+
 import com.google.auto.value.AutoValue;
-import com.google.hardware.techeng.sensors.finder.Estimate;
-import com.google.hardware.techeng.sensors.finder.Status;
 
 /**
  * Fusion data represents a fusion of data received from ranging technologies and data received from
@@ -32,6 +33,12 @@ public abstract class FusionData {
 
     /** Returns standard dev error for distance range. */
     public abstract double getFusionRangeErrorStdDev();
+
+    /**
+     * Returns the std dev of the error in the estimate of the beacon's position relative to the
+     * user.
+     */
+    public abstract double getFusionEstimatedBeaconPositionErrorStdDevM();
 
     /** Returns bearing result from fusion in radians. */
     public abstract double getFusionBearing();
@@ -58,6 +65,8 @@ public abstract class FusionData {
 
         public abstract Builder setFusionBearingErrorStdDev(double value);
 
+        public abstract Builder setFusionEstimatedBeaconPositionErrorStdDevM(double value);
+
         public abstract Builder setArCoreState(ArCoreState arCoreState);
 
         public abstract FusionData build();
@@ -70,6 +79,8 @@ public abstract class FusionData {
                 .setFusionBearing(estimate.getBearingRad())
                 .setFusionBearingErrorStdDev(estimate.getBearingErrorStdDevRad())
                 .setArCoreState(convertToArCoreStateFromStatus(estimate.getStatus()))
+                .setFusionEstimatedBeaconPositionErrorStdDevM(
+                        estimate.getEstimatedBeaconPositionErrorStdDevM())
                 .build();
     }
 
