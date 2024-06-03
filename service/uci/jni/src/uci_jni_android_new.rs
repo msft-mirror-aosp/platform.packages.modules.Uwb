@@ -860,6 +860,7 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeCo
     sub_session_ids: jintArray,
     sub_session_keys: jbyteArray,
     chip_id: JString,
+    is_multicast_list_ntf_v2_supported: jboolean,
 ) -> jbyte {
     debug!("{}: enter", function_name!());
     byte_result_helper(
@@ -873,6 +874,7 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeCo
             sub_session_ids,
             sub_session_keys,
             chip_id,
+            is_multicast_list_ntf_v2_supported,
         ),
         function_name!(),
     )
@@ -890,6 +892,7 @@ fn native_controller_multicast_list_update(
     sub_session_ids: jintArray,
     sub_session_keys: jbyteArray,
     chip_id: JString,
+    is_multicast_list_ntf_v2_supported: jboolean,
 ) -> Result<()> {
     let uci_manager = Dispatcher::get_uci_manager(env, obj, chip_id)?;
 
@@ -980,6 +983,7 @@ fn native_controller_multicast_list_update(
         session_id as u32,
         UpdateMulticastListAction::try_from(action as u8).map_err(|_| Error::BadParameters)?,
         controlee_list,
+        is_multicast_list_ntf_v2_supported != 0,
     )
 }
 
@@ -1531,6 +1535,7 @@ mod tests {
     use uwb_core::uci::{
         CoreNotification, DataRcvNotification, RadarDataRcvNotification, SessionNotification,
     };
+    use uwb_uci_packets::RadarConfigTlvType;
 
     struct NullNotificationManager {}
     impl NotificationManager for NullNotificationManager {
@@ -1608,5 +1613,81 @@ mod tests {
         ];
         let tlvs = parse_app_config_tlv_vec(2, &app_config_byte_array).unwrap();
         assert!(uci_manager_sync.session_set_app_config(42, tlvs).is_ok());
+    }
+
+    #[test]
+    fn test_parse_radar_config_tlv_vec() {
+        let radar_config_tlv_vec: Vec<u8> = vec![
+            0x0, 0x2, 0x0, 0x1, // The first tlv
+            0x1, 0x1, 0x1, // The second tlv
+        ];
+        let tlvs = parse_radar_config_tlv_vec(2, &radar_config_tlv_vec).unwrap();
+        assert_eq!(
+            tlvs[0],
+            RadarConfigTlv { cfg_id: RadarConfigTlvType::RadarTimingParams, v: vec![0x0, 0x1] }
+        );
+        assert_eq!(
+            tlvs[1],
+            RadarConfigTlv { cfg_id: RadarConfigTlvType::SamplesPerSweep, v: vec![0x1] }
+        );
+    }
+
+    #[test]
+    fn test_parse_hybrid_controller_config_phase_list() {
+        let mut raw_controller_config_phase_list = vec![
+            0x1, 0x0, 0x0, 0x0, // session token
+            0x1, 0x0, // start slot index
+            0x2, 0x0, // end slot index
+            0x1, // phase participation
+            0x1, 0x2, // mac address
+        ];
+        let mut phase_list =
+            parse_hybrid_controller_config_phase_list(1, 0, &raw_controller_config_phase_list)
+                .unwrap();
+        assert_eq!(
+            PhaseList::ShortMacAddress(vec![PhaseListShortMacAddress {
+                session_token: 1,
+                start_slot_index: 1,
+                end_slot_index: 2,
+                phase_participation: 1,
+                mac_address: [0x1, 0x2]
+            }]),
+            phase_list
+        );
+
+        raw_controller_config_phase_list = vec![
+            0x1, 0x0, 0x0, 0x0, // session token
+            0x1, 0x0, // start slot index
+            0x2, 0x0, // end slot index
+            0x1, // phase participation
+            0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, // mac address
+        ];
+        phase_list =
+            parse_hybrid_controller_config_phase_list(1, 1, &raw_controller_config_phase_list)
+                .unwrap();
+        assert_eq!(
+            PhaseList::ExtendedMacAddress(vec![PhaseListExtendedMacAddress {
+                session_token: 1,
+                start_slot_index: 1,
+                end_slot_index: 2,
+                phase_participation: 1,
+                mac_address: [0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8]
+            }]),
+            phase_list
+        );
+    }
+
+    #[test]
+    fn test_parse_hybrid_controlee_config_phase_list() {
+        let raw_controlee_config_phase_list = vec![
+            0x1, 0x0, 0x0, 0x0, // session token
+            0x1, // phase participation
+        ];
+        let phase_list =
+            parse_hybrid_controlee_config_phase_list(1, &raw_controlee_config_phase_list).unwrap();
+        assert_eq!(
+            vec![ControleePhaseList { session_token: 1, phase_participation: 1 }],
+            phase_list
+        );
     }
 }

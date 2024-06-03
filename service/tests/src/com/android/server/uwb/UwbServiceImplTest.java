@@ -844,12 +844,11 @@ public class UwbServiceImplTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_DATA_TRANSFER_PHASE_CONFIG)
     public void testSetDataTransferPhaseConfig() throws Exception {
         assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
+        when(mFeatureFlags.dataTransferPhaseConfig()).thenReturn(true);
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         PersistableBundle bundle = new PersistableBundle();
-        when(mFeatureFlags.dataTransferPhaseConfig()).thenReturn(true);
         mUwbServiceImpl.setDataTransferPhaseConfig(sessionHandle, bundle);
         verify(mUwbServiceCore).setDataTransferPhaseConfig(sessionHandle, bundle);
     }
@@ -881,7 +880,6 @@ public class UwbServiceImplTest {
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         final PersistableBundle parameters = new PersistableBundle();
 
-        when(mFeatureFlags.queryTimestampMicros()).thenReturn(true);
         when(mUwbServiceCore.queryMaxDataSizeBytes(sessionHandle)).thenReturn(MAX_DATA_SIZE);
         assertThat(mUwbServiceImpl.queryMaxDataSizeBytes(sessionHandle)).isEqualTo(MAX_DATA_SIZE);
 
@@ -895,7 +893,6 @@ public class UwbServiceImplTest {
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         final PersistableBundle parameters = new PersistableBundle();
 
-        when(mFeatureFlags.hybridSessionSupport()).thenReturn(true);
         mUwbServiceImpl.setHybridSessionControllerConfiguration(sessionHandle, parameters);
 
         verify(mUwbServiceCore).setHybridSessionControllerConfiguration(sessionHandle, parameters);
@@ -908,7 +905,6 @@ public class UwbServiceImplTest {
         SessionHandle sessionHandle = mock(SessionHandle.class);
         PersistableBundle params = mock(PersistableBundle.class);
 
-        when(mFeatureFlags.hybridSessionSupport()).thenReturn(true);
         mUwbServiceImpl.setHybridSessionControleeConfiguration(sessionHandle, params);
 
         verify(mUwbServiceCore).setHybridSessionControleeConfiguration(sessionHandle, params);

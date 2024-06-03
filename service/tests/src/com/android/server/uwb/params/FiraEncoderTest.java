@@ -44,6 +44,7 @@ import static com.google.uwb.support.fira.FiraParams.TX_TIMESTAMP_40_BIT;
 import static com.google.uwb.support.fira.FiraParams.UL_TDOA_DEVICE_ID_16_BIT;
 
 import static org.junit.Assume.assumeTrue;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import android.platform.test.annotations.Presubmit;
@@ -53,6 +54,7 @@ import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.modules.utils.build.SdkLevel;
+import com.android.server.uwb.DeviceConfigFacade;
 import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.util.UwbUtil;
 import com.android.uwb.flags.FeatureFlags;
@@ -202,6 +204,7 @@ public class FiraEncoderTest {
     private static final String BPRF_PHR_DATA_RATE_TLV = "310100";
     private static final String MAX_NUMBER_OF_MEASUREMENTS_TLV = "32020000";
     private static final String STS_LENGTH_TLV = "350101";
+    private static final String ANTENNA_MODE_TLV = "EA0100";
     private static final String RANGING_INTERVAL_TLV = "0904C8000000";
     private static final String DST_MAC_ADDRESS_TLV = "07020406";
     private static final String UWB_INITIATION_TIME_TLV = "2B0400000000";
@@ -236,7 +239,11 @@ public class FiraEncoderTest {
 
         // Setup the unit tests to have the default behavior of using the UWBS UCI version.
         when(mUwbInjector.getFeatureFlags()).thenReturn(mFeatureFlags);
-        when(mFeatureFlags.useUwbsUciVersion()).thenReturn(true);
+
+        // Don't test antenna mode param.
+        DeviceConfigFacade mockDeviceConfig = mock(DeviceConfigFacade.class);
+        when(mockDeviceConfig.isAntennaModeConfigSupported()).thenReturn(false);
+        when(mUwbInjector.getDeviceConfigFacade()).thenReturn(mockDeviceConfig);
 
         mFiraEncoder = new FiraEncoder(mUwbInjector);
 
@@ -349,44 +356,9 @@ public class FiraEncoderTest {
         }
     }
 
-    // Test FiraEncoder behavior when the Fira ProtocolVersion comes from the given params.
-    @Test
-    public void testFiraOpenSessionParams_useFiraOpenSessionParamsProtocolVersion()
-            throws Exception {
-        // Revert to older behavior of using FiraProtocolVersion from the FiraOpenSessionParams.
-        when(mFeatureFlags.useUwbsUciVersion()).thenReturn(false);
-
-        // Test FiRa v1.1 Params
-        FiraOpenSessionParams params = TEST_FIRA_OPEN_SESSION_PARAMS_V_1_1.build();
-        TlvBuffer tlvs = mFiraEncoder.getTlvBuffer(params, PROTOCOL_VERSION_DUMMY);
-
-        assertThat(tlvs.getNoOfParams()).isEqualTo(45);
-        assertThat(tlvs.getByteArray()).isEqualTo(mFiraSessionv11TlvData);
-
-        // Test FiRa v2.0 Params
-        if (SdkLevel.isAtLeastU()) {
-            // Test the default Fira v2.0 OpenSessionParams.
-            params = TEST_FIRA_OPEN_SESSION_PARAMS_V_2_0.build();
-            tlvs = mFiraEncoder.getTlvBuffer(params, PROTOCOL_VERSION_DUMMY);
-
-            assertThat(tlvs.getNoOfParams()).isEqualTo(48);
-            assertThat(tlvs.getByteArray()).isEqualTo(mFiraSessionv20TlvData);
-
-            // Test the Fira v2.0 OpenSessionParams with ABSOLUTE_INITIATION_TIME set.
-            params = TEST_FIRA_OPEN_SESSION_PARAMS_V_2_0_ABSOLUTE_INITIATION_TIME.build();
-            tlvs = mFiraEncoder.getTlvBuffer(params, PROTOCOL_VERSION_DUMMY);
-
-            assertThat(tlvs.getNoOfParams()).isEqualTo(48);
-            assertThat(tlvs.getByteArray()).isEqualTo(mFiraSessionv20AbsoluteInitiationTimeTlvData);
-
-        }
-    }
-
     // Test FiraEncoder behavior when the Fira ProtocolVersion comes from the UWBS UCI version.
     @Test
     public void testFiraOpenSessionParams_useUwbsUciVersion() throws Exception {
-        when(mFeatureFlags.useUwbsUciVersion()).thenReturn(true);
-
         // Test FiRa v1.1 Params
         FiraOpenSessionParams params = TEST_FIRA_OPEN_SESSION_PARAMS_V_1_1.build();
         TlvBuffer tlvs = mFiraEncoder.getTlvBuffer(params, PROTOCOL_VERSION_1_1);

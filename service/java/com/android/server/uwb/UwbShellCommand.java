@@ -144,6 +144,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     private static final int RSSI_FLAG = 1;
     private static final int AOA_FLAG = 1 << 1;
     private static final int CIR_FLAG = 1 << 2;
+    private static final int SEGMENT_METRICS_FLAG = 1 << 5;
     private static final int CMD_TIMEOUT_MS = 10_000;
 
     // These don't require root access.
@@ -553,6 +554,19 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 builder.setRangeDataNtfConfig(RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG);
                 builder.setRangeDataNtfProximityNear(rangeDataNtfProximityNearCm);
                 builder.setRangeDataNtfProximityFar(rangeDataNtfProximityFarCm);
+            }
+            if (option.equals("-R")) {
+                // enable / disable range data NTFs
+                // range-data-notification
+                String range_data_ntf = getNextArgRequired();
+                if (range_data_ntf.equals("disabled")) {
+                    builder.setRangeDataNtfConfig(FiraParams.RANGE_DATA_NTF_CONFIG_DISABLE);
+                } else if (range_data_ntf.equals("enabled")) {
+                    builder.setRangeDataNtfConfig(FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE);
+                } else {
+                    throw new IllegalArgumentException("Unknown range data ntf setting: "
+                        + range_data_ntf);
+                }
             }
             if (option.equals("-z")) {
                 String[] interleaveRatioString = getNextArgRequired().split(",");
@@ -1335,7 +1349,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     stopRangingSession(pw);
                     return 0;
                 case "stop-all-ranging-sessions": {
-                    for (int sessionId : sSessionIdToInfo.keySet()) {
+                    for (int sessionId : new ArrayList<>(sSessionIdToInfo.keySet())) {
                         if (!sSessionIdToInfo.get(sessionId).isRadarSession) {
                             stopRangingSession(pw, sessionId);
                         }
@@ -1343,7 +1357,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     return 0;
                 }
                 case "stop-all-radar-sessions": {
-                    for (int sessionId : sSessionIdToInfo.keySet()) {
+                    for (int sessionId : new ArrayList<>(sSessionIdToInfo.keySet())) {
                         if (sSessionIdToInfo.get(sessionId).isRadarSession) {
                             stopRangingSession(pw, sessionId);
                         }
@@ -1382,6 +1396,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                         }
                         if (option.equals("-c")) {
                             diagramFrameReportsFlags |= CIR_FLAG;
+                        }
+                        if (option.equals("-s")) {
+                            diagramFrameReportsFlags |= SEGMENT_METRICS_FLAG;
                         }
                         option = getNextOption();
                     }
@@ -1494,7 +1511,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-D 6m81|7m80|27m2|31m2](psduDataRate)"
                 + " [-B 850k|6m81](bprfPhrDataRate)"
                 + " [-A enabled|disabled](TX adaptive power, default = disabled)"
-                + " [-S <sfd_id>](sfd_id 0-4, default = 2)");
+                + " [-S <sfd_id>](sfd_id 0-4, default = 2)"
+                + " [-R enabled|disabled](range-data-notification)");
         pw.println("    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
@@ -1562,7 +1580,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("  enable-diagnostics-notification"
                 + " [-r](enable rssi)"
                 + " [-a](enable aoa)"
-                + " [-c](enable cir)");
+                + " [-c](enable cir)"
+                + " [-s](enable segment metrics)");
         pw.println("    Enable vendor diagnostics notification");
         pw.println("  disable-diagnostics-notification");
         pw.println("    Disable vendor diagnostics notification");
