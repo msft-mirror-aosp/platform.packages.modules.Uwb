@@ -1461,7 +1461,7 @@ public class UwbManagerTest {
                 });
     }
 
-    private class AdapterStateCallback implements UwbManager.AdapterStateCallback {
+    private static class AdapterStateCallback implements UwbManager.AdapterStateCallback {
         private final CountDownLatch mCountDownLatch;
         private final Integer mWaitForState;
         public int state;
@@ -1499,6 +1499,8 @@ public class UwbManagerTest {
             setUwbEnabledAndWaitForCompletion(false);
             assertThat(mUwbManager.getAdapterState()).isEqualTo(STATE_DISABLED);
         } finally {
+            // Toggle the state back on.
+            setUwbEnabledAndWaitForCompletion(true);
             uiAutomation.dropShellPermissionIdentity();
         }
     }
