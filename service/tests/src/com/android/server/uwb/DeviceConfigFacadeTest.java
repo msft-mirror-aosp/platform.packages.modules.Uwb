@@ -149,12 +149,17 @@ public class DeviceConfigFacadeTest {
                 .thenReturn(false);
         when(mResources.getBoolean(R.bool.ccc_absolute_uwb_initiation_time_enabled))
                 .thenReturn(false);
+        when(mResources.getBoolean(R.bool.location_use_for_country_code_enabled))
+                .thenReturn(true);
         when(mResources.getBoolean(R.bool.uwb_disabled_until_first_toggle))
                 .thenReturn(false);
         when(mResources.getBoolean(R.bool.persistent_cache_use_for_country_code_enabled))
                 .thenReturn(false);
         when(mResources.getBoolean(R.bool.hw_idle_turn_off_enabled))
                 .thenReturn(false);
+        when(mResources.getBoolean(R.bool.is_antenna_mode_config_supported))
+                .thenReturn(false);
+
         when(mContext.getResources()).thenReturn(mResources);
 
         mDeviceConfigFacade = new DeviceConfigFacade(new Handler(mLooper.getLooper()),
@@ -230,9 +235,11 @@ public class DeviceConfigFacadeTest {
         assertEquals(true, mDeviceConfigFacade.isRangingErrorStreakTimerEnabled());
         assertEquals(false, mDeviceConfigFacade.isCccRangingStoppedParamsSendEnabled());
         assertEquals(false, mDeviceConfigFacade.isCccAbsoluteUwbInitiationTimeEnabled());
+        assertEquals(true, mDeviceConfigFacade.isLocationUseForCountryCodeEnabled());
         assertEquals(false, mDeviceConfigFacade.isUwbDisabledUntilFirstToggle());
         assertEquals(false, mDeviceConfigFacade.isPersistentCacheUseForCountryCodeEnabled());
         assertEquals(false, mDeviceConfigFacade.isHwIdleTurnOffEnabled());
+        assertEquals(false, mDeviceConfigFacade.isAntennaModeConfigSupported());
     }
 
     /**
@@ -338,12 +345,16 @@ public class DeviceConfigFacadeTest {
                 anyBoolean())).thenReturn(true);
         when(DeviceConfig.getBoolean(anyString(), eq("ccc_absolute_uwb_initiation_time_enabled"),
                 anyBoolean())).thenReturn(true);
+        when(DeviceConfig.getBoolean(anyString(), eq("location_use_for_country_code_enabled"),
+                anyBoolean())).thenReturn(false);
         when(DeviceConfig.getBoolean(anyString(), eq("uwb_disabled_until_first_toggle"),
                 anyBoolean())).thenReturn(true);
         when(DeviceConfig.getBoolean(anyString(),
                 eq("persistent_cache_use_for_country_code_enabled"),
                 anyBoolean())).thenReturn(true);
         when(DeviceConfig.getBoolean(anyString(), eq("hw_idle_turn_off_enabled"),
+                anyBoolean())).thenReturn(true);
+        when(DeviceConfig.getBoolean(anyString(), eq("is_antenna_mode_config_supported"),
                 anyBoolean())).thenReturn(true);
 
         mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);
@@ -362,9 +373,11 @@ public class DeviceConfigFacadeTest {
         assertEquals(false, mDeviceConfigFacade.isRangingErrorStreakTimerEnabled());
         assertEquals(true, mDeviceConfigFacade.isCccRangingStoppedParamsSendEnabled());
         assertEquals(true, mDeviceConfigFacade.isCccAbsoluteUwbInitiationTimeEnabled());
+        assertEquals(false, mDeviceConfigFacade.isLocationUseForCountryCodeEnabled());
         assertEquals(true, mDeviceConfigFacade.isUwbDisabledUntilFirstToggle());
         assertEquals(true, mDeviceConfigFacade.isPersistentCacheUseForCountryCodeEnabled());
         assertEquals(true, mDeviceConfigFacade.isHwIdleTurnOffEnabled());
+        assertEquals(true, mDeviceConfigFacade.isAntennaModeConfigSupported());
         when(DeviceConfig.getString(anyString(), eq("pose_source_type"),
                 anyString())).thenReturn("NONE");
         mOnPropertiesChangedListenerCaptor.getValue().onPropertiesChanged(null);

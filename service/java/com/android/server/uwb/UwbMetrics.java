@@ -16,6 +16,7 @@
 package com.android.server.uwb;
 
 import android.content.AttributionSource;
+import android.util.Log;
 import android.util.SparseArray;
 import android.uwb.RangingMeasurement;
 
@@ -28,6 +29,7 @@ import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.proto.UwbStatsLog;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.uwb.support.aliro.AliroOpenRangingParams;
 import com.google.uwb.support.base.Params;
 import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
@@ -157,6 +159,8 @@ public class UwbMetrics {
                 parseFiraParams((FiraOpenSessionParams) params);
             } else if (params instanceof CccOpenRangingParams) {
                 parseCccParams((CccOpenRangingParams) params);
+            } else if (params instanceof AliroOpenRangingParams) {
+                parseAliroParams((AliroOpenRangingParams) params);
             }
         }
 
@@ -176,6 +180,10 @@ public class UwbMetrics {
         }
 
         private void parseCccParams(CccOpenRangingParams params) {
+            mChannel = params.getChannel();
+        }
+
+        private void parseAliroParams(AliroOpenRangingParams params) {
             mChannel = params.getChannel();
         }
 
@@ -415,6 +423,7 @@ public class UwbMetrics {
             mRangingSessionList.add(session);
             mOpenedSessionMap.put(uwbSession.getSessionId(), session);
             if (status != UwbUciConstants.STATUS_CODE_OK) {
+                Log.wtf(TAG, "Session init failed with status " + status);
                 takBugReportSessionInitError("UWB Bugreport: session init failed reason " + status);
             }
             UwbStatsLog.write(UwbStatsLog.UWB_SESSION_INITED, uwbSession.getProfileType(),

@@ -33,13 +33,20 @@ import static com.google.uwb.support.fira.FiraParams.AOA_RESULT_REQUEST_MODE_REQ
 import static com.google.uwb.support.fira.FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_AZIMUTH_ONLY;
 import static com.google.uwb.support.fira.FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_ELEVATION_ONLY;
 import static com.google.uwb.support.fira.FiraParams.AOA_RESULT_REQUEST_MODE_REQ_AOA_RESULTS_INTERLEAVED;
+import static com.google.uwb.support.fira.FiraParams.BPRF_PHR_DATA_RATE_6M81;
+import static com.google.uwb.support.fira.FiraParams.BPRF_PHR_DATA_RATE_850K;
 import static com.google.uwb.support.fira.FiraParams.HOPPING_MODE_DISABLE;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_ADD;
 import static com.google.uwb.support.fira.FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_MANY_TO_MANY;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_ONE_TO_MANY;
 import static com.google.uwb.support.fira.FiraParams.MULTI_NODE_MODE_UNICAST;
+import static com.google.uwb.support.fira.FiraParams.PRF_MODE_BPRF;
 import static com.google.uwb.support.fira.FiraParams.PRF_MODE_HPRF;
+import static com.google.uwb.support.fira.FiraParams.PSDU_DATA_RATE_27M2;
+import static com.google.uwb.support.fira.FiraParams.PSDU_DATA_RATE_31M2;
+import static com.google.uwb.support.fira.FiraParams.PSDU_DATA_RATE_6M81;
+import static com.google.uwb.support.fira.FiraParams.PSDU_DATA_RATE_7M80;
 import static com.google.uwb.support.fira.FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_LEVEL_TRIG;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_DT_TAG;
 import static com.google.uwb.support.fira.FiraParams.RANGING_DEVICE_ROLE_INITIATOR;
@@ -137,6 +144,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
     private static final int RSSI_FLAG = 1;
     private static final int AOA_FLAG = 1 << 1;
     private static final int CIR_FLAG = 1 << 2;
+    private static final int SEGMENT_METRICS_FLAG = 1 << 5;
     private static final int CMD_TIMEOUT_MS = 10_000;
 
     // These don't require root access.
@@ -371,6 +379,13 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         public void onDataSendFailed(SessionHandle sessionHandle, UwbAddress uwbAddress, int reason,
                 PersistableBundle params) {}
 
+        public void onDataTransferPhaseConfigured(SessionHandle sessionHandle,
+                  PersistableBundle params) {
+        }
+
+        public void onDataTransferPhaseConfigFailed(SessionHandle sessionHandle, int reason,
+                PersistableBundle params) {}
+
         public void onDataReceived(SessionHandle sessionHandle, UwbAddress uwbAddress,
                 PersistableBundle params, byte[] data) {}
 
@@ -383,6 +398,18 @@ public class UwbShellCommand extends BasicShellCommandHandler {
 
         public void onRangingRoundsUpdateDtTagStatus(SessionHandle sessionHandle,
                 PersistableBundle params) {}
+
+        public void onHybridSessionControllerConfigured(SessionHandle sessionHandle,
+                PersistableBundle parameters) {}
+
+        public void onHybridSessionControllerConfigurationFailed(SessionHandle sessionHandle,
+                int reason, PersistableBundle parameters) {}
+
+        public void onHybridSessionControleeConfigured(SessionHandle sessionHandle,
+                PersistableBundle parameters) {}
+
+        public void onHybridSessionControleeConfigurationFailed(SessionHandle sessionHandle,
+                int reason, PersistableBundle parameters) {}
     }
 
 
@@ -528,6 +555,19 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 builder.setRangeDataNtfProximityNear(rangeDataNtfProximityNearCm);
                 builder.setRangeDataNtfProximityFar(rangeDataNtfProximityFarCm);
             }
+            if (option.equals("-R")) {
+                // enable / disable range data NTFs
+                // range-data-notification
+                String range_data_ntf = getNextArgRequired();
+                if (range_data_ntf.equals("disabled")) {
+                    builder.setRangeDataNtfConfig(FiraParams.RANGE_DATA_NTF_CONFIG_DISABLE);
+                } else if (range_data_ntf.equals("enabled")) {
+                    builder.setRangeDataNtfConfig(FiraParams.RANGE_DATA_NTF_CONFIG_ENABLE);
+                } else {
+                    throw new IllegalArgumentException("Unknown range data ntf setting: "
+                        + range_data_ntf);
+                }
+            }
             if (option.equals("-z")) {
                 String[] interleaveRatioString = getNextArgRequired().split(",");
                 if (interleaveRatioString.length != 3) {
@@ -651,6 +691,51 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                                     + "reserved for default and has no effect.");
                 }
                 builder.setSessionPriority(sessionPriority);
+            }
+            if (option.equals("-P")) {
+                String prfMode = getNextArgRequired();
+                if (prfMode.equals("bprf")) {
+                    builder.setPrfMode(PRF_MODE_BPRF);
+                } else if (prfMode.equals("hprf")) {
+                    builder.setPrfMode(PRF_MODE_HPRF);
+                } else {
+                    throw new IllegalArgumentException("Wrong arguments for prmMode");
+                }
+            }
+            if (option.equals("-D")) {
+                String psduDataRate = getNextArgRequired();
+                if (psduDataRate.equals("6m81")) {
+                    builder.setPsduDataRate(PSDU_DATA_RATE_6M81);
+                } else if (psduDataRate.equals("7m80")) {
+                    builder.setPsduDataRate(PSDU_DATA_RATE_7M80);
+                } else if (psduDataRate.equals("27m2")) {
+                    builder.setPsduDataRate(PSDU_DATA_RATE_27M2);
+                } else if (psduDataRate.equals("31m2")) {
+                    builder.setPsduDataRate(PSDU_DATA_RATE_31M2);
+                } else {
+                    throw new IllegalArgumentException("Wrong arguments for psduDataRate");
+                }
+            }
+            if (option.equals("-B")) {
+                String bprfPhrDataRate = getNextArgRequired();
+                if (bprfPhrDataRate.equals("850k")) {
+                    builder.setBprfPhrDataRate(BPRF_PHR_DATA_RATE_850K);
+                } else if (bprfPhrDataRate.equals("6m81")) {
+                    builder.setBprfPhrDataRate(BPRF_PHR_DATA_RATE_6M81);
+                } else {
+                    throw new IllegalArgumentException("Wrong arguments for bprfPhrDataRate");
+                }
+            }
+            if (option.equals("-A")) {
+                builder.setIsTxAdaptivePayloadPowerEnabled(
+                        getNextArgRequiredTrueOrFalse("enabled", "disabled"));
+            }
+            if (option.equals("-S")) {
+                int sfd_id = Integer.parseInt(getNextArgRequired());
+                if (sfd_id < 0 || sfd_id > 4) {
+                    throw new IllegalArgumentException("SFD_ID should be in range 0-4");
+                }
+                builder.setSfdId(sfd_id);
             }
             option = getNextOption();
         }
@@ -953,11 +1038,11 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 int rangeDataNtfConfig = Integer.parseInt(getNextArgRequired());
                 builder.setRangeDataNtfConfig(rangeDataNtfConfig);
             }
-            if (option.equals("-pn")) {
+            if (option.equals("-n")) {
                 int proximityNear = Integer.parseInt(getNextArgRequired());
                 builder.setRangeDataProximityNear(proximityNear);
             }
-            if (option.equals("-pf")) {
+            if (option.equals("-f")) {
                 int proximityFar = Integer.parseInt(getNextArgRequired());
                 builder.setRangeDataProximityFar(proximityFar);
             }
@@ -1010,43 +1095,43 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 case "-b":
                     shouldBlockCall = true;
                     break;
-                case "-id":
+                case "-i":
                     builder.setSessionId(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-ch":
+                case "-c":
                     builder.setChannelNumber(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-sp":
+                case "-s":
                     builder.setSweepPeriod(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-sb":
+                case "-u":
                     builder.setSweepsPerBurst(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-ss":
+                case "-e":
                     builder.setSamplesPerSweep(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-so":
+                case "-o":
                     builder.setSweepOffset(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-rc":
+                case "-r":
                     builder.setRframeConfig(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-pd":
+                case "-t":
                     builder.setPreambleDuration(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-pc":
+                case "-d":
                     builder.setPreambleCodeIndex(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-p":
+                case "-x":
                     builder.setSessionPriority(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-bs":
+                case "-p":
                     builder.setBitsPerSample(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-pm":
+                case "-m":
                     builder.setPrfMode(Integer.parseInt(getNextArgRequired()));
                     break;
-                case "-nb":
+                case "-n":
                     builder.setNumberOfBursts(Integer.parseInt(getNextArgRequired()));
                     break;
             }
@@ -1264,7 +1349,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     stopRangingSession(pw);
                     return 0;
                 case "stop-all-ranging-sessions": {
-                    for (int sessionId : sSessionIdToInfo.keySet()) {
+                    for (int sessionId : new ArrayList<>(sSessionIdToInfo.keySet())) {
                         if (!sSessionIdToInfo.get(sessionId).isRadarSession) {
                             stopRangingSession(pw, sessionId);
                         }
@@ -1272,7 +1357,7 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                     return 0;
                 }
                 case "stop-all-radar-sessions": {
-                    for (int sessionId : sSessionIdToInfo.keySet()) {
+                    for (int sessionId : new ArrayList<>(sSessionIdToInfo.keySet())) {
                         if (sSessionIdToInfo.get(sessionId).isRadarSession) {
                             stopRangingSession(pw, sessionId);
                         }
@@ -1311,6 +1396,9 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                         }
                         if (option.equals("-c")) {
                             diagramFrameReportsFlags |= CIR_FLAG;
+                        }
+                        if (option.equals("-s")) {
+                            diagramFrameReportsFlags |= SEGMENT_METRICS_FLAG;
                         }
                         option = getNextOption();
                     }
@@ -1418,7 +1506,13 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-n <sessionKey>](sessionKey 16 or 32 bytes)"
                 + " [-k <subSessionKey>](subSessionKey 16 or 32 bytes)"
                 + " [-j <errorStreakTimeoutMs>](error streak timeout in millis, default=30000)"
-                + " [-q <sessionPriority>](sessionPriority 1-49 or 51-100)");
+                + " [-q <sessionPriority>](sessionPriority 1-49 or 51-100)"
+                + " [-P bprf|hprf](prfMode)"
+                + " [-D 6m81|7m80|27m2|31m2](psduDataRate)"
+                + " [-B 850k|6m81](bprfPhrDataRate)"
+                + " [-A enabled|disabled](TX adaptive power, default = disabled)"
+                + " [-S <sfd_id>](sfd_id 0-4, default = 2)"
+                + " [-R enabled|disabled](range-data-notification)");
         pw.println("    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
@@ -1445,19 +1539,19 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("  start-radar-session"
                 + " [-b](blocking call)"
                 + " Radar data will be displayed on screen)"
-                + " [-id <sessionId>](session-id)"
-                + " [-ch <channel>](channel)"
-                + " [-sp <sweepPeriod>](sweep-period)"
-                + " [-sb <sweepsPerBurst>](sweeps-per-burst)"
-                + " [-ss <samplesPerSweep>](samples-per-sweep)"
-                + " [-bs <bitsPerSample>](bits-per-sample)"
-                + " [-so <sweepOffset>](sweep-offset)"
-                + " [-rc <rframeConfig>](rframe-config)"
-                + " [-pd <preambleDuration>](preamble-duration)"
-                + " [-pc <preambleCodeIndex>](preamble-code-index)"
-                + " [-p  <sessionPriority>](session-priority)"
-                + " [-pm <prfMode>](prf-mode)"
-                + " [-nb <numberOfBursts>](number-of-bursts)");
+                + " [-i <sessionId>](session-id)"
+                + " [-c <channel>](channel)"
+                + " [-s <sweepPeriod>](sweep-period)"
+                + " [-u <sweepsPerBurst>](sweeps-per-burst)"
+                + " [-e <samplesPerSweep>](samples-per-sweep)"
+                + " [-p <bitsPerSample>](bits-per-sample)"
+                + " [-o <sweepOffset>](sweep-offset)"
+                + " [-r <rframeConfig>](rframe-config)"
+                + " [-t <preambleDuration>](preamble-duration)"
+                + " [-d <preambleCodeIndex>](preamble-code-index)"
+                + " [-x  <sessionPriority>](session-priority)"
+                + " [-m <prfMode>](prf-mode)"
+                + " [-n <numberOfBursts>](number-of-bursts)");
         pw.println("    Starts a Radar session with the provided params defined in the radar UCI"
                 + "    spec.");
         pw.println("  reconfigure-fira-ranging-session"
@@ -1467,8 +1561,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + " [-s <subSessionId-1, subSessionId-2,...>](sub-sessionIds)"
                 + " [-b <block-striding>](block-striding)"
                 + " [-c <range-data-ntf-cfg>](range-data-ntf-cfg)"
-                + " [-pn <proximity-near>(proximity-near)"
-                + " [-pf <proximity-far>](proximity-far)");
+                + " [-n <proximity-near>(proximity-near)"
+                + " [-f <proximity-far>](proximity-far)");
         pw.println("  get-ranging-session-reports <sessionId>");
         pw.println("    Displays latest cached ranging reports for an ongoing ranging session");
         pw.println("  get-all-ranging-session-reports");
@@ -1486,7 +1580,8 @@ public class UwbShellCommand extends BasicShellCommandHandler {
         pw.println("  enable-diagnostics-notification"
                 + " [-r](enable rssi)"
                 + " [-a](enable aoa)"
-                + " [-c](enable cir)");
+                + " [-c](enable cir)"
+                + " [-s](enable segment metrics)");
         pw.println("    Enable vendor diagnostics notification");
         pw.println("  disable-diagnostics-notification");
         pw.println("    Disable vendor diagnostics notification");

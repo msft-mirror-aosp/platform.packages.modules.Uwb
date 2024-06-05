@@ -22,7 +22,10 @@ import android.util.Log;
 
 import com.android.server.uwb.UwbInjector;
 
+import com.google.uwb.support.aliro.AliroParams;
+import com.google.uwb.support.aliro.AliroSpecificationParams;
 import com.google.uwb.support.base.Params;
+import com.google.uwb.support.base.ProtocolVersion;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccSpecificationParams;
 import com.google.uwb.support.fira.FiraParams;
@@ -40,19 +43,21 @@ public class GenericDecoder extends TlvDecoder {
     private static final String TAG = "GenericDecoder";
 
     @Override
-    public <T extends Params> T getParams(TlvDecoderBuffer tlvs, Class<T> paramType) {
+    public <T extends Params> T getParams(TlvDecoderBuffer tlvs, Class<T> paramType,
+                    ProtocolVersion protocolVersion) {
         if (GenericSpecificationParams.class.equals(paramType)) {
-            return (T) getSpecificationParamsFromTlvBuffer(tlvs);
+            return (T) getSpecificationParamsFromTlvBuffer(tlvs, protocolVersion);
         }
         return null;
     }
 
-    private GenericSpecificationParams getSpecificationParamsFromTlvBuffer(TlvDecoderBuffer tlvs) {
+    private GenericSpecificationParams getSpecificationParamsFromTlvBuffer(TlvDecoderBuffer tlvs,
+                    ProtocolVersion protocolVersion) {
         GenericSpecificationParams.Builder builder = new GenericSpecificationParams.Builder();
         try {
             FiraSpecificationParams firaSpecificationParams =
                     TlvDecoder.getDecoder(FiraParams.PROTOCOL_NAME, mUwbInjector).getParams(
-                            tlvs, FiraSpecificationParams.class);
+                            tlvs, FiraSpecificationParams.class, protocolVersion);
             builder.setFiraSpecificationParams(firaSpecificationParams);
         } catch (IllegalArgumentException e) {
             Log.e(TAG, "Failed to decode FIRA capabilities", e);
@@ -60,15 +65,23 @@ public class GenericDecoder extends TlvDecoder {
         try {
             CccSpecificationParams cccSpecificationParams =
                     TlvDecoder.getDecoder(CccParams.PROTOCOL_NAME, mUwbInjector).getParams(
-                            tlvs, CccSpecificationParams.class);
+                            tlvs, CccSpecificationParams.class, protocolVersion);
             builder.setCccSpecificationParams(cccSpecificationParams);
         } catch (IllegalArgumentException e) {
             Log.e(TAG, "Failed to decode CCC capabilities", e);
         }
         try {
+            AliroSpecificationParams aliroSpecificationParams =
+                    TlvDecoder.getDecoder(AliroParams.PROTOCOL_NAME, mUwbInjector).getParams(
+                            tlvs, AliroSpecificationParams.class, protocolVersion);
+            builder.setAliroSpecificationParams(aliroSpecificationParams);
+        } catch (IllegalArgumentException e) {
+            Log.e(TAG, "Failed to decode ALIRO capabilities", e);
+        }
+        try {
             RadarSpecificationParams radarSpecificationParams =
                     TlvDecoder.getDecoder(RadarParams.PROTOCOL_NAME, mUwbInjector)
-                            .getParams(tlvs, RadarSpecificationParams.class);
+                            .getParams(tlvs, RadarSpecificationParams.class, protocolVersion);
             builder.setRadarSpecificationParams(radarSpecificationParams);
         } catch (IllegalArgumentException e) {
             Log.v(TAG, "Failed to decode Radar capabilities", e);

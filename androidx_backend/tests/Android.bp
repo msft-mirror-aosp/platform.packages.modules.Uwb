@@ -15,6 +15,7 @@
 // Make test APK
 // ============================================================
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -22,7 +23,7 @@ android_test {
     name: "AndroidxBackendUwbTests",
 
     srcs: [
-        "**/*.java"
+        "**/*.java",
     ],
 
     dxflags: ["--multi-dex"],
@@ -30,14 +31,14 @@ android_test {
     java_version: "1.9",
 
     static_libs: [
-        "androidx.core.uwb.backend.aidl_interface-V1-java",
+        "androidx.core.uwb.backend.aidl_interface-V2-java",
         "androidx.test.rules",
         "collector-device-lib",
         "hamcrest-library",
         "mockito-target-extended-minus-junit4",
         "platform-test-annotations",
         "frameworks-base-testutils",
-        "truth-prebuilt",
+        "truth",
         "com.uwb.support.fira",
         "com.uwb.support.multichip",
         "guava",

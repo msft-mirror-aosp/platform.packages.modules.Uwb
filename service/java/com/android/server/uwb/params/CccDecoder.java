@@ -40,6 +40,7 @@ import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_PULSE_
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_RAN_MULTIPLIER;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_SYNC_CODES;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_UWB_CONFIGS;
+import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_UWBS_MAX_PPM;
 import static com.android.server.uwb.config.CapabilityParam.CCC_SUPPORTED_VERSIONS;
 
 import static com.google.uwb.support.ccc.CccParams.CHAPS_PER_SLOT_12;
@@ -63,6 +64,7 @@ import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.config.ConfigParam;
 
 import com.google.uwb.support.base.Params;
+import com.google.uwb.support.base.ProtocolVersion;
 import com.google.uwb.support.ccc.CccProtocolVersion;
 import com.google.uwb.support.ccc.CccPulseShapeCombo;
 import com.google.uwb.support.ccc.CccRangingStartedParams;
@@ -84,7 +86,8 @@ public class CccDecoder extends TlvDecoder {
     }
 
     @Override
-    public <T extends Params> T getParams(TlvDecoderBuffer tlvs, Class<T> paramsType)
+    public <T extends Params> T getParams(TlvDecoderBuffer tlvs, Class<T> paramsType,
+            ProtocolVersion protocolVersion)
             throws IllegalArgumentException {
         if (CccRangingStartedParams.class.equals(paramsType)) {
             return (T) getCccRangingStartedParamsFromTlvBuffer(tlvs);
@@ -144,7 +147,16 @@ public class CccDecoder extends TlvDecoder {
         for (int i = 0; i < pulse_shape_combos.length; i++) {
             builder.addPulseShapeCombo(CccPulseShapeCombo.fromBytes(pulse_shape_combos, i));
         }
-        builder.setRanMultiplier(tlvs.getInt(CCC_SUPPORTED_RAN_MULTIPLIER));
+        int supportedRanMultiplier;
+        try {
+            supportedRanMultiplier = tlvs.getInt(CCC_SUPPORTED_RAN_MULTIPLIER);
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "CCC_SUPPORTED_RAN_MULTIPLIER not a 4 byte value");
+            // Try for single byte
+            supportedRanMultiplier = tlvs.getByte(CCC_SUPPORTED_RAN_MULTIPLIER);
+        }
+        builder.setRanMultiplier(supportedRanMultiplier);
+
         byte chapsPerslot = tlvs.getByte(CCC_SUPPORTED_CHAPS_PER_SLOT);
         if (isBitSet(chapsPerslot, CCC_CHAPS_PER_SLOT_3)) {
             builder.addChapsPerSlot(CHAPS_PER_SLOT_3);
@@ -233,6 +245,16 @@ public class CccDecoder extends TlvDecoder {
         } catch (IllegalArgumentException e) {
             Log.w(TAG, "SUPPORTED_MIN_UWB_INITIATION_TIME_MS not found");
         }
+
+        // Attempt to parse the UWBS_MAX_PPM as a short, since the CCC spec R3 defines the
+        // field Device_max_PPM field (in the TimeSync message) as a 2-octet field.
+        try {
+            short uwbsMaxPPM = tlvs.getShort(CCC_SUPPORTED_UWBS_MAX_PPM);
+            builder.setUwbsMaxPPM(uwbsMaxPPM);
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "CCC_SUPPORTED_UWBS_MAX_PPM not found");
+        }
+
         return builder.build();
     }
 

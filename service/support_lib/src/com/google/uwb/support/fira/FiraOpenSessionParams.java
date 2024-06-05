@@ -115,6 +115,7 @@ public class FiraOpenSessionParams extends FiraParams {
     private final boolean mIsRssiReportingEnabled;
     private final boolean mIsDiagnosticsEnabled;
     private final byte mDiagramsFrameReportsFieldsFlags;
+    private final byte mAntennaMode;
     private final boolean mIsKeyRotationEnabled;
     private final int mKeyRotationRate;
     @AoaResultRequestMode private final int mAoaResultRequest;
@@ -135,6 +136,8 @@ public class FiraOpenSessionParams extends FiraParams {
     private final Long mRangingErrorStreakTimeoutMs;
     private final int mLinkLayerMode;
     private final int mDataRepetitionCount;
+    @RangingTimeStruct
+    private final int mRangingTimeStruct;
     private final int mMinFramesPerRr;
     private final int mMtuSize;
     private final int mInterFrameInterval;
@@ -240,6 +243,7 @@ public class FiraOpenSessionParams extends FiraParams {
     private static final String KEY_LINK_LAYER_MODE =
             "link_layer_mode";
     private static final String KEY_DATA_REPETITION_COUNT = "data_repetition_count";
+    private static final String KEY_RANGING_TIME_STRUCT = "ranging_time_struct";
     private static final String KEY_MIN_FRAMES_PER_RR =
             "min_frames_per_rr";
     private static final String KEY_MTU_SIZE =
@@ -261,6 +265,7 @@ public class FiraOpenSessionParams extends FiraParams {
     private static final String KEY_SESSION_OFFSET_IN_MICRO_SECONDS =
                 "session_offset_in_micro_seconds";
     private static final String KEY_APPLICATION_DATA_ENDPOINT = "application_data_endpoint";
+    private static final String KEY_ANTENNA_MODE = "antenna_mode";
 
     private FiraOpenSessionParams(
             FiraProtocolVersion protocolVersion,
@@ -311,6 +316,7 @@ public class FiraOpenSessionParams extends FiraParams {
             boolean isRssiReportingEnabled,
             boolean isDiagnosticsEnabled,
             byte diagramsFrameReportsFieldsFlags,
+            @AntennaMode byte antennaMode,
             boolean isKeyRotationEnabled,
             int keyRotationRate,
             @AoaResultRequestMode int aoaResultRequest,
@@ -332,6 +338,7 @@ public class FiraOpenSessionParams extends FiraParams {
             Long rangingErrorStreakTimeoutMs,
             int linkLayerMode,
             int dataRepetitionCount,
+            @RangingTimeStruct int rangingTimeStruct,
             int minFramePerRr,
             int mtuSize,
             int interFrameInterval,
@@ -344,9 +351,9 @@ public class FiraOpenSessionParams extends FiraParams {
             int filterType,
             int maxNumberOfMeasurements,
             boolean sessionDataTransferStatusNtfConfig,
-            @Nullable int referenceTimeBase,
-            @Nullable int referenceSessionHandle,
-            @Nullable int sessionOffsetInMicroSecond,
+            int referenceTimeBase,
+            int referenceSessionHandle,
+            int sessionOffsetInMicroSecond,
             int applicationDataEndpoint) {
         mProtocolVersion = protocolVersion;
         mSessionId = sessionId;
@@ -396,6 +403,7 @@ public class FiraOpenSessionParams extends FiraParams {
         mIsRssiReportingEnabled = isRssiReportingEnabled;
         mIsDiagnosticsEnabled = isDiagnosticsEnabled;
         mDiagramsFrameReportsFieldsFlags = diagramsFrameReportsFieldsFlags;
+        mAntennaMode = antennaMode;
         mIsKeyRotationEnabled = isKeyRotationEnabled;
         mKeyRotationRate = keyRotationRate;
         mAoaResultRequest = aoaResultRequest;
@@ -417,6 +425,7 @@ public class FiraOpenSessionParams extends FiraParams {
         mRangingErrorStreakTimeoutMs = rangingErrorStreakTimeoutMs;
         mLinkLayerMode = linkLayerMode;
         mDataRepetitionCount = dataRepetitionCount;
+        mRangingTimeStruct = rangingTimeStruct;
         mMinFramesPerRr = minFramePerRr;
         mMtuSize = mtuSize;
         mInterFrameInterval = interFrameInterval;
@@ -654,6 +663,11 @@ public class FiraOpenSessionParams extends FiraParams {
         return mDiagramsFrameReportsFieldsFlags;
     }
 
+    @AntennaMode
+    public byte getAntennaMode() {
+        return mAntennaMode;
+    }
+
     public boolean isKeyRotationEnabled() {
         return mIsKeyRotationEnabled;
     }
@@ -741,6 +755,11 @@ public class FiraOpenSessionParams extends FiraParams {
         return mDataRepetitionCount;
     }
 
+    @RangingTimeStruct
+    public int getRangingTimeStruct() {
+        return mRangingTimeStruct;
+    }
+
     public int getMinFramesPerRr() {
         return mMinFramesPerRr;
     }
@@ -789,17 +808,14 @@ public class FiraOpenSessionParams extends FiraParams {
         return mSessionDataTransferStatusNtfConfig;
     }
 
-    @Nullable
     public int getReferenceTimeBase() {
         return mReferenceTimeBase;
     }
 
-    @Nullable
     public int getReferenceSessionHandle() {
         return mReferenceSessionHandle;
     }
 
-    @Nullable
     public int getSessionOffsetInMicroSeconds() {
         return mSessionOffsetInMicroSeconds;
     }
@@ -846,7 +862,8 @@ public class FiraOpenSessionParams extends FiraParams {
         // Always store address as long in bundle.
         bundle.putLong(KEY_DEVICE_ADDRESS, uwbAddressToLong(mDeviceAddress));
 
-        if (mDeviceRole != RANGING_DEVICE_DT_TAG) {
+        if (mDeviceRole != RANGING_DEVICE_DT_TAG &&
+            mScheduledMode != CONTENTION_BASED_RANGING) {
             // Dest Address list needs to be converted to long array.
             long[] destAddressList = new long[mDestAddressList.size()];
             int i = 0;
@@ -907,6 +924,7 @@ public class FiraOpenSessionParams extends FiraParams {
         bundle.putBoolean(KEY_IS_RSSI_REPORTING_ENABLED, mIsRssiReportingEnabled);
         bundle.putBoolean(KEY_IS_DIAGNOSTICS_ENABLED, mIsDiagnosticsEnabled);
         bundle.putInt(KEY_DIAGRAMS_FRAME_REPORTS_FIELDS_FLAGS, mDiagramsFrameReportsFieldsFlags);
+        bundle.putInt(KEY_ANTENNA_MODE, mAntennaMode);
         bundle.putBoolean(KEY_IS_KEY_ROTATION_ENABLED, mIsKeyRotationEnabled);
         bundle.putInt(KEY_KEY_ROTATION_RATE, mKeyRotationRate);
         bundle.putInt(KEY_AOA_RESULT_REQUEST, mAoaResultRequest);
@@ -931,6 +949,7 @@ public class FiraOpenSessionParams extends FiraParams {
         bundle.putLong(RANGING_ERROR_STREAK_TIMEOUT_MS, mRangingErrorStreakTimeoutMs);
         bundle.putInt(KEY_LINK_LAYER_MODE, mLinkLayerMode);
         bundle.putInt(KEY_DATA_REPETITION_COUNT, mDataRepetitionCount);
+        bundle.putInt(KEY_RANGING_TIME_STRUCT, mRangingTimeStruct);
         bundle.putInt(KEY_MIN_FRAMES_PER_RR, mMinFramesPerRr);
         bundle.putInt(KEY_MTU_SIZE, mMtuSize);
         bundle.putInt(KEY_INTER_FRAME_INTERVAL, mInterFrameInterval);
@@ -1033,6 +1052,7 @@ public class FiraOpenSessionParams extends FiraParams {
                 .setIsDiagnosticsEnabled(bundle.getBoolean(KEY_IS_DIAGNOSTICS_ENABLED, false))
                 .setDiagramsFrameReportsFieldsFlags((byte)
                         bundle.getInt(KEY_DIAGRAMS_FRAME_REPORTS_FIELDS_FLAGS, 0))
+                .setAntennaMode((byte) bundle.getInt(KEY_ANTENNA_MODE, ANTENNA_MODE_OMNI))
                 .setIsKeyRotationEnabled(bundle.getBoolean(KEY_IS_KEY_ROTATION_ENABLED))
                 .setKeyRotationRate(bundle.getInt(KEY_KEY_ROTATION_RATE))
                 .setAoaResultRequest(bundle.getInt(KEY_AOA_RESULT_REQUEST))
@@ -1067,6 +1087,8 @@ public class FiraOpenSessionParams extends FiraParams {
                         .getLong(RANGING_ERROR_STREAK_TIMEOUT_MS, 10_000L))
                 .setLinkLayerMode(bundle.getInt(KEY_LINK_LAYER_MODE, 0))
                 .setDataRepetitionCount(bundle.getInt(KEY_DATA_REPETITION_COUNT, 0))
+                .setRangingTimeStruct(bundle.getInt(KEY_RANGING_TIME_STRUCT,
+                    BLOCK_BASED_SCHEDULING))
                 .setMinFramePerRr(bundle.getInt(KEY_MIN_FRAMES_PER_RR, 1))
                 .setMtuSize(bundle.getInt(KEY_MTU_SIZE, 1048))
                 .setInterFrameInterval(bundle.getInt(KEY_INTER_FRAME_INTERVAL, 1))
@@ -1249,6 +1271,9 @@ public class FiraOpenSessionParams extends FiraParams {
         /** All fields are set to 0 by default */
         private byte mDiagramsFrameReportsFieldsFlags = 0;
 
+        /** Defaults to omni mode **/
+        @AntennaMode private byte mAntennaMode = ANTENNA_MODE_OMNI;
+
         /** UCI spec default: no key rotation */
         private boolean mIsKeyRotationEnabled = false;
 
@@ -1308,6 +1333,9 @@ public class FiraOpenSessionParams extends FiraParams {
 
         /** UCI spec default: 0x00(No repetition) */
         private int mDataRepetitionCount = 0;
+
+        /** UCI spec default: 0x01 */
+        private int mRangingTimeStruct = BLOCK_BASED_SCHEDULING;
 
         /** UCI spec default: 1 */
         public int mMinFramesPerRr = 1;
@@ -1406,6 +1434,7 @@ public class FiraOpenSessionParams extends FiraParams {
             mIsRssiReportingEnabled = builder.mIsRssiReportingEnabled;
             mIsDiagnosticsEnabled = builder.mIsDiagnosticsEnabled;
             mDiagramsFrameReportsFieldsFlags = builder.mDiagramsFrameReportsFieldsFlags;
+            mAntennaMode = builder.mAntennaMode;
             mIsKeyRotationEnabled = builder.mIsKeyRotationEnabled;
             mKeyRotationRate = builder.mKeyRotationRate;
             mAoaResultRequest = builder.mAoaResultRequest;
@@ -1427,6 +1456,7 @@ public class FiraOpenSessionParams extends FiraParams {
             mRangingErrorStreakTimeoutMs = builder.mRangingErrorStreakTimeoutMs;
             mLinkLayerMode = builder.mLinkLayerMode;
             mDataRepetitionCount = builder.mDataRepetitionCount;
+            mRangingTimeStruct = builder.mRangingTimeStruct;
             mMinFramesPerRr = builder.mMinFramesPerRr;
             mMtuSize = builder.mMtuSize;
             mInterFrameInterval = builder.mInterFrameInterval;
@@ -1495,6 +1525,7 @@ public class FiraOpenSessionParams extends FiraParams {
             mIsRssiReportingEnabled = params.mIsRssiReportingEnabled;
             mIsDiagnosticsEnabled = params.mIsDiagnosticsEnabled;
             mDiagramsFrameReportsFieldsFlags = params.mDiagramsFrameReportsFieldsFlags;
+            mAntennaMode = params.mAntennaMode;
             mIsKeyRotationEnabled = params.mIsKeyRotationEnabled;
             mKeyRotationRate = params.mKeyRotationRate;
             mAoaResultRequest = params.mAoaResultRequest;
@@ -1516,6 +1547,7 @@ public class FiraOpenSessionParams extends FiraParams {
             mRangingErrorStreakTimeoutMs = params.mRangingErrorStreakTimeoutMs;
             mLinkLayerMode = params.mLinkLayerMode;
             mDataRepetitionCount = params.mDataRepetitionCount;
+            mRangingTimeStruct = params.mRangingTimeStruct;
             mMinFramesPerRr = params.mMinFramesPerRr;
             mMtuSize = params.mMtuSize;
             mInterFrameInterval = params.mInterFrameInterval;
@@ -1815,6 +1847,12 @@ public class FiraOpenSessionParams extends FiraParams {
             return this;
         }
 
+        /** Set the antenna mode **/
+        public FiraOpenSessionParams.Builder setAntennaMode(@AntennaMode byte antennaMode) {
+            mAntennaMode = antennaMode;
+            return this;
+        }
+
         public FiraOpenSessionParams.Builder setIsKeyRotationEnabled(boolean isKeyRotationEnabled) {
             mIsKeyRotationEnabled = isKeyRotationEnabled;
             return this;
@@ -1930,6 +1968,12 @@ public class FiraOpenSessionParams extends FiraParams {
             return this;
         }
 
+        public FiraOpenSessionParams.Builder setRangingTimeStruct(
+                @RangingTimeStruct int rangingTimeStruct) {
+            mRangingTimeStruct = rangingTimeStruct;
+            return this;
+        }
+
         public FiraOpenSessionParams.Builder setMinFramePerRr(int minFramePerRr) {
             mMinFramesPerRr = minFramePerRr;
             return this;
@@ -2014,7 +2058,7 @@ public class FiraOpenSessionParams extends FiraParams {
             return this;
         }
 
-        public FiraOpenSessionParams.Builder setSessionTimeBase(@Nullable int referenceTimeBase,
+        public FiraOpenSessionParams.Builder setSessionTimeBase(int referenceTimeBase,
                 int referenceSessionHandle, int sessionOffsetInMicroSecond) {
             mReferenceTimeBase = referenceTimeBase;
             mReferenceSessionHandle = referenceSessionHandle;
@@ -2232,6 +2276,7 @@ public class FiraOpenSessionParams extends FiraParams {
                     mIsRssiReportingEnabled,
                     mIsDiagnosticsEnabled,
                     mDiagramsFrameReportsFieldsFlags,
+                    mAntennaMode,
                     mIsKeyRotationEnabled,
                     mKeyRotationRate,
                     mAoaResultRequest,
@@ -2253,6 +2298,7 @@ public class FiraOpenSessionParams extends FiraParams {
                     mRangingErrorStreakTimeoutMs,
                     mLinkLayerMode,
                     mDataRepetitionCount,
+                    mRangingTimeStruct,
                     mMinFramesPerRr,
                     mMtuSize,
                     mInterFrameInterval,

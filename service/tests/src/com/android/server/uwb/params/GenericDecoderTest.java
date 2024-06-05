@@ -25,17 +25,20 @@ import static com.android.server.uwb.params.RadarDecoderTest.TEST_RADAR_SPECIFIC
 import static com.android.server.uwb.params.RadarDecoderTest.TEST_RADAR_SPECIFICATION_TLV_NUM_PARAMS;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.uwb.support.fira.FiraParams.PROTOCOL_VERSION_1_1;
+import static com.google.uwb.support.fira.FiraParams.PROTOCOL_VERSION_2_0;
 
 import static org.mockito.Mockito.when;
 
 import android.platform.test.annotations.Presubmit;
-import android.test.suitebuilder.annotation.SmallTest;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.server.uwb.DeviceConfigFacade;
 import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.util.UwbUtil;
+import com.android.uwb.flags.FeatureFlags;
 
 import com.google.uwb.support.generic.GenericSpecificationParams;
 
@@ -74,17 +77,21 @@ public class GenericDecoderTest {
                     + TEST_CCC_SPECIFICATION_TLV_NUM_PARAMS
                     + TEST_RADAR_SPECIFICATION_TLV_NUM_PARAMS;
 
-    @Mock
-    private UwbInjector mUwbInjector;
-    @Mock
-    private DeviceConfigFacade mDeviceConfigFacade;
+    @Mock private UwbInjector mUwbInjector;
+    @Mock private DeviceConfigFacade mDeviceConfigFacade;
+    @Mock private FeatureFlags mFeatureFlags;
+
     private GenericDecoder mGenericDecoder;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+
         when(mUwbInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
         when(mDeviceConfigFacade.isCccSupportedSyncCodesLittleEndian()).thenReturn(true);
+
+        when(mUwbInjector.getFeatureFlags()).thenReturn(mFeatureFlags);
+
         mGenericDecoder = new GenericDecoder(mUwbInjector);
     }
 
@@ -97,7 +104,8 @@ public class GenericDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         GenericSpecificationParams genericSpecificationParams =
-                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class);
+                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class,
+                           PROTOCOL_VERSION_1_1);
         assertThat(genericSpecificationParams.hasPowerStatsSupport()).isTrue();
         FiraDecoderTest.verifyFiraSpecificationVersion1(
                 genericSpecificationParams.getFiraSpecificationParams());
@@ -116,7 +124,8 @@ public class GenericDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         GenericSpecificationParams genericSpecificationParams =
-                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class);
+                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class,
+                            PROTOCOL_VERSION_1_1);
         assertThat(genericSpecificationParams.hasPowerStatsSupport()).isTrue();
         FiraDecoderTest.verifyFiraSpecificationVersion1(
                 genericSpecificationParams.getFiraSpecificationParams());
@@ -135,7 +144,8 @@ public class GenericDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         GenericSpecificationParams genericSpecificationParams =
-                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class);
+                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class,
+                            PROTOCOL_VERSION_2_0);
         assertThat(genericSpecificationParams.hasPowerStatsSupport()).isTrue();
         FiraDecoderTest.verifyFiraSpecificationVersion2(
                 genericSpecificationParams.getFiraSpecificationParams());
@@ -154,7 +164,8 @@ public class GenericDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         GenericSpecificationParams genericSpecificationParams =
-                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class);
+                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class,
+                            PROTOCOL_VERSION_2_0);
         assertThat(genericSpecificationParams.hasPowerStatsSupport()).isTrue();
         FiraDecoderTest.verifyFiraSpecificationVersion2(
                 genericSpecificationParams.getFiraSpecificationParams());
@@ -176,7 +187,8 @@ public class GenericDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         GenericSpecificationParams genericSpecificationParams =
-                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class);
+                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class,
+                            PROTOCOL_VERSION_1_1);
         assertThat(genericSpecificationParams.hasPowerStatsSupport()).isFalse();
         FiraDecoderTest.verifyFiraSpecificationVersion1(
                 genericSpecificationParams.getFiraSpecificationParams());
@@ -197,7 +209,8 @@ public class GenericDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         GenericSpecificationParams genericSpecificationParams =
-                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class);
+                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class,
+                            PROTOCOL_VERSION_1_1);
         assertThat(genericSpecificationParams.hasPowerStatsSupport()).isFalse();
         CccDecoderTest.verifyCccSpecification(
                 genericSpecificationParams.getCccSpecificationParams());
@@ -218,7 +231,8 @@ public class GenericDecoderTest {
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         GenericSpecificationParams genericSpecificationParams =
-                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class);
+                mGenericDecoder.getParams(tlvDecoderBuffer, GenericSpecificationParams.class,
+                            PROTOCOL_VERSION_1_1);
         assertThat(genericSpecificationParams.hasPowerStatsSupport()).isFalse();
         FiraDecoderTest.verifyFiraSpecificationVersion1(
                 genericSpecificationParams.getFiraSpecificationParams());

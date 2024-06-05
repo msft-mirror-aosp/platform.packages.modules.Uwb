@@ -36,7 +36,6 @@ import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
-import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
 import android.util.Pair;
@@ -59,6 +58,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
 /**
@@ -87,6 +87,10 @@ public class UwbCountryCode {
     // exact because all we care about is what country the user is in.
     private static final float DISTANCE_BETWEEN_UPDATES_METERS = 5_000.0f;
 
+    // The last SIM slot index, used when the slot is not known, so that the corresponding
+    // country code has the lowest priority (in the sorted mTelephonyCountryCodeInfoPerSlot map).
+    private static final int LAST_SIM_SLOT_INDEX = Integer.MAX_VALUE;
+
     private final Context mContext;
     private final Handler mHandler;
     private final TelephonyManager mTelephonyManager;
@@ -98,7 +102,7 @@ public class UwbCountryCode {
     private final Set<CountryCodeChangedListener> mListeners = new ArraySet<>();
 
     private Map<Integer, TelephonyCountryCodeSlotInfo> mTelephonyCountryCodeInfoPerSlot =
-            new ArrayMap();
+            new ConcurrentSkipListMap();
     private String mWifiCountryCode = null;
     private String mLocationCountryCode = null;
     private String mCachedCountryCode = null;
@@ -173,8 +177,17 @@ public class UwbCountryCode {
                 mHandler.post(() -> setLocationCountryCode(countryCode));
             }
         };
-        mGeocoder.getFromLocation(
-                location.getLatitude(), location.getLongitude(), 1, geocodeListener);
+        try {
+            mGeocoder.getFromLocation(
+                    location.getLatitude(), location.getLongitude(), 1, geocodeListener);
+        } catch (IllegalArgumentException e) {
+            // Wrong Type of Latitude and Longitude return from getFromLocation.
+            Log.e(TAG, "Exception while fetching latitude/longitude from location", e);
+
+            // Call setCountryCode() to update country code from other sources.
+            mLocationCountryCode = null;
+            setCountryCode(false);
+        }
     }
 
     /**
@@ -193,7 +206,7 @@ public class UwbCountryCode {
                     public void onReceive(Context context, Intent intent) {
                         int slotIdx = intent.getIntExtra(
                                 SubscriptionManager.EXTRA_SLOT_INDEX,
-                                SubscriptionManager.INVALID_SIM_SLOT_INDEX);
+                                LAST_SIM_SLOT_INDEX);
                         String countryCode = intent.getStringExtra(
                                 TelephonyManager.EXTRA_NETWORK_COUNTRY);
                         String lastKnownCountryCode = intent.getStringExtra(
@@ -205,11 +218,19 @@ public class UwbCountryCode {
                 },
                 new IntentFilter(TelephonyManager.ACTION_NETWORK_COUNTRY_CHANGED),
                 null, mHandler);
-        if (mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI)) {
-            mContext.getSystemService(WifiManager.class).registerActiveCountryCodeChangedCallback(
-                    new HandlerExecutor(mHandler), new WifiCountryCodeCallback());
+        try {
+            if (mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI)) {
+                mContext.getSystemService(WifiManager.class)
+                        .registerActiveCountryCodeChangedCallback(
+                            new HandlerExecutor(mHandler), new WifiCountryCodeCallback());
+            }
+        } catch (SecurityException e) {
+            // failed to register WifiCountryCodeCallback
+            Log.e(TAG, "failed to register WifiCountryCodeCallback", e);
+            mWifiCountryCode = null;
         }
-        if (mUwbInjector.isGeocoderPresent()) {
+        if (mUwbInjector.getDeviceConfigFacade().isLocationUseForCountryCodeEnabled() &&
+                mUwbInjector.isGeocoderPresent()) {
             mLocationManager.requestLocationUpdates(
                     LocationManager.PASSIVE_PROVIDER,
                     TIME_BETWEEN_UPDATES_MS,
@@ -221,22 +242,33 @@ public class UwbCountryCode {
                 + mUwbInjector.getOemDefaultCountryCode());
         List<SubscriptionInfo> subscriptionInfoList =
                 mSubscriptionManager.getActiveSubscriptionInfoList();
-        if (subscriptionInfoList == null) return; // No sim
-        Set<Integer> slotIdxs = subscriptionInfoList
-                .stream()
-                .map(SubscriptionInfo::getSimSlotIndex)
-                .collect(Collectors.toSet());
-        for (Integer slotIdx : slotIdxs) {
-            String countryCode;
-            try {
-                countryCode = mTelephonyManager.getNetworkCountryIso(slotIdx);
-            } catch (IllegalArgumentException e) {
-                Log.e(TAG, "Failed to get country code for slot id:" + slotIdx, e);
-                continue;
+        if (subscriptionInfoList != null && !subscriptionInfoList.isEmpty()) {
+            Set<Integer> slotIdxs = subscriptionInfoList
+                    .stream()
+                    .map(SubscriptionInfo::getSimSlotIndex)
+                    .collect(Collectors.toSet());
+            for (Integer slotIdx : slotIdxs) {
+                String countryCode;
+                try {
+                    countryCode = mTelephonyManager.getNetworkCountryIso(slotIdx);
+                } catch (IllegalArgumentException e) {
+                    Log.e(TAG, "Failed to get country code for slot id:" + slotIdx, e);
+                    continue;
+                }
+                setTelephonyCountryCodeAndLastKnownCountryCode(slotIdx, countryCode, null);
             }
-            setTelephonyCountryCodeAndLastKnownCountryCode(slotIdx, countryCode, null);
+        } else {
+            // Fetch and configure the networkCountryIso() when the subscriptionInfoList is either
+            // null or empty. This is done only when the country code is valid.
+            String countryCode = mTelephonyManager.getNetworkCountryIso();
+            if (isValid(countryCode)) {
+                setTelephonyCountryCodeAndLastKnownCountryCode(
+                        LAST_SIM_SLOT_INDEX, countryCode, null);
+            }
         }
-        if (mUwbInjector.isGeocoderPresent()) {
+
+        if (mUwbInjector.getDeviceConfigFacade().isLocationUseForCountryCodeEnabled() &&
+                mUwbInjector.isGeocoderPresent()) {
             setCountryCodeFromGeocodingLocation(
                     mLocationManager.getLastKnownLocation(LocationManager.FUSED_PROVIDER));
         }
@@ -320,19 +352,25 @@ public class UwbCountryCode {
         if (mOverrideCountryCode != null) {
             return mOverrideCountryCode;
         }
-        for (TelephonyCountryCodeSlotInfo telephonyCountryCodeInfoSlot :
-                mTelephonyCountryCodeInfoPerSlot.values()) {
-            if (telephonyCountryCodeInfoSlot.countryCode != null) {
-                return telephonyCountryCodeInfoSlot.countryCode;
+        if (mTelephonyCountryCodeInfoPerSlot != null) {
+            for (TelephonyCountryCodeSlotInfo telephonyCountryCodeInfoSlot :
+                    mTelephonyCountryCodeInfoPerSlot.values()) {
+                if (telephonyCountryCodeInfoSlot != null
+                        && telephonyCountryCodeInfoSlot.countryCode != null) {
+                    return telephonyCountryCodeInfoSlot.countryCode;
+                }
             }
         }
         if (mWifiCountryCode != null) {
             return mWifiCountryCode;
         }
-        for (TelephonyCountryCodeSlotInfo telephonyCountryCodeInfoSlot :
-                mTelephonyCountryCodeInfoPerSlot.values()) {
-            if (telephonyCountryCodeInfoSlot.lastKnownCountryCode != null) {
-                return telephonyCountryCodeInfoSlot.lastKnownCountryCode;
+        if (mTelephonyCountryCodeInfoPerSlot != null) {
+            for (TelephonyCountryCodeSlotInfo telephonyCountryCodeInfoSlot :
+                    mTelephonyCountryCodeInfoPerSlot.values()) {
+                if (telephonyCountryCodeInfoSlot != null
+                        && telephonyCountryCodeInfoSlot.lastKnownCountryCode != null) {
+                    return telephonyCountryCodeInfoSlot.lastKnownCountryCode;
+                }
             }
         }
         if (mLocationCountryCode != null) {

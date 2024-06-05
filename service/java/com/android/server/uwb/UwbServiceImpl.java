@@ -369,6 +369,17 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
         mUwbServiceCore.sendData(sessionHandle, remoteDeviceAddress, params, data);
     }
 
+
+    @Override
+    public void setDataTransferPhaseConfig(SessionHandle sessionHandle, PersistableBundle params)
+            throws RemoteException {
+        if (!SdkLevel.isAtLeastV() || !mUwbInjector.getFeatureFlags().dataTransferPhaseConfig()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.setDataTransferPhaseConfig(sessionHandle, params);
+    }
+
     @Override
     public void updateRangingRoundsDtTag(SessionHandle sessionHandle,
             PersistableBundle parameters) throws RemoteException {
@@ -394,13 +405,23 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     @Override
-    public int setHybridSessionConfiguration(SessionHandle sessionHandle,
+    public void setHybridSessionControllerConfiguration(SessionHandle sessionHandle,
             PersistableBundle params) {
         if (!SdkLevel.isAtLeastV()) {
             throw new UnsupportedOperationException();
         }
         enforceUwbPrivilegedPermission();
-        return mUwbServiceCore.setHybridSessionConfiguration(sessionHandle, params);
+        mUwbServiceCore.setHybridSessionControllerConfiguration(sessionHandle, params);
+    }
+
+    @Override
+    public void setHybridSessionControleeConfiguration(SessionHandle sessionHandle,
+            PersistableBundle params) {
+        if (!SdkLevel.isAtLeastV()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.setHybridSessionControleeConfiguration(sessionHandle, params);
     }
 
     @Override

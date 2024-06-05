@@ -16,6 +16,9 @@
 
 package androidx.core.uwb.backend.impl.internal;
 
+import static android.uwb.UwbManager.AdapterStateCallback.STATE_CHANGED_REASON_SYSTEM_POLICY;
+import static android.uwb.UwbManager.AdapterStateCallback.STATE_CHANGED_REASON_SYSTEM_REGULATION;
+
 import android.os.Build;
 import android.os.Build.VERSION_CODES;
 import android.uwb.AngleMeasurement;
@@ -67,6 +70,10 @@ final class Conversions {
             com.google.uwb.support.dltdoa.DlTDoAMeasurement
                     dlTDoAMeasurement = com.google.uwb.support.dltdoa.DlTDoAMeasurement.fromBundle(
                     measurement.getRangingMeasurementMetadata());
+            // Return null if Dl-TDoA measurement is not valid.
+            if (dlTDoAMeasurement.getMessageControl() == 0) {
+                return null;
+            }
             dlTdoaMeasurement = new DlTdoaMeasurement(
                     dlTDoAMeasurement.getMessageType(),
                     dlTDoAMeasurement.getMessageControl(),
@@ -165,6 +172,15 @@ final class Conversions {
         return RangingSessionCallback.REASON_UNKNOWN;
     }
 
+    @UwbAvailabilityCallback.UwbStateChangeReason
+    static int convertAdapterStateReason(int reason) {
+        return switch (reason) {
+            case STATE_CHANGED_REASON_SYSTEM_POLICY -> UwbAvailabilityCallback.REASON_SYSTEM_POLICY;
+            case STATE_CHANGED_REASON_SYSTEM_REGULATION ->
+                    UwbAvailabilityCallback.REASON_COUNTRY_CODE_ERROR;
+            default -> UwbAvailabilityCallback.REASON_UNKNOWN;
+        };
+    }
     static android.uwb.UwbAddress convertUwbAddress(UwbAddress address, boolean reverseMacAddress) {
         return reverseMacAddress
                 ? android.uwb.UwbAddress.fromBytes(getReverseBytes(address.toBytes()))

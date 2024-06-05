@@ -90,12 +90,18 @@ public class DeviceConfigFacade {
     private boolean mCccRangingStoppedParamsSendEnabled;
     // Flag to enable the UWB Initiation time as an absolute time, for a CCC ranging session.
     private boolean mCccAbsoluteUwbInitiationTimeEnabled;
+    // Flag to enable usage of location APIs for country code determination
+    private boolean mLocationUseForCountryCodeEnabled;
     // Flag to disable UWB until first toggle
     private boolean mUwbDisabledUntilFirstToggle;
     // Flag to interpret CCC supported sync codes value as little endian
     private boolean mCccSupportedSyncCodesLittleEndian;
+    // Flag to control whether RANGE_DATA_NTF_CONFIG and related fields should be configured
+    // for a CCC ranging session.
+    private boolean mCccSupportedRangeDataNtfConfig;
     private boolean mPersistentCacheUseForCountryCodeEnabled;
     private boolean mHwIdleTurnOffEnabled;
+    private boolean mIsAntennaModeConfigSupported;
 
     public DeviceConfigFacade(Handler handler, Context context) {
         mContext = context;
@@ -272,17 +278,28 @@ public class DeviceConfigFacade {
                 mContext.getResources().getBoolean(R.bool.ccc_absolute_uwb_initiation_time_enabled)
         );
 
+        mLocationUseForCountryCodeEnabled = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "location_use_for_country_code_enabled",
+                mContext.getResources().getBoolean(R.bool.location_use_for_country_code_enabled)
+        );
+
         mUwbDisabledUntilFirstToggle = DeviceConfig.getBoolean(
                 DeviceConfig.NAMESPACE_UWB,
                 "uwb_disabled_until_first_toggle",
                 mContext.getResources().getBoolean(R.bool.uwb_disabled_until_first_toggle)
         );
 
-
         mCccSupportedSyncCodesLittleEndian = DeviceConfig.getBoolean(
                 DeviceConfig.NAMESPACE_UWB,
                 "ccc_supported_sync_codes_little_endian",
                 mContext.getResources().getBoolean(R.bool.ccc_supported_sync_codes_little_endian)
+        );
+
+        mCccSupportedRangeDataNtfConfig = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "ccc_supported_range_data_ntf_config",
+                mContext.getResources().getBoolean(R.bool.ccc_supported_range_data_ntf_config)
         );
 
         mPersistentCacheUseForCountryCodeEnabled = DeviceConfig.getBoolean(
@@ -296,6 +313,12 @@ public class DeviceConfigFacade {
                 DeviceConfig.NAMESPACE_UWB,
                 "hw_idle_turn_off_enabled",
                 mContext.getResources().getBoolean(R.bool.hw_idle_turn_off_enabled)
+        );
+
+        mIsAntennaModeConfigSupported = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "is_antenna_mode_config_supported",
+                mContext.getResources().getBoolean(R.bool.is_antenna_mode_config_supported)
         );
 
         // A little parsing and cleanup:
@@ -557,6 +580,15 @@ public class DeviceConfigFacade {
     }
 
     /**
+     * Returns whether to use location APIs in the algorithm to determine country code or not.
+     * If disabled, will use other sources (telephony, wifi, etc) to determine device location for
+     * UWB regulatory purposes.
+     */
+    public boolean isLocationUseForCountryCodeEnabled() {
+        return mLocationUseForCountryCodeEnabled;
+    }
+
+    /**
      * Returns whether to disable uwb until first toggle or not.
      * If enabled, UWB will remain disabled on boot until the user toggles UWB on for the
      * first time.
@@ -573,6 +605,14 @@ public class DeviceConfigFacade {
     }
 
     /**
+     * Returns whether the RANGE_DATA_NTF_CONFIG and related fields are supported (ie, should be
+     * configured), for a CCC ranging session.
+     */
+    public boolean isCccSupportedRangeDataNtfConfig() {
+        return mCccSupportedRangeDataNtfConfig;
+    }
+
+    /**
      * Returns whether to use persistent cache in the algorithm to determine country code or not.
      */
     public boolean isPersistentCacheUseForCountryCodeEnabled() {
@@ -585,4 +625,9 @@ public class DeviceConfigFacade {
     public boolean isHwIdleTurnOffEnabled() {
         return mHwIdleTurnOffEnabled;
     }
+
+    /**
+     * Returns whether antenna mode configuration is supported or not.
+     */
+    public boolean isAntennaModeConfigSupported() { return mIsAntennaModeConfigSupported; }
 }

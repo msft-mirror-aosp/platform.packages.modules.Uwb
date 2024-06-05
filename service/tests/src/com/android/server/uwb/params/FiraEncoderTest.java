@@ -44,16 +44,20 @@ import static com.google.uwb.support.fira.FiraParams.TX_TIMESTAMP_40_BIT;
 import static com.google.uwb.support.fira.FiraParams.UL_TDOA_DEVICE_ID_16_BIT;
 
 import static org.junit.Assume.assumeTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import android.platform.test.annotations.Presubmit;
-import android.test.suitebuilder.annotation.SmallTest;
 import android.uwb.UwbAddress;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.modules.utils.build.SdkLevel;
+import com.android.server.uwb.DeviceConfigFacade;
 import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.util.UwbUtil;
+import com.android.uwb.flags.FeatureFlags;
 
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
@@ -67,7 +71,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.Arrays;
-
 
 /**
  * Unit tests for {@link com.android.server.uwb.params.FiraEncoder}.
@@ -201,6 +204,7 @@ public class FiraEncoderTest {
     private static final String BPRF_PHR_DATA_RATE_TLV = "310100";
     private static final String MAX_NUMBER_OF_MEASUREMENTS_TLV = "32020000";
     private static final String STS_LENGTH_TLV = "350101";
+    private static final String ANTENNA_MODE_TLV = "EA0100";
     private static final String RANGING_INTERVAL_TLV = "0904C8000000";
     private static final String DST_MAC_ADDRESS_TLV = "07020406";
     private static final String UWB_INITIATION_TIME_TLV = "2B0400000000";
@@ -221,6 +225,7 @@ public class FiraEncoderTest {
     private static final String SESSION_TIME_BASE_TLV  = "48090101000000C8000000";
 
     @Mock private UwbInjector mUwbInjector;
+    @Mock private FeatureFlags mFeatureFlags;
 
     private FiraEncoder mFiraEncoder;
     private byte[] mFiraOpenSessionTlvUtTag;
@@ -231,6 +236,14 @@ public class FiraEncoderTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
+
+        // Setup the unit tests to have the default behavior of using the UWBS UCI version.
+        when(mUwbInjector.getFeatureFlags()).thenReturn(mFeatureFlags);
+
+        // Don't test antenna mode param.
+        DeviceConfigFacade mockDeviceConfig = mock(DeviceConfigFacade.class);
+        when(mockDeviceConfig.isAntennaModeConfigSupported()).thenReturn(false);
+        when(mUwbInjector.getDeviceConfigFacade()).thenReturn(mockDeviceConfig);
 
         mFiraEncoder = new FiraEncoder(mUwbInjector);
 
@@ -823,8 +836,6 @@ public class FiraEncoderTest {
                     .setDeviceType(RANGING_DEVICE_TYPE_CONTROLLER)
                     .setDeviceRole(RANGING_DEVICE_ROLE_INITIATOR)
                     .setDeviceAddress(UwbAddress.fromBytes(new byte[]{0x4, 0x6}))
-                    // DestAddressList should be ignored and not set in the TLV params.
-                    .setDestAddressList(Arrays.asList(UwbAddress.fromBytes(new byte[]{0x4, 0x6})))
                     .setMultiNodeMode(MULTI_NODE_MODE_ONE_TO_MANY)
                     .setRangingRoundUsage(RANGING_ROUND_USAGE_SS_TWR_DEFERRED_MODE)
                     .setStsConfig(STS_CONFIG_STATIC)

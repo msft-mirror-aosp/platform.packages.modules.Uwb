@@ -13,6 +13,7 @@
 // limitations under the License.
 
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -34,6 +35,13 @@ aidl_interface {
         },
     },
     visibility: ["//visibility:public"],
+    versions_with_info: [
+        {
+            version: "1",
+            imports: [],
+        },
+    ],
+
 }
 
 java_library {
@@ -48,7 +56,7 @@ java_library {
     static_libs: [
         "androidx.annotation_annotation",
         "androidx.concurrent_concurrent-futures",
-        "androidx.core.uwb.backend.aidl_interface-V1-java",
+        "androidx.core.uwb.backend.aidl_interface-V2-java",
         "com.uwb.support.fira",
         "com.uwb.support.multichip",
         "com.uwb.support.dltdoa",
@@ -60,8 +68,12 @@ java_library {
     ],
     visibility: [
         ":__subpackages__",
+        "//packages/modules/Uwb/generic_ranging:__subpackages__",
         "//packages/modules/Connectivity/remoteauth:__subpackages__",
     ],
+    lint: {
+        baseline_filename: "lint-baseline.xml",
+    },
 }
 
 android_app {
@@ -75,7 +87,7 @@ android_app {
     static_libs: [
         "androidx.annotation_annotation",
         "androidx.concurrent_concurrent-futures",
-        "androidx.core.uwb.backend.aidl_interface-V1-java",
+        "androidx.core.uwb.backend.aidl_interface-V2-java",
         "com.uwb.support.fira",
         "guava",
         "uwb_androidx_backend",
@@ -90,5 +102,4 @@ prebuilt_etc {
     name: "privapp_allowlist_androidx.core.uwb.backend.xml",
     sub_dir: "permissions",
     src: "androidx.core.uwb.backend.xml",
-    installable: false,
 }

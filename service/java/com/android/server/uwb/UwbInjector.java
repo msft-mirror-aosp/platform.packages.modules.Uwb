@@ -19,6 +19,8 @@ package com.android.server.uwb;
 import static android.Manifest.permission.UWB_RANGING;
 import static android.permission.PermissionManager.PERMISSION_GRANTED;
 
+import static java.lang.Math.toRadians;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityManager;
@@ -64,6 +66,7 @@ import com.android.server.uwb.data.ServiceProfileData;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
 import com.android.server.uwb.pm.ProfileManager;
+import com.android.uwb.flags.FeatureFlags;
 
 import java.io.File;
 import java.util.HashMap;
@@ -116,6 +119,7 @@ public class UwbInjector {
     private int mPoseSourceRefCount = 0;
 
     private final UwbSessionManager mUwbSessionManager;
+    private final FeatureFlags mFeatureFlags;
 
     public UwbInjector(@NonNull UwbContext context) {
         // Create UWB service thread.
@@ -157,6 +161,11 @@ public class UwbInjector {
                 mUwbCountryCode, mUwbSessionManager, uwbConfigurationManager, this, mLooper);
         mSystemBuildProperties = new SystemBuildProperties();
         mUwbDiagnostics = new UwbDiagnostics(mContext, this, mSystemBuildProperties);
+        mFeatureFlags = new com.android.uwb.flags.FeatureFlagsImpl();
+    }
+
+    public FeatureFlags getFeatureFlags() {
+        return mFeatureFlags;
     }
 
     public Looper getUwbServiceLooper() {
@@ -265,14 +274,19 @@ public class UwbInjector {
     /**
      * Returns true if the UWB_RANGING permission is granted for the calling app.
      *
-     * <p>Should be used in situations where data will be delivered and hence the app op should
-     * be noted.
+     * <p>Used for checking permission before first data delivery for the session.
      */
-    public boolean checkUwbRangingPermissionForDataDelivery(
+    public boolean checkUwbRangingPermissionForStartDataDelivery(
             @NonNull AttributionSource attributionSource, @NonNull String message) {
-        int permissionCheckResult = mPermissionManager.checkPermissionForDataDelivery(
+        int permissionCheckResult = mPermissionManager.checkPermissionForStartDataDelivery(
                 UWB_RANGING, attributionSource, message);
         return permissionCheckResult == PERMISSION_GRANTED;
+    }
+
+    /** Indicate permission manager that the ranging session is done or stopped. */
+    public void finishUwbRangingPermissionForDataDelivery(
+            @NonNull AttributionSource attributionSource) {
+        mPermissionManager.finishDataDelivery(UWB_RANGING, attributionSource);
     }
 
     /**
@@ -486,6 +500,16 @@ public class UwbInjector {
         }
     }
 
+    public boolean isMulticastListNtfV2Supported() {
+        return mContext.getResources().getBoolean(
+                        com.android.uwb.resources.R.bool.is_multicast_list_update_ntf_v2_supported);
+    }
+
+    public boolean isMulticastListRspV2Supported() {
+        return mContext.getResources().getBoolean(
+                        com.android.uwb.resources.R.bool.is_multicast_list_update_rsp_v2_supported);
+    }
+
     /**
      * Gets the configured pose source, which is reference counted. If there are no references
      * to the pose source, one will be created based on the device configuration. This may
@@ -600,7 +624,7 @@ public class UwbInjector {
 
             // Fov requires an elevation and a spherical coord.
             if (cfg.isEnablePrimerFov()) {
-                builder.addPrimer(new FovPrimer(cfg.getPrimerFovDegree()));
+                builder.addPrimer(new FovPrimer((float) toRadians(cfg.getPrimerFovDegree())));
             }
 
             // Back azimuth detection requires true spherical.

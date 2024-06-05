@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 package {
+    default_team: "trendy_team_fwk_uwb",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -30,7 +31,7 @@ filegroup {
     srcs: [
         "java/**/*.java",
         ":statslog-uwb-java-gen",
-        ":uwb_config"
+        ":uwb_config",
     ],
 }
 
@@ -39,13 +40,10 @@ java_library {
     name: "service-uwb-pre-jarjar",
     installable: false,
     defaults: ["service-uwb-common-defaults"],
-    srcs: [ ":service-uwb-srcs" ],
+    srcs: [":service-uwb-srcs"],
     required: ["libuwb_uci_jni_rust"],
     sdk_version: "system_server_current",
 
-    lint: {
-        strict_updatability_linting: true,
-    },
     libs: [
         "androidx.annotation_annotation",
         "framework-annotations-lib",
@@ -55,10 +53,12 @@ java_library {
         "framework-statsd.stubs.module_lib",
         "framework-wifi.stubs.module_lib",
         "framework-bluetooth.stubs.module_lib",
+        "framework-location.stubs.module_lib",
     ],
 
     static_libs: [
         "android.hardware.uwb.fira_android-V3-java",
+        "com.uwb.support.aliro",
         "com.uwb.support.ccc",
         "com.uwb.support.fira",
         "com.uwb.support.generic",
@@ -76,6 +76,7 @@ java_library {
         "modules-utils-build",
         "cbor-java",
         "bouncycastle-uwb",
+        "uwb_flags_lib",
     ],
 
     apex_available: [
@@ -128,7 +129,7 @@ genrule {
     name: "statslog-uwb-java-gen",
     tools: ["stats-log-api-gen"],
     cmd: "$(location stats-log-api-gen) --java $(out) --module uwb " +
-         " --javaPackage com.android.server.uwb.proto --javaClass UwbStatsLog" +
-         " --minApiLevel 33",
+        " --javaPackage com.android.server.uwb.proto --javaClass UwbStatsLog" +
+        " --minApiLevel 33",
     out: ["com/android/server/uwb/proto/UwbStatsLog.java"],
 }

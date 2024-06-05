@@ -25,7 +25,6 @@ import static com.android.server.uwb.UwbServiceImpl.SETTINGS_SATELLITE_MODE_RADI
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_FIRST_TOGGLE_DONE;
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_TOGGLE_STATE;
 import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
-import static com.android.server.uwb.UwbTestUtils.TEST_STATUS;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.fira.FiraParams.PACS_PROFILE_SERVICE_ID;
@@ -61,8 +60,10 @@ import android.os.Process;
 import android.os.UserManager;
 import android.os.test.TestLooper;
 import android.platform.test.annotations.Presubmit;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.provider.Settings;
-import android.test.suitebuilder.annotation.SmallTest;
 import android.uwb.IOnUwbActivityEnergyInfoListener;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbAdfProvisionStateCallbacks;
@@ -71,6 +72,7 @@ import android.uwb.IUwbVendorUciCallback;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.modules.utils.build.SdkLevel;
@@ -79,15 +81,16 @@ import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.jni.NativeUwbManager;
 import com.android.server.uwb.multchip.UwbMultichipData;
 import com.android.server.uwb.pm.ProfileManager;
+import com.android.uwb.flags.FeatureFlags;
+import com.android.uwb.flags.Flags;
 
-import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.fira.FiraRangingReconfigureParams;
-import com.google.uwb.support.fira.FiraSuspendRangingParams;
 import com.google.uwb.support.multichip.ChipInfoParams;
 import com.google.uwb.support.profile.ServiceProfile;
 import com.google.uwb.support.profile.UuidBundleWrapper;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Answers;
@@ -135,6 +138,11 @@ public class UwbServiceImplTest {
     private UwbServiceImpl mUwbServiceImpl;
     private TestLooper mTestLooper;
 
+    @Mock private FeatureFlags mFeatureFlags;
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
+
+
     private void createUwbServiceImpl() {
         mUwbServiceImpl = new UwbServiceImpl(mContext, mUwbInjector);
     }
@@ -160,6 +168,7 @@ public class UwbServiceImplTest {
                 .thenReturn("cell,bluetooth,nfc,uwb,wifi");
         when(mUwbInjector.getNativeUwbManager()).thenReturn(mNativeUwbManager);
         when(mUwbInjector.getUserManager()).thenReturn(mUserManager);
+        when(mUwbInjector.getFeatureFlags()).thenReturn(mFeatureFlags);
         when(mUwbInjector.getUwbCountryCode()).thenReturn(mUwbCountryCode);
         when(mUwbInjector.getUciLogModeStore()).thenReturn(mUciLogModeStore);
         when(mUserManager.getUserRestrictions().getBoolean(anyString())).thenReturn(false);
@@ -835,6 +844,16 @@ public class UwbServiceImplTest {
     }
 
     @Test
+    public void testSetDataTransferPhaseConfig() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
+        when(mFeatureFlags.dataTransferPhaseConfig()).thenReturn(true);
+        final SessionHandle sessionHandle = mock(SessionHandle.class);
+        PersistableBundle bundle = new PersistableBundle();
+        mUwbServiceImpl.setDataTransferPhaseConfig(sessionHandle, bundle);
+        verify(mUwbServiceCore).setDataTransferPhaseConfig(sessionHandle, bundle);
+    }
+
+    @Test
     public void testSendVendorUciMessage() throws Exception {
         final int mt = 1;
         final int gid = 0;
@@ -855,8 +874,9 @@ public class UwbServiceImplTest {
     }
 
     @Test
+    @RequiresFlagsEnabled(Flags.FLAG_QUERY_TIMESTAMP_MICROS)
     public void testQueryDataSize() throws Exception {
-        assumeTrue(SdkLevel.isAtLeastU()); // Test should only run on U+ devices.
+        assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         final PersistableBundle parameters = new PersistableBundle();
 
@@ -867,17 +887,27 @@ public class UwbServiceImplTest {
     }
 
     @Test
-    public void testSetHybridSessionConfiguration() throws Exception {
+    @RequiresFlagsEnabled(Flags.FLAG_HYBRID_SESSION_SUPPORT)
+    public void testSetHybridSessionControllerConfiguration() throws Exception {
         assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         final PersistableBundle parameters = new PersistableBundle();
 
-        when(mUwbServiceCore.setHybridSessionConfiguration(sessionHandle, parameters))
-               .thenReturn(TEST_STATUS);
-        assertThat(mUwbServiceImpl.setHybridSessionConfiguration(sessionHandle, parameters))
-                .isEqualTo(TEST_STATUS);
+        mUwbServiceImpl.setHybridSessionControllerConfiguration(sessionHandle, parameters);
 
-        verify(mUwbServiceCore).setHybridSessionConfiguration(sessionHandle, parameters);
+        verify(mUwbServiceCore).setHybridSessionControllerConfiguration(sessionHandle, parameters);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_HYBRID_SESSION_SUPPORT)
+    public void testSetHybridSessionControleeConfiguration() {
+        assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        PersistableBundle params = mock(PersistableBundle.class);
+
+        mUwbServiceImpl.setHybridSessionControleeConfiguration(sessionHandle, params);
+
+        verify(mUwbServiceCore).setHybridSessionControleeConfiguration(sessionHandle, params);
     }
 
     @Test

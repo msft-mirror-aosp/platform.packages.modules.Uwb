@@ -41,11 +41,12 @@ public interface INativeUwbManager {
          * Interface for receiving Session Status Notification
          *
          * @param id         : Session ID
+         * @param token      : Session Token
          * @param state      : Session State
          * @param reasonCode : Reason Code - UCI GENERIC SPECIFICATION Table 15 : state change with
          *                   reason codes
          */
-        void onSessionStatusNotificationReceived(long id, int state, int reasonCode);
+        void onSessionStatusNotificationReceived(long id, int token, int state, int reasonCode);
 
         /**
          * Interface for receiving Multicast List Update Data
@@ -87,6 +88,15 @@ public interface INativeUwbManager {
          * @param radarData : refer to Android UWB Radar UCI Specification: radar Data Message
          */
         void onRadarDataMessageReceived(UwbRadarData radarData);
+
+        /**
+         * Interface for receiving the data transfer phase config notification
+         *
+         * @param sessionId                     : Session ID
+         * @param dataTransferPhaseConfigStatus  : DATA_TRANSFER_PHASE_CONFIG_STATUS_NTF status code
+         */
+        void onDataTransferPhaseConfigNotificationReceived(long sessionId,
+                int dataTransferPhaseConfigStatus);
     }
 
     interface DeviceNotification {

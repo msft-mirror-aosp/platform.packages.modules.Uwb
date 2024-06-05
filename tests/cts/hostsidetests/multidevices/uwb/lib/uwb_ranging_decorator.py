@@ -70,9 +70,7 @@ class UwbRangingDecorator():
           return
       except errors.CallbackHandlerTimeoutError as e:
         self.log.warn("Failed to receive 'RangingSessionCallback' event")
-        raise TimeoutError(
-            "Failed to receive '%s' event" % ranging_event
-        ) from e
+    raise TimeoutError("Failed to receive '%s' event" % ranging_event)
 
   def open_fira_ranging(self,
                         params: uwb_ranging_params.UwbRangingParams,
@@ -272,6 +270,7 @@ class UwbRangingDecorator():
     Args:
     """
     for session in self._callback_keys:
+      self.clear_ranging_session_callback_events(session)
       self.ad.uwb.closeRangingSession(self._callback_keys[session])
       self.verify_callback_received("Closed", session)
     self.clear_all_ranging_sessions()

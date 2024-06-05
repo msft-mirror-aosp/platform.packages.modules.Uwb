@@ -255,6 +255,24 @@ public abstract class FiraParams extends Params {
 
     public static final int BLOCK_BASED_SCHEDULING = 1;
 
+    /** Hybrid session controller phase participation */
+    @IntDef(
+            value = {
+                PARTICIPATION_AS_DEFINED_DEVICE_ROLE,
+                NO_PARTICIPATION_IN_THE_PHASE,
+                PARTICIPATION_AS_INITIATOR,
+                PARTICIPATION_AS_RESPONDER,
+            })
+    public @interface PhaseParticipationHybridSessionController {}
+
+    public static final int PARTICIPATION_AS_DEFINED_DEVICE_ROLE = 0;
+
+    public static final int NO_PARTICIPATION_IN_THE_PHASE = 1;
+
+    public static final int PARTICIPATION_AS_INITIATOR = 2;
+
+    public static final int PARTICIPATION_AS_RESPONDER = 3;
+
     /** Cc Constraint Length */
     @IntDef(
             value = {
@@ -296,12 +314,15 @@ public abstract class FiraParams extends Params {
             value = {
                 PRF_MODE_BPRF,
                 PRF_MODE_HPRF,
+                PRF_MODE_HPRF_HIGH_DATA_RATE,
             })
     public @interface PrfMode {}
 
     public static final int PRF_MODE_BPRF = 0;
 
     public static final int PRF_MODE_HPRF = 1;
+
+    public static final int PRF_MODE_HPRF_HIGH_DATA_RATE = 2;
 
     /** Preamble duration: BPRF always uses 64 symbols */
     @IntDef(
@@ -625,6 +646,20 @@ public abstract class FiraParams extends Params {
     public static final int STATUS_CODE_DATA_TRANSFER_NTF_ERROR_DATA_TRANSFER_IS_ONGOING = 6;
     public static final int STATUS_CODE_DATA_TRANSFER_NTF_STATUS_INVALID_FORMAT = 7;
 
+    /**
+     * Table TBD: Status codes in the SESSION_DATA_TRANSFER_PHASE_CONFIGURATION_NTF.
+     */
+    @IntDef(
+            value = {
+                    STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS,
+                    STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGNMENT
+            })
+    public @interface DataTransferPhaseConfigNtfStatusCode {}
+
+    public static final int STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS = 0;
+    public static final int
+            STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGNMENT = 1;
+
     /** State change reason codes defined in UCI table-15 */
     @IntDef(
             value = {
@@ -677,6 +712,11 @@ public abstract class FiraParams extends Params {
                 MULTICAST_LIST_UPDATE_STATUS_ERROR_MULTICAST_LIST_FULL,
                 MULTICAST_LIST_UPDATE_STATUS_ERROR_KEY_FETCH_FAIL,
                 MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_ID_NOT_FOUND,
+                MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_FOUND,
+                MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_APPLICABLE,
+                MULTICAST_LIST_UPDATE_STATUS_ERROR_SESSION_KEY_NOT_FOUND,
+                MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_NOT_FOUND,
+                MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_ALREADY_PRESENT,
             })
     public @interface MulticastListUpdateStatus {}
 
@@ -684,6 +724,11 @@ public abstract class FiraParams extends Params {
     public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_MULTICAST_LIST_FULL = 1;
     public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_KEY_FETCH_FAIL = 2;
     public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_ID_NOT_FOUND = 3;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_FOUND = 4;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SUB_SESSION_KEY_NOT_APPLICABLE = 5;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_SESSION_KEY_NOT_FOUND = 6;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_NOT_FOUND = 7;
+    public static final int MULTICAST_LIST_UPDATE_STATUS_ERROR_ADDRESS_ALREADY_PRESENT = 8;
 
     /** Capability related definitions starts from here */
     @IntDef(
@@ -1106,6 +1151,20 @@ public abstract class FiraParams extends Params {
 
     //Reference time base feature mask.
     public static final int SESSION_TIME_BASE_REFERENCE_FEATURE_ENABLED = 1;
+    /**
+     * Antenna Mode (Android-specific app config)
+     */
+    @IntDef(
+            value = {
+                    ANTENNA_MODE_OMNI,
+                    ANTENNA_MODE_DIRECTIONAL,
+            })
+    public @interface AntennaMode {}
+
+    /** (Default) The ranging antenna is used for both Tx and Rx. **/
+    public static final int ANTENNA_MODE_OMNI = 0;
+    /** The patch antenna is used for both Tx and Rx. **/
+    public static final int ANTENNA_MODE_DIRECTIONAL = 1;
 
     // Helper functions
     protected static UwbAddress longToUwbAddress(long value, int length) {
@@ -1114,7 +1173,8 @@ public abstract class FiraParams extends Params {
         return UwbAddress.fromBytes(Arrays.copyOf(buffer.array(), length));
     }
 
-    protected static long uwbAddressToLong(UwbAddress address) {
+    /** Helper functions to convert UwbAdrress in long value. */
+    public static long uwbAddressToLong(UwbAddress address) {
         ByteBuffer buffer = ByteBuffer.wrap(Arrays.copyOf(address.toBytes(), Long.BYTES));
         return buffer.getLong();
     }

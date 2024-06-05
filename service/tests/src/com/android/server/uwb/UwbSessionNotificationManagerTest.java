@@ -44,19 +44,24 @@ import android.content.AttributionSource;
 import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.platform.test.annotations.Presubmit;
-import android.test.suitebuilder.annotation.SmallTest;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.util.Pair;
 import android.uwb.IUwbOemExtensionCallback;
 import android.uwb.IUwbRangingCallbacks;
 import android.uwb.RangingChangeReason;
 import android.uwb.RangingReport;
 import android.uwb.SessionHandle;
+import android.uwb.UwbAddress;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.server.uwb.data.UwbRadarData;
 import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbUciConstants;
+import com.android.uwb.flags.Flags;
 
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
@@ -66,6 +71,7 @@ import com.google.uwb.support.radar.RadarParams;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -96,6 +102,8 @@ public class UwbSessionNotificationManagerTest {
     @Mock private UwbServiceCore mUwbServiceCore;
     @Mock private UwbMetrics mUwbMetrics;
     @Mock private IUwbOemExtensionCallback mIOemExtensionCallback;
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
 
     private UwbSessionNotificationManager mUwbSessionNotificationManager;
 
@@ -117,7 +125,8 @@ public class UwbSessionNotificationManagerTest {
         when(mFiraParams.hasRangingResultReportMessage()).thenReturn(false);
         when(mFiraParams.hasControlMessage()).thenReturn(false);
         when(mFiraParams.hasRangingControlPhase()).thenReturn(true);
-        when(mUwbInjector.checkUwbRangingPermissionForDataDelivery(any(), any())).thenReturn(true);
+        when(mUwbInjector.checkUwbRangingPermissionForStartDataDelivery(any(), any()))
+                .thenReturn(true);
         when(mUwbInjector.getElapsedSinceBootNanos()).thenReturn(TEST_ELAPSED_NANOS);
         when(mUwbInjector.getUwbServiceCore()).thenReturn(mUwbServiceCore);
         when(mUwbServiceCore.isOemExtensionCbRegistered()).thenReturn(true);
@@ -143,8 +152,9 @@ public class UwbSessionNotificationManagerTest {
                         PEER_SHORT_MAC_ADDRESS, MAC_ADDRESSING_MODE_SHORT,
                         RANGING_MEASUREMENT_TYPE_TWO_WAY,
                         true, true, false, false, TEST_ELAPSED_NANOS);
-        when(mUwbInjector.checkUwbRangingPermissionForDataDelivery(eq(ATTRIBUTION_SOURCE), any()))
-                .thenReturn(false);
+        when(mUwbInjector.checkUwbRangingPermissionForStartDataDelivery(eq(ATTRIBUTION_SOURCE),
+                any())).thenReturn(false);
+        when(mUwbSession.isDataDeliveryPermissionCheckNeeded()).thenReturn(true);
         mUwbSessionNotificationManager.onRangingResult(
                 mUwbSession, testRangingDataAndRangingReport.first);
 
@@ -519,6 +529,7 @@ public class UwbSessionNotificationManagerTest {
     }
 
     @Test
+    @RequiresFlagsEnabled(Flags.FLAG_REASON_INBAND_SESSION_STOP)
     public void testRangingStoppedDuetoInbandSignal() throws Exception {
         mUwbSessionNotificationManager.onRangingStoppedWithApiReasonCode(mUwbSession,
                 RangingChangeReason.INBAND_SESSION_STOP, new PersistableBundle());
@@ -649,6 +660,71 @@ public class UwbSessionNotificationManagerTest {
     }
 
     @Test
+    public void testOnDataTransferPhaseConfigured() throws Exception {
+        int dataTransferPhaseConfigStatus =
+                UwbUciConstants.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS;
+        mUwbSessionNotificationManager.onDataTransferPhaseConfigured(mUwbSession,
+                dataTransferPhaseConfigStatus);
+
+        verify(mIUwbRangingCallbacks).onDataTransferPhaseConfigured(eq(mSessionHandle),
+                argThat(p -> (p.getInt("data_transfer_phase_config_status_code"))
+                      == dataTransferPhaseConfigStatus));
+    }
+
+    @Test
+    public void testOnDataTransferPhaseConfigFailed() throws Exception {
+        int dataTransferPhaseConfigStatus =
+                UwbUciConstants.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGNMENT;
+        mUwbSessionNotificationManager.onDataTransferPhaseConfigFailed(mUwbSession,
+                dataTransferPhaseConfigStatus);
+
+        verify(mIUwbRangingCallbacks).onDataTransferPhaseConfigFailed(eq(mSessionHandle),
+                eq(RangingChangeReason.PROTOCOL_SPECIFIC),
+                argThat(p -> (p.getInt("data_transfer_phase_config_status_code"))
+                      == dataTransferPhaseConfigStatus));
+    }
+
+    @Test
+    public void testOnHybridSessionControllerConfigured() throws Exception {
+        mUwbSessionNotificationManager.onHybridSessionControllerConfigured(mUwbSession,
+                UwbUciConstants.STATUS_CODE_OK);
+
+        verify(mIUwbRangingCallbacks).onHybridSessionControllerConfigured(eq(mSessionHandle),
+                argThat(p -> (p.getInt("status_code")) == UwbUciConstants.STATUS_CODE_OK));
+    }
+
+    @Test
+    public void testOnHybridSessionControllerConfigurationFailed() throws Exception {
+        mUwbSessionNotificationManager.onHybridSessionControllerConfigurationFailed(mUwbSession,
+                UwbUciConstants.STATUS_CODE_FAILED);
+
+        verify(mIUwbRangingCallbacks).onHybridSessionControllerConfigurationFailed(
+                eq(mSessionHandle),
+                eq(RangingChangeReason.UNKNOWN),
+                argThat(p -> (p.getInt("status_code")) == UwbUciConstants.STATUS_CODE_FAILED));
+    }
+
+    @Test
+    public void testOnHybridSessionControleeConfigured() throws Exception {
+        mUwbSessionNotificationManager.onHybridSessionControleeConfigured(mUwbSession,
+                UwbUciConstants.STATUS_CODE_OK);
+
+        verify(mIUwbRangingCallbacks).onHybridSessionControleeConfigured(eq(mSessionHandle),
+                argThat(p -> (p.getInt("status_code")) == UwbUciConstants.STATUS_CODE_OK));
+    }
+
+    @Test
+    public void testOnHybridSessionControleeConfigurationFailed() throws Exception {
+        mUwbSessionNotificationManager.onHybridSessionControleeConfigurationFailed(mUwbSession,
+                UwbUciConstants.STATUS_CODE_FAILED);
+
+        verify(mIUwbRangingCallbacks).onHybridSessionControleeConfigurationFailed(
+                eq(mSessionHandle),
+                eq(RangingChangeReason.UNKNOWN),
+                argThat(p -> (p.getInt("status_code")) == UwbUciConstants.STATUS_CODE_FAILED));
+    }
+
+    @Test
     public void testOnRangingRoundsUpdateStatus() throws RemoteException {
         PersistableBundle bundle = new PersistableBundle();
         mUwbSessionNotificationManager.onRangingRoundsUpdateStatus(mUwbSession, bundle);
@@ -662,8 +738,9 @@ public class UwbSessionNotificationManagerTest {
         Pair<UwbRadarData, RadarData> testUwbRadarDataAndRadarData =
                 UwbTestUtils.generateUwbRadarDataAndRadarData(
                         RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES);
-        when(mUwbInjector.checkUwbRangingPermissionForDataDelivery(eq(ATTRIBUTION_SOURCE), any()))
-                .thenReturn(false);
+        when(mUwbInjector.checkUwbRangingPermissionForStartDataDelivery(eq(ATTRIBUTION_SOURCE),
+                any())).thenReturn(false);
+        when(mUwbRadarSession.isDataDeliveryPermissionCheckNeeded()).thenReturn(true);
         mUwbSessionNotificationManager.onRadarDataMessageReceived(
                 mUwbRadarSession, testUwbRadarDataAndRadarData.first);
 
@@ -680,7 +757,7 @@ public class UwbSessionNotificationManagerTest {
 
         verify(mIUwbRangingCallbacks).onDataReceived(
                 eq(mSessionHandle),
-                eq(null),
+                eq(UwbAddress.fromBytes(new byte[] {0x00, 0x00})),
                 argThat(p -> p.getInt("sweep_offset")
                         == testUwbRadarDataAndRadarData.second.getSweepOffset()),
                 eq(new byte[] {}));

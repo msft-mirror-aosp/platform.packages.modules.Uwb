@@ -16,21 +16,39 @@
 
 package com.android.server.uwb.params;
 
+import static com.google.uwb.support.ccc.CccParams.RANGE_DATA_NTF_CONFIG_ENABLE_AOA_EDGE_TRIG;
+import static com.google.uwb.support.ccc.CccParams.RANGE_DATA_NTF_CONFIG_ENABLE_AOA_LEVEL_TRIG;
+import static com.google.uwb.support.ccc.CccParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_EDGE_TRIG;
+import static com.google.uwb.support.ccc.CccParams.RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_LEVEL_TRIG;
+
+import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.config.ConfigParam;
 import com.android.server.uwb.data.UwbCccConstants;
 import com.android.server.uwb.data.UwbUciConstants;
+import com.android.server.uwb.util.UwbUtil;
 
 import com.google.uwb.support.base.Params;
 import com.google.uwb.support.base.ProtocolVersion;
 import com.google.uwb.support.ccc.CccOpenRangingParams;
 import com.google.uwb.support.ccc.CccParams;
+import com.google.uwb.support.ccc.CccRangingReconfiguredParams;
 import com.google.uwb.support.fira.FiraParams;
 
 public class CccEncoder extends TlvEncoder {
+    private final UwbInjector mUwbInjector;
+
+    public CccEncoder(UwbInjector uwbInjector) {
+        mUwbInjector = uwbInjector;
+    }
+
     @Override
     public TlvBuffer getTlvBuffer(Params param, ProtocolVersion protocolVersion) {
         if (param instanceof CccOpenRangingParams) {
             return getTlvBufferFromCccOpenRangingParams(param);
+        }
+
+        if (param instanceof CccRangingReconfiguredParams) {
+            return getTlvBufferFromCccRangingReconfiguredParams(param);
         }
         return null;
     }
@@ -71,8 +89,6 @@ public class CccEncoder extends TlvEncoder {
                         (byte) params.getNumResponderNodes()) // NUMBER_OF_ANCHORS
                 .putInt(ConfigParam.RANGING_INTERVAL,
                         params.getRanMultiplier() * 96) //RANGING_INTERVAL = RAN_Multiplier * 96
-                .putByte(ConfigParam.RANGE_DATA_NTF_CONFIG,
-                        (byte) UwbUciConstants.RANGE_DATA_NTF_CONFIG_DISABLE) // RNG_DATA_NTF
                 .putByte(ConfigParam.DEVICE_ROLE,
                         (byte) UwbUciConstants.RANGING_DEVICE_ROLE_INITIATOR) // DEVICE_ROLE
                 .putByte(ConfigParam.MULTI_NODE_MODE,
@@ -104,6 +120,107 @@ public class CccEncoder extends TlvEncoder {
             tlvBufferBuilder.putLong(
                     ConfigParam.UWB_INITIATION_TIME, params.getInitiationTimeMs());
         }
+        if (mUwbInjector.getDeviceConfigFacade().isCccSupportedRangeDataNtfConfig()) {
+            tlvBufferBuilder
+                    .putByte(ConfigParam.RANGE_DATA_NTF_CONFIG,
+                            (byte) params.getRangeDataNtfConfig())
+                    .putShort(ConfigParam.RANGE_DATA_NTF_PROXIMITY_NEAR,
+                            (short) params.getRangeDataNtfProximityNear())
+                    .putShort(ConfigParam.RANGE_DATA_NTF_PROXIMITY_FAR,
+                            (short) params.getRangeDataNtfProximityFar());
+
+            if (hasAoaBoundInRangeDataNtfConfig(params.getRangeDataNtfConfig())) {
+                tlvBufferBuilder.putShortArray(ConfigParam.RANGE_DATA_NTF_AOA_BOUND, new short[] {
+                        // TODO (b/235355249): Verify this conversion. This is using AOA value
+                        // in UwbTwoWayMeasurement to external RangingMeasurement conversion as
+                        // reference.
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                UwbUtil.radianTodegree(
+                                        params.getRangeDataNtfAoaAzimuthLower()), 9, 7), 16),
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                UwbUtil.radianTodegree(
+                                        params.getRangeDataNtfAoaAzimuthUpper()), 9, 7), 16),
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                UwbUtil.radianTodegree(
+                                        params.getRangeDataNtfAoaElevationLower()), 9, 7), 16),
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                UwbUtil.radianTodegree(
+                                        params.getRangeDataNtfAoaElevationUpper()), 9, 7), 16),
+                });
+            }
+        } else {
+            tlvBufferBuilder
+                    .putByte(ConfigParam.RANGE_DATA_NTF_CONFIG,
+                            (byte) UwbUciConstants.RANGE_DATA_NTF_CONFIG_DISABLE); // RNG_DATA_NTF
+        }
         return tlvBufferBuilder.build();
+    }
+
+    private TlvBuffer getTlvBufferFromCccRangingReconfiguredParams(Params baseParam) {
+        CccRangingReconfiguredParams params = (CccRangingReconfiguredParams) baseParam;
+        TlvBuffer.Builder tlvBuilder  = new TlvBuffer.Builder();
+
+        Integer rangeDataNtfConfig = params.getRangeDataNtfConfig();
+        Integer rangeDataProximityNear = params.getRangeDataProximityNear();
+        Integer rangeDataProximityFar = params.getRangeDataProximityFar();
+        Double rangeDataAoaAzimuthLower = params.getRangeDataAoaAzimuthLower();
+        Double rangeDataAoaAzimuthUpper = params.getRangeDataAoaAzimuthUpper();
+        Double rangeDataAoaElevationLower = params.getRangeDataAoaElevationLower();
+        Double rangeDataAoaElevationUpper = params.getRangeDataAoaElevationUpper();
+
+        if (rangeDataNtfConfig != null) {
+            tlvBuilder.putByte(ConfigParam.RANGE_DATA_NTF_CONFIG,
+                    (byte) rangeDataNtfConfig.intValue());
+        }
+        if (rangeDataProximityNear != null) {
+            tlvBuilder.putShort(ConfigParam.RANGE_DATA_NTF_PROXIMITY_NEAR,
+                    (short) rangeDataProximityNear.intValue());
+        }
+        if (rangeDataProximityFar != null) {
+            tlvBuilder.putShort(ConfigParam.RANGE_DATA_NTF_PROXIMITY_FAR,
+                    (short) rangeDataProximityFar.intValue());
+        }
+        if (rangeDataNtfConfig != null && hasAoaBoundInRangeDataNtfConfig(rangeDataNtfConfig)) {
+            if ((rangeDataAoaAzimuthLower != null && rangeDataAoaAzimuthUpper != null)
+                    || (rangeDataAoaElevationLower != null && rangeDataAoaElevationUpper != null)) {
+                rangeDataAoaAzimuthLower = rangeDataAoaAzimuthLower != null
+                        ? rangeDataAoaAzimuthLower
+                        : FiraParams.RANGE_DATA_NTF_AOA_AZIMUTH_LOWER_DEFAULT;
+                rangeDataAoaAzimuthUpper = rangeDataAoaAzimuthUpper != null
+                        ? rangeDataAoaAzimuthUpper
+                        : FiraParams.RANGE_DATA_NTF_AOA_AZIMUTH_UPPER_DEFAULT;
+                rangeDataAoaElevationLower = rangeDataAoaElevationLower != null
+                        ? rangeDataAoaElevationLower
+                        : FiraParams.RANGE_DATA_NTF_AOA_ELEVATION_LOWER_DEFAULT;
+                rangeDataAoaElevationUpper = rangeDataAoaElevationUpper != null
+                        ? rangeDataAoaElevationUpper
+                        : FiraParams.RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT;
+                tlvBuilder.putShortArray(ConfigParam.RANGE_DATA_NTF_AOA_BOUND, new short[]{
+                        // TODO (b/235355249): Verify this conversion. This is using AOA value
+                        // in UwbTwoWayMeasurement to external RangingMeasurement conversion as
+                        // reference.
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                UwbUtil.radianTodegree(
+                                        rangeDataAoaAzimuthLower.floatValue()), 9, 7), 16),
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                UwbUtil.radianTodegree(
+                                        rangeDataAoaAzimuthUpper.floatValue()), 9, 7), 16),
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                UwbUtil.radianTodegree(
+                                        rangeDataAoaElevationLower.floatValue()), 9, 7), 16),
+                        (short) UwbUtil.twos_compliment(UwbUtil.convertFloatToQFormat(
+                                UwbUtil.radianTodegree(
+                                        rangeDataAoaElevationUpper.floatValue()), 9, 7), 16),
+                });
+            }
+        }
+        return tlvBuilder.build();
+    }
+
+    private static boolean hasAoaBoundInRangeDataNtfConfig(int rangeDataNtfConfig) {
+        return rangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_AOA_LEVEL_TRIG
+                || rangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_LEVEL_TRIG
+                || rangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_AOA_EDGE_TRIG
+                || rangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_ENABLE_PROXIMITY_AOA_EDGE_TRIG;
     }
 }

@@ -41,10 +41,13 @@ import com.android.server.uwb.data.UwbUciConstants;
 import com.android.server.uwb.params.TlvUtil;
 import com.android.server.uwb.util.UwbUtil;
 
+import com.google.uwb.support.aliro.AliroParams;
+import com.google.uwb.support.aliro.AliroRangingReconfiguredParams;
 import com.google.uwb.support.base.Params;
 import com.google.uwb.support.ccc.CccParams;
 import com.google.uwb.support.ccc.CccRangingReconfiguredParams;
 import com.google.uwb.support.dltdoa.DlTDoAMeasurement;
+import com.google.uwb.support.fira.FiraDataTransferPhaseConfigStatusCode;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.oemextension.RangingReportMetadata;
@@ -67,14 +70,16 @@ public class UwbSessionNotificationManager {
     public void onRangingResult(UwbSession uwbSession, UwbRangingData rangingData) {
         SessionHandle sessionHandle = uwbSession.getSessionHandle();
         IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
-        boolean permissionGranted = mUwbInjector.checkUwbRangingPermissionForDataDelivery(
-                uwbSession.getAttributionSource(), "uwb ranging result");
-        if (!permissionGranted) {
-            Log.e(TAG, "Not delivering ranging result because of permission denial"
-                    + sessionHandle);
-            return;
+        if (uwbSession.isDataDeliveryPermissionCheckNeeded()) {
+            boolean permissionGranted = mUwbInjector.checkUwbRangingPermissionForStartDataDelivery(
+                    uwbSession.getAttributionSource(), "uwb ranging result");
+            if (!permissionGranted) {
+                Log.e(TAG, "Not delivering ranging result because of permission denial"
+                        + sessionHandle);
+                return;
+            }
+            uwbSession.setDataDeliveryPermissionCheckNeeded(false);
         }
-
         RangingReport rangingReport = null;
         try {
             rangingReport = getRangingReport(rangingData, uwbSession.getProtocolName(),
@@ -192,6 +197,8 @@ public class UwbSessionNotificationManager {
             PersistableBundle params)  {
         SessionHandle sessionHandle = uwbSession.getSessionHandle();
         IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
+        mUwbInjector.finishUwbRangingPermissionForDataDelivery(uwbSession.getAttributionSource());
+        uwbSession.setDataDeliveryPermissionCheckNeeded(true);
         try {
             uwbRangingCallbacks.onRangingStopped(sessionHandle, reason, params);
             Log.i(TAG, "IUwbRangingCallbacks - onRangingStopped");
@@ -243,6 +250,9 @@ public class UwbSessionNotificationManager {
         if (Objects.equals(uwbSession.getProtocolName(), CccParams.PROTOCOL_NAME)) {
             // Why are there no params defined for this bundle?
             params = new CccRangingReconfiguredParams.Builder().build().toBundle();
+        } else if (Objects.equals(uwbSession.getProtocolName(), AliroParams.PROTOCOL_NAME)) {
+            // Why are there no params defined for this bundle?
+            params = new AliroRangingReconfiguredParams.Builder().build().toBundle();
         } else {
             // No params defined for FiRa reconfigure.
             params = new PersistableBundle();
@@ -476,6 +486,45 @@ public class UwbSessionNotificationManager {
         }
     }
 
+    /** Notify that data transfer phase config setting is successful. */
+    public void onDataTransferPhaseConfigured(UwbSession uwbSession,
+            int dataTransferPhaseConfigStatus) {
+        SessionHandle sessionHandle = uwbSession.getSessionHandle();
+        IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
+        FiraDataTransferPhaseConfigStatusCode statusCode =
+                new FiraDataTransferPhaseConfigStatusCode.Builder()
+                        .setStatusCode(dataTransferPhaseConfigStatus).build();
+        try {
+            uwbRangingCallbacks.onDataTransferPhaseConfigured(
+                    sessionHandle, statusCode.toBundle());
+            Log.i(TAG, "IUwbRangingCallbacks - onDataTransferPhaseConfigured");
+        } catch (Exception e) {
+            Log.e(TAG, "IUwbRangingCallbacks - onDataTransferPhaseConfigured : Failed");
+            e.printStackTrace();
+        }
+    }
+
+    /** Notify that data transfer phase config setting is failed. */
+    public void onDataTransferPhaseConfigFailed(UwbSession uwbSession,
+            int dataTransferPhaseConfigStatus) {
+        SessionHandle sessionHandle = uwbSession.getSessionHandle();
+        IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
+        int reason =
+                UwbSessionNotificationHelper.convertDataTransferPhaseConfigStatusToApiReasonCode(
+                        dataTransferPhaseConfigStatus);
+        FiraDataTransferPhaseConfigStatusCode statusCode =
+                new FiraDataTransferPhaseConfigStatusCode.Builder()
+                        .setStatusCode(dataTransferPhaseConfigStatus).build();
+        try {
+            uwbRangingCallbacks.onDataTransferPhaseConfigFailed(sessionHandle,
+                    reason, statusCode.toBundle());
+            Log.i(TAG, "IUwbRangingCallbacks - onDataTransferPhaseConfigFailed");
+        } catch (Exception e) {
+            Log.e(TAG, "IUwbRangingCallbacks - onDataTransferPhaseConfigFailed : Failed");
+            e.printStackTrace();
+        }
+    }
+
     /** Notify the response for Ranging rounds update status for Dt Tag. */
     public void onRangingRoundsUpdateStatus(
             UwbSession uwbSession, PersistableBundle parameters) {
@@ -491,25 +540,94 @@ public class UwbSessionNotificationManager {
         }
     }
 
+    /** Notify that Hybrid session configuration for controller is updated. */
+    public void onHybridSessionControllerConfigured(UwbSession uwbSession, int status) {
+        SessionHandle sessionHandle = uwbSession.getSessionHandle();
+        IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
+        try {
+            uwbRangingCallbacks.onHybridSessionControllerConfigured(sessionHandle,
+                    UwbSessionNotificationHelper.convertUciStatusToParam(
+                            uwbSession.getProtocolName(), status));
+            Log.i(TAG, "IUwbRangingCallbacks - onHybridSessionControllerConfigured");
+        } catch (Exception e) {
+            Log.e(TAG, "IUwbRangingCallbacks - onHybridSessionControllerConfigured: Failed");
+            e.printStackTrace();
+        }
+    }
+
+    /** Notify that Hybrid session configuration for controller is failed to update. */
+    public void onHybridSessionControllerConfigurationFailed(UwbSession uwbSession, int status) {
+        SessionHandle sessionHandle = uwbSession.getSessionHandle();
+        IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
+        try {
+            uwbRangingCallbacks.onHybridSessionControllerConfigurationFailed(sessionHandle,
+                    UwbSessionNotificationHelper.convertUciStatusToApiReasonCode(status),
+                    UwbSessionNotificationHelper.convertUciStatusToParam(
+                            uwbSession.getProtocolName(), status));
+            Log.i(TAG, "IUwbRangingCallbacks - onHybridSessionControllerConfigurationFailed");
+        } catch (Exception e) {
+            Log.e(TAG, "IUwbRangingCallbacks - onHybridSessionControllerConfigurationFailed :"
+                    + "Failed");
+            e.printStackTrace();
+        }
+    }
+
+    /** Notify that Hybrid session configuration for controlee is updated. */
+    public void onHybridSessionControleeConfigured(UwbSession uwbSession, int status) {
+        SessionHandle sessionHandle = uwbSession.getSessionHandle();
+        IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
+        try {
+            uwbRangingCallbacks.onHybridSessionControleeConfigured(sessionHandle,
+                    UwbSessionNotificationHelper.convertUciStatusToParam(
+                            uwbSession.getProtocolName(), status));
+            Log.i(TAG, "IUwbRangingCallbacks - onHybridSessionControleeConfigured");
+        } catch (Exception e) {
+            Log.e(TAG, "IUwbRangingCallbacks - onHybridSessionControleeConfigured: Failed");
+            e.printStackTrace();
+        }
+    }
+
+    /** Notify that Hybrid session configuration for controlee is failed to update. */
+    public void onHybridSessionControleeConfigurationFailed(UwbSession uwbSession, int status) {
+        SessionHandle sessionHandle = uwbSession.getSessionHandle();
+        IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
+        try {
+            uwbRangingCallbacks.onHybridSessionControleeConfigurationFailed(sessionHandle,
+                    UwbSessionNotificationHelper.convertUciStatusToApiReasonCode(status),
+                    UwbSessionNotificationHelper.convertUciStatusToParam(
+                            uwbSession.getProtocolName(), status));
+            Log.i(TAG, "IUwbRangingCallbacks - onHybridSessionControleeConfigurationFailed");
+        } catch (Exception e) {
+            Log.e(TAG, "IUwbRangingCallbacks - onHybridSessionControleeConfigurationFailed :"
+                    + "Failed");
+            e.printStackTrace();
+        }
+    }
+
     /** Notify about new radar data message. */
     public void onRadarDataMessageReceived(UwbSession uwbSession, UwbRadarData radarData) {
         SessionHandle sessionHandle = uwbSession.getSessionHandle();
         IUwbRangingCallbacks uwbRangingCallbacks = uwbSession.getIUwbRangingCallbacks();
-        boolean permissionGranted =
-                mUwbInjector.checkUwbRangingPermissionForDataDelivery(
-                        uwbSession.getAttributionSource(), "uwb radar data");
-        if (!permissionGranted) {
-            Log.e(
-                    TAG,
-                    "Not delivering uwb radar data because of permission denial" + sessionHandle);
-            return;
+        if (uwbSession.isDataDeliveryPermissionCheckNeeded()) {
+            boolean permissionGranted =
+                    mUwbInjector.checkUwbRangingPermissionForStartDataDelivery(
+                            uwbSession.getAttributionSource(), "uwb radar data");
+            if (!permissionGranted) {
+                Log.e(
+                        TAG,
+                        "Not delivering uwb radar data because of permission denial"
+                                + sessionHandle);
+                return;
+            }
+            uwbSession.setDataDeliveryPermissionCheckNeeded(false);
         }
         PersistableBundle radarDataBundle = getRadarData(radarData).toBundle();
         try {
             // TODO: Add radar specific @SystemApi
             // Temporary workaround to avoid adding a new @SystemApi for the short-term.
             uwbRangingCallbacks.onDataReceived(
-                    sessionHandle, null, radarDataBundle, new byte[] {});
+                    sessionHandle, UwbAddress.fromBytes(new byte[] {0x0, 0x0}),
+                    radarDataBundle, new byte[] {});
             Log.i(TAG, "IUwbRangingCallbacks - onDataReceived with radar data");
         } catch (Exception e) {
             Log.e(TAG, "IUwbRangingCallbacks - onDataReceived with radar data: Failed");
@@ -731,7 +849,6 @@ public class UwbSessionNotificationManager {
                         .setActiveRangingRounds(uwbDlTDoAMeasurements[i].getActiveRangingRounds())
                         .setRoundIndex(uwbDlTDoAMeasurements[i].getRoundIndex())
                         .build();
-
                 rangingMeasurementBuilder.setRangingMeasurementMetadata(
                         dlTDoAMeasurement.toBundle());
 

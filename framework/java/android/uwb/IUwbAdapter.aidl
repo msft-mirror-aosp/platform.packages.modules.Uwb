@@ -277,6 +277,22 @@ interface IUwbAdapter {
           in PersistableBundle params, in byte[] data);
 
   /**
+    * Set data transfer phase configuration during ranging as well as dedicated data transfer.
+    * <p>This is only functional on a FIRA 2.0 compliant device.
+    *
+    * <p>On successfully sending the data transfer phase config,
+    * {@link RangingSession.Callback#onDataTransferPhaseConfigured(PersistableBundle)} is
+    * invoked.
+    *
+    * <p>On failure to send the data transfer phase config,
+    * {@link RangingSession.Callback#onDataTransferPhaseConfigFailed(int, PersistableBundle)} is
+    * invoked.
+    *
+    * @param params Protocol specific data transfer phase configuration parameters
+    */
+  void setDataTransferPhaseConfig(in SessionHandle sessionHandle, in PersistableBundle params);
+
+  /**
    * Disables or enables UWB for a user
    *
    * The provided callback's IUwbAdapterStateCallbacks#onAdapterStateChanged
@@ -362,25 +378,22 @@ interface IUwbAdapter {
 
   /**
    * @hide
-   * Sets the Hybrid UWB Session Configuration
+   * Sets the Hybrid UWB Session Controller Configuration
    *
    * @param SessionHandle Primary session handle
-   * @param params protocol specific parameters to initiate the hybrid session
-   * @return HUS configuration status code
-   * <p>{@link UwbUciConstants#STATUS_CODE_OK} UWBS successfully processes the command
-   *
-   * <p>{@link UwbUciConstants#STATUS_CODE_FAILED} Intended operation is failed to complete
-   *
-   * <p>{@link UwbUciConstants#STATUS_CODE_ERROR_SESSION_NOT_EXIST} Primary session or
-   * secondary session is not existing or not created
-   *
-   * <p>{@link UwbUciConstants#STATUS_CODE_ERROR_SESSION_NOT_CONFIGURED} Primary session or
-   * secondary session has not been configured (i.e. SESSION_STATE_IDLE)
-   *
-   * <p>{@link UwbUciConstants#STATUS_CODE_ERROR_SESSION_DUPLICATE} Session Handle in phase
-   * list is repeated
+   * @param params protocol specific parameters to initiate the hybrid session for controller.
    */
-  int setHybridSessionConfiguration(in SessionHandle sessionHandle,
+  void setHybridSessionControllerConfiguration(in SessionHandle sessionHandle,
+        in PersistableBundle params);
+
+  /**
+   * @hide
+   * Sets the Hybrid UWB Session Controlee Configuration
+   *
+   * @param SessionHandle Primary session handle
+   * @param params protocol specific parameters to initiate the hybrid session for controlee.
+   */
+  void setHybridSessionControleeConfiguration(in SessionHandle sessionHandle,
         in PersistableBundle params);
 
   void updateRangingRoundsDtTag(in SessionHandle sessionHandle, in PersistableBundle parameters);
@@ -420,4 +433,14 @@ interface IUwbAdapter {
    * The maximum allowed time to configure ranging rounds update for DT Tag
    */
   const int RANGING_ROUNDS_UPDATE_DT_TAG_THRESHOLD_MS = 3000; // Value TBD
+
+  /**
+   * The maximum allowed time to configure session data transfer phase config
+   */
+  const int SESSION_DATA_TRANSFER_PHASE_CONFIG_THRESHOLD_MS = 3000; // Value TBD
+
+  /**
+   * The maximum allowed time to configure hybrid session
+   */
+  const int SESSION_CONFIGURATION_THRESHOLD_MS = 3000; // Value TBD
 }

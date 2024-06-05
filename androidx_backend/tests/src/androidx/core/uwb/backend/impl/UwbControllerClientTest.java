@@ -16,6 +16,8 @@
 
 package androidx.core.uwb.backend.impl;
 
+import static androidx.core.uwb.backend.impl.internal.Utils.RANGE_DATA_NTF_ENABLE;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -24,16 +26,17 @@ import static org.mockito.Mockito.when;
 
 import android.os.RemoteException;
 import android.platform.test.annotations.Presubmit;
-import android.test.suitebuilder.annotation.SmallTest;
 
 import androidx.core.uwb.backend.IRangingSessionCallback;
 import androidx.core.uwb.backend.RangingControleeParameters;
 import androidx.core.uwb.backend.RangingParameters;
 import androidx.core.uwb.backend.UwbAddress;
+import androidx.core.uwb.backend.UwbRangeDataNtfConfig;
 import androidx.core.uwb.backend.impl.internal.RangingController;
 import androidx.core.uwb.backend.impl.internal.RangingSessionCallback;
 import androidx.core.uwb.backend.impl.internal.UwbComplexChannel;
 import androidx.core.uwb.backend.impl.internal.UwbServiceImpl;
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import org.junit.Before;
@@ -85,6 +88,11 @@ public class UwbControllerClientTest {
         params.complexChannel.channel = 9;
         params.complexChannel.preambleIndex = 9;
         params.peerDevices = new ArrayList<>();
+        params.uwbRangeDataNtfConfig = new UwbRangeDataNtfConfig();
+        params.uwbRangeDataNtfConfig.rangeDataNtfConfigType = RANGE_DATA_NTF_ENABLE;
+        params.uwbRangeDataNtfConfig.ntfProximityNearCm = 100;
+        params.uwbRangeDataNtfConfig.ntfProximityFarCm = 300;
+        params.slotDuration = 1;
         mUwbControllerClient.startRanging(params, mRangingSessionCallback);
         verify(mRangingController).setRangingParameters(any(
                 androidx.core.uwb.backend.impl.internal.RangingParameters.class));

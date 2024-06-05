@@ -20,6 +20,7 @@ import static com.android.internal.util.Preconditions.checkNotNull;
 
 import android.Manifest.permission;
 import android.annotation.CallbackExecutor;
+import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
@@ -148,8 +149,8 @@ public final class UwbManager {
          * The state when UWB is enabled by user but the hardware is not enabled since no clients
          * have requested for it.
          * Only sent if the device supports {@link #isUwbHwIdleTurnOffEnabled()} feature.
-         * @hide
          */
+        @FlaggedApi("com.android.uwb.flags.hw_state")
         int STATE_ENABLED_HW_IDLE = 3;
 
         /**
@@ -554,13 +555,13 @@ public final class UwbManager {
     }
 
     /**
-     * @hide
      * Get uwbs timestamp in micros.
      *
      * @return uwb device timestamp in micros.
      */
     @NonNull
     @RequiresPermission(permission.UWB_PRIVILEGED)
+    @FlaggedApi("com.android.uwb.flags.query_timestamp_micros")
     public long queryUwbsTimestampMicros() {
         try {
             return mUwbAdapter.queryUwbsTimestampMicros();
@@ -745,7 +746,7 @@ public final class UwbManager {
      *
      * <p>
      * If the device supports automatically turning off UWB hardware, the state of UWB hardware
-     * is controller by:
+     * is controlled by:
      * <li> UWB user toggle state or Airplane mode state, AND </li>
      * <li> Whether any clients are actively enabling UWB </li>
      * </p>
@@ -754,8 +755,8 @@ public final class UwbManager {
      *
      * @see #isUwbHwEnableRequested()
      * @see #requestUwbHwEnable(boolean)
-     * @hide
      */
+    @FlaggedApi("com.android.uwb.flags.hw_state")
     @RequiresPermission(permission.UWB_PRIVILEGED)
     public boolean isUwbHwIdleTurnOffEnabled() {
         try {
@@ -781,8 +782,8 @@ public final class UwbManager {
      *
      * @see #isUwbHwIdleTurnOffEnabled()
      * @see #requestUwbHwEnable(boolean)
-     * @hide
      */
+    @FlaggedApi("com.android.uwb.flags.hw_state")
     @RequiresPermission(permission.UWB_PRIVILEGED)
     public boolean isUwbHwEnableRequested() {
         try {
@@ -810,8 +811,8 @@ public final class UwbManager {
      *
      * @see #isUwbHwIdleTurnOffEnabled()
      * @see #isUwbHwEnableRequested() ()
-     * @hide
      */
+    @FlaggedApi("com.android.uwb.flags.hw_state")
     @RequiresPermission(permission.UWB_PRIVILEGED)
     public void requestUwbHwEnabled(boolean enabled) {
         try {
