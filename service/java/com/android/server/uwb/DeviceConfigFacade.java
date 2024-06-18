@@ -96,6 +96,7 @@ public class DeviceConfigFacade {
     private boolean mCccSupportedSyncCodesLittleEndian;
     private boolean mPersistentCacheUseForCountryCodeEnabled;
     private boolean mHwIdleTurnOffEnabled;
+    private boolean mFusedCountryCodeProviderEnabled;
 
     public DeviceConfigFacade(Handler handler, Context context) {
         mContext = context;
@@ -296,6 +297,12 @@ public class DeviceConfigFacade {
                 DeviceConfig.NAMESPACE_UWB,
                 "hw_idle_turn_off_enabled",
                 mContext.getResources().getBoolean(R.bool.hw_idle_turn_off_enabled)
+        );
+
+        mFusedCountryCodeProviderEnabled = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "fused_country_code_provider_enabled",
+                mContext.getResources().getBoolean(R.bool.fused_country_code_provider_enabled)
         );
 
         // A little parsing and cleanup:
@@ -584,5 +591,12 @@ public class DeviceConfigFacade {
      */
     public boolean isHwIdleTurnOffEnabled() {
         return mHwIdleTurnOffEnabled;
+    }
+
+    /**
+     * Returns whether used country code provider is enabled or not.
+     */
+    public boolean isFusedCountryCodeProviderEnabled() {
+        return mFusedCountryCodeProviderEnabled;
     }
 }
