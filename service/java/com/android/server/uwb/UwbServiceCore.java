@@ -204,7 +204,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         @Override
         public void binderDied() {
             Log.i(TAG, "binderDied : reset hw enable for " + this);
-            mUwbClientHwState.setEnabled(this, false);
+            requestHwEnabled(false, mAttributionSource, mBinder);
         }
     }
 
