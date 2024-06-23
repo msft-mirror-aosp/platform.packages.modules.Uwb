@@ -26,6 +26,7 @@ import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TY
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY;
 import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_FAILED;
 
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.radar.RadarParams.RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES;
 
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -47,7 +48,6 @@ import android.platform.test.annotations.Presubmit;
 import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.DeviceFlagsValueProvider;
-import android.test.suitebuilder.annotation.SmallTest;
 import android.util.Pair;
 import android.uwb.IUwbOemExtensionCallback;
 import android.uwb.IUwbRangingCallbacks;
@@ -56,6 +56,7 @@ import android.uwb.RangingReport;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.server.uwb.data.UwbRadarData;
@@ -63,6 +64,7 @@ import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.uwb.flags.Flags;
 
+import com.google.uwb.support.fira.FiraOnControleeRemovedParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.radar.RadarData;
@@ -74,6 +76,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -585,9 +588,20 @@ public class UwbSessionNotificationManagerTest {
 
     @Test
     public void testOnControleeRemoved() throws Exception {
-        mUwbSessionNotificationManager.onControleeRemoved(mUwbSession);
+        UwbAddress address = UwbTestUtils.PEER_EXTENDED_UWB_ADDRESS;
+        int reason = FiraOnControleeRemovedParams.Reason.LOST_CONNECTION;
 
-        verify(mIUwbRangingCallbacks).onControleeRemoved(eq(mSessionHandle), any());
+        ArgumentCaptor<PersistableBundle> bundleCaptor =
+                ArgumentCaptor.forClass(PersistableBundle.class);
+
+        mUwbSessionNotificationManager.onControleeRemoved(mUwbSession, address, reason);
+        verify(mIUwbRangingCallbacks).onControleeRemoved(eq(mSessionHandle),
+                bundleCaptor.capture());
+
+        FiraOnControleeRemovedParams params =
+                FiraOnControleeRemovedParams.fromBundle(bundleCaptor.getValue());
+        assertThat(params.getAddress()).isEqualTo(address);
+        assertThat(params.getReason()).isEqualTo(reason);
     }
 
     @Test
