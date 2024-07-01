@@ -208,7 +208,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         @Override
         public void binderDied() {
             Log.i(TAG, "binderDied : reset hw enable for " + this);
-            mUwbClientHwState.setEnabled(this, false);
+            requestHwEnabled(false, mAttributionSource, mBinder);
         }
     }
 
@@ -365,6 +365,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                 ret = "ACTIVE";
                 break;
             case UwbUciConstants.DEVICE_STATE_ERROR:
+            case UwbUciConstants.DEVICE_STATE_INIT_ERROR:
                 ret = "ERROR";
                 break;
         }
@@ -442,13 +443,6 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
     }
 
     void notifyAdapterState(int adapterState, int reason) {
-        // Check if the current adapter state is same as the state in the last adapter state
-        // notification, to avoid sending extra onAdapterStateChanged() notifications. For example,
-        // this can happen when UWB is toggled on and a valid country code is already set.
-        if (mLastAdapterStateNotification == adapterState
-                && mLastAdapterStateChangedReason == reason) {
-            return;
-        }
         Log.d(TAG, "notifyAdapterState(): adapterState = " + adapterState + ", reason = " + reason);
 
         synchronized (mAdapterStateCallbacksList) {
@@ -1162,7 +1156,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                             takBugReportAfterDeviceError("UWB Bugreport: error enabling UWB");
                         }
                         for (String chipId : mUwbInjector.getMultichipData().getChipIds()) {
-                            updateState(AdapterStateCallback.STATE_DISABLED, chipId);
+                            updateDeviceState(UwbUciConstants.DEVICE_STATE_INIT_ERROR, chipId);
                         }
                         for (InitializationFailureListener listener : mListeners) {
                             listener.onFailure();
