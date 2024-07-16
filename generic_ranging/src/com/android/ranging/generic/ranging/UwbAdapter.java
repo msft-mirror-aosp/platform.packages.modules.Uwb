@@ -308,14 +308,21 @@ public class UwbAdapter implements RangingAdapter {
                 }
             }
 
-            RangingData rangingData =
-                    RangingData.builder()
+            RangingData.Builder rangingDataBuilder =
+                    new RangingData.Builder()
                             .setRangingTechnology(RangingTechnology.UWB)
                             .setRangeDistance(position.getDistance().getValue())
                             .setRssi(position.getRssiDbm())
                             .setTimestamp(position.getElapsedRealtimeNanos())
-                            .build();
-            callback.get().onRangingData(rangingData);
+                            .setPeerAddress(device.getAddress().toBytes());
+
+            if (position.getAzimuth() != null) {
+                rangingDataBuilder.setAzimuth(position.getAzimuth().getValue());
+            }
+            if (position.getElevation() != null) {
+                rangingDataBuilder.setElevation(position.getElevation().getValue());
+            }
+            callback.get().onRangingData(rangingDataBuilder.build());
         }
 
         @Override
