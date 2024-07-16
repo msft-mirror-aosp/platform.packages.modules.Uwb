@@ -27,12 +27,14 @@ import android.util.Log;
 
 import androidx.core.uwb.backend.IUwb;
 import androidx.core.uwb.backend.impl.internal.RangingCapabilities;
+import androidx.core.uwb.backend.impl.internal.RangingController;
 import androidx.core.uwb.backend.impl.internal.RangingDevice;
 import androidx.core.uwb.backend.impl.internal.RangingParameters;
 import androidx.core.uwb.backend.impl.internal.RangingPosition;
 import androidx.core.uwb.backend.impl.internal.RangingSessionCallback;
 import androidx.core.uwb.backend.impl.internal.UwbAddress;
 import androidx.core.uwb.backend.impl.internal.UwbAvailabilityCallback;
+import androidx.core.uwb.backend.impl.internal.UwbComplexChannel;
 import androidx.core.uwb.backend.impl.internal.UwbDevice;
 import androidx.core.uwb.backend.impl.internal.UwbFeatureFlags;
 import androidx.core.uwb.backend.impl.internal.UwbServiceImpl;
@@ -48,9 +50,10 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 
 import java.util.Optional;
+import java.util.concurrent.Executors;
 
 /** Ranging Adapter for Ultra-Wide Band (UWB). */
-class UwbAdapter implements RangingAdapter {
+public class UwbAdapter implements RangingAdapter {
 
     public static String TAG = UwbAdapter.class.getSimpleName();
 
@@ -69,7 +72,8 @@ class UwbAdapter implements RangingAdapter {
 
     private final ListeningExecutorService executorService;
 
-    public UwbAdapter(Context context, ListeningExecutorService executorServices)
+    public UwbAdapter(Context context, ListeningExecutorService executorServices,
+            DeviceType deviceType)
             throws RemoteException {
 
         UwbFeatureFlags uwbFeatureFlags = new UwbFeatureFlags.Builder()
@@ -84,7 +88,9 @@ class UwbAdapter implements RangingAdapter {
         //TODO(b/331206299): Add support to pick controller or controlee.
         this.uwbClient =
                 context.getPackageManager().hasSystemFeature("android.hardware.uwb")
-                        ? Optional.of(mUwbService.getControlee(context))
+                        ? (deviceType == DeviceType.CONTROLEE) ? Optional.of(
+                        mUwbService.getControlee(context)) : Optional.of(
+                        mUwbService.getController(context))
                         : Optional.empty();
         this.rangingParameters = Optional.empty();
         this.callback = Optional.empty();
@@ -177,6 +183,25 @@ class UwbAdapter implements RangingAdapter {
         }, executorService);
     }
 
+    ListenableFuture<UwbComplexChannel> getComplexChannel() throws RemoteException {
+        if (uwbClient.isEmpty()) {
+            clear();
+
+            return immediateFailedFuture(new IllegalStateException("UWB is not available."));
+        }
+        if (!(uwbClient.get() instanceof RangingController)) {
+            return immediateFuture(null);
+        }
+        return Futures.submit(() -> {
+            return ((RangingController) uwbClient.get()).getComplexChannel();
+        }, executorService);
+    }
+
+    @VisibleForTesting
+    public void setLocalADdress(UwbAddress uwbAddress) {
+        uwbClient.get().setLocalAddress(uwbAddress);
+    }
+
     ListenableFuture<RangingCapabilities> getCapabilities() throws RemoteException {
         if (uwbClient.isEmpty()) {
             clear();
@@ -200,7 +225,7 @@ class UwbAdapter implements RangingAdapter {
         this.uwbListener = Optional.of(uwbListener);
         uwbClient.get().setRangingParameters(this.rangingParameters.get());
         var future = Futures.submit(() -> {
-            uwbClient.get().startRanging(uwbListener, executorService);
+            uwbClient.get().startRanging(uwbListener, Executors.newSingleThreadExecutor());
         }, executorService);
         Futures.addCallback(
                 future,
@@ -283,14 +308,21 @@ class UwbAdapter implements RangingAdapter {
                 }
             }
 
-            RangingData rangingData =
-                    RangingData.builder()
+            RangingData.Builder rangingDataBuilder =
+                    new RangingData.Builder()
                             .setRangingTechnology(RangingTechnology.UWB)
                             .setRangeDistance(position.getDistance().getValue())
                             .setRssi(position.getRssiDbm())
                             .setTimestamp(position.getElapsedRealtimeNanos())
-                            .build();
-            callback.get().onRangingData(rangingData);
+                            .setPeerAddress(device.getAddress().toBytes());
+
+            if (position.getAzimuth() != null) {
+                rangingDataBuilder.setAzimuth(position.getAzimuth().getValue());
+            }
+            if (position.getElevation() != null) {
+                rangingDataBuilder.setElevation(position.getElevation().getValue());
+            }
+            callback.get().onRangingData(rangingDataBuilder.build());
         }
 
         @Override
@@ -304,7 +336,7 @@ class UwbAdapter implements RangingAdapter {
                     return;
                 }
                 internalState = UwbAdapterState.STOPPED;
-                stopRanging();
+                // stopRanging();
             }
             if (reason == RangingSessionCallback.REASON_STOP_RANGING_CALLED) {
                 callback.get().onStopped(RangingAdapter.Callback.StoppedReason.REQUESTED);
@@ -312,6 +344,13 @@ class UwbAdapter implements RangingAdapter {
                 callback.get().onStopped(RangingAdapter.Callback.StoppedReason.ERROR);
             }
             clear();
+        }
+    }
+
+    @VisibleForTesting
+    public void setComplexChannelForTesting() {
+        if (uwbClient.get() instanceof RangingController) {
+            uwbClient.get().setForTesting(true);
         }
     }
 
@@ -329,6 +368,11 @@ class UwbAdapter implements RangingAdapter {
     @VisibleForTesting
     public RangingSessionCallback getListener() {
         return this.uwbListener.get();
+    }
+
+    public enum DeviceType {
+        CONTROLEE,
+        CONTROLLER,
     }
 
     private enum UwbAdapterState {
