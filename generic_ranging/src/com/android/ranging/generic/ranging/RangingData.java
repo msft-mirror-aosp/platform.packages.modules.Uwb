@@ -18,40 +18,124 @@ package com.android.ranging.generic.ranging;
 
 import com.android.ranging.generic.RangingTechnology;
 
-import com.google.auto.value.AutoValue;
+import java.util.OptionalDouble;
 
 /** Ranging Data class contains data received from a ranging technology such as UWB or CS. */
-@AutoValue
-public abstract class RangingData {
+public class RangingData {
+    private final RangingTechnology mRangingTechnology;
+    private final double mRangeDistance;
+    private final float mAzimuth;
+    private final float mElevation;
+    private final int mRssi;
+    private final long mTimestamp;
+    private final byte[] mPeerAddress;
 
     /** Returns the ranging technology this data is for. */
-    public abstract RangingTechnology getRangingTechnology();
+    public RangingTechnology getRangingTechnology() {
+        return mRangingTechnology;
+    }
 
     /** Returns range distance in meters. */
-    public abstract double getRangeDistance();
+    public double getRangeDistance() {
+        return mRangeDistance;
+    }
+
+    /** Gets the azimuth in degrees. */
+    public OptionalDouble getAzimuth() {
+        if (mAzimuth != Float.MAX_VALUE) {
+            return OptionalDouble.of(mAzimuth);
+        }
+        return OptionalDouble.empty();
+    }
+
+    /** Gets the elevation in degrees. */
+    public OptionalDouble getElevation() {
+        if (mElevation != Float.MAX_VALUE) {
+            return OptionalDouble.of(mElevation);
+        }
+        return OptionalDouble.empty();
+    }
 
     /** Returns rssi. */
-    public abstract int getRssi();
+    public int getRssi() {
+        return mRssi;
+    }
 
-    /** Returns timestamp in nanons. */
-    public abstract long getTimestamp();
+    /** Returns timestamp in nanos. */
+    public long getTimestamp() {
+        return mTimestamp;
+    }
 
-    /** Returns a builder for {@link RangingData}. */
-    public static Builder builder() {
-        return new AutoValue_RangingData.Builder();
+    /** Returns a copy of the sender's address */
+    public byte[] getPeerAddress() {
+        return mPeerAddress.clone();
+    }
+
+    private RangingData(Builder builder) {
+        mRangingTechnology = builder.mRangingTechnology;
+        mRangeDistance = builder.mRangeDistance;
+        mRssi = builder.mRssi;
+        mTimestamp = builder.mTimestamp;
+        mPeerAddress = builder.mPeerAddress;
+        mAzimuth = builder.mAzimuth;
+        mElevation = builder.mElevation;
     }
 
     /** Builder for {@link RangingData}. */
-    @AutoValue.Builder
-    public abstract static class Builder {
-        public abstract Builder setRangingTechnology(RangingTechnology rangingTechnology);
+    public static class Builder {
+        private RangingTechnology mRangingTechnology;
+        private double mRangeDistance;
+        private float mAzimuth = Float.MAX_VALUE;
+        private float mElevation = Float.MAX_VALUE;
+        private int mRssi;
+        private long mTimestamp;
+        private byte[] mPeerAddress;
 
-        public abstract Builder setRangeDistance(double rangeDistance);
+        /** Set the ranging technology that produced this data */
+        public Builder setRangingTechnology(RangingTechnology rangingTechnology) {
+            mRangingTechnology = rangingTechnology;
+            return this;
+        }
 
-        public abstract Builder setRssi(int rssi);
+        /** Set the measured distance in meters */
+        public Builder setRangeDistance(double rangeDistance) {
+            mRangeDistance = rangeDistance;
+            return this;
+        }
 
-        public abstract Builder setTimestamp(long timestamp);
+        /** Sets the azimuth in degrees. */
+        public Builder setAzimuth(float azimuth) {
+            mAzimuth = azimuth;
+            return this;
+        }
 
-        public abstract RangingData build();
+        /** Sets the elevation in degrees. */
+        public Builder setElevation(float elevation) {
+            mElevation = elevation;
+            return this;
+        }
+
+        /** Set the measured RSSI in dBm */
+        public Builder setRssi(int rssi) {
+            mRssi = rssi;
+            return this;
+        }
+
+        /** Set the timestamp of the measurement */
+        public Builder setTimestamp(long timestamp) {
+            mTimestamp = timestamp;
+            return this;
+        }
+
+        /** Set the peer address as a byte array */
+        public Builder setPeerAddress(byte[] peerAddress) {
+            mPeerAddress = peerAddress;
+            return this;
+        }
+
+        /** Build the ranging data */
+        public RangingData build() {
+            return new RangingData(this);
+        }
     }
 }
