@@ -94,10 +94,10 @@ public class NativeUwbManager {
         mDeviceListener.onCoreGenericErrorNotificationReceived(status, chipId);
     }
 
-    public void onSessionStatusNotificationReceived(long id, int state, int reasonCode) {
-        Log.d(TAG, "onSessionStatusNotificationReceived(" + id + ", " + state + ", " + reasonCode
-                + ")");
-        mSessionListener.onSessionStatusNotificationReceived(id, state, reasonCode);
+    public void onSessionStatusNotificationReceived(long id, int token, int state, int reasonCode) {
+        Log.d(TAG, "onSessionStatusNotificationReceived(" + id + ", " + token + ", "
+                + state + ", " + reasonCode + ")");
+        mSessionListener.onSessionStatusNotificationReceived(id, token, state, reasonCode);
     }
 
     public void onRangeDataNotificationReceived(UwbRangingData rangeData) {
@@ -362,12 +362,14 @@ public class NativeUwbManager {
      * @return : refer to SESSION_SET_APP_CONFIG_RSP
      * in the Table 16: Control messages to set Application configurations
      */
-    public byte controllerMulticastListUpdate(int sessionId, int action, int noOfControlee,
-            byte[] addresses, int[] subSessionIds, byte[] subSessionKeyList,
+    public UwbMulticastListUpdateStatus controllerMulticastListUpdate(int sessionId, int action,
+            int noOfControlee, byte[] addresses, int[] subSessionIds, byte[] subSessionKeyList,
             String chipId) {
         synchronized (mNativeLock) {
             return nativeControllerMulticastListUpdate(sessionId, (byte) action,
-                    (byte) noOfControlee, addresses, subSessionIds, subSessionKeyList, chipId);
+                    (byte) noOfControlee, addresses, subSessionIds, subSessionKeyList, chipId,
+                    mUwbInjector.isMulticastListNtfV2Supported(),
+                    mUwbInjector.isMulticastListRspV2Supported());
         }
     }
 
@@ -515,7 +517,7 @@ public class NativeUwbManager {
     }
 
     /**
-     * Sets the Hybrid UWB Session Configuration
+     * Sets the Hybrid UWB Session Controller Configuration
      *
      * @param sessionId : Primary session ID
      * @param numberOfPhases : Number of secondary sessions
@@ -525,10 +527,27 @@ public class NativeUwbManager {
      * @param chipId : Identifier of UWB chip for multi-HAL devices
      * @return Byte representing the status of the operation
      */
-    public byte setHybridSessionConfiguration(int sessionId, int numberOfPhases, byte[] updateTime,
+    public byte setHybridSessionControllerConfiguration(int sessionId, byte messageControl,
+            int numberOfPhases, byte[] updateTime, byte[] phaseList, String chipId) {
+        synchronized (mNativeLock) {
+            return nativeSetHybridSessionControllerConfigurations(sessionId, messageControl,
+                numberOfPhases, updateTime, phaseList, chipId);
+        }
+    }
+
+    /**
+     * Sets the Hybrid UWB Session Controlee Configuration
+     *
+     * @param sessionId : Primary session ID
+     * @param numberOfPhases : Number of secondary sessions
+     * @param phaseList : list of secondary sessions
+     * @param chipId : Identifier of UWB chip for multi-HAL devices
+     * @return Byte representing the status of the operation
+     */
+    public byte setHybridSessionControleeConfiguration(int sessionId, int numberOfPhases,
             byte[] phaseList, String chipId) {
         synchronized (mNativeLock) {
-            return nativeSetHybridSessionConfigurations(sessionId, numberOfPhases, updateTime,
+            return nativeSetHybridSessionControleeConfigurations(sessionId, numberOfPhases,
                 phaseList, chipId);
         }
     }
@@ -579,9 +598,10 @@ public class NativeUwbManager {
 
     private native UwbTlvData nativeGetCapsInfo(String chipId);
 
-    private native byte nativeControllerMulticastListUpdate(int sessionId, byte action,
-            byte noOfControlee, byte[] address, int[] subSessionId, byte[] subSessionKeyList,
-            String chipId);
+    private native UwbMulticastListUpdateStatus nativeControllerMulticastListUpdate(int sessionId,
+            byte action, byte noOfControlee, byte[] address, int[] subSessionId,
+            byte[] subSessionKeyList, String chipId, boolean isMulticastListNtfV2Supported,
+            boolean isMulticastListRspV2Supported);
 
     private native byte nativeSetCountryCode(byte[] countryCode, String chipId);
 
@@ -599,6 +619,10 @@ public class NativeUwbManager {
 
     private native int nativeGetSessionToken(int sessionId, String chipId);
 
-    private native byte nativeSetHybridSessionConfigurations(int sessionId, int noOfPhases,
-            byte[] updateTime, byte[] phaseList, String chipId);
+    private native byte nativeSetHybridSessionControllerConfigurations(int sessionId,
+            byte messageControl, int noOfPhases, byte[] updateTime, byte[] phaseList,
+                String chipId);
+
+    private native byte nativeSetHybridSessionControleeConfigurations(int sessionId,
+            int noOfPhases, byte[] phaseList, String chipId);
 }

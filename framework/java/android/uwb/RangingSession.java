@@ -436,7 +436,8 @@ public final class RangingSession implements AutoCloseable {
          * @param parameters protocol specific parameters for set data transfer phase config failure
          */
         @FlaggedApi("com.android.uwb.flags.data_transfer_phase_config")
-        default void onDataTransferPhaseConfigFailed(@NonNull PersistableBundle parameters) {}
+        default void onDataTransferPhaseConfigFailed(@Reason int reason,
+                @NonNull PersistableBundle parameters) {}
 
         /**
          * Invoked when service is discovered via OOB.
@@ -467,6 +468,43 @@ public final class RangingSession implements AutoCloseable {
          */
         @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
         default void onRangingRoundsUpdateDtTagStatus(@NonNull PersistableBundle parameters) {}
+
+        /**
+         * Invoked when hybrid session controller is successfully configured.
+         *
+         * @param parameters protocol specific parameters sent for HUS session configuration
+         */
+        @FlaggedApi("com.android.uwb.flags.hybrid_session_support")
+        default void onHybridSessionControllerConfigured(
+                @NonNull PersistableBundle parameters) {}
+
+        /**
+         * Invoked when hybrid session controller configuration fails.
+         *
+         * @param parameters protocol specific parameters for configuration failure
+         */
+        @FlaggedApi("com.android.uwb.flags.hybrid_session_support")
+        default void onHybridSessionControllerConfigurationFailed(
+                @RangingChangeReason int reason, @NonNull PersistableBundle parameters) {
+        }
+
+        /**
+         * Invoked when hybrid session controlee is successfully configured.
+         *
+         * @param parameters protocol specific parameters sent for HUS session configuration
+         */
+        @FlaggedApi("com.android.uwb.flags.hybrid_session_support")
+        default void onHybridSessionControleeConfigured(
+                @NonNull PersistableBundle parameters) {}
+
+        /**
+         *Invoked when hybrid session controlee configuration fails.
+         *
+         * @param parameters protocol specific parameters for configuration failure
+         */
+        @FlaggedApi("com.android.uwb.flags.hybrid_session_support")
+        default void onHybridSessionControleeConfigurationFailed(
+                @RangingChangeReason int reason, @NonNull PersistableBundle parameters) {}
     }
 
     /**
@@ -852,33 +890,58 @@ public final class RangingSession implements AutoCloseable {
     }
 
     /**
-     * Sets the Hybrid UWB Session Configuration
+     * Sets the Hybrid UWB Session Controller Configuration.
      *
-     * @param params protocol specific parameters to initiate the hybrid session
-     * @return HUS configuration status code
-     * <p>{@link UwbUciConstants#STATUS_CODE_OK} UWBS successfully processes the command
+     * <p>On successfully setting the hybrid controller configuration,
+     * {@link RangingSession.Callback#onHybridSessionControllerConfigured(PersistableBundle)}
+     * is invoked.
      *
-     * <p>{@link UwbUciConstants#STATUS_CODE_FAILED} Intended operation is failed to complete
+     * <p>On failing to set the hybrid controller configuration,
+     * {@link RangingSession.Callback#onHybridSessionControllerConfigurationFailed(int,
+     * PersistableBundle)} is invoked.
      *
-     * <p>{@link UwbUciConstants#STATUS_CODE_ERROR_SESSION_NOT_EXIST} Primary session or
-     * secondary session is not existing or not created
-     *
-     * <p>{@link UwbUciConstants#STATUS_CODE_ERROR_SESSION_NOT_CONFIGURED} Primary session or
-     * secondary session has not been configured (i.e. SESSION_STATE_IDLE)
-     *
-     * <p>{@link UwbUciConstants#STATUS_CODE_ERROR_SESSION_DUPLICATE} Session Handle in phase
-     * list is repeated
+     * @param params protocol specific parameters to configure the hybrid session controller
      * @throws RemoteException if a remote error occurred
      */
     @RequiresPermission(Manifest.permission.UWB_PRIVILEGED)
     @FlaggedApi("com.android.uwb.flags.hybrid_session_support")
-    public int setHybridSessionConfiguration(@NonNull PersistableBundle params) {
+    public void setHybridSessionControllerConfiguration(@NonNull PersistableBundle params) {
         if (!isOpen()) {
             throw new IllegalStateException("Ranging session is not open");
         }
 
+        Log.v(mTag, "setHybridSessionControllerConfiguration - sessionHandle: " + mSessionHandle);
         try {
-            return mAdapter.setHybridSessionConfiguration(mSessionHandle, params);
+            mAdapter.setHybridSessionControllerConfiguration(mSessionHandle, params);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Sets the Hybrid UWB Session Controlee Configuration.
+     *
+     * <p>On successfully setting the hybrid Controlee configuration,
+     * {@link RangingSession.Callback#onHybridSessionControleeConfigured(PersistableBundle)}
+     * is invoked.
+     *
+     * <p>On failing to set the hybrid Controlee configuration,
+     * {@link RangingSession.Callback#onHybridSessionControleeConfigurationFailed(int,
+     * PersistableBundle)} is invoked.
+     *
+     * @param params protocol specific parameters to configure the hybrid session Controlee
+     * @throws RemoteException if a remote error occurred
+     */
+    @RequiresPermission(Manifest.permission.UWB_PRIVILEGED)
+    @FlaggedApi("com.android.uwb.flags.hybrid_session_support")
+    public void setHybridSessionControleeConfiguration(@NonNull PersistableBundle params) {
+        if (!isOpen()) {
+            throw new IllegalStateException("Ranging session is not open");
+        }
+
+        Log.v(mTag, "setHybridSessionControleeConfiguration - sessionHandle: " + mSessionHandle);
+        try {
+            mAdapter.setHybridSessionControleeConfiguration(mSessionHandle, params);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
@@ -1200,14 +1263,15 @@ public final class RangingSession implements AutoCloseable {
     /**
      * @hide
      */
-    public void onDataTransferPhaseConfigFailed(@NonNull PersistableBundle params) {
+    public void onDataTransferPhaseConfigFailed(@Callback.Reason int reason,
+            @NonNull PersistableBundle params) {
         if (!isOpen()) {
             Log.w(mTag, "onDataTransferPhaseConfigFailed invoked for non-open session");
             return;
         }
 
         Log.v(mTag, "onDataTransferPhaseConfigFailed - sessionHandle: " + mSessionHandle);
-        executeCallback(() -> mCallback.onDataTransferPhaseConfigFailed(params));
+        executeCallback(() -> mCallback.onDataTransferPhaseConfigFailed(reason, params));
     }
 
     /**
@@ -1249,6 +1313,66 @@ public final class RangingSession implements AutoCloseable {
         if (SdkLevel.isAtLeastU()) {
             executeCallback(() -> mCallback.onRangingRoundsUpdateDtTagStatus(params));
         }
+    }
+
+    /**
+     * @hide
+     */
+    public void onHybridSessionControllerConfigured(@NonNull PersistableBundle params) {
+        if (!isOpen()) {
+            Log.w(mTag, "onHybridSessionControllerConfigured invoked for non-open session");
+            return;
+        }
+
+        Log.v(mTag, "onHybridSessionControllerConfigured - sessionHandle: " + mSessionHandle);
+        executeCallback(() -> mCallback.onHybridSessionControllerConfigured(params));
+    }
+
+    /**
+     * @hide
+     */
+    public void onHybridSessionControllerConfigurationFailed(@Callback.Reason int reason,
+            @NonNull PersistableBundle params) {
+        if (!isOpen()) {
+            Log.w(mTag, "onHybridSessionControllerConfigurationFailed invoked for non-open"
+                    + "session");
+            return;
+        }
+
+        Log.v(mTag, "onHybridSessionControllerConfigurationFailed - sessionHandle: "
+                + mSessionHandle);
+        executeCallback(() -> mCallback.onHybridSessionControllerConfigurationFailed(
+                reason, params));
+    }
+
+    /**
+     * @hide
+     */
+    public void onHybridSessionControleeConfigured(@NonNull PersistableBundle params) {
+        if (!isOpen()) {
+            Log.w(mTag, "onHybridSessionControleeConfigured invoked for non-open session");
+            return;
+        }
+
+        Log.v(mTag, "onHybridSessionControleeConfigured - sessionHandle: " + mSessionHandle);
+        executeCallback(() -> mCallback.onHybridSessionControleeConfigured(params));
+    }
+
+    /**
+     * @hide
+     */
+    public void onHybridSessionControleeConfigurationFailed(@Callback.Reason int reason,
+            @NonNull PersistableBundle params) {
+        if (!isOpen()) {
+            Log.w(mTag, "onHybridSessionControleeConfigurationFailed invoked for non-open"
+                    + "session");
+            return;
+        }
+
+        Log.v(mTag, "onHybridSessionControleeConfigurationFailed - sessionHandle: "
+                + mSessionHandle);
+        executeCallback(() -> mCallback.onHybridSessionControleeConfigurationFailed(
+                reason, params));
     }
 
     /**

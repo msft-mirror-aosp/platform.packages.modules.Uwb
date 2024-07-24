@@ -19,6 +19,8 @@ package com.android.server.uwb;
 import static android.Manifest.permission.UWB_RANGING;
 import static android.permission.PermissionManager.PERMISSION_GRANTED;
 
+import static java.lang.Math.toRadians;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityManager;
@@ -498,6 +500,16 @@ public class UwbInjector {
         }
     }
 
+    public boolean isMulticastListNtfV2Supported() {
+        return mContext.getResources().getBoolean(
+                        com.android.uwb.resources.R.bool.is_multicast_list_update_ntf_v2_supported);
+    }
+
+    public boolean isMulticastListRspV2Supported() {
+        return mContext.getResources().getBoolean(
+                        com.android.uwb.resources.R.bool.is_multicast_list_update_rsp_v2_supported);
+    }
+
     /**
      * Gets the configured pose source, which is reference counted. If there are no references
      * to the pose source, one will be created based on the device configuration. This may
@@ -612,7 +624,7 @@ public class UwbInjector {
 
             // Fov requires an elevation and a spherical coord.
             if (cfg.isEnablePrimerFov()) {
-                builder.addPrimer(new FovPrimer(cfg.getPrimerFovDegree()));
+                builder.addPrimer(new FovPrimer((float) toRadians(cfg.getPrimerFovDegree())));
             }
 
             // Back azimuth detection requires true spherical.

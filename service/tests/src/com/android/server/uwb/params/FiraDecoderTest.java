@@ -56,8 +56,8 @@ import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.when;
 
 import android.platform.test.annotations.Presubmit;
-import android.test.suitebuilder.annotation.SmallTest;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.server.uwb.UwbInjector;
@@ -166,7 +166,6 @@ public class FiraDecoderTest {
         MockitoAnnotations.initMocks(this);
 
         when(mUwbInjector.getFeatureFlags()).thenReturn(mFeatureFlags);
-        when(mFeatureFlags.cr423CleanupIntervalScheduling()).thenReturn(true);
 
         mFiraDecoder = new FiraDecoder(mUwbInjector);
     }

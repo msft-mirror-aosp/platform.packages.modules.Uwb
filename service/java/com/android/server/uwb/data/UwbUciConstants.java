@@ -32,6 +32,11 @@ public class UwbUciConstants {
     public static final byte DEVICE_STATE_OFF = 0x00; //NOT defined in the UCI spec
     public static final byte DEVICE_STATE_READY = 0x01;
     public static final byte DEVICE_STATE_ACTIVE = 0x02;
+    /**
+     * This is NOT defined in the UCI spec. It exists so that OEMs can trace initialization
+     * failures from IUwbOemExtensionCallback#onDeviceStatusNotificationReceived.
+     */
+    public static final byte DEVICE_STATE_INIT_ERROR = (byte) 0xFE;
     public static final byte DEVICE_STATE_ERROR = (byte) 0xFF;
 
     public static final byte UWBS_RESET = 0x00;
@@ -132,6 +137,8 @@ public class UwbUciConstants {
 
     public static final int CONTENTION_BASED_RANGING = FiraParams.CONTENTION_BASED_RANGING;
     public static final int TIME_SCHEDULED_RANGING = FiraParams.TIME_SCHEDULED_RANGING;
+    public static final int HYBRID_SCHEDULED_RANGING =
+            FiraParams.HYBRID_SCHEDULED_RANGING;
 
     public static final int CONSTRAINT_LENGTH_3 = FiraParams.CONSTRAINT_LENGTH_3;
     public static final int CONSTRAINT_LENGTH_7 = FiraParams.CONSTRAINT_LENGTH_7;
@@ -264,8 +271,8 @@ public class UwbUciConstants {
      */
     public static final int STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS =
             FiraParams.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS;
-    public static final int STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGMENT =
-            FiraParams.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGMENT;
+    public static final int STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGNMENT =
+            FiraParams.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGNMENT;
 
     /* UWB Device Extended Mac address length */
     public static final int UWB_DEVICE_SHORT_MAC_ADDRESS_LEN = 2;
@@ -285,6 +292,6 @@ public class UwbUciConstants {
     public static final int FIRA_VERSION_MAJOR_1 = 1;
     public static final int FIRA_VERSION_MAJOR_2 = 2;
 
-    /* Used by DATA_TRANSFER_PHASE_CONFIG */
-    public static final int DATA_TRANSFER_CONTROL_SHORT_MAC_ADDRESS = 0;
+    /* Used by DATA_TRANSFER_PHASE_CONFIG and Hybrid config updates */
+    public static final int SHORT_MAC_ADDRESS = 0;
 }

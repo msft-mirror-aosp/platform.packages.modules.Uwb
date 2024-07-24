@@ -281,7 +281,7 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
 
     @Override
     public long queryUwbsTimestampMicros() throws RemoteException {
-        if (!SdkLevel.isAtLeastV() || !mUwbInjector.getFeatureFlags().queryTimestampMicros()) {
+        if (!SdkLevel.isAtLeastV()) {
             throw new UnsupportedOperationException();
         }
         enforceUwbPrivilegedPermission();
@@ -405,13 +405,23 @@ public class UwbServiceImpl extends IUwbAdapter.Stub {
     }
 
     @Override
-    public int setHybridSessionConfiguration(SessionHandle sessionHandle,
+    public void setHybridSessionControllerConfiguration(SessionHandle sessionHandle,
             PersistableBundle params) {
-        if (!SdkLevel.isAtLeastV() || !mUwbInjector.getFeatureFlags().hybridSessionSupport()) {
+        if (!SdkLevel.isAtLeastV()) {
             throw new UnsupportedOperationException();
         }
         enforceUwbPrivilegedPermission();
-        return mUwbServiceCore.setHybridSessionConfiguration(sessionHandle, params);
+        mUwbServiceCore.setHybridSessionControllerConfiguration(sessionHandle, params);
+    }
+
+    @Override
+    public void setHybridSessionControleeConfiguration(SessionHandle sessionHandle,
+            PersistableBundle params) {
+        if (!SdkLevel.isAtLeastV()) {
+            throw new UnsupportedOperationException();
+        }
+        enforceUwbPrivilegedPermission();
+        mUwbServiceCore.setHybridSessionControleeConfiguration(sessionHandle, params);
     }
 
     @Override

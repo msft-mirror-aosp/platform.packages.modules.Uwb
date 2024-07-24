@@ -25,7 +25,6 @@ import static com.android.server.uwb.UwbServiceImpl.SETTINGS_SATELLITE_MODE_RADI
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_FIRST_TOGGLE_DONE;
 import static com.android.server.uwb.UwbSettingsStore.SETTINGS_TOGGLE_STATE;
 import static com.android.server.uwb.UwbTestUtils.MAX_DATA_SIZE;
-import static com.android.server.uwb.UwbTestUtils.TEST_STATUS;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.fira.FiraParams.PACS_PROFILE_SERVICE_ID;
@@ -65,7 +64,6 @@ import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.provider.Settings;
-import android.test.suitebuilder.annotation.SmallTest;
 import android.uwb.IOnUwbActivityEnergyInfoListener;
 import android.uwb.IUwbAdapterStateCallbacks;
 import android.uwb.IUwbAdfProvisionStateCallbacks;
@@ -74,6 +72,7 @@ import android.uwb.IUwbVendorUciCallback;
 import android.uwb.SessionHandle;
 import android.uwb.UwbAddress;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.modules.utils.build.SdkLevel;
@@ -845,9 +844,9 @@ public class UwbServiceImplTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_DATA_TRANSFER_PHASE_CONFIG)
     public void testSetDataTransferPhaseConfig() throws Exception {
         assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
+        when(mFeatureFlags.dataTransferPhaseConfig()).thenReturn(true);
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         PersistableBundle bundle = new PersistableBundle();
         mUwbServiceImpl.setDataTransferPhaseConfig(sessionHandle, bundle);
@@ -881,7 +880,6 @@ public class UwbServiceImplTest {
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         final PersistableBundle parameters = new PersistableBundle();
 
-        when(mFeatureFlags.queryTimestampMicros()).thenReturn(true);
         when(mUwbServiceCore.queryMaxDataSizeBytes(sessionHandle)).thenReturn(MAX_DATA_SIZE);
         assertThat(mUwbServiceImpl.queryMaxDataSizeBytes(sessionHandle)).isEqualTo(MAX_DATA_SIZE);
 
@@ -890,18 +888,26 @@ public class UwbServiceImplTest {
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_HYBRID_SESSION_SUPPORT)
-    public void testSetHybridSessionConfiguration() throws Exception {
+    public void testSetHybridSessionControllerConfiguration() throws Exception {
         assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
         final SessionHandle sessionHandle = mock(SessionHandle.class);
         final PersistableBundle parameters = new PersistableBundle();
 
-        when(mFeatureFlags.hybridSessionSupport()).thenReturn(true);
-        when(mUwbServiceCore.setHybridSessionConfiguration(sessionHandle, parameters))
-               .thenReturn(TEST_STATUS);
-        assertThat(mUwbServiceImpl.setHybridSessionConfiguration(sessionHandle, parameters))
-                .isEqualTo(TEST_STATUS);
+        mUwbServiceImpl.setHybridSessionControllerConfiguration(sessionHandle, parameters);
 
-        verify(mUwbServiceCore).setHybridSessionConfiguration(sessionHandle, parameters);
+        verify(mUwbServiceCore).setHybridSessionControllerConfiguration(sessionHandle, parameters);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_HYBRID_SESSION_SUPPORT)
+    public void testSetHybridSessionControleeConfiguration() {
+        assumeTrue(SdkLevel.isAtLeastV()); // Test should only run on V+ devices.
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        PersistableBundle params = mock(PersistableBundle.class);
+
+        mUwbServiceImpl.setHybridSessionControleeConfiguration(sessionHandle, params);
+
+        verify(mUwbServiceCore).setHybridSessionControleeConfiguration(sessionHandle, params);
     }
 
     @Test

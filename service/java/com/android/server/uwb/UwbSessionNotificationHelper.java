@@ -68,9 +68,7 @@ public class UwbSessionNotificationHelper {
                 rangingChangeReason = RangingChangeReason.SESSION_SUSPENDED;
                 break;
             case UwbUciConstants.REASON_SESSION_STOPPED_DUE_TO_INBAND_SIGNAL:
-                if (com.android.uwb.flags.Flags.reasonInbandSessionStop()) {
-                    rangingChangeReason = RangingChangeReason.INBAND_SESSION_STOP;
-                }
+                rangingChangeReason = RangingChangeReason.INBAND_SESSION_STOP;
                 break;
         }
         return rangingChangeReason;
@@ -98,6 +96,24 @@ public class UwbSessionNotificationHelper {
                 break;
             case UwbUciConstants.REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR:
                 rangingChangeReason = RangingChangeReason.INSUFFICIENT_SLOTS_PER_RR;
+                break;
+        }
+        return rangingChangeReason;
+    }
+
+    /**
+     * Convert UCI status code received in SESSION_DATA_TRANSFER_PHASE_CONFIGURATION_NTF to
+     * an API reason code.
+     */
+    public static int convertDataTransferPhaseConfigStatusToApiReasonCode(
+            int dataTransferPhaseConfigStatus) {
+        int rangingChangeReason = RangingChangeReason.UNKNOWN;
+        switch (dataTransferPhaseConfigStatus) {
+            case UwbUciConstants.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_DTPCM_CONFIG_SUCCESS:
+                rangingChangeReason = RangingChangeReason.LOCAL_API;
+                break;
+            case UwbUciConstants.STATUS_CODE_DATA_TRANSFER_PHASE_CONFIG_ERROR_DUPLICATE_SLOT_ASSIGNMENT:
+                rangingChangeReason = RangingChangeReason.PROTOCOL_SPECIFIC;
                 break;
         }
         return rangingChangeReason;

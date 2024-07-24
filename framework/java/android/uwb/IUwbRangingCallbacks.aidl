@@ -249,7 +249,7 @@ oneway interface IUwbRangingCallbacks {
    * @param parameters protocol specific parameters for set data transfer phase config failure.
    */
   void onDataTransferPhaseConfigFailed(in SessionHandle sessionHandle,
-          in PersistableBundle parameters);
+          RangingChangeReason reason, in PersistableBundle parameters);
 
   /**
    * Invoked when data is received successfully from a remote device.
@@ -274,6 +274,54 @@ oneway interface IUwbRangingCallbacks {
    * @param parameters protocol specific parameters for resumption failure.
    */
   void onDataReceiveFailed(in SessionHandle sessionHandle, in UwbAddress remoteDeviceAddress,
+          RangingChangeReason reason, in PersistableBundle parameters);
+
+  /**
+   * Invoked when set hybrid session controller configuration via {@link RangingSession#
+   * setHybridSessionControllerConfiguration(
+   * in SessionHandle sessionHandle, in PersistableBundle params)} succeeds.
+   *
+   * @param sessionHandle the session for which the callback is being invoked for.
+   * @param parameters protocol specific parameters for set hybrid session controller config
+   * success.
+   */
+  void onHybridSessionControllerConfigured(in SessionHandle sessionHandle,
+          in PersistableBundle parameters);
+
+  /**
+   * Invoked when set hybrid session controller configuration via {@link RangingSession#
+   * setHybridSessionControllerConfiguration(
+   * in SessionHandle sessionHandle, in PersistableBundle params)} fails.
+   *
+   * @param sessionHandle the session for which the callback is being invoked for.
+   * @param parameters protocol specific parameters for set hybrid session controller config
+   * failure.
+   */
+  void onHybridSessionControllerConfigurationFailed(in SessionHandle sessionHandle,
+          RangingChangeReason reason, in PersistableBundle parameters);
+
+  /**
+   * Invoked when set hybrid session Controlee configuration via {@link RangingSession#
+   * setHybridSessionControleeConfiguration(
+   * in SessionHandle sessionHandle, in PersistableBundle params)} succeeds.
+   *
+   * @param sessionHandle the session for which the callback is being invoked for.
+   * @param parameters protocol specific parameters for set hybrid session Controlee config
+   * success.
+   */
+  void onHybridSessionControleeConfigured(in SessionHandle sessionHandle,
+          in PersistableBundle parameters);
+
+  /**
+   * Invoked when set hybrid session Controlee configuration via {@link RangingSession#
+   * setHybridSessionControleeConfiguration(
+   * in SessionHandle sessionHandle, in PersistableBundle params)} fails.
+   *
+   * @param sessionHandle the session for which the callback is being invoked for.
+   * @param parameters protocol specific parameters for set hybrid session Controlee config
+   * failure.
+   */
+  void onHybridSessionControleeConfigurationFailed(in SessionHandle sessionHandle,
           RangingChangeReason reason, in PersistableBundle parameters);
 
   void onServiceDiscovered(in SessionHandle sessionHandle, in PersistableBundle parameters);

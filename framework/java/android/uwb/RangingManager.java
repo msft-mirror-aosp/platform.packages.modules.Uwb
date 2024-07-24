@@ -415,7 +415,7 @@ public class RangingManager extends android.uwb.IUwbRangingCallbacks.Stub {
 
     @Override
     public void onDataTransferPhaseConfigFailed(SessionHandle sessionHandle,
-            PersistableBundle parameters) {
+            @RangingChangeReason int reason, PersistableBundle parameters) {
         synchronized (this) {
             if (!hasSession(sessionHandle)) {
                 Log.w(mTag, "onDataTransferPhaseConfigFailed - received unknown SessionHandle: "
@@ -424,7 +424,7 @@ public class RangingManager extends android.uwb.IUwbRangingCallbacks.Stub {
             }
 
             RangingSession session = mRangingSessionTable.get(sessionHandle);
-            session.onDataTransferPhaseConfigFailed(parameters);
+            session.onDataTransferPhaseConfigFailed(reason, parameters);
         }
     }
 
@@ -473,6 +473,65 @@ public class RangingManager extends android.uwb.IUwbRangingCallbacks.Stub {
         }
     }
 
+    @Override
+    public void onHybridSessionControllerConfigured(SessionHandle sessionHandle,
+            PersistableBundle parameters) {
+        synchronized (this) {
+            if (!hasSession(sessionHandle)) {
+                Log.w(mTag, "onHybridSessionControllerConfigured - received unexpected"
+                        + "SessionHandle: " + sessionHandle);
+                return;
+            }
+
+            RangingSession session = mRangingSessionTable.get(sessionHandle);
+            session.onHybridSessionControllerConfigured(parameters);
+        }
+    }
+
+    @Override
+    public void onHybridSessionControllerConfigurationFailed(SessionHandle sessionHandle,
+            @RangingChangeReason int reason, PersistableBundle parameters) {
+        synchronized (this) {
+            if (!hasSession(sessionHandle)) {
+                Log.w(mTag, "onHybridSessionControllerConfigurationFailed - received"
+                        + "unexpected SessionHandle: " + sessionHandle);
+                return;
+            }
+
+            RangingSession session = mRangingSessionTable.get(sessionHandle);
+            session.onHybridSessionControllerConfigurationFailed(reason, parameters);
+        }
+    }
+
+    @Override
+    public void onHybridSessionControleeConfigured(SessionHandle sessionHandle,
+            PersistableBundle parameters) {
+        synchronized (this) {
+            if (!hasSession(sessionHandle)) {
+                Log.w(mTag, "onHybridSessionControleeConfigured - received unexpected"
+                        + "SessionHandle: " + sessionHandle);
+                return;
+            }
+
+            RangingSession session = mRangingSessionTable.get(sessionHandle);
+            session.onHybridSessionControleeConfigured(parameters);
+        }
+    }
+
+    @Override
+    public void onHybridSessionControleeConfigurationFailed(SessionHandle sessionHandle,
+            @RangingChangeReason int reason, PersistableBundle parameters) {
+        synchronized (this) {
+            if (!hasSession(sessionHandle)) {
+                Log.w(mTag, "onHybridSessionControleeConfigurationFailed - received"
+                        + "unexpected SessionHandle: " + sessionHandle);
+                return;
+            }
+
+            RangingSession session = mRangingSessionTable.get(sessionHandle);
+            session.onHybridSessionControleeConfigurationFailed(reason, parameters);
+        }
+    }
 
     @Override
     public void onServiceConnected(SessionHandle sessionHandle,

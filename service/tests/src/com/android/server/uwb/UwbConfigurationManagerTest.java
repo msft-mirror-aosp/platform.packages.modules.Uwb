@@ -43,13 +43,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.platform.test.annotations.Presubmit;
-import android.test.suitebuilder.annotation.SmallTest;
 import android.uwb.UwbAddress;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.server.uwb.data.UwbConfigStatusData;
@@ -131,7 +132,6 @@ public class UwbConfigurationManagerTest {
 
         // Setup the unit tests to have the default behavior of using the UWBS UCI version.
         when(mUwbInjector.getFeatureFlags()).thenReturn(mFeatureFlags);
-        when(mFeatureFlags.useUwbsUciVersion()).thenReturn(true);
     }
 
     @Test
@@ -141,6 +141,10 @@ public class UwbConfigurationManagerTest {
                 1, cfgStatus);
         when(mNativeUwbManager.setAppConfigurations(anyInt(), anyInt(), anyInt(),
                 any(byte[].class), anyString())).thenReturn(appConfig);
+
+        DeviceConfigFacade mockDeviceConfig = mock(DeviceConfigFacade.class);
+        when(mockDeviceConfig.isAntennaModeConfigSupported()).thenReturn(false);
+        when(mUwbInjector.getDeviceConfigFacade()).thenReturn(mockDeviceConfig);
 
         int status = mUwbConfigurationManager
                 .setAppConfigurations(mUwbSession.getSessionId(), mFiraParams, TEST_CHIP_ID,

@@ -120,7 +120,6 @@ public class UwbCountryCodeTest {
         // should not have any effect as below the TelephonyManager is setup to return some active
         // subscription(s) (which should also be the typical behavior when phone has a SIM).
         when(mUwbInjector.getFeatureFlags()).thenReturn(mFeatureFlags);
-        when(mFeatureFlags.useNetworkCountryIso()).thenReturn(true);
 
         when(mContext.createContext(any())).thenReturn(mContext);
         when(mContext.getSystemService(TelephonyManager.class))
@@ -217,36 +216,6 @@ public class UwbCountryCodeTest {
         mUwbCountryCode.initialize();
 
         verify(mTelephonyManager).getNetworkCountryIso();
-        verify(mTelephonyManager, never()).getNetworkCountryIso(anyInt());
-        verifyNoMoreInteractions(mNativeUwbManager, mListener);
-    }
-
-    // Test that a country code is not configured, when the list of active subscription is empty,
-    // the flag to use the NetworkCountryIso() is disabled.
-    @Test
-    public void testInitializeCountryCodeFromTelephonyWhenSubscriptionListEmptyAndFlagDisabled() {
-        when(mSubscriptionManager.getActiveSubscriptionInfoList()).thenReturn(List.of());
-        when(mTelephonyManager.getNetworkCountryIso()).thenReturn(ISO_COUNTRY_CODE);
-        when(mFeatureFlags.useNetworkCountryIso()).thenReturn(false);
-
-        mUwbCountryCode.initialize();
-
-        verify(mTelephonyManager, never()).getNetworkCountryIso();
-        verify(mTelephonyManager, never()).getNetworkCountryIso(anyInt());
-        verifyNoMoreInteractions(mNativeUwbManager, mListener);
-    }
-
-    // Test that a country code is not configured, when the list of active subscriptions is null,
-    // the flag to use the NetworkCountryIso() is disabled.
-    @Test
-    public void testInitializeCountryCodeFromTelephonyWhenSubscriptionListNullAndFlagDisabled() {
-        when(mSubscriptionManager.getActiveSubscriptionInfoList()).thenReturn(null);
-        when(mTelephonyManager.getNetworkCountryIso()).thenReturn(ISO_COUNTRY_CODE);
-        when(mFeatureFlags.useNetworkCountryIso()).thenReturn(false);
-
-        mUwbCountryCode.initialize();
-
-        verify(mTelephonyManager, never()).getNetworkCountryIso();
         verify(mTelephonyManager, never()).getNetworkCountryIso(anyInt());
         verifyNoMoreInteractions(mNativeUwbManager, mListener);
     }
@@ -385,6 +354,36 @@ public class UwbCountryCodeTest {
         verify(mNativeUwbManager).setCountryCode(
                 TEST_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
         verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, TEST_COUNTRY_CODE);
+    }
+
+    @Test
+    public void testWifiECallback_error() {
+        // Disable other sources (Geocoder) for the Wifi location error test.
+        when(mUwbInjector.isGeocoderPresent()).thenReturn(false);
+        when(mDeviceConfigFacade.isLocationUseForCountryCodeEnabled()).thenReturn(false);
+
+        doThrow(new SecurityException()).when(mWifiManager)
+                .registerActiveCountryCodeChangedCallback(any(), any());
+        mUwbCountryCode.initialize();
+
+        verify(mWifiManager).registerActiveCountryCodeChangedCallback(any(), any());
+        verify(mNativeUwbManager).setCountryCode(
+                DEFAULT_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, DEFAULT_COUNTRY_CODE);
+    }
+
+    @Test
+    public void testGeocodingLocation_error() {
+        doThrow(new IllegalArgumentException()).when(mLocation).getLatitude();
+        when(mLocation.getLongitude()).thenReturn(0.0);
+        mUwbCountryCode.initialize();
+
+        verify(mLocationManager).requestLocationUpdates(
+                anyString(), anyLong(), anyFloat(), mLocationListenerCaptor.capture());
+        mLocationListenerCaptor.getValue().onLocationChanged(mLocation);
+        verify(mNativeUwbManager).setCountryCode(
+                DEFAULT_COUNTRY_CODE.getBytes(StandardCharsets.UTF_8));
+        verify(mListener).onCountryCodeChanged(STATUS_CODE_OK, DEFAULT_COUNTRY_CODE);
     }
 
     @Test
