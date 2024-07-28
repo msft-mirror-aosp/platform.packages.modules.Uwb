@@ -29,13 +29,13 @@ import androidx.core.uwb.backend.impl.internal.UwbComplexChannel;
 import androidx.core.uwb.backend.impl.internal.UwbRangeDataNtfConfig;
 import androidx.test.platform.app.InstrumentationRegistry;
 
-import com.android.ranging.generic.RangingTechnology;
-import com.android.ranging.generic.ranging.PrecisionData;
-import com.android.ranging.generic.ranging.PrecisionRanging;
-import com.android.ranging.generic.ranging.PrecisionRangingConfig;
-import com.android.ranging.generic.ranging.PrecisionRangingImpl;
-import com.android.ranging.generic.ranging.RangingData;
-import com.android.ranging.generic.ranging.UwbAdapter;
+import com.android.ranging.PrecisionData;
+import com.android.ranging.PrecisionRanging;
+import com.android.ranging.PrecisionRangingConfig;
+import com.android.ranging.PrecisionRangingImpl;
+import com.android.ranging.RangingData;
+import com.android.ranging.RangingTechnology;
+import com.android.ranging.adapter.UwbAdapter;
 
 import com.google.android.mobly.snippet.Snippet;
 import com.google.android.mobly.snippet.event.EventCache;
@@ -250,7 +250,7 @@ public class GenericRangingSnippet implements Snippet {
                 Optional.of(ImmutableMap.of(RangingTechnology.UWB, uwbAdapter)));
 
         precisionRanging.setUwbConfig(generateRangingParameters(config));
-        uwbAdapter.setLocalADdress(UwbAddress.fromBytes(
+        uwbAdapter.setLocalAddress(UwbAddress.fromBytes(
                 convertJSONArrayToByteArray(config.getJSONArray("deviceAddress"))));
 
         // Test forces channel to 9 and preamble to 11
