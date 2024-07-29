@@ -101,6 +101,7 @@ public class DeviceConfigFacade {
     private boolean mCccSupportedRangeDataNtfConfig;
     private boolean mPersistentCacheUseForCountryCodeEnabled;
     private boolean mHwIdleTurnOffEnabled;
+    private boolean mFusedCountryCodeProviderEnabled;
     private boolean mIsAntennaModeConfigSupported;
 
     public DeviceConfigFacade(Handler handler, Context context) {
@@ -120,9 +121,9 @@ public class DeviceConfigFacade {
         mRangingResultLogIntervalMs = DeviceConfig.getInt(DeviceConfig.NAMESPACE_UWB,
                 "ranging_result_log_interval_ms", DEFAULT_RANGING_RESULT_LOG_INTERVAL_MS);
         mDeviceErrorBugreportEnabled = DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_UWB,
-                "device_error_bugreport_enabled", false);
+                "device_error_bugreport_enabled", true);
         mSessionInitErrorBugreportEnabled = DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_UWB,
-                "session_init_error_bugreport_enabled", false);
+                "session_init_error_bugreport_enabled", true);
         mBugReportMinIntervalMs = DeviceConfig.getInt(DeviceConfig.NAMESPACE_UWB,
                 "bug_report_min_interval_ms", DEFAULT_BUG_REPORT_MIN_INTERVAL_MS);
 
@@ -313,6 +314,12 @@ public class DeviceConfigFacade {
                 DeviceConfig.NAMESPACE_UWB,
                 "hw_idle_turn_off_enabled",
                 mContext.getResources().getBoolean(R.bool.hw_idle_turn_off_enabled)
+        );
+
+        mFusedCountryCodeProviderEnabled = DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_UWB,
+                "fused_country_code_provider_enabled",
+                mContext.getResources().getBoolean(R.bool.fused_country_code_provider_enabled)
         );
 
         mIsAntennaModeConfigSupported = DeviceConfig.getBoolean(
@@ -624,6 +631,13 @@ public class DeviceConfigFacade {
      */
     public boolean isHwIdleTurnOffEnabled() {
         return mHwIdleTurnOffEnabled;
+    }
+
+    /**
+     * Returns whether used country code provider is enabled or not.
+     */
+    public boolean isFusedCountryCodeProviderEnabled() {
+        return mFusedCountryCodeProviderEnabled;
     }
 
     /**
