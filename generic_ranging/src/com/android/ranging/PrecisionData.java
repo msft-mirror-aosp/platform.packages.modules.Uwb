@@ -14,44 +14,43 @@
  * limitations under the License.
  */
 
-package com.android.ranging.generic.ranging;
-
-import com.android.ranging.generic.RangingTechnology;
+package com.android.ranging;
 
 import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableList;
 
-/** Ranging Data class contains data received from a ranging technology such as UWB or CS. */
+import java.util.Optional;
+
+/**
+ * Precision data represents both data received from ranging technologies and data from the fusion
+ * algorithm.
+ */
 @AutoValue
-public abstract class RangingData {
+public abstract class PrecisionData {
 
-    /** Returns the ranging technology this data is for. */
-    public abstract RangingTechnology getRangingTechnology();
+    /** Returns a list of {@link RangingData} for different ranging technologies if present. */
+    public abstract Optional<ImmutableList<RangingData>> getRangingData();
 
-    /** Returns range distance in meters. */
-    public abstract double getRangeDistance();
+    /** Returns {@link FusionData} if present. */
+    public abstract Optional<FusionData> getFusionData();
 
-    /** Returns rssi. */
-    public abstract int getRssi();
-
-    /** Returns timestamp in nanons. */
+    /** Returns the timestamp for this data. */
     public abstract long getTimestamp();
 
     /** Returns a builder for {@link RangingData}. */
     public static Builder builder() {
-        return new AutoValue_RangingData.Builder();
+        return new AutoValue_PrecisionData.Builder();
     }
 
     /** Builder for {@link RangingData}. */
     @AutoValue.Builder
     public abstract static class Builder {
-        public abstract Builder setRangingTechnology(RangingTechnology rangingTechnology);
+        public abstract Builder setRangingData(ImmutableList<RangingData> rangingData);
 
-        public abstract Builder setRangeDistance(double rangeDistance);
-
-        public abstract Builder setRssi(int rssi);
+        public abstract Builder setFusionData(FusionData fusionData);
 
         public abstract Builder setTimestamp(long timestamp);
 
-        public abstract RangingData build();
+        public abstract PrecisionData build();
     }
 }
