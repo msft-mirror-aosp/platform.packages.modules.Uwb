@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.ranging.generic.ranging;
+package com.android.ranging;
 
 import android.os.RemoteException;
 
@@ -22,8 +22,7 @@ import androidx.annotation.IntDef;
 import androidx.core.uwb.backend.impl.internal.RangingCapabilities;
 import androidx.core.uwb.backend.impl.internal.RangingParameters;
 import androidx.core.uwb.backend.impl.internal.UwbAddress;
-
-import com.android.ranging.generic.RangingTechnology;
+import androidx.core.uwb.backend.impl.internal.UwbComplexChannel;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -73,6 +72,9 @@ public interface PrecisionRanging {
 
     /** Sets UWB configuration. No op if UWB was not requested. */
     void setUwbConfig(RangingParameters rangingParameters);
+
+    /** Get the Uwb complex channel for the controller. */
+    ListenableFuture<UwbComplexChannel> getUwbComplexChannel() throws RemoteException;
 
     /** Returns CS capabilities if CS was requested. */
     void getCsCapabilities();

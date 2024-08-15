@@ -1151,15 +1151,29 @@ public abstract class FiraParams extends Params {
 
     //Reference time base feature mask.
     public static final int SESSION_TIME_BASE_REFERENCE_FEATURE_ENABLED = 1;
+    /**
+     * Antenna Mode (Android-specific app config)
+     */
+    @IntDef(
+            value = {
+                    ANTENNA_MODE_OMNI,
+                    ANTENNA_MODE_DIRECTIONAL,
+            })
+    public @interface AntennaMode {}
 
-    // Helper functions
-    protected static UwbAddress longToUwbAddress(long value, int length) {
+    /** (Default) The ranging antenna is used for both Tx and Rx. **/
+    public static final int ANTENNA_MODE_OMNI = 0;
+    /** The patch antenna is used for both Tx and Rx. **/
+    public static final int ANTENNA_MODE_DIRECTIONAL = 1;
+
+    /** Helper function to covert long value to UwbAddress. */
+    public static UwbAddress longToUwbAddress(long value, int length) {
         ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
         buffer.putLong(value);
         return UwbAddress.fromBytes(Arrays.copyOf(buffer.array(), length));
     }
 
-    /** Helper functions to convert UwbAdrress in long value. */
+    /** Helper functions to convert UwbAddress in long value. */
     public static long uwbAddressToLong(UwbAddress address) {
         ByteBuffer buffer = ByteBuffer.wrap(Arrays.copyOf(address.toBytes(), Long.BYTES));
         return buffer.getLong();

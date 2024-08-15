@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.ranging.generic.ranging;
+package com.android.ranging;
 
 import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
 
@@ -24,13 +24,16 @@ import android.content.Context;
 import android.os.RemoteException;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.uwb.backend.impl.internal.RangingCapabilities;
 import androidx.core.uwb.backend.impl.internal.RangingParameters;
 import androidx.core.uwb.backend.impl.internal.UwbAddress;
+import androidx.core.uwb.backend.impl.internal.UwbComplexChannel;
 
 import com.android.internal.annotations.GuardedBy;
-import com.android.ranging.generic.RangingTechnology;
+import com.android.ranging.adapter.RangingAdapter;
+import com.android.ranging.adapter.UwbAdapter;
 import com.android.sensor.Estimate;
 import com.android.sensor.MultiSensorFinderListener;
 
@@ -60,7 +63,6 @@ import java.util.concurrent.ScheduledExecutorService;
 public final class PrecisionRangingImpl implements PrecisionRanging {
 
     private static final String TAG = PrecisionRangingImpl.class.getSimpleName();
-
 
     /**
      * Default frequency of the task running the periodic update when {@link
@@ -211,6 +213,7 @@ public final class PrecisionRangingImpl implements PrecisionRanging {
             Optional<ImmutableMap<RangingTechnology, RangingAdapter>> rangingAdapters) {
         this.context = context;
         this.config = config;
+        this.callback = Optional.empty();
         this.periodicUpdateExecutorService = scheduledExecutorService;
         this.internalExecutorService = scheduledExecutorService;
         //this.timeSource = timeSource;
@@ -250,7 +253,7 @@ public final class PrecisionRangingImpl implements PrecisionRanging {
     }
 
     @Override
-    public void start(PrecisionRanging.Callback callback) {
+    public void start(@NonNull PrecisionRanging.Callback callback) {
         Log.i(TAG, "Start Precision Ranging called.");
         Preconditions.checkArgument(
                 rangingConfigurationsAdded.containsAll(config.getRangingTechnologiesToRangeWith()),
@@ -348,21 +351,17 @@ public final class PrecisionRangingImpl implements PrecisionRanging {
         }
 
         PrecisionData.Builder precisionDataBuilder = PrecisionData.builder();
-        ImmutableList.Builder<RangingData> rangingDataBuilder = ImmutableList.builder();
         synchronized (lock) {
-            if (lastUwbRangingDataResult.isPresent()) {
-                rangingDataBuilder.add(lastUwbRangingDataResult.get());
-            }
-            if (lastCsRangingDataResult.isPresent()) {
-                rangingDataBuilder.add(lastCsRangingDataResult.get());
-            }
+            ImmutableList.Builder<RangingData> rangingDataBuilder = ImmutableList.builder();
+            lastUwbRangingDataResult.ifPresent(rangingDataBuilder::add);
+            lastCsRangingDataResult.ifPresent(rangingDataBuilder::add);
             var rangingData = rangingDataBuilder.build();
+
             if (!rangingData.isEmpty()) {
                 precisionDataBuilder.setRangingData(rangingData);
             }
-            if (lastFusionDataResult.isPresent()) {
-                precisionDataBuilder.setFusionData(lastFusionDataResult.get());
-            }
+            lastFusionDataResult.ifPresent(precisionDataBuilder::setFusionData);
+
             lastUwbRangingDataResult = Optional.empty();
             lastCsRangingDataResult = Optional.empty();
             lastFusionDataResult = Optional.empty();
@@ -554,6 +553,16 @@ public final class PrecisionRangingImpl implements PrecisionRanging {
     }
 
     @Override
+    public ListenableFuture<UwbComplexChannel> getUwbComplexChannel() throws RemoteException {
+        if (!rangingAdapters.containsKey(RangingTechnology.UWB)) {
+            return immediateFailedFuture(
+                    new IllegalStateException("UWB was not requested for this session."));
+        }
+        UwbAdapter uwbAdapter = (UwbAdapter) rangingAdapters.get(RangingTechnology.UWB);
+        return uwbAdapter.getComplexChannel();
+    }
+
+    @Override
     public void setUwbConfig(RangingParameters rangingParameters) {
         if (config.getRangingTechnologiesToRangeWith().contains(RangingTechnology.UWB)) {
             UwbAdapter uwbAdapter = (UwbAdapter) rangingAdapters.get(RangingTechnology.UWB);
@@ -606,9 +615,6 @@ public final class PrecisionRangingImpl implements PrecisionRanging {
                         var adapter = rangingAdapters.get(tech);
                         if (adapter == null) {
                             Log.e(TAG, "Adapter not found for ranging technology: " + tech);
-                            rangingTechnologiesAvailability.put(
-                                    tech, RangingTechnologyAvailability.NOT_SUPPORTED);
-                        } else if (!adapter.isPresent()) {
                             rangingTechnologiesAvailability.put(
                                     tech, RangingTechnologyAvailability.NOT_SUPPORTED);
                         } else if (!enabledList.get(i)) {

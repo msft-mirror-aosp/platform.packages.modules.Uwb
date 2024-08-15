@@ -166,6 +166,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.FutureTask;
@@ -915,15 +916,25 @@ public class UwbSessionManagerTest {
                 mock(UwbMulticastListUpdateStatus.class);
         UwbSession mockUwbSession = mock(UwbSession.class);
         when(mockUwbSession.getWaitObj()).thenReturn(mock(WaitObj.class));
+        when(mockUwbSession.getOperationType())
+                .thenReturn(UwbSessionManager.SESSION_RECONFIG_RANGING);
         doReturn(mockUwbSession)
-                .when(mUwbSessionManager).getUwbSession(anyInt());
+                        .when(mUwbSessionManager).getUwbSession(anyInt());
+        when(mockUwbMulticastListUpdateStatus.getNumOfControlee())
+                .thenReturn(2);
+        when(mockUwbMulticastListUpdateStatus.getStatus())
+                        .thenReturn(new int[] {
+                                UwbUciConstants.STATUS_CODE_OK, UwbUciConstants.STATUS_CODE_OK });
 
         mUwbSessionManager.onMulticastListUpdateNotificationReceived(
                 mockUwbMulticastListUpdateStatus);
 
         verify(mockUwbSession, times(2)).getWaitObj();
         verify(mockUwbSession)
-                .setMulticastListUpdateStatus(eq(mockUwbMulticastListUpdateStatus));
+                        .setMulticastListUpdateStatus(eq(mockUwbMulticastListUpdateStatus));
+        verify(mUwbSessionNotificationManager, never())
+                .onControleeAddFailed(any(), any(), anyInt());
+        verify(mUwbSessionNotificationManager, never()).onRangingReconfigureFailed(any(), anyInt());
     }
 
     @Test
@@ -1643,6 +1654,28 @@ public class UwbSessionManagerTest {
         doReturn(mock(WaitObj.class)).when(uwbSession).getWaitObj();
 
         return uwbSession;
+    }
+
+    private UwbAddress setUpControlee(UwbSessionManager.UwbSession session,
+                                      int macAddressingMode) {
+        UwbAddress uwbAddress = (macAddressingMode == MAC_ADDRESSING_MODE_SHORT)
+                ? PEER_SHORT_UWB_ADDRESS : PEER_EXTENDED_UWB_ADDRESS;
+
+        session.mMulticastRangingErrorStreakTimerListeners = spy(new ConcurrentHashMap<>());
+        session.mControlees = spy(new ConcurrentHashMap<>());
+        session.addControlee(uwbAddress);
+        return uwbAddress;
+    }
+
+    private void startRanging(UwbSession session) {
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE, UwbUciConstants.UWB_SESSION_STATE_ACTIVE)
+                .when(session).getSessionState();
+        when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+
+        mUwbSessionManager.startRanging(
+                session.getSessionHandle(), session.getParams());
+        mTestLooper.dispatchAll();
     }
 
     private Params setupFiraParams() {
@@ -3105,26 +3138,9 @@ public class UwbSessionManagerTest {
 
     @Test
     public void execStartRanging_twoWay_onRangeDataNotificationContinuousErrors() throws Exception {
-        startRanging_onRangeDataNotificationContinuousErrors(RANGING_MEASUREMENT_TYPE_TWO_WAY);
-    }
-
-    @Test
-    public void execStartRanging_owrAoa_onRangeDataNotificationContinuousErrors() throws Exception {
-        startRanging_onRangeDataNotificationContinuousErrors(RANGING_MEASUREMENT_TYPE_OWR_AOA);
-    }
-
-    private void startRanging_onRangeDataNotificationContinuousErrors(
-            int rangingMeasurementType) throws Exception {
         UwbSession uwbSession = prepareExistingUwbSession();
-        // set up for start ranging
-        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE, UwbUciConstants.UWB_SESSION_STATE_ACTIVE)
-                .when(uwbSession).getSessionState();
-        when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
-
-        mUwbSessionManager.startRanging(
-                uwbSession.getSessionHandle(), uwbSession.getParams());
-        mTestLooper.dispatchAll();
+        UwbAddress controleeAddr = setUpControlee(uwbSession, MAC_ADDRESSING_MODE_SHORT);
+        startRanging(uwbSession);
 
         verify(mUwbSessionNotificationManager).onRangingStarted(eq(uwbSession), any());
         verify(mUwbMetrics).longRangingStartEvent(
@@ -3132,7 +3148,59 @@ public class UwbSessionManagerTest {
 
         // Now send a range data notification with an error.
         UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
-                rangingMeasurementType, MAC_ADDRESSING_MODE_EXTENDED,
+                RANGING_MEASUREMENT_TYPE_TWO_WAY, MAC_ADDRESSING_MODE_SHORT,
+                UwbUciConstants.STATUS_CODE_RANGING_RX_TIMEOUT);
+        mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
+        verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
+
+        // Verify that an alarm is started for the controlee
+        ArgumentCaptor<UwbAddress> addressCaptor = ArgumentCaptor.forClass(UwbAddress.class);
+        ArgumentCaptor<AlarmManager.OnAlarmListener> alarmListenerCaptor =
+                ArgumentCaptor.forClass(AlarmManager.OnAlarmListener.class);
+        verify(uwbSession.mMulticastRangingErrorStreakTimerListeners).put(
+                addressCaptor.capture(),
+                alarmListenerCaptor.capture()
+        );
+        verify(mAlarmManager).setExact(
+                anyInt(), anyLong(), anyString(), eq(alarmListenerCaptor.getValue()), any());
+        assertThat(addressCaptor.getValue()).isEqualTo(controleeAddr);
+        assertThat(alarmListenerCaptor.getValue()).isNotNull();
+
+        // Send one more error
+        uwbRangingData = UwbTestUtils.generateRangingData(
+                RANGING_MEASUREMENT_TYPE_TWO_WAY, MAC_ADDRESSING_MODE_SHORT,
+                UwbUciConstants.STATUS_CODE_RANGING_RX_TIMEOUT);
+        mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
+        verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
+
+        // Verify that the alarm is not cancelled
+        verify(mAlarmManager, never()).cancel(any(AlarmManager.OnAlarmListener.class));
+
+        // set up for stop ranging
+        doReturn(UwbUciConstants.UWB_SESSION_STATE_ACTIVE, UwbUciConstants.UWB_SESSION_STATE_IDLE)
+                .when(uwbSession).getSessionState();
+        when(mNativeUwbManager.stopRanging(eq(TEST_SESSION_ID), anyString()))
+                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+
+        // Now fire the timer callback.
+        alarmListenerCaptor.getValue().onAlarm();
+
+        // Expect session stop.
+        mTestLooper.dispatchNext();
+        verify(mUwbSessionNotificationManager)
+                .onRangingStoppedWithApiReasonCode(eq(uwbSession),
+                        eq(RangingChangeReason.SYSTEM_POLICY), any());
+        verify(mUwbMetrics).longRangingStopEvent(eq(uwbSession));
+    }
+
+    @Test
+    public void execStartRanging_owrAoa_onRangeDataNotificationContinuousErrors() throws Exception {
+        UwbSession uwbSession = prepareExistingUwbSession();
+        startRanging(uwbSession);
+
+        // Now send a range data notification with an error.
+        UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
+                RANGING_MEASUREMENT_TYPE_OWR_AOA, MAC_ADDRESSING_MODE_SHORT,
                 UwbUciConstants.STATUS_CODE_RANGING_RX_TIMEOUT);
         mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
         verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
@@ -3144,7 +3212,7 @@ public class UwbSessionManagerTest {
 
         // Send one more error and ensure that the timer is not cancelled.
         uwbRangingData = UwbTestUtils.generateRangingData(
-                rangingMeasurementType, MAC_ADDRESSING_MODE_EXTENDED,
+                RANGING_MEASUREMENT_TYPE_OWR_AOA, MAC_ADDRESSING_MODE_SHORT,
                 UwbUciConstants.STATUS_CODE_RANGING_RX_TIMEOUT);
         mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
         verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
@@ -3175,23 +3243,11 @@ public class UwbSessionManagerTest {
         when(mDeviceConfigFacade.isRangingErrorStreakTimerEnabled()).thenReturn(false);
 
         UwbSession uwbSession = prepareExistingUwbSession();
-        // set up for start ranging
-        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE, UwbUciConstants.UWB_SESSION_STATE_ACTIVE)
-                .when(uwbSession).getSessionState();
-        when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
-
-        mUwbSessionManager.startRanging(
-                uwbSession.getSessionHandle(), uwbSession.getParams());
-        mTestLooper.dispatchAll();
-
-        verify(mUwbSessionNotificationManager).onRangingStarted(eq(uwbSession), any());
-        verify(mUwbMetrics).longRangingStartEvent(
-                eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+        startRanging(uwbSession);
 
         // Now send a range data notification with an error.
         UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
-                RANGING_MEASUREMENT_TYPE_TWO_WAY, MAC_ADDRESSING_MODE_EXTENDED,
+                RANGING_MEASUREMENT_TYPE_TWO_WAY, MAC_ADDRESSING_MODE_SHORT,
                 UwbUciConstants.STATUS_CODE_RANGING_RX_TIMEOUT);
         mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
         verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
@@ -3203,40 +3259,41 @@ public class UwbSessionManagerTest {
     @Test
     public void execStartRanging_onRangeDataNotificationErrorFollowedBySuccess() throws Exception {
         UwbSession uwbSession = prepareExistingUwbSession();
-        // set up for start ranging
-        doReturn(UwbUciConstants.UWB_SESSION_STATE_IDLE, UwbUciConstants.UWB_SESSION_STATE_ACTIVE)
-                .when(uwbSession).getSessionState();
-        when(mNativeUwbManager.startRanging(eq(TEST_SESSION_ID), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
-
-        mUwbSessionManager.startRanging(
-                uwbSession.getSessionHandle(), uwbSession.getParams());
-        mTestLooper.dispatchAll();
-
-        verify(mUwbSessionNotificationManager).onRangingStarted(eq(uwbSession), any());
-        verify(mUwbMetrics).longRangingStartEvent(
-                eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_OK));
+        UwbAddress controleeAddr = setUpControlee(uwbSession, MAC_ADDRESSING_MODE_SHORT);
+        startRanging(uwbSession);
 
         // Now send a range data notification with an error.
         UwbRangingData uwbRangingData = UwbTestUtils.generateRangingData(
-                RANGING_MEASUREMENT_TYPE_TWO_WAY, MAC_ADDRESSING_MODE_EXTENDED,
+                RANGING_MEASUREMENT_TYPE_TWO_WAY, MAC_ADDRESSING_MODE_SHORT,
                 UwbUciConstants.STATUS_CODE_RANGING_RX_TIMEOUT);
+
         mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
         verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
+        // Verify that an alarm is started for the controlee.
+        ArgumentCaptor<UwbAddress> addressCaptor = ArgumentCaptor.forClass(UwbAddress.class);
         ArgumentCaptor<AlarmManager.OnAlarmListener> alarmListenerCaptor =
                 ArgumentCaptor.forClass(AlarmManager.OnAlarmListener.class);
+        verify(uwbSession.mMulticastRangingErrorStreakTimerListeners).put(
+                addressCaptor.capture(),
+                alarmListenerCaptor.capture()
+        );
         verify(mAlarmManager).setExact(
-                anyInt(), anyLong(), anyString(), alarmListenerCaptor.capture(), any());
+                anyInt(), anyLong(), anyString(), eq(alarmListenerCaptor.getValue()), any());
+        assertThat(addressCaptor.getValue()).isEqualTo(controleeAddr);
         assertThat(alarmListenerCaptor.getValue()).isNotNull();
+        // Actually do the putting so that we can check for removal later.
+        uwbSession.mMulticastRangingErrorStreakTimerListeners.put(addressCaptor.getValue(),
+                alarmListenerCaptor.getValue());
 
-        // Send success and ensure that the timer is cancelled.
+        // Send successful data and ensure that the controlee's timer is cancelled.
         uwbRangingData = UwbTestUtils.generateRangingData(
-                RANGING_MEASUREMENT_TYPE_TWO_WAY, MAC_ADDRESSING_MODE_EXTENDED,
+                RANGING_MEASUREMENT_TYPE_TWO_WAY, MAC_ADDRESSING_MODE_SHORT,
                 UwbUciConstants.STATUS_CODE_OK);
         mUwbSessionManager.onRangeDataNotificationReceived(uwbRangingData);
-        verify(mUwbSessionNotificationManager).onRangingResult(uwbSession, uwbRangingData);
-
-        verify(mAlarmManager).cancel(any(AlarmManager.OnAlarmListener.class));
+        verify(mUwbSessionNotificationManager).onRangingResult(eq(uwbSession), eq(uwbRangingData));
+        verify(mAlarmManager).cancel(eq(alarmListenerCaptor.getValue()));
+        verify(uwbSession.mMulticastRangingErrorStreakTimerListeners)
+                .remove(eq(addressCaptor.getValue()));
     }
 
     @Test
@@ -4104,10 +4161,11 @@ public class UwbSessionManagerTest {
         UwbSession uwbSession = prepareExistingUwbSession();
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParams();
+        UwbMulticastListUpdateStatus status = mock(UwbMulticastListUpdateStatus.class);
         when(mNativeUwbManager
                 .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
                         any(), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+                .thenReturn(status);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
         when(uwbMulticastListUpdateStatus.getNumOfControlee()).thenReturn(1);
@@ -4138,7 +4196,8 @@ public class UwbSessionManagerTest {
                 uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
                 dstAddress, reconfigureParams.getSubSessionIdList(), null,
                 uwbSession.getChipId());
-        verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession));
+        verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession),
+                        eq(UWB_DEST_ADDRESS_2));
         verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
     }
 
@@ -4159,10 +4218,12 @@ public class UwbSessionManagerTest {
         UwbSession uwbSession = prepareExistingUwbSession();
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParams(FiraParams.MULTICAST_LIST_UPDATE_ACTION_DELETE);
+
+        UwbMulticastListUpdateStatus status = mock(UwbMulticastListUpdateStatus.class);
         when(mNativeUwbManager
                 .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
                         any(), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+                .thenReturn(status);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
         when(uwbMulticastListUpdateStatus.getNumOfControlee()).thenReturn(1);
@@ -4193,7 +4254,8 @@ public class UwbSessionManagerTest {
                 uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
                 dstAddress, reconfigureParams.getSubSessionIdList(), null,
                 uwbSession.getChipId());
-        verify(mUwbSessionNotificationManager).onControleeRemoved(eq(uwbSession));
+        verify(mUwbSessionNotificationManager).onControleeRemoved(eq(uwbSession),
+                eq(UWB_DEST_ADDRESS), anyInt());
         verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
     }
 
@@ -4221,10 +4283,11 @@ public class UwbSessionManagerTest {
         UwbSession uwbSession = prepareExistingUwbSession(firaParams);
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParamsV2();
+        UwbMulticastListUpdateStatus status = mock(UwbMulticastListUpdateStatus.class);
         when(mNativeUwbManager
                 .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
                                 any(), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+                .thenReturn(status);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
         when(uwbMulticastListUpdateStatus.getNumOfControlee()).thenReturn(1);
@@ -4254,7 +4317,8 @@ public class UwbSessionManagerTest {
                 uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
                 dstAddress, reconfigureParams.getSubSessionIdList(),
                 reconfigureParams.getSubSessionKeyList(), uwbSession.getChipId());
-        verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession));
+        verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession),
+                        eq(UWB_DEST_ADDRESS_2));
         verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
     }
 
@@ -4270,10 +4334,11 @@ public class UwbSessionManagerTest {
         UwbSession uwbSession = prepareExistingUwbSession(firaParams);
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParams(FiraParams.P_STS_MULTICAST_LIST_UPDATE_ACTION_ADD_16_BYTE);
+        UwbMulticastListUpdateStatus status = mock(UwbMulticastListUpdateStatus.class);
         when(mNativeUwbManager
                 .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
                                 any(), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+                .thenReturn(status);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
         when(uwbMulticastListUpdateStatus.getNumOfControlee()).thenReturn(1);
@@ -4303,7 +4368,8 @@ public class UwbSessionManagerTest {
                 uwbSession.getSessionId(), reconfigureParams.getAction(), 1,
                 dstAddress, reconfigureParams.getSubSessionIdList(),
                 reconfigureParams.getSubSessionKeyList(), uwbSession.getChipId());
-        verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession));
+        verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession),
+                        eq(UWB_DEST_ADDRESS_2));
         verify(mUwbSessionNotificationManager).onRangingReconfigured(eq(uwbSession));
     }
 
@@ -4358,16 +4424,24 @@ public class UwbSessionManagerTest {
         UwbSession uwbSession = prepareExistingUwbSession(firaParams);
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParamsV2();
+        //return status > 0 indicates failure
+        //TBD: update session and address from params
+        UwbMulticastListUpdateStatus status = mock(UwbMulticastListUpdateStatus.class);
+        when(status.getNumOfControlee()).thenReturn(1);
+        when(status.getControleeUwbAddresses()).thenReturn(
+                new UwbAddress[] { UWB_DEST_ADDRESS_2 });
+        when(status.getStatus()).thenReturn(
+                new int[] { UwbUciConstants.STATUS_CODE_FAILED });
         when(mNativeUwbManager
                 .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
                                 any(), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_FAILED);
+                .thenReturn(status);
 
         mUwbSessionManager.reconfigure(uwbSession.getSessionHandle(), reconfigureParams);
         mTestLooper.dispatchNext();
 
         verify(mUwbSessionNotificationManager).onControleeAddFailed(eq(uwbSession),
-                eq(UwbUciConstants.STATUS_CODE_FAILED));
+                        eq(UWB_DEST_ADDRESS_2), eq(UwbUciConstants.STATUS_CODE_FAILED));
         verify(mUwbSessionNotificationManager).onRangingReconfigureFailed(
                 eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_FAILED));
     }
@@ -4384,10 +4458,6 @@ public class UwbSessionManagerTest {
         UwbSession uwbSession = prepareExistingUwbSession(firaParams);
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParamsV2();
-        when(mNativeUwbManager
-                .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
-                        any(), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
         when(uwbMulticastListUpdateStatus.getNumOfControlee()).thenReturn(2);
@@ -4396,6 +4466,10 @@ public class UwbSessionManagerTest {
         // One fail, one success
         when(uwbMulticastListUpdateStatus.getStatus()).thenReturn(
                 new int[] { UwbUciConstants.STATUS_CODE_FAILED, UwbUciConstants.STATUS_CODE_OK });
+        when(mNativeUwbManager
+                .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
+                        any(), anyString()))
+                .thenReturn(uwbMulticastListUpdateStatus);
         doReturn(uwbMulticastListUpdateStatus).when(uwbSession).getMulticastListUpdateStatus();
 
         mUwbSessionManager.reconfigure(uwbSession.getSessionHandle(), reconfigureParams);
@@ -4403,9 +4477,10 @@ public class UwbSessionManagerTest {
 
         // Fail callback for the first one.
         verify(mUwbSessionNotificationManager).onControleeAddFailed(eq(uwbSession),
-                eq(UwbUciConstants.STATUS_CODE_FAILED));
+                eq(UWB_DEST_ADDRESS_2), eq(UwbUciConstants.STATUS_CODE_FAILED));
         // Success callback for the second.
-        verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession));
+        verify(mUwbSessionNotificationManager).onControleeAdded(eq(uwbSession),
+                        eq(UWB_DEST_ADDRESS_3));
 
         // Make sure the failed address was not added.
         assertThat(uwbSession.getControleeList().stream()
@@ -4429,13 +4504,16 @@ public class UwbSessionManagerTest {
         UwbSession uwbSession = prepareExistingUwbSession(firaParams);
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParamsV2();
+        UwbMulticastListUpdateStatus status = mock(UwbMulticastListUpdateStatus.class);
         when(mNativeUwbManager
                 .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
                                 any(), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
+                .thenReturn(status);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
         when(uwbMulticastListUpdateStatus.getNumOfControlee()).thenReturn(1);
+        when(uwbMulticastListUpdateStatus.getControleeUwbAddresses()).thenReturn(
+                new UwbAddress[] { UWB_DEST_ADDRESS_2 });
         when(uwbMulticastListUpdateStatus.getStatus()).thenReturn(
                 new int[] { UwbUciConstants.STATUS_CODE_FAILED });
         doReturn(uwbMulticastListUpdateStatus).when(uwbSession).getMulticastListUpdateStatus();
@@ -4444,7 +4522,7 @@ public class UwbSessionManagerTest {
         mTestLooper.dispatchNext();
 
         verify(mUwbSessionNotificationManager).onControleeAddFailed(eq(uwbSession),
-                eq(UwbUciConstants.STATUS_CODE_FAILED));
+                eq(UWB_DEST_ADDRESS_2), eq(UwbUciConstants.STATUS_CODE_FAILED));
         verify(mUwbSessionNotificationManager).onRangingReconfigureFailed(
                 eq(uwbSession), eq(UwbUciConstants.STATUS_CODE_FAILED));
     }
@@ -4492,10 +4570,12 @@ public class UwbSessionManagerTest {
         UwbSession uwbSession = prepareExistingUwbSession(firaParams);
         FiraRangingReconfigureParams reconfigureParams =
                 buildReconfigureParamsV2();
+        UwbMulticastListUpdateStatus status = mock(UwbMulticastListUpdateStatus.class);
         when(mNativeUwbManager
                 .controllerMulticastListUpdate(anyInt(), anyInt(), anyInt(), any(), any(),
                                 any(), anyString()))
-                .thenReturn((byte) UwbUciConstants.STATUS_CODE_FAILED);
+                .thenReturn(status);
+        when(status.getNumOfControlee()).thenReturn(1);
         UwbMulticastListUpdateStatus uwbMulticastListUpdateStatus =
                 mock(UwbMulticastListUpdateStatus.class);
         when(uwbMulticastListUpdateStatus.getStatus()).thenReturn(
@@ -4811,7 +4891,7 @@ public class UwbSessionManagerTest {
                         UWB_DEST_ADDRESS))
                 .setProtocolVersion(new FiraProtocolVersion(1, 0))
                 .setSessionId(10)
-                .setSessionType(FiraParams.SESSION_TYPE_IN_BAND_DATA_PHASE)
+                .setSessionType(FiraParams.SESSION_TYPE_RANGING)
                 .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_CONTROLLER)
                 .setDeviceRole(FiraParams.RANGING_DEVICE_ROLE_INITIATOR)
                 .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
@@ -4820,7 +4900,7 @@ public class UwbSessionManagerTest {
                 .setDataRepetitionCount(0)
                 .build();
         UwbSession uwbSession = prepareExistingUwbSessionWithSessionType(
-                (byte) FiraParams.SESSION_TYPE_IN_BAND_DATA_PHASE, params);
+                (byte) FiraParams.SESSION_TYPE_RANGING, params);
 
         byte messageControl = 0;
         int noOfPhases = 2;
@@ -4871,7 +4951,7 @@ public class UwbSessionManagerTest {
                         UWB_DEST_ADDRESS))
                 .setProtocolVersion(new FiraProtocolVersion(1, 0))
                 .setSessionId(10)
-                .setSessionType(FiraParams.SESSION_TYPE_RANGING_ONLY_PHASE)
+                .setSessionType(FiraParams.SESSION_TYPE_RANGING)
                 .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_CONTROLLER)
                 .setDeviceRole(FiraParams.RANGING_DEVICE_ROLE_INITIATOR)
                 .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
@@ -4880,7 +4960,7 @@ public class UwbSessionManagerTest {
                 .setDataRepetitionCount(0)
                 .build();
         UwbSession uwbSession = prepareExistingUwbSessionWithSessionType(
-                (byte) FiraParams.SESSION_TYPE_RANGING_ONLY_PHASE, params);
+                (byte) FiraParams.SESSION_TYPE_RANGING, params);
 
         byte[] updateTime = new byte[8];
         int noOfPhases = 2;
@@ -4951,7 +5031,7 @@ public class UwbSessionManagerTest {
                         UWB_DEST_ADDRESS))
                 .setProtocolVersion(new FiraProtocolVersion(1, 0))
                 .setSessionId(10)
-                .setSessionType(FiraParams.SESSION_TYPE_RANGING)
+                .setSessionType(FiraParams.SESSION_TYPE_RANGING_ONLY_PHASE)
                 .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_CONTROLLER)
                 .setDeviceRole(FiraParams.RANGING_DEVICE_ROLE_INITIATOR)
                 .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
@@ -4960,7 +5040,7 @@ public class UwbSessionManagerTest {
                 .setDataRepetitionCount(0)
                 .build();
         UwbSession uwbSession = prepareExistingUwbSessionWithSessionType(
-                (byte) FiraParams.SESSION_TYPE_RANGING, params);
+                (byte) FiraParams.SESSION_TYPE_RANGING_ONLY_PHASE, params);
 
 
         // Expected to fail due to invalid session type
@@ -5065,7 +5145,7 @@ public class UwbSessionManagerTest {
                         UWB_DEST_ADDRESS))
                 .setProtocolVersion(new FiraProtocolVersion(1, 0))
                 .setSessionId(10)
-                .setSessionType(FiraParams.SESSION_TYPE_RANGING_WITH_DATA_PHASE)
+                .setSessionType(FiraParams.SESSION_TYPE_RANGING)
                 .setDeviceType(FiraParams.RANGING_DEVICE_TYPE_CONTROLEE)
                 .setDeviceRole(FiraParams.RANGING_DEVICE_ROLE_INITIATOR)
                 .setMultiNodeMode(FiraParams.MULTI_NODE_MODE_UNICAST)
@@ -5074,7 +5154,7 @@ public class UwbSessionManagerTest {
                 .setDataRepetitionCount(0)
                 .build();
         UwbSession uwbSession = prepareExistingUwbSessionWithSessionType(
-                (byte) FiraParams.SESSION_TYPE_RANGING_WITH_DATA_PHASE, params);
+                (byte) FiraParams.SESSION_TYPE_RANGING, params);
 
         int noOfPhases = 2;
         byte phaseParticipation = 0;
