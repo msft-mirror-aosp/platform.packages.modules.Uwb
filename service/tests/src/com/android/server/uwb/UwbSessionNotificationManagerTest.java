@@ -26,6 +26,7 @@ import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TY
 import static com.android.server.uwb.data.UwbUciConstants.RANGING_MEASUREMENT_TYPE_TWO_WAY;
 import static com.android.server.uwb.data.UwbUciConstants.STATUS_CODE_FAILED;
 
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.uwb.support.radar.RadarParams.RADAR_DATA_TYPE_RADAR_SWEEP_SAMPLES;
 
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -63,6 +64,7 @@ import com.android.server.uwb.data.UwbRangingData;
 import com.android.server.uwb.data.UwbUciConstants;
 import com.android.uwb.flags.Flags;
 
+import com.google.uwb.support.fira.FiraOnControleeAddRemoveParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.fira.FiraParams;
 import com.google.uwb.support.radar.RadarData;
@@ -74,6 +76,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -568,7 +571,8 @@ public class UwbSessionNotificationManagerTest {
 
     @Test
     public void testOnControleeAdded() throws Exception {
-        mUwbSessionNotificationManager.onControleeAdded(mUwbSession);
+        mUwbSessionNotificationManager.onControleeAdded(mUwbSession,
+                        UwbTestUtils.PEER_SHORT_UWB_ADDRESS);
 
         verify(mIUwbRangingCallbacks).onControleeAdded(eq(mSessionHandle), any());
     }
@@ -576,28 +580,62 @@ public class UwbSessionNotificationManagerTest {
     @Test
     public void testOnControleeAddFailed() throws Exception {
         int status =  UwbUciConstants.STATUS_CODE_INVALID_MESSAGE_SIZE;
-        mUwbSessionNotificationManager.onControleeAddFailed(mUwbSession, status);
+        mUwbSessionNotificationManager.onControleeAddFailed(mUwbSession,
+                UwbTestUtils.PEER_SHORT_UWB_ADDRESS, status);
 
         verify(mIUwbRangingCallbacks).onControleeAddFailed(eq(mSessionHandle),
                 eq(UwbSessionNotificationHelper.convertUciStatusToApiReasonCode(status)),
-                argThat(p -> (p.getInt("status_code")) == status));
+                argThat(bundle -> {
+                        int addressMode = bundle.getInt("mac_address_mode");
+                        UwbAddress address = FiraParams.longToUwbAddress(
+                                bundle.getLong("address"),
+                                addressMode == FiraParams.MAC_ADDRESS_MODE_2_BYTES
+                                        ? UwbAddress.SHORT_ADDRESS_BYTE_LENGTH
+                                        : UwbAddress.EXTENDED_ADDRESS_BYTE_LENGTH);
+                        int reason = bundle.getInt("reason");
+                        return address.equals(UwbTestUtils.PEER_SHORT_UWB_ADDRESS)
+                                && FiraOnControleeAddRemoveParams.Reason.REQUESTED_BY_API == reason;
+                }));
     }
 
     @Test
     public void testOnControleeRemoved() throws Exception {
-        mUwbSessionNotificationManager.onControleeRemoved(mUwbSession);
+        UwbAddress address = UwbTestUtils.PEER_EXTENDED_UWB_ADDRESS;
+        int reason = FiraOnControleeAddRemoveParams.Reason.LOST_CONNECTION;
 
-        verify(mIUwbRangingCallbacks).onControleeRemoved(eq(mSessionHandle), any());
+        ArgumentCaptor<PersistableBundle> bundleCaptor =
+                ArgumentCaptor.forClass(PersistableBundle.class);
+
+        mUwbSessionNotificationManager.onControleeRemoved(mUwbSession, address, reason);
+        verify(mIUwbRangingCallbacks).onControleeRemoved(eq(mSessionHandle),
+                bundleCaptor.capture());
+
+        FiraOnControleeAddRemoveParams params =
+                FiraOnControleeAddRemoveParams.fromBundle(bundleCaptor.getValue());
+        assertThat(params.getAddress()).isEqualTo(address);
+        assertThat(params.getReason()).isEqualTo(reason);
     }
 
     @Test
     public void testOnControleeRemoveFailed() throws Exception {
         int status =  UwbUciConstants.STATUS_CODE_INVALID_MESSAGE_SIZE;
-        mUwbSessionNotificationManager.onControleeRemoveFailed(mUwbSession, status);
+        mUwbSessionNotificationManager.onControleeRemoveFailed(mUwbSession,
+                UwbTestUtils.PEER_SHORT_UWB_ADDRESS, status,
+                FiraOnControleeAddRemoveParams.Reason.LOST_CONNECTION);
 
         verify(mIUwbRangingCallbacks).onControleeRemoveFailed(eq(mSessionHandle),
                 eq(UwbSessionNotificationHelper.convertUciStatusToApiReasonCode(status)),
-                argThat(p -> (p.getInt("status_code")) == status));
+                argThat(bundle -> {
+                        int addressMode = bundle.getInt("mac_address_mode");
+                        UwbAddress address = FiraParams.longToUwbAddress(
+                                bundle.getLong("address"),
+                                addressMode == FiraParams.MAC_ADDRESS_MODE_2_BYTES
+                                        ? UwbAddress.SHORT_ADDRESS_BYTE_LENGTH
+                                        : UwbAddress.EXTENDED_ADDRESS_BYTE_LENGTH);
+                        int reason = bundle.getInt("reason");
+                        return address.equals(UwbTestUtils.PEER_SHORT_UWB_ADDRESS)
+                                && FiraOnControleeAddRemoveParams.Reason.LOST_CONNECTION == reason;
+                }));
     }
 
     @Test
