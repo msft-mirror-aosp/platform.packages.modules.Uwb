@@ -20,65 +20,54 @@ import com.android.ranging.proto.MultiSensorFinderConfig;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 
 import java.time.Duration;
 import java.util.Optional;
 
-/** Configuration for Precision Ranging. */
+/** Configuration for multi-tecnology ranging */
 @AutoValue
-public abstract class PrecisionRangingConfig {
-
-    /** Returns the list of ranging technologies that were requested for this ranging session. */
-    public abstract ImmutableList<RangingTechnology> getRangingTechnologiesToRangeWith();
+public abstract class RangingConfig {
 
     /** Returns whether to use the fusing algorithm or not. */
     public abstract boolean getUseFusingAlgorithm();
 
     /**
      * Returns the max interval at which data will be reported back. If set to 0 data will be
-     * reported
-     * immediately on reception. If set to non zero value, only latest received data that hasn't
-     * been
-     * yet reported will be reported, so there's a chance that some data doesn't get reported if
-     * multiple data points were received during the same update interval.
+     * reported immediately on reception. If set to non zero value, only latest received data that
+     * hasn't yet been reported will be reported, so there's a chance that some data doesn't get
+     * reported if multiple data points were received during the same update interval.
      */
     public abstract Duration getMaxUpdateInterval();
 
     /**
      * Returns the timeout after which precision ranging will be stopped if no data was produced
-     * since
-     * precision ranging started.
+     * since precision ranging started.
      */
     public abstract Duration getInitTimeout();
 
     /**
-     * Returns the timeout to stop reporting back new data if fusion algorithm wasn't feeded ranging
+     * Returns the timeout to stop reporting back new data if fusion algorithm wasn't fed ranging
      * data in that amount of time. Checked only if useFusingAlgorithm is set to true.
      */
     public abstract Duration getFusionAlgorithmDriftTimeout();
 
     /**
-     * Returns the timeout to stop precision ranging if there were no new precision data updates
-     * sent
-     * in that time period.
+     * Returns the timeout to stop ranging if there were no new data updates sent in that time
+     * period.
      */
     public abstract Duration getNoUpdateTimeout();
 
     /** Returns the fusion algorithm configuration if present. */
     public abstract Optional<MultiSensorFinderConfig> getFusionAlgorithmConfig();
 
-    /** Returns a builder for {@link PrecisionRangingConfig}. */
+    /** Returns a builder for {@link RangingConfig}. */
     public static Builder builder() {
-        return new AutoValue_PrecisionRangingConfig.Builder();
+        return new AutoValue_RangingConfig.Builder();
     }
 
-    /** Builder for {@link PrecisionRangingConfig}. */
+    /** Builder for {@link RangingConfig}. */
     @AutoValue.Builder
     public abstract static class Builder {
-        public abstract Builder setRangingTechnologiesToRangeWith(
-                ImmutableList<RangingTechnology> rangingTechnologiesToRangeWith);
-
         public abstract Builder setUseFusingAlgorithm(boolean useFusingAlgorithm);
 
         public abstract Builder setMaxUpdateInterval(Duration maxUpdateInterval);
@@ -92,26 +81,15 @@ public abstract class PrecisionRangingConfig {
         public abstract Builder setFusionAlgorithmConfig(MultiSensorFinderConfig
                 fusionAlgorithmConfig);
 
-        abstract PrecisionRangingConfig autoBuild();
+        abstract RangingConfig autoBuild();
 
-        public PrecisionRangingConfig build() {
-            PrecisionRangingConfig config = autoBuild();
-            Preconditions.checkArgument(
-                    !config.getRangingTechnologiesToRangeWith().isEmpty(),
-                    "Ranging technologies to range with must contain at least one ranging "
-                            + "technology.");
+        public RangingConfig build() {
+            RangingConfig config = autoBuild();
             Preconditions.checkArgument(
                     config.getUseFusingAlgorithm() == config.getFusionAlgorithmConfig()
                     .isPresent(),
                     "Fusion algorithm config must be set when and only when useFusingAlgorithm"
-                    + "is set to");
-            if (config.getUseFusingAlgorithm()
-                    && config.getRangingTechnologiesToRangeWith().contains(RangingTechnology
-                    .UWB)) {
-                Preconditions.checkArgument(
-                        config.getFusionAlgorithmConfig().get().getUseUwbMeasurements(),
-                        "Fusion algorithm should accept UWB measurements since UWB was requested.");
-            }
+                    + "is set too");
             return config;
         }
     }
