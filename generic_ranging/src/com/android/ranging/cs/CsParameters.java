@@ -14,26 +14,14 @@
  * limitations under the License.
  */
 
-package com.android.ranging.tests;
+package com.android.ranging.cs;
 
-import android.util.Log;
+import com.android.ranging.RangingParameters;
 
-import androidx.test.filters.SmallTest;
-
-import com.android.ranging.PrecisionRanging;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
-@RunWith(JUnit4.class)
-@SmallTest
-public class PrecisionRangingTest {
-    private static final String TAG = PrecisionRangingTest.class.getSimpleName();
-
-    @Test
-    public void replaceMe() {
-        Log.d(TAG, "Running generic ranging unit tests. The PrecisionRanging class is: "
-                + PrecisionRanging.class.getSimpleName());
+/** Parameters for Bluetooth channel sounding ranging. */
+public class CsParameters implements RangingParameters.TechnologyParameters {
+    public CsParameters() {
+        throw new UnsupportedOperationException("Not implemented!");
     }
 }
+
