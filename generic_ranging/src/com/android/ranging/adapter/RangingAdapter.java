@@ -16,9 +16,7 @@
 
 package com.android.ranging.adapter;
 
-import android.os.RemoteException;
-
-import com.android.ranging.RangingData;
+import com.android.ranging.RangingReport;
 import com.android.ranging.RangingTechnology;
 
 import com.google.common.util.concurrent.ListenableFuture;
@@ -34,7 +32,7 @@ public interface RangingAdapter {
      * otherwise. When this returns false it's most likely because of not being enabled in settings,
      * airplane mode being on, etc.
      */
-    ListenableFuture<Boolean> isEnabled() throws RemoteException;
+    ListenableFuture<Boolean> isEnabled();
 
     /**
      * Start ranging. Does nothing if the ranging technology is not enabled on device or if ranging
@@ -63,7 +61,7 @@ public interface RangingAdapter {
          * Notifies the caller on each instance of ranging data received from the ranging
          * technology.
          */
-        void onRangingData(RangingData rangingData);
+        void onRangingData(RangingReport rangingReport);
 
         /** Stopped reason for this ranging adapter. */
         enum StoppedReason {
