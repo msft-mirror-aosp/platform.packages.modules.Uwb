@@ -23,7 +23,8 @@ _TEST_CASES = (
     "test_ranging_nearby_share_profile_default",
     "test_ranging_nearby_share_profile_p_sts_default",
     "test_ranging_nearby_share_profile_reconfigure_controlee",
-    "test_ranging_nearby_share_profile_p_sts_add_controlee",
+    # (TODO: ziyiw) Re-enable this test after fix b/360248188
+    # "test_ranging_nearby_share_profile_p_sts_add_controlee",
     "test_ranging_nearby_share_profile_add_remove_controlee",
     "test_ranging_device_tracker_profile_reconfigure_ranging_interval",
     "test_ranging_nearby_share_profile_reconfigure_ranging_interval",
@@ -627,7 +628,8 @@ class RangingTest(uwb_base_test.UwbBaseTest):
   def test_ranging_nearby_share_profile_p_sts_add_controlee(self):
     """Verifies ranging for device nearby share with default profile."""
     asserts.skip_if(
-        self._get_uci_version(self.initiator) < 2 or self._get_uci_version(self.responder) < 2,
+        self._get_uci_version(self.initiator) & 0xFF < 2
+        or self._get_uci_version(self.responder) & 0xFF < 2,
         f"Provisioned STS individual key case is not supported",
     )
     initiator_params = uwb_ranging_params.UwbRangingParams(

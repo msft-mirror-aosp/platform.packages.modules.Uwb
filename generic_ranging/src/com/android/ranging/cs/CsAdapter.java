@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 
-package com.android.ranging.adapter;
+package com.android.ranging.cs;
 
-import static com.google.common.util.concurrent.Futures.immediateFuture;
+import android.content.Context;
 
+import com.android.ranging.RangingAdapter;
+import com.android.ranging.RangingParameters.TechnologyParameters;
 import com.android.ranging.RangingTechnology;
 
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
 /** Channel Sounding adapter for ranging. */
 public class CsAdapter implements RangingAdapter {
 
-    public static boolean isSupported() {
+    public static boolean isSupported(Context context) {
         return false;
     }
 
@@ -40,11 +43,11 @@ public class CsAdapter implements RangingAdapter {
 
     @Override
     public ListenableFuture<Boolean> isEnabled() {
-        return immediateFuture(false);
+        return Futures.immediateFuture(false);
     }
 
     @Override
-    public void start(Callback callback) {
+    public void start(TechnologyParameters parameters, Callback callback) {
         throw new UnsupportedOperationException("Not implemented.");
     }
 
