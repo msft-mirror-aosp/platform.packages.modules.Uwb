@@ -128,8 +128,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeDo
     debug!("{}: enter", function_name!());
     match option_result_helper(native_do_initialize(env, obj, chip_id), function_name!()) {
         Some(rsp) => create_device_info_response(rsp, env)
-            .inspect_err(|e| {
+            .map_err(|e| {
                 error!("{} failed with {:?}", function_name!(), &e);
+                e
             })
             .unwrap_or(*JObject::null()),
         None => *JObject::null(),
@@ -455,8 +456,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
         function_name!(),
     ) {
         Some(config_response) => create_set_config_response(config_response, env)
-            .inspect_err(|e| {
+            .map_err(|e| {
                 error!("{} failed with {:?}", function_name!(), &e);
+                e
             })
             .unwrap_or(*JObject::null()),
         None => *JObject::null(),
@@ -502,8 +504,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
         function_name!(),
     ) {
         Some(config_response) => create_radar_config_response(config_response, env)
-            .inspect_err(|e| {
+            .map_err(|e| {
                 error!("{} failed with {:?}", function_name!(), &e);
+                e
             })
             .unwrap_or(*JObject::null()),
         None => *JObject::null(),
@@ -763,8 +766,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGe
         function_name!(),
     ) {
         Some(v) => create_get_config_response(v, env)
-            .inspect_err(|e| {
+            .map_err(|e| {
                 error!("{} failed with {:?}", function_name!(), &e);
+                e
             })
             .unwrap_or(*JObject::null()),
         None => *JObject::null(),
@@ -831,8 +835,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGe
     debug!("{}: enter", function_name!());
     match option_result_helper(native_get_caps_info(env, obj, chip_id), function_name!()) {
         Some(v) => create_cap_response(v, env)
-            .inspect_err(|e| {
+            .map_err(|e| {
                 error!("{} failed with {:?}", function_name!(), &e);
+                e
             })
             .unwrap_or(*JObject::null()),
         None => *JObject::null(),
@@ -933,8 +938,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeCo
         function_name!(),
     ) {
         Some(v) => create_session_update_controller_multicast_response(v, env)
-            .inspect_err(|e| {
+            .map_err(|e| {
                 error!("{} failed with {:?}", function_name!(), &e);
+                e
             })
             .unwrap_or(*JObject::null()),
         None => *JObject::null(),
@@ -1205,8 +1211,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
         // native_send_raw_vendor_cmd.
         Some(msg) => unsafe {
             create_vendor_response(msg, env)
-                .inspect_err(|e| {
+                .map_err(|e| {
                     error!("{} failed with {:?}", function_name!(), &e);
+                    e
                 })
                 .unwrap_or_else(|_| create_invalid_vendor_response(env).unwrap())
         },
@@ -1257,8 +1264,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeGe
     debug!("{}: enter", function_name!());
     match option_result_helper(native_get_power_stats(env, obj, chip_id), function_name!()) {
         Some(ps) => create_power_stats(ps, env)
-            .inspect_err(|e| {
+            .map_err(|e| {
                 error!("{} failed with {:?}", function_name!(), &e);
+                e
             })
             .unwrap_or(*JObject::null()),
         None => *JObject::null(),
@@ -1294,8 +1302,9 @@ pub extern "system" fn Java_com_android_server_uwb_jni_NativeUwbManager_nativeSe
         // Safety: rr is safely returned from native_set_ranging_rounds_dt_tag
         Some(rr) => unsafe {
             create_ranging_round_status(rr, env)
-                .inspect_err(|e| {
+                .map_err(|e| {
                     error!("{} failed with {:?}", function_name!(), &e);
+                    e
                 })
                 .unwrap_or(*JObject::null())
         },

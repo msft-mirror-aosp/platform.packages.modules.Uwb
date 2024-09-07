@@ -32,7 +32,6 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.android.ranging.RangingConfig;
 import com.android.ranging.RangingData;
 import com.android.ranging.RangingParameters;
-import com.android.ranging.RangingParameters.DeviceRole;
 import com.android.ranging.RangingReport;
 import com.android.ranging.RangingSession;
 import com.android.ranging.RangingSessionImpl;
@@ -206,9 +205,7 @@ public class GenericRangingSnippet implements Snippet {
                 j.getInt("slotDurationMillis"),
                 j.getBoolean("isAoaDisabled")
         );
-        DeviceRole role = j.getInt("deviceRole") == 0
-                ? DeviceRole.CONTROLEE : DeviceRole.CONTROLLER;
-        return new RangingParameters.Builder(role).useUwb(uwbParams).build();
+        return new RangingParameters.Builder().useUwb(uwbParams).build();
     }
 
     private byte[] convertJSONArrayToByteArray(JSONArray jArray) throws JSONException {
@@ -229,14 +226,14 @@ public class GenericRangingSnippet implements Snippet {
     @AsyncRpc(description = "Start UWB ranging session")
     public void startUwbRanging(String callbackId, JSONObject config)
             throws JSONException, RemoteException {
-        int deviceRole = config.getInt("deviceRole");
+        int deviceType = config.getInt("deviceType");
         UwbAdapter uwbAdapter = null;
-        if (deviceRole == 0) {
+        if (deviceType == 0) {
             logInfo("Starting controlee session");
-            uwbAdapter = new UwbAdapter(mContext, mExecutor, DeviceRole.CONTROLEE);
+            uwbAdapter = new UwbAdapter(mContext, mExecutor, UwbAdapter.DeviceType.CONTROLEE);
         } else {
             logInfo("Starting controller session");
-            uwbAdapter = new UwbAdapter(mContext, mExecutor, DeviceRole.CONTROLLER);
+            uwbAdapter = new UwbAdapter(mContext, mExecutor, UwbAdapter.DeviceType.CONTROLLER);
         }
         uwbAdapter.setLocalAddressForTesting(UwbAddress.fromBytes(
                 convertJSONArrayToByteArray(config.getJSONArray("deviceAddress"))));

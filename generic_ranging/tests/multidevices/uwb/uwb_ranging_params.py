@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 class Constants:
   """Class for ranging parameter constants."""
 
-  class DeviceRole(IntEnum):
+  class DeviceType(IntEnum):
     CONTROLEE = 0
     CONTROLLER = 1
 
@@ -129,7 +129,7 @@ class UwbRangingParams:
   slot_duration_millis: Constants.SlotDuration = Constants.SlotDuration.MILLIS_2
   is_aoa_disabled: bool = False
   device_address: List[int]
-  device_role: Constants.DeviceRole
+  device_type: Constants.DeviceType
 
   def to_dict(self) -> Dict[str, Any]:
     """Returns UWB ranging parameters in dictionary for sl4a.
@@ -148,7 +148,7 @@ class UwbRangingParams:
         "slotDurationMillis": self.slot_duration_millis,
         "isAoaDisabled": self.is_aoa_disabled,
         "deviceAddress": self.device_address,
-        "deviceRole": self.device_role,
+        "deviceType": self.device_type,
     }
 
     if self.sub_session_key_info is not None:
