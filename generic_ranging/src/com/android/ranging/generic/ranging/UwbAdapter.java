@@ -50,6 +50,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 
 import java.util.Optional;
+import java.util.concurrent.Executors;
 
 /** Ranging Adapter for Ultra-Wide Band (UWB). */
 public class UwbAdapter implements RangingAdapter {
@@ -224,7 +225,7 @@ public class UwbAdapter implements RangingAdapter {
         this.uwbListener = Optional.of(uwbListener);
         uwbClient.get().setRangingParameters(this.rangingParameters.get());
         var future = Futures.submit(() -> {
-            uwbClient.get().startRanging(uwbListener, executorService);
+            uwbClient.get().startRanging(uwbListener, Executors.newSingleThreadExecutor());
         }, executorService);
         Futures.addCallback(
                 future,
@@ -307,14 +308,21 @@ public class UwbAdapter implements RangingAdapter {
                 }
             }
 
-            RangingData rangingData =
-                    RangingData.builder()
+            RangingData.Builder rangingDataBuilder =
+                    new RangingData.Builder()
                             .setRangingTechnology(RangingTechnology.UWB)
                             .setRangeDistance(position.getDistance().getValue())
                             .setRssi(position.getRssiDbm())
                             .setTimestamp(position.getElapsedRealtimeNanos())
-                            .build();
-            callback.get().onRangingData(rangingData);
+                            .setPeerAddress(device.getAddress().toBytes());
+
+            if (position.getAzimuth() != null) {
+                rangingDataBuilder.setAzimuth(position.getAzimuth().getValue());
+            }
+            if (position.getElevation() != null) {
+                rangingDataBuilder.setElevation(position.getElevation().getValue());
+            }
+            callback.get().onRangingData(rangingDataBuilder.build());
         }
 
         @Override
@@ -328,7 +336,7 @@ public class UwbAdapter implements RangingAdapter {
                     return;
                 }
                 internalState = UwbAdapterState.STOPPED;
-                stopRanging();
+                // stopRanging();
             }
             if (reason == RangingSessionCallback.REASON_STOP_RANGING_CALLED) {
                 callback.get().onStopped(RangingAdapter.Callback.StoppedReason.REQUESTED);
