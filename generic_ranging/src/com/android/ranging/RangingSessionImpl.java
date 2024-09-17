@@ -26,13 +26,17 @@ import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.ranging.RangingParameters.DeviceRole;
+import com.android.ranging.RangingParameters.TechnologyParameters;
 import com.android.ranging.RangingUtils.StateMachine;
 import com.android.ranging.cs.CsAdapter;
+import com.android.ranging.fusion.DataFusers;
+import com.android.ranging.fusion.FilteringFusionEngine;
 import com.android.ranging.fusion.FusionEngine;
 import com.android.ranging.uwb.UwbAdapter;
 import com.android.ranging.uwb.backend.internal.RangingCapabilities;
 import com.android.ranging.uwb.backend.internal.UwbAddress;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
@@ -43,6 +47,7 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -54,22 +59,37 @@ public final class RangingSessionImpl implements RangingSession {
     private static final String TAG = RangingSessionImpl.class.getSimpleName();
 
     private final Context mContext;
-    private final RangingConfig mConfig;
 
-    /** Callback for session events. Invariant: Non-null while a session is ongoing. */
+    /**
+     * Parameters provided when the session was started.
+     * <b>Invariant: Non-null while a session is ongoing</b>.
+     */
+    private RangingParameters mParameters;
+
+    /**
+     * Callback for session events.
+     * <b>Invariant: Non-null while a session is ongoing</b>.
+     */
     private RangingSession.Callback mCallback;
 
-    /** Keeps track of state of the ranging session. <b>Must be synchronized.</b> */
+    /**
+     * Fusion engine to use for this session.
+     * <b>Invariant: Non-null while a session is ongoing</b>.
+     */
+    private FusionEngine mFusionEngine;
+
+    /**
+     * Keeps track of state of the ranging session.
+     * <b>Must be synchronized</b>.
+     */
     private final StateMachine<State> mStateMachine;
 
     /**
-     * Ranging adapters used for this session. <b>Must be synchronized</b>.
+     * Ranging adapters used for this session.
+     * <b>Must be synchronized</b>.
      * {@code mStateMachine} lock must be acquired first if mutual synchronization is necessary.
      */
     private final Map<RangingTechnology, RangingAdapter> mAdapters;
-
-    /** Fusion engine to use for this session. */
-    private final FusionEngine mFusionEngine;
 
     /** Executor for ranging technology adapters. */
     private final ListeningExecutorService mAdapterExecutor;
@@ -82,23 +102,16 @@ public final class RangingSessionImpl implements RangingSession {
 
     public RangingSessionImpl(
             @NonNull Context context,
-            @NonNull RangingConfig config,
-            @NonNull FusionEngine fusionEngine,
             @NonNull ScheduledExecutorService timeoutExecutor,
             @NonNull ListeningExecutorService rangingAdapterExecutor
     ) {
         mContext = context;
-        mConfig = config;
-
         mStateMachine = new StateMachine<>(State.STOPPED);
         mCallback = null;
-
+        mFusionEngine = null;
         mAdapters = Collections.synchronizedMap(new EnumMap<>(RangingTechnology.class));
-        mFusionEngine = fusionEngine;
-
         mTimeoutExecutor = timeoutExecutor;
         mAdapterExecutor = rangingAdapterExecutor;
-
         mPendingTimeout = null;
     }
 
@@ -118,18 +131,26 @@ public final class RangingSessionImpl implements RangingSession {
 
     @Override
     public void start(@NonNull RangingParameters parameters, @NonNull Callback callback) {
-        EnumMap<RangingTechnology, RangingParameters.TechnologyParameters> paramsMap =
-                parameters.asMap();
-        mAdapters.keySet().retainAll(paramsMap.keySet());
-
         Log.i(TAG, "Start Precision Ranging called.");
         if (!mStateMachine.transition(State.STOPPED, State.STARTING)) {
             Log.w(TAG, "Failed transition STOPPED -> STARTING");
             return;
         }
         mCallback = callback;
+        mParameters = parameters;
 
-        for (RangingTechnology technology : paramsMap.keySet()) {
+
+        if (parameters.getDataFuser().isPresent()) {
+            mFusionEngine = new FilteringFusionEngine(parameters.getDataFuser().get());
+        } else {
+            mFusionEngine = new NoOpFusionEngine();
+        }
+
+        ImmutableMap<RangingTechnology, TechnologyParameters> techParams =
+                parameters.getTechnologyParams();
+        mAdapters.keySet().retainAll(techParams.keySet());
+        mFusionEngine.start(new FusionEngineListener());
+        for (RangingTechnology technology : techParams.keySet()) {
             if (!technology.isSupported(mContext)) {
                 Log.w(TAG, "Attempted to range with unsupported technology " + technology
                         + ", skipping");
@@ -141,14 +162,13 @@ public final class RangingSessionImpl implements RangingSession {
                 if (!mAdapters.containsKey(technology)) {
                     mAdapters.put(technology, newAdapter(technology, parameters.getRole()));
                 }
-
-                mAdapters.get(technology).start(paramsMap.get(technology),
-                        new AdapterListener(technology));
+                mAdapters.get(technology)
+                        .start(techParams.get(technology), new AdapterListener(technology));
             }
         }
 
-        mFusionEngine.start(new FusionEngineListener());
-        scheduleTimeout(mConfig.getInitTimeout(), Callback.StoppedReason.NO_INITIAL_DATA_TIMEOUT);
+        scheduleTimeout(parameters.getNoInitialDataTimeout(),
+                Callback.StoppedReason.NO_INITIAL_DATA_TIMEOUT);
     }
 
     @Override
@@ -178,7 +198,9 @@ public final class RangingSessionImpl implements RangingSession {
             }
 
             // Reset internal state.
+            mParameters = null;
             mFusionEngine.stop();
+            mFusionEngine = null;
             mAdapters.clear();
             mCallback.onStopped(null, reason);
             mCallback = null;
@@ -280,7 +302,7 @@ public final class RangingSessionImpl implements RangingSession {
                     Log.w(TAG, "Reached scheduled timeout of " + timeout.toMillis());
                     stopForReason(reason);
                 },
-                mConfig.getNoUpdateTimeout().toMillis(), TimeUnit.MILLISECONDS
+                timeout.toMillis(), TimeUnit.MILLISECONDS
         );
     }
 
@@ -341,9 +363,28 @@ public final class RangingSessionImpl implements RangingSession {
                 }
                 mCallback.onData(data);
                 scheduleTimeout(
-                        mConfig.getNoUpdateTimeout(),
+                        mParameters.getNoUpdatedDataTimeout(),
                         Callback.StoppedReason.NO_UPDATED_DATA_TIMEOUT);
             }
+        }
+    }
+
+    private class NoOpFusionEngine extends FusionEngine {
+        NoOpFusionEngine() {
+            super(new DataFusers.PassthroughDataFuser());
+        }
+
+        @Override
+        protected @NonNull Set<RangingTechnology> getDataSources() {
+            return mAdapters.keySet();
+        }
+
+        @Override
+        public void addDataSource(@NonNull RangingTechnology technology) {
+        }
+
+        @Override
+        public void removeDataSource(@NonNull RangingTechnology technology) {
         }
     }
 

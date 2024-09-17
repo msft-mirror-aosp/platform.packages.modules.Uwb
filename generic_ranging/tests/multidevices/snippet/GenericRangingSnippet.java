@@ -27,7 +27,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.test.platform.app.InstrumentationRegistry;
 
-import com.android.ranging.RangingConfig;
 import com.android.ranging.RangingData;
 import com.android.ranging.RangingParameters;
 import com.android.ranging.RangingParameters.DeviceRole;
@@ -35,7 +34,6 @@ import com.android.ranging.RangingSession;
 import com.android.ranging.RangingSessionImpl;
 import com.android.ranging.RangingTechnology;
 import com.android.ranging.fusion.DataFusers;
-import com.android.ranging.fusion.FilteringFusionEngine;
 import com.android.ranging.uwb.UwbAdapter;
 import com.android.ranging.uwb.UwbParameters;
 import com.android.ranging.uwb.backend.internal.UwbAddress;
@@ -206,7 +204,12 @@ public class GenericRangingSnippet implements Snippet {
         );
         DeviceRole role = j.getInt("deviceRole") == 0
                 ? DeviceRole.CONTROLEE : DeviceRole.CONTROLLER;
-        return new RangingParameters.Builder(role).useUwb(uwbParams).build();
+        return new RangingParameters.Builder(role)
+                .setNoInitialDataTimeout(Duration.ofSeconds(3))
+                .setNoUpdatedDataTimeout(Duration.ofSeconds(2))
+                .useUwb(uwbParams)
+                .useSensorFusion(new DataFusers.PreferentialDataFuser(RangingTechnology.UWB))
+                .build();
     }
 
     private byte[] convertJSONArrayToByteArray(JSONArray jArray) throws JSONException {
@@ -248,24 +251,8 @@ public class GenericRangingSnippet implements Snippet {
             throw new RuntimeException(e);
         }
 
-        //TODO: Make this configurable
-        //    private Provider<PrecisionRanging.Factory> mRangingFactory;
-        RangingConfig rangingConfig =
-                RangingConfig.builder()
-                        .setUseFusingAlgorithm(false)
-                        .setMaxUpdateInterval(Duration.ofMillis(200))
-                        .setFusionAlgorithmDriftTimeout(Duration.ofSeconds(1))
-                        .setNoUpdateTimeout(Duration.ofSeconds(2))
-                        .setInitTimeout(Duration.ofSeconds(3))
-                        .build();
-
-        FilteringFusionEngine fusionEngine =
-                new FilteringFusionEngine(
-                        new DataFusers.PreferentialDataFuser(RangingTechnology.UWB));
-
         RangingSessionImpl session = new RangingSessionImpl(
-                mContext, rangingConfig, fusionEngine,
-                Executors.newSingleThreadScheduledExecutor(),
+                mContext, Executors.newSingleThreadScheduledExecutor(),
                 MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor()));
 
         session.useAdapterForTesting(RangingTechnology.UWB, uwbAdapter);
