@@ -53,10 +53,10 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-/**  Implementation of the Android multi-technology ranging layer */
-public final class RangingSessionImpl implements RangingSession {
+/** A peer device within a generic ranging session. */
+public final class RangingPeer {
 
-    private static final String TAG = RangingSessionImpl.class.getSimpleName();
+    private static final String TAG = RangingPeer.class.getSimpleName();
 
     private final Context mContext;
 
@@ -64,7 +64,7 @@ public final class RangingSessionImpl implements RangingSession {
      * Parameters provided when the session was started.
      * <b>Invariant: Non-null while a session is ongoing</b>.
      */
-    private RangingParameters mParameters;
+    private volatile RangingParameters mParameters;
 
     /**
      * Callback for session events.
@@ -76,7 +76,7 @@ public final class RangingSessionImpl implements RangingSession {
      * Fusion engine to use for this session.
      * <b>Invariant: Non-null while a session is ongoing</b>.
      */
-    private FusionEngine mFusionEngine;
+    private volatile FusionEngine mFusionEngine;
 
     /**
      * Keeps track of state of the ranging session.
@@ -98,12 +98,12 @@ public final class RangingSessionImpl implements RangingSession {
     private final ScheduledExecutorService mTimeoutExecutor;
 
     /** Future that stops the session due to a timeout. */
-    private ScheduledFuture<?> mPendingTimeout;
+    private volatile ScheduledFuture<?> mPendingTimeout;
 
-    public RangingSessionImpl(
+    public RangingPeer(
             @NonNull Context context,
-            @NonNull ScheduledExecutorService timeoutExecutor,
-            @NonNull ListeningExecutorService rangingAdapterExecutor
+            @NonNull ListeningExecutorService adapterExecutor,
+            @NonNull ScheduledExecutorService timeoutExecutor
     ) {
         mContext = context;
         mStateMachine = new StateMachine<>(State.STOPPED);
@@ -111,7 +111,7 @@ public final class RangingSessionImpl implements RangingSession {
         mFusionEngine = null;
         mAdapters = Collections.synchronizedMap(new EnumMap<>(RangingTechnology.class));
         mTimeoutExecutor = timeoutExecutor;
-        mAdapterExecutor = rangingAdapterExecutor;
+        mAdapterExecutor = adapterExecutor;
         mPendingTimeout = null;
     }
 
@@ -129,8 +129,10 @@ public final class RangingSessionImpl implements RangingSession {
         }
     }
 
-    @Override
-    public void start(@NonNull RangingParameters parameters, @NonNull Callback callback) {
+    /** Start a ranging session with this peer */
+    public void start(
+            @NonNull RangingParameters parameters, @NonNull RangingSession.Callback callback
+    ) {
         Log.i(TAG, "Start Precision Ranging called.");
         if (!mStateMachine.transition(State.STOPPED, State.STARTING)) {
             Log.w(TAG, "Failed transition STOPPED -> STARTING");
@@ -139,8 +141,7 @@ public final class RangingSessionImpl implements RangingSession {
         mCallback = callback;
         mParameters = parameters;
 
-
-        if (parameters.getDataFuser().isPresent()) {
+        if (mParameters.getDataFuser().isPresent()) {
             mFusionEngine = new FilteringFusionEngine(parameters.getDataFuser().get());
         } else {
             mFusionEngine = new NoOpFusionEngine();
@@ -168,10 +169,10 @@ public final class RangingSessionImpl implements RangingSession {
         }
 
         scheduleTimeout(parameters.getNoInitialDataTimeout(),
-                Callback.StoppedReason.NO_INITIAL_DATA_TIMEOUT);
+                RangingSession.Callback.StoppedReason.NO_INITIAL_DATA_TIMEOUT);
     }
 
-    @Override
+    /** Stop the active sessionw with this peer */
     public void stop() {
         stopForReason(RangingAdapter.Callback.StoppedReason.REQUESTED);
     }
@@ -180,7 +181,7 @@ public final class RangingSessionImpl implements RangingSession {
      * Stop all ranging adapters and reset internal state.
      * @param reason why the session was stopped.
      */
-    private void stopForReason(@Callback.StoppedReason int reason) {
+    private void stopForReason(@RangingSession.Callback.StoppedReason int reason) {
         Log.i(TAG, "stopPrecisionRanging with reason: " + reason);
         synchronized (mStateMachine) {
             if (mStateMachine.getState() == State.STOPPED) {
@@ -207,7 +208,7 @@ public final class RangingSessionImpl implements RangingSession {
         }
     }
 
-    @Override
+    /** Returns UWB capabilities if UWB was requested. */
     public ListenableFuture<RangingCapabilities> getUwbCapabilities() {
         if (!mAdapters.containsKey(RangingTechnology.UWB)) {
             return immediateFailedFuture(
@@ -222,7 +223,7 @@ public final class RangingSessionImpl implements RangingSession {
         }
     }
 
-    @Override
+    /** Returns UWB address if UWB was requested. */
     public ListenableFuture<UwbAddress> getUwbAddress() throws RemoteException {
         if (!mAdapters.containsKey(RangingTechnology.UWB)) {
             return immediateFailedFuture(
@@ -232,13 +233,16 @@ public final class RangingSessionImpl implements RangingSession {
         return uwbAdapter.getLocalAddress();
     }
 
+    /** Returns CS capabilities if CS was requested. */
     @DoNotCall("Not implemented")
-    @Override
     public void getCsCapabilities() {
         throw new UnsupportedOperationException("Not implemented");
     }
 
-    @Override
+    /**
+     * Returns a map that describes the {@link RangingSession.TechnologyStatus} of every
+     * {@link RangingTechnology}
+     */
     public ListenableFuture<EnumMap<RangingTechnology, Integer>> getTechnologyStatus() {
         // Combine all isEnabled futures for each technology into a single future. The resulting
         // future contains a list of technologies grouped with their corresponding
@@ -262,15 +266,15 @@ public final class RangingSessionImpl implements RangingSession {
                     EnumMap<RangingTechnology, Integer> statuses =
                             new EnumMap<>(RangingTechnology.class);
                     for (RangingTechnology technology : RangingTechnology.values()) {
-                        statuses.put(technology, TechnologyStatus.UNUSED);
+                        statuses.put(technology, RangingSession.TechnologyStatus.UNUSED);
                     }
 
                     for (Map.Entry<RangingTechnology, Boolean> enabledState : enabledStates) {
                         RangingTechnology technology = enabledState.getKey();
                         if (enabledState.getValue()) {
-                            statuses.put(technology, TechnologyStatus.ENABLED);
+                            statuses.put(technology, RangingSession.TechnologyStatus.ENABLED);
                         } else {
-                            statuses.put(technology, TechnologyStatus.DISABLED);
+                            statuses.put(technology, RangingSession.TechnologyStatus.DISABLED);
                         }
                     }
                     return statuses;
@@ -279,7 +283,7 @@ public final class RangingSessionImpl implements RangingSession {
         );
     }
 
-    /* If there is a pending timeout, cancel it. */
+    /** If there is a pending timeout, cancel it. */
     private synchronized void cancelScheduledTimeout() {
         if (mPendingTimeout != null) {
             mPendingTimeout.cancel(false);
@@ -294,7 +298,7 @@ public final class RangingSessionImpl implements RangingSession {
      * @param reason  for stopping the session.
      */
     private synchronized void scheduleTimeout(
-            @NonNull Duration timeout, @Callback.StoppedReason int reason
+            @NonNull Duration timeout, @RangingSession.Callback.StoppedReason int reason
     ) {
         cancelScheduledTimeout();
         mPendingTimeout = mTimeoutExecutor.schedule(
@@ -306,7 +310,7 @@ public final class RangingSessionImpl implements RangingSession {
         );
     }
 
-    /* Listener implementation for ranging adapter callback. */
+    /** Listens for ranging adapter events. */
     private class AdapterListener implements RangingAdapter.Callback {
         private final RangingTechnology mTechnology;
 
@@ -347,7 +351,7 @@ public final class RangingSessionImpl implements RangingSession {
         }
     }
 
-    /* Listener implementation for fusion engine callback. */
+    /** Listens for fusion engine events. */
     private class FusionEngineListener implements FusionEngine.Callback {
 
         @Override
@@ -364,7 +368,7 @@ public final class RangingSessionImpl implements RangingSession {
                 mCallback.onData(data);
                 scheduleTimeout(
                         mParameters.getNoUpdatedDataTimeout(),
-                        Callback.StoppedReason.NO_UPDATED_DATA_TIMEOUT);
+                        RangingSession.Callback.StoppedReason.NO_UPDATED_DATA_TIMEOUT);
             }
         }
     }

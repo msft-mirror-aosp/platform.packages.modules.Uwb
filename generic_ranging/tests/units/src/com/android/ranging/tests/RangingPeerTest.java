@@ -37,8 +37,8 @@ import com.android.ranging.RangingConfig;
 import com.android.ranging.RangingData;
 import com.android.ranging.RangingParameters;
 import com.android.ranging.RangingParameters.DeviceRole;
+import com.android.ranging.RangingPeer;
 import com.android.ranging.RangingSession;
-import com.android.ranging.RangingSessionImpl;
 import com.android.ranging.RangingTechnology;
 import com.android.ranging.cs.CsParameters;
 import com.android.ranging.fusion.DataFusers;
@@ -66,7 +66,7 @@ import java.util.concurrent.ScheduledExecutorService;
 
 @RunWith(JUnit4.class)
 @SmallTest
-public class RangingSessionTest {
+public class RangingPeerTest {
     @Rule public final MockitoRule mMockito = MockitoJUnit.rule();
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS) private Context mMockContext;
@@ -78,7 +78,7 @@ public class RangingSessionTest {
     private final EnumMap<RangingTechnology, RangingAdapter> mMockAdapters =
             new EnumMap<>(RangingTechnology.class);
 
-    private RangingSessionImpl mSession;
+    private RangingPeer mSession;
 
     /**
      * Starts a ranging session with the provided parameters.
@@ -130,8 +130,8 @@ public class RangingSessionTest {
         when(mMockConfig.getNoUpdateTimeout()).thenReturn(Duration.ZERO);
         when(mMockConfig.getUseFusingAlgorithm()).thenReturn(true);
 
-        mSession = new RangingSessionImpl(
-                mMockContext, mMockTimeoutExecutor, MoreExecutors.newDirectExecutorService());
+        mSession = new RangingPeer(
+                mMockContext, MoreExecutors.newDirectExecutorService(), mMockTimeoutExecutor);
 
         for (RangingTechnology technology : RangingTechnology.values()) {
             RangingAdapter adapter = mock(RangingAdapter.class);
@@ -233,8 +233,7 @@ public class RangingSessionTest {
         startSession(generateParameters().build());
 
         ArgumentCaptor<Runnable> onTimeoutCaptor = ArgumentCaptor.forClass(Runnable.class);
-        verify(mMockTimeoutExecutor).scheduleWithFixedDelay(onTimeoutCaptor.capture(),
-                anyLong(), anyLong(), any());
+        verify(mMockTimeoutExecutor).schedule(onTimeoutCaptor.capture(), anyLong(), any());
 
         onTimeoutCaptor.getValue().run();
 

@@ -30,8 +30,8 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.android.ranging.RangingData;
 import com.android.ranging.RangingParameters;
 import com.android.ranging.RangingParameters.DeviceRole;
+import com.android.ranging.RangingPeer;
 import com.android.ranging.RangingSession;
-import com.android.ranging.RangingSessionImpl;
 import com.android.ranging.RangingTechnology;
 import com.android.ranging.fusion.DataFusers;
 import com.android.ranging.uwb.UwbAdapter;
@@ -45,6 +45,7 @@ import com.google.android.mobly.snippet.event.EventCache;
 import com.google.android.mobly.snippet.event.SnippetEvent;
 import com.google.android.mobly.snippet.rpc.AsyncRpc;
 import com.google.android.mobly.snippet.rpc.Rpc;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -61,7 +62,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 public class GenericRangingSnippet implements Snippet {
     private static final String TAG = "GenericRangingSnippet";
@@ -72,7 +75,7 @@ public class GenericRangingSnippet implements Snippet {
     private final ListeningExecutorService mExecutor = MoreExecutors.listeningDecorator(
             Executors.newSingleThreadExecutor());
     private final EventCache mEventCache = EventCache.getInstance();
-    private static final HashMap<String, RangingSessionImpl> sRangingHashMap =
+    private static final HashMap<String, RangingSession> sRangingHashMap =
             new HashMap<>();
     private static final HashMap<String, GenericRangingCallback> sRangingCallbackHashMap =
             new HashMap<>();
@@ -251,18 +254,28 @@ public class GenericRangingSnippet implements Snippet {
             throw new RuntimeException(e);
         }
 
-        RangingSessionImpl session = new RangingSessionImpl(
-                mContext, Executors.newSingleThreadScheduledExecutor(),
-                MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor()));
+        ListeningExecutorService adapterExecutor = MoreExecutors.listeningDecorator(
+                Executors.newSingleThreadExecutor());
+        ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
 
-        session.useAdapterForTesting(RangingTechnology.UWB, uwbAdapter);
+        RangingPeer peer = new RangingPeer(mContext, adapterExecutor, timeoutExecutor);
+        peer.useAdapterForTesting(RangingTechnology.UWB, uwbAdapter);
 
-        GenericRangingCallback genericRangingCallback =
+        UUID peerId = UUID.randomUUID();
+        RangingSession session = new RangingSession(mContext, adapterExecutor, timeoutExecutor);
+        session.usePeerForTesting(peerId, peer);
+
+        ImmutableMap<UUID, RangingParameters> parameters =
+                new ImmutableMap.Builder<UUID, RangingParameters>()
+                        .put(peerId, generateRangingParameters(config))
+                        .build();
+        GenericRangingCallback callback =
                 new GenericRangingCallback(callbackId, Event.EventAll.getType());
         String uwbSessionKey = getUwbSessionKeyFromId(config.getInt("sessionId"));
+
         sRangingHashMap.put(uwbSessionKey, session);
-        session.start(generateRangingParameters(config), genericRangingCallback);
-        sRangingCallbackHashMap.put(uwbSessionKey, genericRangingCallback);
+        session.start(parameters, callback);
+        sRangingCallbackHashMap.put(uwbSessionKey, callback);
     }
 
     @Rpc(description = "Stop UWB ranging session")
