@@ -16,6 +16,15 @@
 
 package com.android.ranging;
 
+import static java.lang.Math.min;
+
+import com.google.common.collect.ImmutableList;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.BitSet;
+import java.util.List;
+
 /**
  * Utilities for {@link com.android.ranging}.
  */
@@ -67,4 +76,54 @@ public class RangingUtils {
         }
     }
 
+    public static class Conversions {
+        /**
+         * Converts a list of integers to a byte array representing a bitmap of the integers. Given
+         * integers are first shifted by the shift param amount before being placed into the bitmap
+         * (e.g int x results in bit at pos "x - shift" being set).
+         */
+        public static byte[] intListToByteArrayBitmap(
+                List<Integer> list, int expectedSizeBytes, int shift) {
+            BitSet bitSet = new BitSet(expectedSizeBytes * 8);
+            for (int i : list) {
+                bitSet.set(i - shift);
+            }
+            byte[] byteArray = new byte[expectedSizeBytes];
+            System.arraycopy(bitSet.toByteArray(), 0, byteArray, 0,
+                    min(expectedSizeBytes, bitSet.toByteArray().length));
+            return byteArray;
+        }
+
+        /**
+         * Converts a byte array representing a bitmap of integers to a list of integers. The
+         * resulting integers are shifted by the shift param amount (e.g bit set at pos x results
+         * to "x + shift" int in the final list).
+         */
+        public static ImmutableList<Integer> byteArrayToIntList(byte[] byteArray, int shift) {
+            ImmutableList.Builder<Integer> list = ImmutableList.builder();
+            BitSet bitSet = BitSet.valueOf(byteArray);
+            for (int i = 0; i < bitSet.length(); i++) {
+                if (bitSet.get(i)) {
+                    list.add(i + shift);
+                }
+            }
+            return list.build();
+        }
+
+        /** Converts an int to a byte array of a given size, using little endianness. */
+        public static byte[] intToByteArray(int value, int expectedSizeBytes) {
+            ByteBuffer buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+            buffer.putInt(value).rewind();
+            byte[] byteArray = new byte[expectedSizeBytes];
+            buffer.get(byteArray, 0, min(expectedSizeBytes, 4));
+            return byteArray;
+        }
+
+        /** Converts the given byte array to an integer using little endianness. */
+        public static int byteArrayToInt(byte[] byteArray) {
+            ByteBuffer buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+            buffer.put(byteArray).rewind();
+            return buffer.getInt();
+        }
+    }
 }
