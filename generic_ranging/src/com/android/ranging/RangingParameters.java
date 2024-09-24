@@ -90,7 +90,7 @@ public class RangingParameters {
         private CsParameters mCsParameters = null;
 
         /**
-         @param role of the device within the session.
+         * @param role of the device within the session.
          */
         public Builder(DeviceRole role) {
             mRole = role;
@@ -103,6 +103,7 @@ public class RangingParameters {
 
         /**
          * Range with UWB in this session.
+         *
          * @param uwbParameters containing a configuration for UWB ranging.
          */
         public Builder useUwb(@NonNull UwbParameters uwbParameters) {
@@ -112,6 +113,7 @@ public class RangingParameters {
 
         /**
          * Range with Bluetooth Channel Sounding in this session.
+         *
          * @param csParameters containing a configuration for CS ranging.
          */
         public Builder useCs(@NonNull CsParameters csParameters) {
