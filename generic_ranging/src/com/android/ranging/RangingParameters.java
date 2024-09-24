@@ -172,6 +172,7 @@ public class RangingParameters {
 
         /**
          * Range with UWB in this session.
+         *
          * @param uwbParameters containing a configuration for UWB ranging.
          */
         public Builder useUwb(UwbParameters uwbParameters) {
@@ -181,6 +182,7 @@ public class RangingParameters {
 
         /**
          * Range with Bluetooth Channel Sounding in this session.
+         *
          * @param csParameters containing a configuration for CS ranging.
          */
         public Builder useCs(CsParameters csParameters) {
