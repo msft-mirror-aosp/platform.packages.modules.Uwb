@@ -83,7 +83,8 @@ public abstract class FusionEngine {
     /**
      * Stop the fusion engine.
      */
-    public abstract void stop();
+    public void stop() {
+    }
 
     /**
      * Feed data to the engine.
