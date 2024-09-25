@@ -19,9 +19,14 @@ package com.android.ranging;
 import androidx.annotation.NonNull;
 
 import com.android.ranging.cs.CsParameters;
+import com.android.ranging.fusion.DataFusers;
+import com.android.ranging.fusion.FusionEngine;
 import com.android.ranging.uwb.UwbParameters;
 
-import java.util.EnumMap;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
+
+import java.time.Duration;
 import java.util.Optional;
 
 /** Parameters for a generic ranging session. */
@@ -42,32 +47,67 @@ public class RangingParameters {
     }
 
     private final DeviceRole mRole;
-    private final EnumMap<RangingTechnology, TechnologyParameters> mParameters;
+    private final Duration mNoInitialDataTimeout;
+    private final Duration mNoUpdatedDataTimeout;
+    private final FusionEngine.DataFuser mDataFuser;
+    private final ImmutableMap<RangingTechnology, TechnologyParameters> mTechParams;
 
     private RangingParameters(@NonNull RangingParameters.Builder builder) {
-        mRole = builder.mRole;
-        mParameters = new EnumMap<>(RangingTechnology.class);
+        Preconditions.checkArgument(builder.mNoInitialDataTimeout != null,
+                "No initial data timeout required but not provided");
+        Preconditions.checkArgument(builder.mNoUpdatedDataTimeout != null,
+                "No updated data timeout required but not provided");
 
+        mRole = builder.mRole;
+        mNoInitialDataTimeout = builder.mNoInitialDataTimeout;
+        mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout;
+        mDataFuser = builder.mDataFuser;
+
+        ImmutableMap.Builder<RangingTechnology, TechnologyParameters> techParamsBuilder =
+                new ImmutableMap.Builder<>();
         if (builder.mUwbParameters != null) {
-            mParameters.put(RangingTechnology.UWB, builder.mUwbParameters);
+            techParamsBuilder.put(RangingTechnology.UWB, builder.mUwbParameters);
         }
         if (builder.mCsParameters != null) {
-            mParameters.put(RangingTechnology.CS, builder.mCsParameters);
+            techParamsBuilder.put(RangingTechnology.CS, builder.mCsParameters);
         }
+        mTechParams = techParamsBuilder.build();
     }
 
     /**
      * @return The configured device role.
      */
-    public DeviceRole getRole() {
+    public @NonNull DeviceRole getRole() {
         return mRole;
+    }
+
+    /**
+     * @return timeout after which to stop the session if no ranging data is produced after
+     * starting.
+     */
+    public @NonNull Duration getNoInitialDataTimeout() {
+        return mNoInitialDataTimeout;
+    }
+
+    /**
+     * @return timeout after which to stop the session if no new ranging data is produced.
+     */
+    public @NonNull Duration getNoUpdatedDataTimeout() {
+        return mNoUpdatedDataTimeout;
+    }
+
+    /**
+     * @return the configured data fuser, or {@code Optional.empty()} if fusion wasn't set.
+     */
+    public Optional<FusionEngine.DataFuser> getDataFuser() {
+        return Optional.ofNullable(mDataFuser);
     }
 
     /**
      * @return UWB parameters, or {@code Optional.empty()} if they were never set.
      */
     public Optional<UwbParameters> getUwbParameters() {
-        return Optional.ofNullable(mParameters.get(RangingTechnology.UWB))
+        return Optional.ofNullable(mTechParams.get(RangingTechnology.UWB))
                 .map(params -> (UwbParameters) params);
     }
 
@@ -75,22 +115,25 @@ public class RangingParameters {
      * @return channel sounding parameters, or {@code Optional.empty()} if they were never set.
      */
     public Optional<CsParameters> getCsParameters() {
-        return Optional.ofNullable(mParameters.get(RangingTechnology.CS))
+        return Optional.ofNullable(mTechParams.get(RangingTechnology.CS))
                 .map(params -> (CsParameters) params);
     }
 
     /** @return A map between technologies and their corresponding generic parameters object. */
-    public @NonNull EnumMap<RangingTechnology, TechnologyParameters> asMap() {
-        return mParameters.clone();
+    public @NonNull ImmutableMap<RangingTechnology, TechnologyParameters> getTechnologyParams() {
+        return mTechParams;
     }
 
     public static class Builder {
         private final DeviceRole mRole;
+        private Duration mNoInitialDataTimeout = null;
+        private Duration mNoUpdatedDataTimeout = null;
+        private FusionEngine.DataFuser mDataFuser = null;
         private UwbParameters mUwbParameters = null;
         private CsParameters mCsParameters = null;
 
         /**
-         @param role of the device within the session.
+         * @param role of the device within the session.
          */
         public Builder(DeviceRole role) {
             mRole = role;
@@ -102,10 +145,36 @@ public class RangingParameters {
         }
 
         /**
+         * @param timeout after which the session will be stopped if no ranging data was produced
+         *                directly after starting.
+         */
+        public Builder setNoInitialDataTimeout(Duration timeout) {
+            mNoInitialDataTimeout = timeout;
+            return this;
+        }
+
+        /**
+         * @param timeout after which the session will be stopped if there is no new ranging data
+         *                produced.
+         */
+        public Builder setNoUpdatedDataTimeout(Duration timeout) {
+            mNoUpdatedDataTimeout = timeout;
+            return this;
+        }
+
+        /**
+         * @param fuser to use. See {@link DataFusers}.
+         */
+        public Builder useSensorFusion(FusionEngine.DataFuser fuser) {
+            mDataFuser = fuser;
+            return this;
+        }
+
+        /**
          * Range with UWB in this session.
          * @param uwbParameters containing a configuration for UWB ranging.
          */
-        public Builder useUwb(@NonNull UwbParameters uwbParameters) {
+        public Builder useUwb(UwbParameters uwbParameters) {
             mUwbParameters = uwbParameters;
             return this;
         }
@@ -114,7 +183,7 @@ public class RangingParameters {
          * Range with Bluetooth Channel Sounding in this session.
          * @param csParameters containing a configuration for CS ranging.
          */
-        public Builder useCs(@NonNull CsParameters csParameters) {
+        public Builder useCs(CsParameters csParameters) {
             mCsParameters = csParameters;
             return this;
         }
