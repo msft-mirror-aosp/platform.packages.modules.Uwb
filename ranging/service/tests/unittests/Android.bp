@@ -19,22 +19,18 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-java_library {
-    name: "com.uwb.fusion",
+android_test {
+    name: "GenericRangingTests",
     srcs: ["src/**/*.java"],
-    sdk_version: "system_31",
-    libs: [
-        "androidx.annotation_annotation",
-        "framework-annotations-lib",
-    ],
+    sdk_version: "34",
+    certificate: "platform",
     static_libs: [
-        "guava",
+        "service-ranging-pre-jarjar",
+        "framework-uwb.stubs.module_lib",
+        "androidx.test.rules",
+        "androidx.test.ext.junit",
+        "androidx.test.runner",
+        "mockito-target-minus-junit4",
     ],
-    visibility: [
-        "//packages/modules/Uwb/service:__subpackages__",
-        "//packages/modules/Uwb/ranging:__subpackages__",
-    ],
-    apex_available: [
-        "com.android.uwb",
-    ],
+    test_suites: ["device-tests"],
 }
