@@ -14,27 +14,25 @@
  * limitations under the License.
  */
 
-package {
-    default_team: "trendy_team_fwk_uwb",
-    default_applicable_licenses: ["Android-Apache-2.0"],
-}
+package com.android.server.ranging.uwb;
 
-java_library {
-    name: "com.uwb.fusion",
-    srcs: ["src/**/*.java"],
-    sdk_version: "system_31",
-    libs: [
-        "androidx.annotation_annotation",
-        "framework-annotations-lib",
-    ],
-    static_libs: [
-        "guava",
-    ],
-    visibility: [
-        "//packages/modules/Uwb/service:__subpackages__",
-        "//packages/modules/Uwb/ranging:__subpackages__",
-    ],
-    apex_available: [
-        "com.android.uwb",
-    ],
+/** Device role, whether it's an initiator or a responder. */
+public enum UwbDeviceRole {
+    UNKNOWN(0),
+    INITIATOR(1),
+    RESPONDER(2);
+
+    private final int mValue;
+
+    UwbDeviceRole(int value) {
+        this.mValue = value;
+    }
+
+    public int getValue() {
+        return mValue;
+    }
+
+    public static UwbDeviceRole fromValue(int value) {
+        return value < 0 || value > 2 ? UNKNOWN : UwbDeviceRole.values()[value];
+    }
 }
