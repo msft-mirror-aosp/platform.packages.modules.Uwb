@@ -22,7 +22,7 @@ package {
 aconfig_declarations {
     name: "ranging_aconfig_flags",
     package: "com.android.ranging.flags",
-    container: "com.android.ranging",
+    container: "com.android.uwb",
     srcs: ["ranging_flags.aconfig"],
     visibility: [
         "//packages/modules/Uwb/ranging:__subpackages__",
