@@ -20,7 +20,7 @@ package {
 soong_config_module_type {
     name: "custom_android_test",
     module_type: "android_test",
-    config_namespace: "android",
+    config_namespace: "bootclasspath",
     bool_variables: [
         "release_ranging_stack",
     ],
