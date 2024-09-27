@@ -29,6 +29,11 @@ import android.content.pm.PackageManager;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.ranging.uwb.backend.internal.RangingController;
+import com.android.ranging.uwb.backend.internal.RangingPosition;
+import com.android.ranging.uwb.backend.internal.RangingSessionCallback;
+import com.android.ranging.uwb.backend.internal.UwbDevice;
+import com.android.ranging.uwb.backend.internal.UwbServiceImpl;
 import com.android.server.ranging.RangingAdapter;
 import com.android.server.ranging.RangingData;
 import com.android.server.ranging.RangingParameters.DeviceRole;
@@ -36,11 +41,6 @@ import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.cs.CsParameters;
 import com.android.server.ranging.uwb.UwbAdapter;
 import com.android.server.ranging.uwb.UwbParameters;
-import com.android.ranging.uwb.backend.internal.RangingController;
-import com.android.ranging.uwb.backend.internal.RangingPosition;
-import com.android.ranging.uwb.backend.internal.RangingSessionCallback;
-import com.android.ranging.uwb.backend.internal.UwbDevice;
-import com.android.ranging.uwb.backend.internal.UwbServiceImpl;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -78,7 +78,7 @@ public class UwbAdapterTest {
                 .thenReturn(true);
         when(mMockUwbService.getController(any())).thenReturn(mMockUwbClient);
         mUwbAdapter = new UwbAdapter(mMockContext, MoreExecutors.newDirectExecutorService(),
-                mMockUwbService, DeviceRole.CONTROLLER);
+                mMockUwbService, DeviceRole.INITIATOR);
     }
 
     @Test
