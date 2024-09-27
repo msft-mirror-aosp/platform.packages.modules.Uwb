@@ -14,27 +14,14 @@
  * limitations under the License.
  */
 
-package {
-    default_team: "trendy_team_fwk_uwb",
-    default_applicable_licenses: ["Android-Apache-2.0"],
+package com.android.server.ranging.cs;
+
+import com.android.server.ranging.RangingParameters;
+
+/** Parameters for Bluetooth channel sounding ranging. */
+public class CsParameters implements RangingParameters.TechnologyParameters {
+    public CsParameters() {
+        throw new UnsupportedOperationException("Not implemented!");
+    }
 }
 
-java_library {
-    name: "com.uwb.fusion",
-    srcs: ["src/**/*.java"],
-    sdk_version: "system_31",
-    libs: [
-        "androidx.annotation_annotation",
-        "framework-annotations-lib",
-    ],
-    static_libs: [
-        "guava",
-    ],
-    visibility: [
-        "//packages/modules/Uwb/service:__subpackages__",
-        "//packages/modules/Uwb/ranging:__subpackages__",
-    ],
-    apex_available: [
-        "com.android.uwb",
-    ],
-}

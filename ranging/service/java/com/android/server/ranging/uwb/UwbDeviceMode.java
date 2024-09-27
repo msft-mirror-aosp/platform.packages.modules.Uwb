@@ -14,27 +14,25 @@
  * limitations under the License.
  */
 
-package {
-    default_team: "trendy_team_fwk_uwb",
-    default_applicable_licenses: ["Android-Apache-2.0"],
-}
+package com.android.server.ranging.uwb;
 
-java_library {
-    name: "com.uwb.fusion",
-    srcs: ["src/**/*.java"],
-    sdk_version: "system_31",
-    libs: [
-        "androidx.annotation_annotation",
-        "framework-annotations-lib",
-    ],
-    static_libs: [
-        "guava",
-    ],
-    visibility: [
-        "//packages/modules/Uwb/service:__subpackages__",
-        "//packages/modules/Uwb/ranging:__subpackages__",
-    ],
-    apex_available: [
-        "com.android.uwb",
-    ],
+/** UWB Device Mode, whether it's a controller or a controlee. */
+public enum UwbDeviceMode {
+    UNKNOWN(0),
+    CONTROLLER(1),
+    CONTROLEE(2);
+
+    private final int mValue;
+
+    UwbDeviceMode(int value) {
+        this.mValue = value;
+    }
+
+    public int getValue() {
+        return mValue;
+    }
+
+    public static UwbDeviceMode fromValue(int value) {
+        return value < 0 || value > 2 ? UNKNOWN : UwbDeviceMode.values()[value];
+    }
 }
