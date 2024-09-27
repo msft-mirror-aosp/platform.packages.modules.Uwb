@@ -23,9 +23,9 @@ import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.fusion.FusionEngine;
 import com.android.server.ranging.uwb.UwbParameters;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.uwb.support.base.RequiredParam;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -50,15 +50,10 @@ public class RangingParameters {
     private final FusionEngine.DataFuser mDataFuser;
     private final ImmutableMap<RangingTechnology, TechnologyParameters> mTechParams;
 
-    private RangingParameters(@NonNull RangingParameters.Builder builder) {
-        Preconditions.checkArgument(builder.mNoInitialDataTimeout != null,
-                "No initial data timeout required but not provided");
-        Preconditions.checkArgument(builder.mNoUpdatedDataTimeout != null,
-                "No updated data timeout required but not provided");
-
+    private RangingParameters(@NonNull Builder builder) {
         mDeviceRole = builder.mDeviceRole;
-        mNoInitialDataTimeout = builder.mNoInitialDataTimeout;
-        mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout;
+        mNoInitialDataTimeout = builder.mNoInitialDataTimeout.get();
+        mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout.get();
         mDataFuser = builder.mDataFuser;
 
         ImmutableMap.Builder<RangingTechnology, TechnologyParameters> techParamsBuilder =
@@ -122,8 +117,8 @@ public class RangingParameters {
 
     public static class Builder {
         private final DeviceRole mDeviceRole;
-        private Duration mNoInitialDataTimeout = null;
-        private Duration mNoUpdatedDataTimeout = null;
+        private final RequiredParam<Duration> mNoInitialDataTimeout = new RequiredParam<>();
+        private final RequiredParam<Duration> mNoUpdatedDataTimeout = new RequiredParam<>();
         private FusionEngine.DataFuser mDataFuser = null;
         private UwbParameters mUwbParameters = null;
         private CsParameters mCsParameters = null;
@@ -144,8 +139,8 @@ public class RangingParameters {
          * @param timeout after which the session will be stopped if no ranging data was produced
          *                directly after starting.
          */
-        public Builder setNoInitialDataTimeout(Duration timeout) {
-            mNoInitialDataTimeout = timeout;
+        public Builder setNoInitialDataTimeout(@NonNull Duration timeout) {
+            mNoInitialDataTimeout.set(timeout);
             return this;
         }
 
@@ -153,8 +148,8 @@ public class RangingParameters {
          * @param timeout after which the session will be stopped if there is no new ranging data
          *                produced.
          */
-        public Builder setNoUpdatedDataTimeout(Duration timeout) {
-            mNoUpdatedDataTimeout = timeout;
+        public Builder setNoUpdatedDataTimeout(@NonNull Duration timeout) {
+            mNoUpdatedDataTimeout.set(timeout);
             return this;
         }
 
