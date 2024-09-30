@@ -97,7 +97,7 @@ public class RangingPeerTest {
 
         mSession.start(params, mMockCallback);
 
-        for (RangingTechnology technology : params.getTechnologyParams().keySet()) {
+        for (RangingTechnology technology : params.getTechnologyConfigs().keySet()) {
             ArgumentCaptor<RangingAdapter.Callback> callbackCaptor =
                     ArgumentCaptor.forClass(RangingAdapter.Callback.class);
             verify(mMockAdapters.get(technology)).start(any(), callbackCaptor.capture());

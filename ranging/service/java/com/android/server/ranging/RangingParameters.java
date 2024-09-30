@@ -18,9 +18,12 @@ package com.android.server.ranging;
 
 import androidx.annotation.NonNull;
 
+import com.android.server.ranging.RangingAdapter.TechnologyConfig;
+import com.android.server.ranging.cs.CsConfig;
 import com.android.server.ranging.cs.CsParameters;
 import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.fusion.FusionEngine;
+import com.android.server.ranging.uwb.UwbConfig;
 import com.android.server.ranging.uwb.UwbParameters;
 
 import com.google.common.collect.ImmutableList;
@@ -32,9 +35,6 @@ import java.util.Optional;
 
 /** Parameters for a generic ranging session. */
 public class RangingParameters {
-    /** Parameters for a specific generic ranging technology. */
-    public interface TechnologyParameters { }
-
     public enum DeviceRole {
         RESPONDER,
         /** The device that initiates the session. */
@@ -48,7 +48,7 @@ public class RangingParameters {
     private final Duration mNoInitialDataTimeout;
     private final Duration mNoUpdatedDataTimeout;
     private final FusionEngine.DataFuser mDataFuser;
-    private final ImmutableMap<RangingTechnology, TechnologyParameters> mTechParams;
+    private final ImmutableMap<RangingTechnology, TechnologyConfig> mTechConfigs;
 
     private RangingParameters(@NonNull Builder builder) {
         mDeviceRole = builder.mDeviceRole;
@@ -56,15 +56,19 @@ public class RangingParameters {
         mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout.get();
         mDataFuser = builder.mDataFuser;
 
-        ImmutableMap.Builder<RangingTechnology, TechnologyParameters> techParamsBuilder =
+        ImmutableMap.Builder<RangingTechnology, TechnologyConfig> techConfigs =
                 new ImmutableMap.Builder<>();
         if (builder.mUwbParameters != null) {
-            techParamsBuilder.put(RangingTechnology.UWB, builder.mUwbParameters);
+            techConfigs.put(RangingTechnology.UWB,
+                    new UwbConfig.Builder()
+                            .setDeviceRole(mDeviceRole)
+                            .setParameters(builder.mUwbParameters)
+                            .build());
         }
         if (builder.mCsParameters != null) {
-            techParamsBuilder.put(RangingTechnology.CS, builder.mCsParameters);
+            techConfigs.put(RangingTechnology.CS, new CsConfig());
         }
-        mTechParams = techParamsBuilder.build();
+        mTechConfigs = techConfigs.build();
     }
 
     /** @return The device's role within the session. */
@@ -94,25 +98,9 @@ public class RangingParameters {
         return Optional.ofNullable(mDataFuser);
     }
 
-    /**
-     * @return UWB parameters, or {@code Optional.empty()} if they were never set.
-     */
-    public Optional<UwbParameters> getUwbParameters() {
-        return Optional.ofNullable(mTechParams.get(RangingTechnology.UWB))
-                .map(params -> (UwbParameters) params);
-    }
-
-    /**
-     * @return channel sounding parameters, or {@code Optional.empty()} if they were never set.
-     */
-    public Optional<CsParameters> getCsParameters() {
-        return Optional.ofNullable(mTechParams.get(RangingTechnology.CS))
-                .map(params -> (CsParameters) params);
-    }
-
     /** @return A map between technologies and their corresponding generic parameters object. */
-    public @NonNull ImmutableMap<RangingTechnology, TechnologyParameters> getTechnologyParams() {
-        return mTechParams;
+    public @NonNull ImmutableMap<RangingTechnology, TechnologyConfig> getTechnologyConfigs() {
+        return mTechConfigs;
     }
 
     public static class Builder {
