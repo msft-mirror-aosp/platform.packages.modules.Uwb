@@ -16,20 +16,7 @@
 
 package android.ranging;
 
-import android.content.AttributionSource;
-import android.ranging.IRangingCapabilitiesCallback;
-import android.ranging.IRangingCallbacks;
-import android.ranging.SessionHandle;
-import android.ranging.RangingPreference;
-
 /**
 *  @hide
 */
-interface IRangingAdapter {
-    void getRangingCapabilities(in IRangingCapabilitiesCallback rangingCapabilitiesCallback);
-
-    void startRanging(in SessionHandle sessionHandle, in RangingPreference rangingPreference,
-                 in IRangingCallbacks callbacks);
-
-    void stopRanging(in SessionHandle sessionHandle);
-}
+parcelable RangingPreference;
