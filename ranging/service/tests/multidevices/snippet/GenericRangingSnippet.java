@@ -27,6 +27,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.android.ranging.uwb.backend.internal.UwbAddress;
+import com.android.ranging.uwb.backend.internal.UwbComplexChannel;
+import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
 import com.android.server.ranging.RangingData;
 import com.android.server.ranging.RangingParameters;
 import com.android.server.ranging.RangingParameters.DeviceRole;
@@ -36,9 +39,6 @@ import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.uwb.UwbAdapter;
 import com.android.server.ranging.uwb.UwbParameters;
-import com.android.ranging.uwb.backend.internal.UwbAddress;
-import com.android.ranging.uwb.backend.internal.UwbComplexChannel;
-import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
 
 import com.google.android.mobly.snippet.Snippet;
 import com.google.android.mobly.snippet.event.EventCache;
@@ -205,8 +205,7 @@ public class GenericRangingSnippet implements Snippet {
                 j.getInt("slotDurationMillis"),
                 j.getBoolean("isAoaDisabled")
         );
-        DeviceRole role = j.getInt("deviceRole") == 0
-                ? DeviceRole.CONTROLEE : DeviceRole.CONTROLLER;
+        DeviceRole role = DeviceRole.ROLES.get(j.getInt("deviceRole"));
         return new RangingParameters.Builder(role)
                 .setNoInitialDataTimeout(Duration.ofSeconds(3))
                 .setNoUpdatedDataTimeout(Duration.ofSeconds(2))
@@ -233,15 +232,8 @@ public class GenericRangingSnippet implements Snippet {
     @AsyncRpc(description = "Start UWB ranging session")
     public void startUwbRanging(String callbackId, JSONObject config)
             throws JSONException, RemoteException {
-        int deviceRole = config.getInt("deviceRole");
-        UwbAdapter uwbAdapter = null;
-        if (deviceRole == 0) {
-            logInfo("Starting controlee session");
-            uwbAdapter = new UwbAdapter(mContext, mExecutor, DeviceRole.CONTROLEE);
-        } else {
-            logInfo("Starting controller session");
-            uwbAdapter = new UwbAdapter(mContext, mExecutor, DeviceRole.CONTROLLER);
-        }
+        UwbAdapter uwbAdapter = new UwbAdapter(
+                mContext, mExecutor, DeviceRole.ROLES.get(config.getInt("deviceRole")));
         uwbAdapter.setLocalAddressForTesting(UwbAddress.fromBytes(
                 convertJSONArrayToByteArray(config.getJSONArray("deviceAddress"))));
 
