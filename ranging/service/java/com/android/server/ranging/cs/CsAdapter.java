@@ -36,6 +36,10 @@ public class CsAdapter implements RangingAdapter {
         throw new UnsupportedOperationException("Not implemented.");
     }
 
+    public ListenableFuture<com.android.server.ranging.cs.CsCapabilities> getCapabilities() {
+        return null;
+    }
+
     @Override
     public RangingTechnology getType() {
         return RangingTechnology.CS;
