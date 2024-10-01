@@ -17,6 +17,7 @@
 package com.android.server.ranging;
 
 import android.content.Context;
+import android.server.ranging.RangingInjector;
 import android.util.Log;
 
 import com.android.server.SystemService;
@@ -26,7 +27,7 @@ public class RangingService extends SystemService {
     private final RangingServiceImpl mRangingImpl;
     public RangingService(Context context) {
         super(context);
-        mRangingImpl = new RangingServiceImpl(context);
+        mRangingImpl = new RangingServiceImpl(context, new RangingInjector(context));
     }
 
     @Override
