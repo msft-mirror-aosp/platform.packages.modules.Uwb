@@ -25,8 +25,6 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
-import com.android.ranging.uwb.backend.internal.RangingCapabilities;
-import com.android.ranging.uwb.backend.internal.UwbAddress;
 import com.android.server.ranging.RangingParameters.DeviceRole;
 import com.android.server.ranging.RangingParameters.TechnologyParameters;
 import com.android.server.ranging.RangingUtils.StateMachine;
@@ -35,6 +33,8 @@ import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.fusion.FilteringFusionEngine;
 import com.android.server.ranging.fusion.FusionEngine;
 import com.android.server.ranging.uwb.UwbAdapter;
+import com.android.ranging.uwb.backend.internal.RangingCapabilities;
+import com.android.ranging.uwb.backend.internal.UwbAddress;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.Futures;
@@ -161,7 +161,7 @@ public final class RangingPeer {
             synchronized (mAdapters) {
                 // Do not overwrite any adapters that were supplied for testing
                 if (!mAdapters.containsKey(technology)) {
-                    mAdapters.put(technology, newAdapter(technology, parameters.getDeviceRole()));
+                    mAdapters.put(technology, newAdapter(technology, parameters.getRole()));
                 }
                 mAdapters.get(technology)
                         .start(techParams.get(technology), new AdapterListener(technology));
