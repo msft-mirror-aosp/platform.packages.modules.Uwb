@@ -17,6 +17,7 @@
 package android.ranging.uwb;
 
 import android.annotation.FlaggedApi;
+import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Parcel;
@@ -25,6 +26,8 @@ import android.ranging.RangingDevice;
 
 import com.android.ranging.flags.Flags;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -34,36 +37,40 @@ import java.util.Map;
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public class UwbRangingParameters implements Parcelable {
 
-    // Session and Sub-session details
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef(value = {
+            CONTROLEE,
+            CONTROLLER})
+    @interface DeviceRole {}
+    public static final int CONTROLEE = 1;
+    public static final int CONTROLLER = 2;
+
+    @DeviceRole
+    private final int mDeviceRole;
+
     private final int mSessionId;
     private final int mSubSessionId;
 
-    // UWB configuration
     private final int mUwbConfigId;
     private final byte[] mSessionKeyInfo;
     private final byte[] mSubSessionKeyInfo;
 
-    // UWB complex channel information
     @NonNull
     private final UwbComplexChannel mUwbComplexChannel;
 
-    // Peer addressing
     @NonNull
     private final Map<RangingDevice, UwbAddress> mPeerAddressMap;
 
-    // Ranging update configurations
     private final int mRangingUpdateRate;
     @Nullable
     private final UwbRangeDataNtfConfig mUwbRangeDataNtfConfig;
 
-    // Slot duration for ranging
     private final int mSlotDuration;
 
-    // Flags or boolean settings
     private final boolean mIsAoaDisabled;
 
-    // Private constructor using the Builder
     private UwbRangingParameters(Builder builder) {
+        this.mDeviceRole = builder.mDeviceRole;
         this.mSessionId = builder.mSessionId;
         this.mSubSessionId = builder.mSubSessionId;
         this.mUwbConfigId = builder.mUwbConfigId;
@@ -80,35 +87,33 @@ public class UwbRangingParameters implements Parcelable {
 
     // Static Builder class
     public static class Builder {
-        // Session and Sub-session details
+        private int mDeviceRole = CONTROLEE;
         private int mSessionId;
         private int mSubSessionId;
 
-        // UWB configuration
         private int mUwbConfigId;
         private byte[] mSessionKeyInfo;
         private byte[] mSubSessionKeyInfo;
 
-        // UWB complex channel information
         @NonNull
         private UwbComplexChannel mUwbComplexChannel;
 
-        // Peer addressing
         @NonNull
         private Map<RangingDevice, UwbAddress> mPeerAddressMap;
 
-        // Ranging update configurations
         private int mRangingUpdateRate;
         @Nullable
         private android.ranging.uwb.UwbRangeDataNtfConfig mUwbRangeDataNtfConfig;
 
-        // Slot duration for ranging
         private int mSlotDuration;
 
-        // Flags or boolean settings
         private boolean mIsAoaDisabled;
 
-        // Builder methods for each field with method chaining
+        public Builder setDeviceRole(@DeviceRole int deviceRole) {
+            this.mDeviceRole = deviceRole;
+            return this;
+        }
+
         public Builder sessionId(int sessionId) {
             this.mSessionId = sessionId;
             return this;
@@ -174,6 +179,7 @@ public class UwbRangingParameters implements Parcelable {
     }
 
     protected UwbRangingParameters(Parcel in) {
+        mDeviceRole = in.readInt();
         mSessionId = in.readInt();
         mSubSessionId = in.readInt();
         mUwbConfigId = in.readInt();
@@ -196,6 +202,7 @@ public class UwbRangingParameters implements Parcelable {
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
+        dest.writeInt(mDeviceRole);
         dest.writeInt(mSessionId);
         dest.writeInt(mSubSessionId);
         dest.writeInt(mUwbConfigId);
@@ -232,7 +239,10 @@ public class UwbRangingParameters implements Parcelable {
                 }
             };
 
-    // Getters for each field
+    @DeviceRole
+    public int getDeviceRole() {
+        return  mDeviceRole;
+    }
     public int getSessionId() {
         return mSessionId;
     }
