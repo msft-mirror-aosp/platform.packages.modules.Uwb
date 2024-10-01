@@ -26,12 +26,6 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import com.android.server.ranging.RangingAdapter;
-import com.android.server.ranging.RangingData;
-import com.android.server.ranging.RangingParameters.DeviceRole;
-import com.android.server.ranging.RangingParameters.TechnologyParameters;
-import com.android.server.ranging.RangingTechnology;
-import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.ranging.uwb.backend.internal.RangingCapabilities;
 import com.android.ranging.uwb.backend.internal.RangingController;
 import com.android.ranging.uwb.backend.internal.RangingDevice;
@@ -44,6 +38,12 @@ import com.android.ranging.uwb.backend.internal.UwbComplexChannel;
 import com.android.ranging.uwb.backend.internal.UwbDevice;
 import com.android.ranging.uwb.backend.internal.UwbFeatureFlags;
 import com.android.ranging.uwb.backend.internal.UwbServiceImpl;
+import com.android.server.ranging.RangingAdapter;
+import com.android.server.ranging.RangingData;
+import com.android.server.ranging.RangingParameters.DeviceRole;
+import com.android.server.ranging.RangingParameters.TechnologyParameters;
+import com.android.server.ranging.RangingTechnology;
+import com.android.server.ranging.RangingUtils.StateMachine;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.FutureCallback;
@@ -106,7 +106,7 @@ public class UwbAdapter implements RangingAdapter {
 
         mStateMachine = new StateMachine<>(State.STOPPED);
         mUwbService = uwbService;
-        mUwbClient = role == DeviceRole.CONTROLLER
+        mUwbClient = role == DeviceRole.INITIATOR
                 ? mUwbService.getController(context)
                 : mUwbService.getControlee(context);
         mExecutorService = executorService;

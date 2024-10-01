@@ -18,9 +18,12 @@ package com.android.server.ranging.uwb;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
+import android.util.Log;
+
+import com.android.ranging.uwb.backend.internal.UwbAddress;
+import com.android.server.ranging.RangingParameters.DeviceRole;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.Conversions;
-import com.android.ranging.uwb.backend.internal.UwbAddress;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Preconditions;
@@ -32,6 +35,7 @@ import java.util.Arrays;
 /** Configuration for UWB sent as part SetConfigurationMessage for Finder OOB. */
 @AutoValue
 public abstract class UwbConfig {
+    private static final String TAG = UwbConfig.class.getSimpleName();
 
     private static final int MIN_SIZE_BYTES = 20;
 
@@ -50,7 +54,7 @@ public abstract class UwbConfig {
     private static final int PSTS_LONG_SESSION_KEY_SIZE = 32;
     private static final int COUNTRY_CODE_SIZE = 2;
     private static final int DEVICE_ROLE_SIZE = 1;
-    private static final int DEVICE_MODE_SIZE = 1;
+    private static final int DEVICE_TYPE_SIZE = 1;
 
     /** Returns the size of the object in bytes when serialized. */
     public final int getSize() {
@@ -132,12 +136,17 @@ public abstract class UwbConfig {
         parseCursor += COUNTRY_CODE_SIZE;
 
         // Parse Device Role
-        UwbDeviceRole deviceRole = UwbDeviceRole.fromValue(uwbConfigBytes[parseCursor]);
+        DeviceRole deviceRole = Conversions.fromOobDeviceRole(uwbConfigBytes[parseCursor]);
         parseCursor += DEVICE_ROLE_SIZE;
 
-        // Parse Device Mode
-        UwbDeviceMode deviceMode = UwbDeviceMode.fromValue(uwbConfigBytes[parseCursor]);
-        parseCursor += DEVICE_MODE_SIZE;
+        // Parse Device Type
+        int deviceType = uwbConfigBytes[parseCursor];
+        parseCursor += DEVICE_TYPE_SIZE;
+
+        if (deviceRole != Conversions.fromOobDeviceType(deviceType)) {
+            Log.e(TAG, "Parsed UWB device type (" + deviceType + ")" + " that contradicts role ("
+                    + deviceRole.toString() + "). Ignoring type.");
+        }
 
         return builder()
                 .setUwbAddress(uwbAddress)
@@ -150,7 +159,6 @@ public abstract class UwbConfig {
                 .setSessionKey(sessionKey)
                 .setCountryCode(countryCode)
                 .setDeviceRole(deviceRole)
-                .setDeviceMode(deviceMode)
                 .build();
     }
 
@@ -170,8 +178,10 @@ public abstract class UwbConfig {
                 .put(Conversions.intToByteArray(getSessionKeyLength(), SESSION_KEY_LENGTH_SIZE))
                 .put(getSessionKey())
                 .put(getCountryCode().getBytes(US_ASCII))
-                .put(Conversions.intToByteArray(getDeviceRole().getValue(), DEVICE_ROLE_SIZE))
-                .put(Conversions.intToByteArray(getDeviceMode().getValue(), DEVICE_MODE_SIZE))
+                .put(Conversions.intToByteArray(Conversions.toOobDeviceRole(getDeviceRole()),
+                        DEVICE_ROLE_SIZE))
+                .put(Conversions.intToByteArray(Conversions.toOobDeviceType(getDeviceRole()),
+                        DEVICE_TYPE_SIZE))
                 .array();
     }
 
@@ -214,10 +224,7 @@ public abstract class UwbConfig {
     public abstract String getCountryCode();
 
     /** Returns Device Role. */
-    public abstract UwbDeviceRole getDeviceRole();
-
-    /** Returns Device Mode. */
-    public abstract UwbDeviceMode getDeviceMode();
+    public abstract DeviceRole getDeviceRole();
 
     /** Returns a builder for {@link UwbConfig}. */
     public static Builder builder() {
@@ -245,9 +252,7 @@ public abstract class UwbConfig {
 
         public abstract Builder setCountryCode(String countryCode);
 
-        public abstract Builder setDeviceRole(UwbDeviceRole deviceRole);
-
-        public abstract Builder setDeviceMode(UwbDeviceMode deviceMode);
+        public abstract Builder setDeviceRole(DeviceRole deviceRole);
 
         abstract UwbConfig autoBuild();
 
