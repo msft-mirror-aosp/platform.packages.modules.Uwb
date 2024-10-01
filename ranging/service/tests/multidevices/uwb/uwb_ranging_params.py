@@ -9,8 +9,8 @@ class Constants:
   """Class for ranging parameter constants."""
 
   class DeviceRole(IntEnum):
-    RESPONDER = 0
-    INITIATOR = 1
+    CONTROLEE = 0
+    CONTROLLER = 1
 
   class ConfigType(IntEnum):
     UNICAST_DS_TWR = 1

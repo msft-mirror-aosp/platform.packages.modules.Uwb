@@ -116,7 +116,7 @@ public class RangingPeerTest {
     }
 
     private RangingParameters.Builder generateParameters() {
-        return new RangingParameters.Builder(DeviceRole.INITIATOR)
+        return new RangingParameters.Builder(DeviceRole.CONTROLLER)
                 .setNoInitialDataTimeout(Duration.ZERO)
                 .setNoUpdatedDataTimeout(Duration.ZERO)
                 .useSensorFusion(new DataFusers.PassthroughDataFuser());
