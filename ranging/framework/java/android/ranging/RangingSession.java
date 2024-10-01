@@ -17,13 +17,85 @@
 package android.ranging;
 
 import android.annotation.FlaggedApi;
-import android.annotation.Hide;
+import android.annotation.NonNull;
+import android.os.CancellationSignal;
+import android.os.RemoteException;
 
+import com.android.ranging.flags.Flags;
+
+import java.util.concurrent.Executor;
 
 /**
  * @hide
  */
-@Hide
-@FlaggedApi("com.android.ranging.flags.ranging_stack_enabled")
-public class RangingSession {
+@FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
+public class RangingSession implements AutoCloseable {
+
+    private final SessionHandle mSessionHandle;
+    private final IRangingAdapter mRangingAdapter;
+    private final RangingSessionManager mRangingSessionManager;
+    private final Callback mCallback;
+    private final Executor mExecutor;
+
+
+    public RangingSession(RangingSessionManager rangingSessionManager,
+            SessionHandle sessionHandle, IRangingAdapter rangingAdapter,
+            Callback callback, Executor executor) {
+        mRangingSessionManager = rangingSessionManager;
+        mSessionHandle = sessionHandle;
+        mRangingAdapter = rangingAdapter;
+        mCallback = callback;
+        mExecutor = executor;
+    }
+
+    public CancellationSignal start(RangingPreference rangingPreference) {
+        try {
+            mRangingAdapter.startRanging(mSessionHandle, rangingPreference, mRangingSessionManager);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+        CancellationSignal cancellationSignal = new CancellationSignal();
+        cancellationSignal.setOnCancelListener(() -> this.close());
+        return cancellationSignal;
+    }
+
+    public void stop() {
+        try {
+            mRangingAdapter.stopRanging(mSessionHandle);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    public void onRangingStarted(int technology) {
+        mExecutor.execute(() -> mCallback.onStarted(technology));
+    }
+
+    public void onRangingClosed(int reason) {
+        mExecutor.execute(() -> mCallback.onClosed(reason));
+    }
+
+    public interface Callback {
+        void onStarted(@RangingManager.RangingTechnology int technology);
+
+        void onStartFailed(int reason);
+
+        void onClosed(int reasonCode);
+
+        /*public void onRangingStarted(@NonNull RangingStartedParameters
+                params);*/
+        void onRangingStopped(@NonNull RangingDevice device);
+
+        void onResults(@NonNull RangingDevice device,
+                @NonNull RangingData data);
+
+    }
+
+    /**
+     * @hide
+     */
+    @Override
+    public void close() {
+        stop();
+    }
 }
