@@ -32,18 +32,14 @@
 // later when a module using the interface is updated, e.g., Mainline modules.
 
 package androidx.core.uwb.backend;
-interface IUwbClient {
-  boolean isAvailable();
-  androidx.core.uwb.backend.RangingCapabilities getRangingCapabilities();
-  androidx.core.uwb.backend.UwbAddress getLocalAddress();
-  androidx.core.uwb.backend.UwbComplexChannel getComplexChannel();
-  void startRanging(in androidx.core.uwb.backend.RangingParameters parameters, in androidx.core.uwb.backend.IRangingSessionCallback callback);
-  void stopRanging(in androidx.core.uwb.backend.IRangingSessionCallback callback);
-  void addControlee(in androidx.core.uwb.backend.UwbAddress address);
-  void addControleeWithSessionParams(in androidx.core.uwb.backend.RangingControleeParameters params);
-  void removeControlee(in androidx.core.uwb.backend.UwbAddress address);
-  void reconfigureRangingInterval(in int intervalSkipCount);
-  void reconfigureRangeDataNtf(in int configType, in int proximityNearCm, in int proximityFarCm);
-  void subscribeToAvailability(in androidx.core.uwb.backend.IUwbAvailabilityObserver observer);
-  void unsubscribeFromAvailability();
+interface IRangingSessionCallback {
+  oneway void onRangingInitialized(in androidx.core.uwb.backend.UwbDevice device);
+  oneway void onRangingResult(in androidx.core.uwb.backend.UwbDevice device, in androidx.core.uwb.backend.RangingPosition position);
+  oneway void onRangingSuspended(in androidx.core.uwb.backend.UwbDevice device, int reason);
+  const int UNKNOWN = 0;
+  const int WRONG_PARAMETERS = 1;
+  const int FAILED_TO_START = 2;
+  const int STOPPED_BY_PEER = 3;
+  const int STOP_RANGING_CALLED = 4;
+  const int MAX_RANGING_ROUND_RETRY_REACHED = 5;
 }
