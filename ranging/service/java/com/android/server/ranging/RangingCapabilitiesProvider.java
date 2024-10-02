@@ -40,7 +40,7 @@ public class RangingCapabilitiesProvider {
         if (UwbAdapter.isSupported(mRangingInjector.getContext())) {
             mUwbAdapter = new UwbAdapter(mRangingInjector.getContext(),
                     MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor()),
-                    RangingParameters.DeviceRole.CONTROLLER);
+                    RangingParameters.DeviceRole.INITIATOR);
         }
         if (CsAdapter.isSupported(mRangingInjector.getContext())) {
             mCsAdapter = new CsAdapter();

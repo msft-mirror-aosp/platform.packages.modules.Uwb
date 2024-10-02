@@ -22,9 +22,9 @@ import com.android.server.ranging.cs.CsParameters;
 import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.fusion.FusionEngine;
 import com.android.server.ranging.uwb.UwbParameters;
-import com.android.server.ranging.RangingTechnology;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import java.time.Duration;
@@ -36,18 +36,15 @@ public class RangingParameters {
     public interface TechnologyParameters { }
 
     public enum DeviceRole {
-        /**
-         * The device is a controlee within the session.
-         */
-        CONTROLEE,
-        /**
-         * The device is the session controller. It decides when the session is started or stopped,
-         * ranging technology preferences, etc.
-         */
-        CONTROLLER
+        RESPONDER,
+        /** The device that initiates the session. */
+        INITIATOR;
+
+        public static final ImmutableList<DeviceRole> ROLES =
+                ImmutableList.copyOf(DeviceRole.values());
     }
 
-    private final DeviceRole mRole;
+    private final DeviceRole mDeviceRole;
     private final Duration mNoInitialDataTimeout;
     private final Duration mNoUpdatedDataTimeout;
     private final FusionEngine.DataFuser mDataFuser;
@@ -59,7 +56,7 @@ public class RangingParameters {
         Preconditions.checkArgument(builder.mNoUpdatedDataTimeout != null,
                 "No updated data timeout required but not provided");
 
-        mRole = builder.mRole;
+        mDeviceRole = builder.mDeviceRole;
         mNoInitialDataTimeout = builder.mNoInitialDataTimeout;
         mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout;
         mDataFuser = builder.mDataFuser;
@@ -75,11 +72,9 @@ public class RangingParameters {
         mTechParams = techParamsBuilder.build();
     }
 
-    /**
-     * @return The configured device role.
-     */
-    public @NonNull DeviceRole getRole() {
-        return mRole;
+    /** @return The device's role within the session. */
+    public @NonNull DeviceRole getDeviceRole() {
+        return mDeviceRole;
     }
 
     /**
@@ -126,7 +121,7 @@ public class RangingParameters {
     }
 
     public static class Builder {
-        private final DeviceRole mRole;
+        private final DeviceRole mDeviceRole;
         private Duration mNoInitialDataTimeout = null;
         private Duration mNoUpdatedDataTimeout = null;
         private FusionEngine.DataFuser mDataFuser = null;
@@ -137,7 +132,7 @@ public class RangingParameters {
          * @param role of the device within the session.
          */
         public Builder(DeviceRole role) {
-            mRole = role;
+            mDeviceRole = role;
         }
 
         /** Build the {@link RangingParameters object} */
