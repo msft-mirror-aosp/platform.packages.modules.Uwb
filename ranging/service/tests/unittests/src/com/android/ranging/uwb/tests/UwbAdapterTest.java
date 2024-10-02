@@ -32,6 +32,8 @@ import androidx.test.filters.SmallTest;
 import com.android.ranging.uwb.backend.internal.RangingController;
 import com.android.ranging.uwb.backend.internal.RangingPosition;
 import com.android.ranging.uwb.backend.internal.RangingSessionCallback;
+import com.android.ranging.uwb.backend.internal.Utils;
+import com.android.ranging.uwb.backend.internal.UwbAddress;
 import com.android.ranging.uwb.backend.internal.UwbDevice;
 import com.android.ranging.uwb.backend.internal.UwbServiceImpl;
 import com.android.server.ranging.RangingAdapter;
@@ -42,6 +44,7 @@ import com.android.server.ranging.cs.CsParameters;
 import com.android.server.ranging.uwb.UwbAdapter;
 import com.android.server.ranging.uwb.UwbParameters;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import org.junit.Assert;
@@ -71,6 +74,17 @@ public class UwbAdapterTest {
 
     /** Class under test */
     private UwbAdapter mUwbAdapter;
+
+    private UwbParameters.Builder generateParams() {
+        return new UwbParameters.Builder()
+                .setCountryCode("US")
+                .setLocalAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
+                .setPeerAddresses(ImmutableSet.of())
+                .setConfigType(Utils.CONFIG_UNICAST_DS_TWR)
+                .setSessionId(0)
+                .setSubSessionId(0)
+                .setUpdateRateType(Utils.NORMAL);
+    }
 
     @Before
     public void setup() {
@@ -102,7 +116,7 @@ public class UwbAdapterTest {
 
     @Test
     public void start_startsUwbClientWithCallbacks() {
-        mUwbAdapter.start(mock(UwbParameters.class), mMockCallback);
+        mUwbAdapter.start(generateParams().build(), mMockCallback);
 
         ArgumentCaptor<RangingSessionCallback> callbackCaptor =
                 ArgumentCaptor.forClass(RangingSessionCallback.class);
@@ -118,14 +132,14 @@ public class UwbAdapterTest {
 
     @Test
     public void stop_stopsUwbClient() {
-        mUwbAdapter.start(mock(UwbParameters.class), mMockCallback);
+        mUwbAdapter.start(generateParams().build(), mMockCallback);
         mUwbAdapter.stop();
         verify(mMockUwbClient).stopRanging();
     }
 
     @Test
     public void shouldReportData_onRangingResult() {
-        mUwbAdapter.start(mock(UwbParameters.class), mMockCallback);
+        mUwbAdapter.start(generateParams().build(), mMockCallback);
 
         ArgumentCaptor<RangingSessionCallback> callbackCaptor =
                 ArgumentCaptor.forClass(RangingSessionCallback.class);
