@@ -20,21 +20,25 @@ import static java.nio.charset.StandardCharsets.US_ASCII;
 
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
+import com.android.ranging.uwb.backend.internal.RangingParameters;
+import com.android.ranging.uwb.backend.internal.Utils;
 import com.android.ranging.uwb.backend.internal.UwbAddress;
+import com.android.ranging.uwb.backend.internal.UwbComplexChannel;
+import com.android.server.ranging.RangingAdapter.TechnologyConfig;
 import com.android.server.ranging.RangingParameters.DeviceRole;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.Conversions;
 
-import com.google.auto.value.AutoValue;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.uwb.support.base.RequiredParam;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /** Configuration for UWB sent as part SetConfigurationMessage for Finder OOB. */
-@AutoValue
-public abstract class UwbConfig {
+public class UwbConfig implements TechnologyConfig {
     private static final String TAG = UwbConfig.class.getSimpleName();
 
     private static final int MIN_SIZE_BYTES = 20;
@@ -58,7 +62,15 @@ public abstract class UwbConfig {
 
     /** Returns the size of the object in bytes when serialized. */
     public final int getSize() {
-        return MIN_SIZE_BYTES + getSessionKeyLength();
+        return MIN_SIZE_BYTES + getSessionKeyInfoLength();
+    }
+
+    private final DeviceRole mDeviceRole;
+    private final UwbParameters mParameters;
+
+    private UwbConfig(Builder builder) {
+        mDeviceRole = builder.mDeviceRole.get();
+        mParameters = builder.mParameters.get();
     }
 
     /**
@@ -148,127 +160,106 @@ public abstract class UwbConfig {
                     + deviceRole.toString() + "). Ignoring type.");
         }
 
-        return builder()
-                .setUwbAddress(uwbAddress)
+        UwbParameters.Builder paramsBuilder = new UwbParameters.Builder()
+                .setLocalAddress(uwbAddress)
                 .setSessionId(sessionId)
-                .setSelectedConfigId(configId)
-                .setSelectedChannel(channel)
-                .setSelectedPreambleIndex(preambleIndex)
-                .setSelectedRangingIntervalMs(rangingIntervalMs)
-                .setSelectedSlotDurationMs(slotDurationMs)
-                .setSessionKey(sessionKey)
-                .setCountryCode(countryCode)
-                .setDeviceRole(deviceRole)
-                .build();
+                .setConfigType(configId)
+                .setComplexChannel(new UwbComplexChannel(channel, preambleIndex))
+                .setSlotDurationMs(slotDurationMs)
+                .setSessionKeyInfo(sessionKey)
+                .setCountryCode(countryCode);
+
+
+        for (@Utils.RangingUpdateRate int rate = Utils.NORMAL; rate <= Utils.FAST; rate++) {
+            if (Utils.getRangingTimingParams(configId).getRangingInterval(rate)
+                    == rangingIntervalMs) {
+                paramsBuilder.setUpdateRateType(rate);
+            }
+        }
+
+        return new Builder().setDeviceRole(deviceRole).setParameters(paramsBuilder.build()).build();
     }
 
     /** Serializes this {@link UwbConfig} object to bytes. */
     public final byte[] toBytes() {
-        int size = MIN_SIZE_BYTES + getSessionKeyLength();
+        int size = MIN_SIZE_BYTES + getSessionKeyInfoLength();
         return ByteBuffer.allocate(size)
                 .put(RangingTechnology.UWB.toByte())
-                .put(getUwbAddress().toBytes())
-                .put(Conversions.intToByteArray(getSessionId(), SESSION_ID_SIZE))
-                .put(Conversions.intToByteArray(getSelectedConfigId(), CONFIG_ID_SIZE))
-                .put(Conversions.intToByteArray(getSelectedChannel(), CHANNEL_SIZE))
-                .put(Conversions.intToByteArray(getSelectedPreambleIndex(), PREAMBLE_INDEX_SIZE))
-                .put(Conversions.intToByteArray(getSelectedRangingIntervalMs(),
+                .put(mParameters.getLocalAddress().toBytes())
+                .put(Conversions.intToByteArray(mParameters.getSessionId(), SESSION_ID_SIZE))
+                .put(Conversions.intToByteArray(mParameters.getConfigType(), CONFIG_ID_SIZE))
+                .put(Conversions.intToByteArray(
+                        mParameters.getComplexChannel().getChannel(), CHANNEL_SIZE))
+                .put(Conversions.intToByteArray(
+                        mParameters.getComplexChannel().getPreambleIndex(), PREAMBLE_INDEX_SIZE))
+                .put(Conversions.intToByteArray(
+                        Utils.getRangingTimingParams(mParameters.getConfigType())
+                                .getRangingInterval(mParameters.getUpdateRateType()),
                         RANGING_INTERVAL_SIZE))
-                .put(Conversions.intToByteArray(getSelectedSlotDurationMs(), SLOT_DURATION_SIZE))
-                .put(Conversions.intToByteArray(getSessionKeyLength(), SESSION_KEY_LENGTH_SIZE))
-                .put(getSessionKey())
-                .put(getCountryCode().getBytes(US_ASCII))
-                .put(Conversions.intToByteArray(Conversions.toOobDeviceRole(getDeviceRole()),
-                        DEVICE_ROLE_SIZE))
-                .put(Conversions.intToByteArray(Conversions.toOobDeviceType(getDeviceRole()),
-                        DEVICE_TYPE_SIZE))
+                .put(Conversions.intToByteArray(
+                        mParameters.getSlotDurationMs(), SLOT_DURATION_SIZE))
+                .put(Conversions.intToByteArray(getSessionKeyInfoLength(), SESSION_KEY_LENGTH_SIZE))
+                .put(mParameters.getSessionKeyInfo())
+                .put(mParameters.getCountryCode().getBytes(US_ASCII))
+                .put(Conversions.intToByteArray(
+                        Conversions.toOobDeviceRole(getDeviceRole()), DEVICE_ROLE_SIZE))
+                .put(Conversions.intToByteArray(
+                        Conversions.toOobDeviceType(getDeviceRole()), DEVICE_TYPE_SIZE))
                 .array();
     }
 
-    /** Returns {@link UwbAddress} of the device. */
-    public abstract UwbAddress getUwbAddress();
-
-    /** Returns the session Id. */
-    public abstract int getSessionId();
-
-    /** Returns the selected config Id. */
-    public abstract int getSelectedConfigId();
-
-    /** Returns the selected channel. */
-    public abstract int getSelectedChannel();
-
-    /** Returns the selected preamble index. */
-    public abstract int getSelectedPreambleIndex();
-
-    /** Returns the selected ranging interval in ms. */
-    public abstract int getSelectedRangingIntervalMs();
-
-    /** Returns the selected slot duration in ms. */
-    public abstract int getSelectedSlotDurationMs();
-
     /** Returns the length of the session key. */
-    public final int getSessionKeyLength() {
-        return getSessionKey().length;
+    public final int getSessionKeyInfoLength() {
+        if (mParameters.getSessionKeyInfo() == null) {
+            return 0;
+        } else {
+            return mParameters.getSessionKeyInfo().length;
+        }
+    }
+
+    /** Returns the device's role within the session. */
+    public DeviceRole getDeviceRole() {
+        return mDeviceRole;
+    }
+
+    /** Returns the UWB-specific ranging parameters. */
+    public UwbParameters getParameters() {
+        return mParameters;
     }
 
     /**
-     * Returns the session key bytes. If S-STS is used then first two bytes are VENDOR ID and
-     * following 6 bytes are STATIC STS IV. If P-STS is used then this is either a 16 byte or 32
-     * byte
-     * session key.
+     * @return the configuration converted to a
+     * {@link androidx.core.uwb.backend.impl.internal.RangingParameters} accepted by the UWB
+     * backend.
      */
-    @SuppressWarnings("mutable")
-    public abstract byte[] getSessionKey();
-
-    /** Returns ISO 3166-1 alpha-2 country code, represented by 2 ascii characters */
-    public abstract String getCountryCode();
-
-    /** Returns Device Role. */
-    public abstract DeviceRole getDeviceRole();
-
-    /** Returns a builder for {@link UwbConfig}. */
-    public static Builder builder() {
-        return new AutoValue_UwbConfig.Builder().setSessionKey(null);
+    public RangingParameters asBackendParameters() {
+        return new RangingParameters(
+                mParameters.getConfigType(), mParameters.getSessionId(),
+                mParameters.getSubSessionId(), mParameters.getSessionKeyInfo(),
+                mParameters.getSubSessionKeyInfo(), mParameters.getComplexChannel(),
+                mParameters.getPeerAddresses().asList(), mParameters.getUpdateRateType(),
+                mParameters.getRangeDataNtfConfig(), mParameters.getSlotDurationMs(),
+                mParameters.isAoaDisabled()
+        );
     }
 
     /** Builder for {@link UwbConfig}. */
-    @AutoValue.Builder
-    public abstract static class Builder {
-        public abstract Builder setUwbAddress(UwbAddress uwbAddress);
+    public static class Builder {
+        private final RequiredParam<DeviceRole> mDeviceRole = new RequiredParam<>();
+        private final RequiredParam<UwbParameters> mParameters = new RequiredParam<>();
 
-        public abstract Builder setSessionId(int sessionId);
+        public @NonNull UwbConfig build() {
+            return new UwbConfig(this);
+        }
 
-        public abstract Builder setSelectedConfigId(int selectedConfigId);
+        public Builder setDeviceRole(@NonNull DeviceRole role) {
+            mDeviceRole.set(role);
+            return this;
+        }
 
-        public abstract Builder setSelectedChannel(int selectedChannel);
-
-        public abstract Builder setSelectedPreambleIndex(int selectedPreambleIndex);
-
-        public abstract Builder setSelectedRangingIntervalMs(int selectedRangingIntervalMs);
-
-        public abstract Builder setSelectedSlotDurationMs(int selectedSlotDurationMs);
-
-        public abstract Builder setSessionKey(byte[] sessionKey);
-
-        public abstract Builder setCountryCode(String countryCode);
-
-        public abstract Builder setDeviceRole(DeviceRole deviceRole);
-
-        abstract UwbConfig autoBuild();
-
-        public UwbConfig build() {
-            UwbConfig uwbConfig = autoBuild();
-            Preconditions.checkNotNull(uwbConfig.getUwbAddress(), "UwbAddress cannot be null");
-            int sessionKeyLength = uwbConfig.getSessionKeyLength();
-            Preconditions.checkArgument(
-                    sessionKeyLength == STS_SESSION_KEY_SIZE
-                            || sessionKeyLength == PSTS_SHORT_SESSION_KEY_SIZE
-                            || sessionKeyLength == PSTS_LONG_SESSION_KEY_SIZE,
-                    "Invalid session key length");
-            Preconditions.checkArgument(
-                    uwbConfig.getCountryCode().length() == COUNTRY_CODE_SIZE,
-                    "Invalid country code length");
-            return uwbConfig;
+        public Builder setParameters(@NonNull UwbParameters parameters) {
+            mParameters.set(parameters);
+            return this;
         }
     }
 }

@@ -23,13 +23,12 @@ import com.android.ranging.uwb.backend.internal.Utils;
 import com.android.ranging.uwb.backend.internal.UwbAddress;
 import com.android.ranging.uwb.backend.internal.UwbComplexChannel;
 import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
-import com.android.server.ranging.RangingParameters.TechnologyParameters;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.uwb.support.base.RequiredParam;
 
 /** Configuration for UWB sent as part SetConfigurationMessage for Finder OOB. */
-public class UwbParameters implements TechnologyParameters {
+public class UwbParameters {
     private final String mCountryCode;
     private final UwbAddress mLocalAddress;
     private final ImmutableSet<UwbAddress> mPeerAddresses;
@@ -44,7 +43,7 @@ public class UwbParameters implements TechnologyParameters {
     private final @Utils.SlotDuration int mSlotDurationMs;
     private final boolean mIsAoaDisabled;
 
-    private UwbParameters(Builder builder) {
+    protected UwbParameters(Builder builder) {
         mCountryCode = builder.mCountryCode;
         mLocalAddress = builder.mLocalAddress;
         mPeerAddresses = builder.mPeerAddresses.get();
@@ -134,14 +133,14 @@ public class UwbParameters implements TechnologyParameters {
         }
 
         // TODO(370077264): This is not marked as required, but it does not have a fallback value.
-        //  It should be set automatically in the UwbAdapter.
+        //  It should be set automatically.
         public Builder setCountryCode(@NonNull String countryCode) {
             mCountryCode = countryCode;
             return this;
         }
 
         // TODO(370077264): This is not marked as required, but it does not have a fallback value.
-        //  It should be set automatically in the UwbAdapter.
+        //  It should be set automatically.
         public Builder setLocalAddress(UwbAddress address) {
             mLocalAddress = address;
             return this;
@@ -177,6 +176,8 @@ public class UwbParameters implements TechnologyParameters {
             return this;
         }
 
+        // TODO(370077264): This is not marked as required, but it does not have a fallback value.
+        //  It should be set automatically.
         public Builder setComplexChannel(UwbComplexChannel complexChannel) {
             mComplexChannel = complexChannel;
             return this;

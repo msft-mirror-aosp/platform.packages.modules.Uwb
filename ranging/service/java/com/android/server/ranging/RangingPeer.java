@@ -27,8 +27,8 @@ import androidx.annotation.VisibleForTesting;
 
 import com.android.ranging.uwb.backend.internal.RangingCapabilities;
 import com.android.ranging.uwb.backend.internal.UwbAddress;
+import com.android.server.ranging.RangingAdapter.TechnologyConfig;
 import com.android.server.ranging.RangingParameters.DeviceRole;
-import com.android.server.ranging.RangingParameters.TechnologyParameters;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.cs.CsAdapter;
 import com.android.server.ranging.fusion.DataFusers;
@@ -147,11 +147,11 @@ public final class RangingPeer {
             mFusionEngine = new NoOpFusionEngine();
         }
 
-        ImmutableMap<RangingTechnology, TechnologyParameters> techParams =
-                parameters.getTechnologyParams();
-        mAdapters.keySet().retainAll(techParams.keySet());
+        ImmutableMap<RangingTechnology, TechnologyConfig> techConfigs =
+                parameters.getTechnologyConfigs();
+        mAdapters.keySet().retainAll(techConfigs.keySet());
         mFusionEngine.start(new FusionEngineListener());
-        for (RangingTechnology technology : techParams.keySet()) {
+        for (RangingTechnology technology : techConfigs.keySet()) {
             if (!technology.isSupported(mContext)) {
                 Log.w(TAG, "Attempted to range with unsupported technology " + technology
                         + ", skipping");
@@ -164,7 +164,7 @@ public final class RangingPeer {
                     mAdapters.put(technology, newAdapter(technology, parameters.getDeviceRole()));
                 }
                 mAdapters.get(technology)
-                        .start(techParams.get(technology), new AdapterListener(technology));
+                        .start(techConfigs.get(technology), new AdapterListener(technology));
             }
         }
 
