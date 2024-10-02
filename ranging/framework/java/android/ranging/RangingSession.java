@@ -18,6 +18,7 @@ package android.ranging;
 
 import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
+import android.content.AttributionSource;
 import android.os.CancellationSignal;
 import android.os.RemoteException;
 
@@ -31,6 +32,7 @@ import java.util.concurrent.Executor;
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public class RangingSession implements AutoCloseable {
 
+    private final AttributionSource mAttributionSource;
     private final SessionHandle mSessionHandle;
     private final IRangingAdapter mRangingAdapter;
     private final RangingSessionManager mRangingSessionManager;
@@ -39,9 +41,11 @@ public class RangingSession implements AutoCloseable {
 
 
     public RangingSession(RangingSessionManager rangingSessionManager,
+            AttributionSource attributionSource,
             SessionHandle sessionHandle, IRangingAdapter rangingAdapter,
             Callback callback, Executor executor) {
         mRangingSessionManager = rangingSessionManager;
+        mAttributionSource = attributionSource;
         mSessionHandle = sessionHandle;
         mRangingAdapter = rangingAdapter;
         mCallback = callback;
@@ -50,7 +54,8 @@ public class RangingSession implements AutoCloseable {
 
     public CancellationSignal start(RangingPreference rangingPreference) {
         try {
-            mRangingAdapter.startRanging(mSessionHandle, rangingPreference, mRangingSessionManager);
+            mRangingAdapter.startRanging(mAttributionSource, mSessionHandle, rangingPreference,
+                    mRangingSessionManager);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }

@@ -28,8 +28,8 @@ import android.ranging.RangingPreference;
 interface IRangingAdapter {
     void getRangingCapabilities(in IRangingCapabilitiesCallback rangingCapabilitiesCallback);
 
-    void startRanging(in SessionHandle sessionHandle, in RangingPreference rangingPreference,
-                 in IRangingCallbacks callbacks);
+    void startRanging(in AttributionSource attributionSource, in SessionHandle sessionHandle,
+                 in RangingPreference rangingPreference, in IRangingCallbacks callbacks);
 
     void stopRanging(in SessionHandle sessionHandle);
 }

@@ -20,6 +20,7 @@ import android.annotation.CallbackExecutor;
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.annotation.SystemService;
 import android.content.AttributionSource;
 import android.content.Context;
@@ -110,7 +111,7 @@ public final class RangingManager {
             @NonNull RangingCapabilitiesListener listener) {
     }
 
-    @NonNull
+    @Nullable
     @FlaggedApi("com.android.ranging.flags.ranging_stack_enabled")
     public RangingSession createRangingSession(RangingSession.Callback callback,
             Executor executor) {
