@@ -132,12 +132,24 @@ public class UwbAdapter implements RangingAdapter {
         }
 
         mCallbacks = callbacks;
-        if (!(parameters instanceof RangingParameters)) {
+        if (!(parameters instanceof UwbParameters params)) {
             Log.w(TAG, "Tried to start adapter with invalid ranging parameters");
             mCallbacks.onStopped(Callback.StoppedReason.FAILED_TO_START);
             return;
         }
-        mUwbClient.setRangingParameters((RangingParameters) parameters);
+        mUwbClient.setRangingParameters(new RangingParameters(
+                params.getConfigType(), params.getSessionId(), params.getSubSessionId(),
+                params.getSessionKeyInfo(), params.getSubSessionKeyInfo(),
+                params.getComplexChannel(), params.getPeerAddresses().asList(),
+                params.getUpdateRateType(), params.getRangeDataNtfConfig(),
+                params.getSlotDurationMs(), params.isAoaDisabled()
+        ));
+        if (params.getLocalAddress() != null) {
+            mUwbClient.setLocalAddress(params.getLocalAddress());
+        }
+        if (mUwbClient instanceof RangingController controller) {
+            controller.setComplexChannel(params.getComplexChannel());
+        }
 
         var future = Futures.submit(() -> {
             mUwbClient.startRanging(mUwbListener, Executors.newSingleThreadExecutor());
