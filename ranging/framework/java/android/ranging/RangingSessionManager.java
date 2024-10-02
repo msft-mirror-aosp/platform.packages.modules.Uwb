@@ -20,6 +20,8 @@ import android.content.AttributionSource;
 import android.os.Process;
 import android.util.Log;
 
+import com.android.ranging.flags.Flags;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -41,12 +43,16 @@ public class RangingSessionManager extends IRangingCallbacks.Stub {
 
     public RangingSession createRangingSessionInstance(AttributionSource attributionSource,
             RangingSession.Callback callback, Executor executor) {
-        SessionHandle sessionHandle = new SessionHandle(sSessionIdCounter++, attributionSource,
-                Process.myPid());
-        RangingSession rangingSession = new RangingSession(this, sessionHandle, mRangingAdapter,
-                callback, executor);
-        mRangingSessionMap.put(sessionHandle, rangingSession);
-        return rangingSession;
+        if (Flags.rangingStackEnabled()) {
+            SessionHandle sessionHandle = new SessionHandle(sSessionIdCounter++, attributionSource,
+                    Process.myPid());
+            RangingSession rangingSession = new RangingSession(this, attributionSource,
+                    sessionHandle,
+                    mRangingAdapter, callback, executor);
+            mRangingSessionMap.put(sessionHandle, rangingSession);
+            return rangingSession;
+        }
+        return null;
     }
 
     @Override
