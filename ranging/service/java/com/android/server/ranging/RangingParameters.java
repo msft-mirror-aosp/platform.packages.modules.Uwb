@@ -18,68 +18,62 @@ package com.android.server.ranging;
 
 import androidx.annotation.NonNull;
 
+import com.android.server.ranging.RangingAdapter.TechnologyConfig;
+import com.android.server.ranging.cs.CsConfig;
 import com.android.server.ranging.cs.CsParameters;
 import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.fusion.FusionEngine;
+import com.android.server.ranging.uwb.UwbConfig;
 import com.android.server.ranging.uwb.UwbParameters;
-import com.android.server.ranging.RangingTechnology;
 
-import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.uwb.support.base.RequiredParam;
 
 import java.time.Duration;
 import java.util.Optional;
 
 /** Parameters for a generic ranging session. */
 public class RangingParameters {
-    /** Parameters for a specific generic ranging technology. */
-    public interface TechnologyParameters { }
-
     public enum DeviceRole {
-        /**
-         * The device is a controlee within the session.
-         */
-        CONTROLEE,
-        /**
-         * The device is the session controller. It decides when the session is started or stopped,
-         * ranging technology preferences, etc.
-         */
-        CONTROLLER
+        RESPONDER,
+        /** The device that initiates the session. */
+        INITIATOR;
+
+        public static final ImmutableList<DeviceRole> ROLES =
+                ImmutableList.copyOf(DeviceRole.values());
     }
 
-    private final DeviceRole mRole;
+    private final DeviceRole mDeviceRole;
     private final Duration mNoInitialDataTimeout;
     private final Duration mNoUpdatedDataTimeout;
     private final FusionEngine.DataFuser mDataFuser;
-    private final ImmutableMap<RangingTechnology, TechnologyParameters> mTechParams;
+    private final ImmutableMap<RangingTechnology, TechnologyConfig> mTechConfigs;
 
-    private RangingParameters(@NonNull RangingParameters.Builder builder) {
-        Preconditions.checkArgument(builder.mNoInitialDataTimeout != null,
-                "No initial data timeout required but not provided");
-        Preconditions.checkArgument(builder.mNoUpdatedDataTimeout != null,
-                "No updated data timeout required but not provided");
-
-        mRole = builder.mRole;
-        mNoInitialDataTimeout = builder.mNoInitialDataTimeout;
-        mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout;
+    private RangingParameters(@NonNull Builder builder) {
+        mDeviceRole = builder.mDeviceRole;
+        mNoInitialDataTimeout = builder.mNoInitialDataTimeout.get();
+        mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout.get();
         mDataFuser = builder.mDataFuser;
 
-        ImmutableMap.Builder<RangingTechnology, TechnologyParameters> techParamsBuilder =
+        ImmutableMap.Builder<RangingTechnology, TechnologyConfig> techConfigs =
                 new ImmutableMap.Builder<>();
         if (builder.mUwbParameters != null) {
-            techParamsBuilder.put(RangingTechnology.UWB, builder.mUwbParameters);
+            techConfigs.put(RangingTechnology.UWB,
+                    new UwbConfig.Builder()
+                            .setDeviceRole(mDeviceRole)
+                            .setParameters(builder.mUwbParameters)
+                            .build());
         }
         if (builder.mCsParameters != null) {
-            techParamsBuilder.put(RangingTechnology.CS, builder.mCsParameters);
+            techConfigs.put(RangingTechnology.CS, new CsConfig());
         }
-        mTechParams = techParamsBuilder.build();
+        mTechConfigs = techConfigs.build();
     }
 
-    /**
-     * @return The configured device role.
-     */
-    public @NonNull DeviceRole getRole() {
-        return mRole;
+    /** @return The device's role within the session. */
+    public @NonNull DeviceRole getDeviceRole() {
+        return mDeviceRole;
     }
 
     /**
@@ -104,31 +98,15 @@ public class RangingParameters {
         return Optional.ofNullable(mDataFuser);
     }
 
-    /**
-     * @return UWB parameters, or {@code Optional.empty()} if they were never set.
-     */
-    public Optional<UwbParameters> getUwbParameters() {
-        return Optional.ofNullable(mTechParams.get(RangingTechnology.UWB))
-                .map(params -> (UwbParameters) params);
-    }
-
-    /**
-     * @return channel sounding parameters, or {@code Optional.empty()} if they were never set.
-     */
-    public Optional<CsParameters> getCsParameters() {
-        return Optional.ofNullable(mTechParams.get(RangingTechnology.CS))
-                .map(params -> (CsParameters) params);
-    }
-
     /** @return A map between technologies and their corresponding generic parameters object. */
-    public @NonNull ImmutableMap<RangingTechnology, TechnologyParameters> getTechnologyParams() {
-        return mTechParams;
+    public @NonNull ImmutableMap<RangingTechnology, TechnologyConfig> getTechnologyConfigs() {
+        return mTechConfigs;
     }
 
     public static class Builder {
-        private final DeviceRole mRole;
-        private Duration mNoInitialDataTimeout = null;
-        private Duration mNoUpdatedDataTimeout = null;
+        private final DeviceRole mDeviceRole;
+        private final RequiredParam<Duration> mNoInitialDataTimeout = new RequiredParam<>();
+        private final RequiredParam<Duration> mNoUpdatedDataTimeout = new RequiredParam<>();
         private FusionEngine.DataFuser mDataFuser = null;
         private UwbParameters mUwbParameters = null;
         private CsParameters mCsParameters = null;
@@ -137,7 +115,7 @@ public class RangingParameters {
          * @param role of the device within the session.
          */
         public Builder(DeviceRole role) {
-            mRole = role;
+            mDeviceRole = role;
         }
 
         /** Build the {@link RangingParameters object} */
@@ -149,8 +127,8 @@ public class RangingParameters {
          * @param timeout after which the session will be stopped if no ranging data was produced
          *                directly after starting.
          */
-        public Builder setNoInitialDataTimeout(Duration timeout) {
-            mNoInitialDataTimeout = timeout;
+        public Builder setNoInitialDataTimeout(@NonNull Duration timeout) {
+            mNoInitialDataTimeout.set(timeout);
             return this;
         }
 
@@ -158,8 +136,8 @@ public class RangingParameters {
          * @param timeout after which the session will be stopped if there is no new ranging data
          *                produced.
          */
-        public Builder setNoUpdatedDataTimeout(Duration timeout) {
-            mNoUpdatedDataTimeout = timeout;
+        public Builder setNoUpdatedDataTimeout(@NonNull Duration timeout) {
+            mNoUpdatedDataTimeout.set(timeout);
             return this;
         }
 

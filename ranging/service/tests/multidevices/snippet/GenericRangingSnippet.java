@@ -27,6 +27,10 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.android.ranging.uwb.backend.internal.Utils;
+import com.android.ranging.uwb.backend.internal.UwbAddress;
+import com.android.ranging.uwb.backend.internal.UwbComplexChannel;
+import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
 import com.android.server.ranging.RangingData;
 import com.android.server.ranging.RangingParameters;
 import com.android.server.ranging.RangingParameters.DeviceRole;
@@ -36,9 +40,6 @@ import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.uwb.UwbAdapter;
 import com.android.server.ranging.uwb.UwbParameters;
-import com.android.ranging.uwb.backend.internal.UwbAddress;
-import com.android.ranging.uwb.backend.internal.UwbComplexChannel;
-import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
 
 import com.google.android.mobly.snippet.Snippet;
 import com.google.android.mobly.snippet.event.EventCache;
@@ -46,6 +47,7 @@ import com.google.android.mobly.snippet.event.SnippetEvent;
 import com.google.android.mobly.snippet.rpc.AsyncRpc;
 import com.google.android.mobly.snippet.rpc.Rpc;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -185,32 +187,37 @@ public class GenericRangingSnippet implements Snippet {
             }
             peerAddresses = Arrays.asList(destinationUwbAddresses);
         }
-        UwbComplexChannel uwbComplexChannel = new UwbComplexChannel(9, 11);
+        UwbComplexChannel uwbComplexChannel = new UwbComplexChannel(
+                Utils.channelForTesting, Utils.preambleIndexForTesting);
         UwbRangeDataNtfConfig rangeDataNtfConfig = new UwbRangeDataNtfConfig.Builder()
                 .setRangeDataConfigType(j.getInt("rangeDataConfigType"))
                 .build();
 
-        UwbParameters uwbParams = new UwbParameters(
-                j.getInt("configType"),
-                j.getInt("sessionId"),
-                j.getInt("subSessionId"),
-                convertJSONArrayToByteArray(j.getJSONArray("sessionKeyInfo")),
-                j.has("subSessionKeyInfo")
-                        ? convertJSONArrayToByteArray(j.getJSONArray("subSessionKeyInfo"))
-                        : null,
-                uwbComplexChannel,
-                peerAddresses,
-                j.getInt("updateRateType"),
-                rangeDataNtfConfig,
-                j.getInt("slotDurationMillis"),
-                j.getBoolean("isAoaDisabled")
-        );
-        DeviceRole role = j.getInt("deviceRole") == 0
-                ? DeviceRole.CONTROLEE : DeviceRole.CONTROLLER;
+        UwbParameters.Builder uwbParamsBuilder = new UwbParameters.Builder()
+                .setCountryCode("US")
+                .setLocalAddress(UwbAddress.fromBytes(
+                        convertJSONArrayToByteArray(j.getJSONArray("deviceAddress"))))
+                .setPeerAddresses(ImmutableSet.copyOf(peerAddresses))
+                .setConfigType(j.getInt("configType"))
+                .setSessionId(j.getInt("sessionId"))
+                .setSubSessionId(j.getInt("subSessionId"))
+                .setSessionKeyInfo(convertJSONArrayToByteArray(j.getJSONArray("sessionKeyInfo")))
+                .setComplexChannel(uwbComplexChannel)
+                .setUpdateRateType(j.getInt("updateRateType"))
+                .setRangeDataNtfConfig(rangeDataNtfConfig)
+                .setSlotDurationMs(j.getInt("slotDurationMillis"))
+                .setAoaDisabled(j.getBoolean("isAoaDisabled"));
+
+        if (j.has("subSessionKeyInfo")) {
+            uwbParamsBuilder.setSubSessionKeyInfo(
+                    convertJSONArrayToByteArray(j.getJSONArray("subSessionKeyInfo")));
+        }
+
+        DeviceRole role = DeviceRole.ROLES.get(j.getInt("deviceRole"));
         return new RangingParameters.Builder(role)
                 .setNoInitialDataTimeout(Duration.ofSeconds(3))
                 .setNoUpdatedDataTimeout(Duration.ofSeconds(2))
-                .useUwb(uwbParams)
+                .useUwb(uwbParamsBuilder.build())
                 .useSensorFusion(new DataFusers.PreferentialDataFuser(RangingTechnology.UWB))
                 .build();
     }
@@ -233,26 +240,10 @@ public class GenericRangingSnippet implements Snippet {
     @AsyncRpc(description = "Start UWB ranging session")
     public void startUwbRanging(String callbackId, JSONObject config)
             throws JSONException, RemoteException {
-        int deviceRole = config.getInt("deviceRole");
-        UwbAdapter uwbAdapter = null;
-        if (deviceRole == 0) {
-            logInfo("Starting controlee session");
-            uwbAdapter = new UwbAdapter(mContext, mExecutor, DeviceRole.CONTROLEE);
-        } else {
-            logInfo("Starting controller session");
-            uwbAdapter = new UwbAdapter(mContext, mExecutor, DeviceRole.CONTROLLER);
-        }
+        UwbAdapter uwbAdapter = new UwbAdapter(
+                mContext, mExecutor, DeviceRole.ROLES.get(config.getInt("deviceRole")));
         uwbAdapter.setLocalAddressForTesting(UwbAddress.fromBytes(
                 convertJSONArrayToByteArray(config.getJSONArray("deviceAddress"))));
-
-        // Test forces channel to 9 and preamble to 11
-        uwbAdapter.setComplexChannelForTesting();
-        try {
-            uwbAdapter.getComplexChannel().get();
-        } catch (Exception e) {
-            Log.w(TAG, "Could not get complex channel for uwb adapter");
-            throw new RuntimeException(e);
-        }
 
         ListeningExecutorService adapterExecutor = MoreExecutors.listeningDecorator(
                 Executors.newSingleThreadExecutor());
