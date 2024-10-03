@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package android.server.ranging;
+package com.android.server.ranging;
 
 import android.annotation.Nullable;
 import android.os.RemoteException;
 
-import com.android.server.ranging.RangingParameters;
 import com.android.server.ranging.cs.CsAdapter;
 import com.android.server.ranging.uwb.UwbAdapter;
 
