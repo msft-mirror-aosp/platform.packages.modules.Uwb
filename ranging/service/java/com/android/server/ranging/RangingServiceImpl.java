@@ -44,6 +44,7 @@ public class RangingServiceImpl extends IRangingAdapter.Stub {
     @Override
     public void startRanging(AttributionSource attributionSource, SessionHandle sessionHandle,
             RangingPreference rangingPreference, IRangingCallbacks callbacks) {
+        mRangingInjector.enforceRangingPermissionForPreflight(attributionSource);
         mRangingInjector.getRangingServiceManager().startRanging(attributionSource, sessionHandle,
                 rangingPreference, callbacks);
     }
