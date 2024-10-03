@@ -29,19 +29,23 @@ import android.content.pm.PackageManager;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.ranging.uwb.backend.internal.RangingController;
+import com.android.ranging.uwb.backend.internal.RangingPosition;
+import com.android.ranging.uwb.backend.internal.RangingSessionCallback;
+import com.android.ranging.uwb.backend.internal.Utils;
+import com.android.ranging.uwb.backend.internal.UwbAddress;
+import com.android.ranging.uwb.backend.internal.UwbDevice;
+import com.android.ranging.uwb.backend.internal.UwbServiceImpl;
 import com.android.server.ranging.RangingAdapter;
 import com.android.server.ranging.RangingData;
 import com.android.server.ranging.RangingParameters.DeviceRole;
 import com.android.server.ranging.RangingTechnology;
-import com.android.server.ranging.cs.CsParameters;
+import com.android.server.ranging.cs.CsConfig;
 import com.android.server.ranging.uwb.UwbAdapter;
+import com.android.server.ranging.uwb.UwbConfig;
 import com.android.server.ranging.uwb.UwbParameters;
-import com.android.ranging.uwb.backend.internal.RangingController;
-import com.android.ranging.uwb.backend.internal.RangingPosition;
-import com.android.ranging.uwb.backend.internal.RangingSessionCallback;
-import com.android.ranging.uwb.backend.internal.UwbDevice;
-import com.android.ranging.uwb.backend.internal.UwbServiceImpl;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import org.junit.Assert;
@@ -72,13 +76,27 @@ public class UwbAdapterTest {
     /** Class under test */
     private UwbAdapter mUwbAdapter;
 
+    private UwbConfig.Builder generateConfig() {
+        return new UwbConfig.Builder()
+                .setDeviceRole(DeviceRole.INITIATOR)
+                .setParameters(new UwbParameters.Builder()
+                        .setCountryCode("US")
+                        .setLocalAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
+                        .setPeerAddresses(ImmutableSet.of())
+                        .setConfigType(Utils.CONFIG_UNICAST_DS_TWR)
+                        .setSessionId(0)
+                        .setSubSessionId(0)
+                        .setUpdateRateType(Utils.NORMAL)
+                        .build());
+    }
+
     @Before
     public void setup() {
         when(mMockContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_UWB))
                 .thenReturn(true);
         when(mMockUwbService.getController(any())).thenReturn(mMockUwbClient);
         mUwbAdapter = new UwbAdapter(mMockContext, MoreExecutors.newDirectExecutorService(),
-                mMockUwbService, DeviceRole.CONTROLLER);
+                mMockUwbService, DeviceRole.INITIATOR);
     }
 
     @Test
@@ -95,14 +113,14 @@ public class UwbAdapterTest {
 
     @Test
     public void start_failsWhenParamsInvalid() {
-        mUwbAdapter.start(mock(CsParameters.class), mMockCallback);
+        mUwbAdapter.start(mock(CsConfig.class), mMockCallback);
         verify(mMockCallback).onStopped(eq(RangingAdapter.Callback.StoppedReason.FAILED_TO_START));
         verify(mMockCallback, never()).onStarted();
     }
 
     @Test
     public void start_startsUwbClientWithCallbacks() {
-        mUwbAdapter.start(mock(UwbParameters.class), mMockCallback);
+        mUwbAdapter.start(generateConfig().build(), mMockCallback);
 
         ArgumentCaptor<RangingSessionCallback> callbackCaptor =
                 ArgumentCaptor.forClass(RangingSessionCallback.class);
@@ -118,14 +136,14 @@ public class UwbAdapterTest {
 
     @Test
     public void stop_stopsUwbClient() {
-        mUwbAdapter.start(mock(UwbParameters.class), mMockCallback);
+        mUwbAdapter.start(generateConfig().build(), mMockCallback);
         mUwbAdapter.stop();
         verify(mMockUwbClient).stopRanging();
     }
 
     @Test
     public void shouldReportData_onRangingResult() {
-        mUwbAdapter.start(mock(UwbParameters.class), mMockCallback);
+        mUwbAdapter.start(generateConfig().build(), mMockCallback);
 
         ArgumentCaptor<RangingSessionCallback> callbackCaptor =
                 ArgumentCaptor.forClass(RangingSessionCallback.class);
