@@ -31,14 +31,14 @@ import com.android.ranging.flags.Flags;
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public class RangingParameters implements Parcelable {
 
-    private final UwbRangingParameters mUwbRangingParameters;
+    private final UwbRangingParameters mUwbParameters;
 
     private RangingParameters(Builder builder) {
-        mUwbRangingParameters = builder.mUwbRangingParameters;
+        mUwbParameters = builder.mUwbParameters;
     }
 
     protected RangingParameters(Parcel in) {
-        mUwbRangingParameters = in.readParcelable(
+        mUwbParameters = in.readParcelable(
                 UwbRangingParameters.class.getClassLoader(), UwbRangingParameters.class);
     }
 
@@ -54,8 +54,8 @@ public class RangingParameters implements Parcelable {
         }
     };
 
-    public UwbRangingParameters getUwbRangingParameters() {
-        return mUwbRangingParameters;
+    public @NonNull UwbRangingParameters getUwbParameters() {
+        return mUwbParameters;
     }
 
     @Override
@@ -65,14 +65,18 @@ public class RangingParameters implements Parcelable {
 
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        dest.writeParcelable(mUwbRangingParameters, flags);
+        dest.writeParcelable(mUwbParameters, flags);
     }
 
     public static class Builder {
-        private UwbRangingParameters mUwbRangingParameters;
+        private UwbRangingParameters mUwbParameters;
 
-        public Builder setUwbRangingParameters(UwbRangingParameters uwbRangingParameters) {
-            mUwbRangingParameters = uwbRangingParameters;
+        public RangingParameters build() {
+            return new RangingParameters(this);
+        }
+
+        public Builder setUwbParameters(UwbRangingParameters uwbParameters) {
+            mUwbParameters = uwbParameters;
             return this;
         }
     }
