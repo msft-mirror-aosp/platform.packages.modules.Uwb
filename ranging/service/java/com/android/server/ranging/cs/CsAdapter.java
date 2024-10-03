@@ -19,7 +19,6 @@ package com.android.server.ranging.cs;
 import android.content.Context;
 
 import com.android.server.ranging.RangingAdapter;
-import com.android.server.ranging.RangingParameters.TechnologyParameters;
 import com.android.server.ranging.RangingTechnology;
 
 import com.google.common.util.concurrent.Futures;
@@ -51,7 +50,7 @@ public class CsAdapter implements RangingAdapter {
     }
 
     @Override
-    public void start(TechnologyParameters parameters, Callback callback) {
+    public void start(TechnologyConfig config, Callback callback) {
         throw new UnsupportedOperationException("Not implemented.");
     }
 

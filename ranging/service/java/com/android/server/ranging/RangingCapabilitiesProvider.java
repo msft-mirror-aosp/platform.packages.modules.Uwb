@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package android.server.ranging;
+package com.android.server.ranging;
 
 import android.annotation.Nullable;
 import android.os.RemoteException;
 
-import com.android.server.ranging.RangingParameters;
 import com.android.server.ranging.cs.CsAdapter;
 import com.android.server.ranging.uwb.UwbAdapter;
 
@@ -40,7 +39,7 @@ public class RangingCapabilitiesProvider {
         if (UwbAdapter.isSupported(mRangingInjector.getContext())) {
             mUwbAdapter = new UwbAdapter(mRangingInjector.getContext(),
                     MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor()),
-                    RangingParameters.DeviceRole.CONTROLLER);
+                    RangingParameters.DeviceRole.INITIATOR);
         }
         if (CsAdapter.isSupported(mRangingInjector.getContext())) {
             mCsAdapter = new CsAdapter();
