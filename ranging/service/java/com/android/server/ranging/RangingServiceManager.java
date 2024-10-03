@@ -23,7 +23,6 @@ import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
-import android.server.ranging.RangingInjector;
 
 public class RangingServiceManager {
 

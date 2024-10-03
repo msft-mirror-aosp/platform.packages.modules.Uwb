@@ -30,6 +30,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * @hide
@@ -185,17 +186,22 @@ public class UwbRangingParameters implements Parcelable {
         mUwbConfigId = in.readInt();
         mSessionKeyInfo = in.readBlob();
         mSubSessionKeyInfo = in.readBlob();
-        mUwbComplexChannel = in.readParcelable(UwbComplexChannel.class.getClassLoader());
+        mUwbComplexChannel = Objects.requireNonNull(
+                in.readParcelable(
+                        UwbComplexChannel.class.getClassLoader(), UwbComplexChannel.class));
         mRangingUpdateRate = in.readInt();
-        mUwbRangeDataNtfConfig = in.readParcelable(UwbRangeDataNtfConfig.class.getClassLoader());
+        mUwbRangeDataNtfConfig = in.readParcelable(
+                UwbRangeDataNtfConfig.class.getClassLoader(), UwbRangeDataNtfConfig.class);
         mSlotDuration = in.readInt();
         mIsAoaDisabled = in.readByte() != 0;
         // Deserialize peerAddresses (Map<RangingDevice, UwbAddress>)
         int size = in.readInt();  // Get size of the Map
         mPeerAddressMap = new HashMap<>();
         for (int i = 0; i < size; i++) {
-            RangingDevice device = in.readParcelable(RangingDevice.class.getClassLoader());
-            UwbAddress address = in.readParcelable(UwbAddress.class.getClassLoader());
+            RangingDevice device = Objects.requireNonNull(
+                    in.readParcelable(RangingDevice.class.getClassLoader(), RangingDevice.class));
+            UwbAddress address = Objects.requireNonNull(
+                    in.readParcelable(UwbAddress.class.getClassLoader(), UwbAddress.class));
             mPeerAddressMap.put(device, address);
         }
     }
