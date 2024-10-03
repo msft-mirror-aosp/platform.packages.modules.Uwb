@@ -15,7 +15,7 @@
  */
 package com.android.server.ranging;
 
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.uwb.UwbParameters;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -71,7 +71,7 @@ public class RangingConfig extends RangingParameters {
     }
 
     private @Nullable UwbConfig getUwbConfig() {
-        UwbRangingParameters uwbParameters = getUwbParameters();
+        UwbParameters uwbParameters = getUwbParameters();
         if (uwbParameters == null) return null;
         UwbAdapter adapter = mRangingInjector.getAdapterProvider().getUwbAdapter();
         if (adapter == null) {

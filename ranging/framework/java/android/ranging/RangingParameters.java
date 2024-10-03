@@ -19,7 +19,7 @@ package android.ranging;
 import android.annotation.FlaggedApi;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.uwb.UwbParameters;
 
 import androidx.annotation.NonNull;
 
@@ -31,7 +31,7 @@ import com.android.ranging.flags.Flags;
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public class RangingParameters implements Parcelable {
 
-    private final UwbRangingParameters mUwbParameters;
+    private final UwbParameters mUwbParameters;
 
     private RangingParameters(Builder builder) {
         mUwbParameters = builder.mUwbParameters;
@@ -39,7 +39,7 @@ public class RangingParameters implements Parcelable {
 
     protected RangingParameters(Parcel in) {
         mUwbParameters = in.readParcelable(
-                UwbRangingParameters.class.getClassLoader(), UwbRangingParameters.class);
+                UwbParameters.class.getClassLoader(), UwbParameters.class);
     }
 
     public static final Creator<RangingParameters> CREATOR = new Creator<RangingParameters>() {
@@ -54,7 +54,7 @@ public class RangingParameters implements Parcelable {
         }
     };
 
-    public @NonNull UwbRangingParameters getUwbParameters() {
+    public @NonNull UwbParameters getUwbParameters() {
         return mUwbParameters;
     }
 
@@ -69,13 +69,13 @@ public class RangingParameters implements Parcelable {
     }
 
     public static class Builder {
-        private UwbRangingParameters mUwbParameters;
+        private UwbParameters mUwbParameters;
 
         public RangingParameters build() {
             return new RangingParameters(this);
         }
 
-        public Builder setUwbParameters(UwbRangingParameters uwbParameters) {
+        public Builder setUwbParameters(UwbParameters uwbParameters) {
             mUwbParameters = uwbParameters;
             return this;
         }

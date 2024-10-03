@@ -21,7 +21,7 @@ import static java.nio.charset.StandardCharsets.US_ASCII;
 import android.ranging.DataNotificationConfig;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.uwb.UwbParameters;
 
 import androidx.annotation.NonNull;
 
@@ -44,7 +44,7 @@ import java.util.Arrays;
  * configuration message sent over OOB and everything required to start a session in the underlying
  * UWB system API.
  */
-public class UwbConfig extends UwbRangingParameters implements TechnologyConfig {
+public class UwbConfig extends UwbParameters implements TechnologyConfig {
     private static final String TAG = UwbConfig.class.getSimpleName();
 
     private static final int MIN_SIZE_BYTES = 20;
@@ -170,16 +170,16 @@ public class UwbConfig extends UwbRangingParameters implements TechnologyConfig 
         int deviceType = uwbConfigBytes[parseCursor];
         parseCursor += DEVICE_TYPE_SIZE;
 
-        UwbRangingParameters.Builder paramsBuilder = new UwbRangingParameters.Builder()
+        UwbParameters.Builder paramsBuilder = new UwbParameters.Builder()
                 .setSessionId(sessionId)
                 .setConfigId(configId)
                 .setSlotDurationMs(slotDurationMs)
                 .setSessionKeyInfo(sessionKey);
 
 
-        for (@UwbRangingParameters.RangingUpdateRate int rate =
-                UwbRangingParameters.RangingUpdateRate.NORMAL;
-                rate <= UwbRangingParameters.RangingUpdateRate.FAST;
+        for (@UwbParameters.RangingUpdateRate int rate =
+                UwbParameters.RangingUpdateRate.NORMAL;
+                rate <= UwbParameters.RangingUpdateRate.FAST;
                 rate++
         ) {
             if (Utils.getRangingTimingParams(configId).getRangingInterval((int) rate)
@@ -290,18 +290,18 @@ public class UwbConfig extends UwbRangingParameters implements TechnologyConfig 
         }
     }
 
-    public static int toOobDeviceType(@UwbRangingParameters.DeviceType int type) {
+    public static int toOobDeviceType(@UwbParameters.DeviceType int type) {
         switch (type) {
-            case UwbRangingParameters.DeviceType.CONTROLEE: return 0x02;
-            case UwbRangingParameters.DeviceType.CONTROLLER: return 0x01;
+            case UwbParameters.DeviceType.CONTROLEE: return 0x02;
+            case UwbParameters.DeviceType.CONTROLLER: return 0x01;
             default: return 0x00;
         }
     }
 
-    public static @UwbRangingParameters.DeviceType int fromOobDeviceType(int type) {
+    public static @UwbParameters.DeviceType int fromOobDeviceType(int type) {
         switch (type) {
-            case 0x01: return UwbRangingParameters.DeviceType.CONTROLLER;
-            case 0x02: return UwbRangingParameters.DeviceType.CONTROLEE;
+            case 0x01: return UwbParameters.DeviceType.CONTROLLER;
+            case 0x02: return UwbParameters.DeviceType.CONTROLEE;
             default: throw new IllegalArgumentException(
                     "Unknown device type with value " + type);
         }
@@ -333,7 +333,7 @@ public class UwbConfig extends UwbRangingParameters implements TechnologyConfig 
 
     /** Builder for {@link UwbConfig}. */
     public static class Builder {
-        private final UwbRangingParameters mParameters;
+        private final UwbParameters mParameters;
         private final RequiredParam<DeviceRole> mDeviceRole = new RequiredParam<>();
         private final RequiredParam<com.android.ranging.uwb.backend.internal.UwbAddress>
                 mLocalAddress = new RequiredParam<>();
@@ -344,7 +344,7 @@ public class UwbConfig extends UwbRangingParameters implements TechnologyConfig 
         private final RequiredParam<UwbComplexChannel> mComplexChannel = new RequiredParam<>();
 
 
-        public Builder(@NonNull UwbRangingParameters parameters) {
+        public Builder(@NonNull UwbParameters parameters) {
             mParameters = parameters;
         }
 

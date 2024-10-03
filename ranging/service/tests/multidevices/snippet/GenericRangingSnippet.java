@@ -24,7 +24,7 @@ import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.uwb.UwbParameters;
 import android.util.Log;
 import android.uwb.UwbManager;
 
@@ -186,7 +186,7 @@ public class GenericRangingSnippet implements Snippet {
             }
         }
 
-        UwbRangingParameters.Builder uwbParamsBuilder = new UwbRangingParameters.Builder()
+        UwbParameters.Builder uwbParamsBuilder = new UwbParameters.Builder()
                 .setPeerAddresses(peerAddressesBuilder.build())
                 .setConfigId(j.getInt("configType"))
                 .setSessionId(j.getInt("sessionId"))
