@@ -17,7 +17,7 @@
 package com.android.server.ranging;
 
 import android.ranging.DataNotificationConfig;
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.uwb.UwbParameters;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -49,7 +49,7 @@ public class RangingParameters {
     private final Duration mNoUpdatedDataTimeout;
     private final DataNotificationConfig mDataNotificationConfig;
     private final FusionEngine.DataFuser mDataFuser;
-    private final UwbRangingParameters mUwbParameters;
+    private final UwbParameters mUwbParameters;
 
     private final CsParameters mCsParameters;
     private final UwbAddress mLocalUwbAddress;
@@ -109,7 +109,7 @@ public class RangingParameters {
     }
 
     /** @return ranging parameters for UWB, if they were provided */
-    public @Nullable UwbRangingParameters getUwbParameters() {
+    public @Nullable UwbParameters getUwbParameters() {
         return mUwbParameters;
     }
 
@@ -128,7 +128,7 @@ public class RangingParameters {
         private final RequiredParam<Duration> mNoUpdatedDataTimeout = new RequiredParam<>();
         private DataNotificationConfig mDataNotificationConfig = null;
         private FusionEngine.DataFuser mDataFuser = null;
-        private UwbRangingParameters mUwbParameters = null;
+        private UwbParameters mUwbParameters = null;
         private CsParameters mCsParameters = null;
         private UwbAddress mLocalUwbAddress = null;
 
@@ -181,7 +181,7 @@ public class RangingParameters {
          *
          * @param uwbParameters containing a configuration for UWB ranging.
          */
-        public Builder useUwb(UwbRangingParameters uwbParameters) {
+        public Builder useUwb(UwbParameters uwbParameters) {
             mUwbParameters = uwbParameters;
             return this;
         }

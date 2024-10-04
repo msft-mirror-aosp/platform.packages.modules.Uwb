@@ -40,7 +40,7 @@ import java.util.Objects;
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public class UwbRangingParameters implements Parcelable {
+public class UwbParameters implements Parcelable {
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
@@ -116,7 +116,7 @@ public class UwbRangingParameters implements Parcelable {
 
     private final boolean mIsAoaDisabled;
 
-    private UwbRangingParameters(Builder builder) {
+    private UwbParameters(Builder builder) {
         Preconditions.checkNotNull(builder.mConfigId,
                 "Missing required parameter config id");
         Preconditions.checkNotNull(builder.mPeerAddresses,
@@ -134,7 +134,7 @@ public class UwbRangingParameters implements Parcelable {
         mIsAoaDisabled = builder.mIsAoaDisabled;
     }
 
-    public UwbRangingParameters(UwbRangingParameters other) {
+    public UwbParameters(UwbParameters other) {
         mDeviceType = other.mDeviceType;
         mSessionId = other.mSessionId;
         mSubSessionId = other.mSubSessionId;
@@ -162,8 +162,8 @@ public class UwbRangingParameters implements Parcelable {
         private boolean mIsAoaDisabled = false;
 
         // Build method to create an instance of RangingConfiguration
-        public UwbRangingParameters build() {
-            return new UwbRangingParameters(this);
+        public UwbParameters build() {
+            return new UwbParameters(this);
         }
 
         public Builder setDeviceType(@DeviceType int type) {
@@ -224,7 +224,7 @@ public class UwbRangingParameters implements Parcelable {
         }
     }
 
-    protected UwbRangingParameters(Parcel in) {
+    protected UwbParameters(Parcel in) {
         mDeviceType = in.readInt();
         mSessionId = in.readInt();
         mSubSessionId = in.readInt();
@@ -276,16 +276,16 @@ public class UwbRangingParameters implements Parcelable {
         return 0;
     }
 
-    public static final Creator<UwbRangingParameters> CREATOR =
-            new Creator<UwbRangingParameters>() {
+    public static final Creator<UwbParameters> CREATOR =
+            new Creator<UwbParameters>() {
                 @Override
-                public UwbRangingParameters createFromParcel(Parcel in) {
-                    return new UwbRangingParameters(in);
+                public UwbParameters createFromParcel(Parcel in) {
+                    return new UwbParameters(in);
                 }
 
                 @Override
-                public UwbRangingParameters[] newArray(int size) {
-                    return new UwbRangingParameters[size];
+                public UwbParameters[] newArray(int size) {
+                    return new UwbParameters[size];
                 }
             };
 

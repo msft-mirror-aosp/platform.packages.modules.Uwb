@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.ranging.uwb.UwbComplexChannel;
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.uwb.UwbParameters;
 
 import androidx.test.filters.SmallTest;
 
@@ -78,10 +78,10 @@ public class UwbAdapterTest {
 
     private UwbConfig.Builder generateConfig() {
         return new UwbConfig.Builder(
-                new UwbRangingParameters.Builder()
-                        .setConfigId(UwbRangingParameters.ConfigId.UNICAST_DS_TWR)
+                new UwbParameters.Builder()
+                        .setConfigId(UwbParameters.ConfigId.UNICAST_DS_TWR)
                         .setPeerAddresses(ImmutableMap.of())
-                        .setRangingUpdateRate(UwbRangingParameters.RangingUpdateRate.NORMAL)
+                        .setRangingUpdateRate(UwbParameters.RangingUpdateRate.NORMAL)
                         .build()
         )
                 .setCountryCode("US")

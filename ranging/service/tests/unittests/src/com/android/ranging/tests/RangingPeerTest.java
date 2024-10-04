@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.ranging.uwb.UwbComplexChannel;
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.uwb.UwbParameters;
 
 import androidx.test.filters.SmallTest;
 
@@ -115,14 +115,14 @@ public class RangingPeerTest {
                 .build();
     }
 
-    private UwbRangingParameters.Builder getUwbParams() {
-        return new UwbRangingParameters.Builder()
-                .setConfigId(UwbRangingParameters.ConfigId.UNICAST_DS_TWR)
+    private UwbParameters.Builder getUwbParams() {
+        return new UwbParameters.Builder()
+                .setConfigId(UwbParameters.ConfigId.UNICAST_DS_TWR)
                 .setPeerAddresses(ImmutableMap.of())
-                .setRangingUpdateRate(UwbRangingParameters.RangingUpdateRate.NORMAL);
+                .setRangingUpdateRate(UwbParameters.RangingUpdateRate.NORMAL);
     }
 
-    private UwbConfig.Builder getUwbConfig(UwbRangingParameters parameters) {
+    private UwbConfig.Builder getUwbConfig(UwbParameters parameters) {
         return new UwbConfig.Builder(parameters)
                 .setCountryCode("US")
                 .setDeviceRole(DeviceRole.INITIATOR)
