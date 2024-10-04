@@ -38,7 +38,8 @@ public class RangingParameters implements Parcelable {
     }
 
     protected RangingParameters(Parcel in) {
-        mUwbRangingParameters = in.readParcelable(UwbRangingParameters.class.getClassLoader());
+        mUwbRangingParameters = in.readParcelable(
+                UwbRangingParameters.class.getClassLoader(), UwbRangingParameters.class);
     }
 
     public static final Creator<RangingParameters> CREATOR = new Creator<RangingParameters>() {

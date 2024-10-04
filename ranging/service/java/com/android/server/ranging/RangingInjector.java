@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 
-package android.server.ranging;
+package com.android.server.ranging;
 
 import android.annotation.NonNull;
 import android.content.Context;
-
-import com.android.server.ranging.RangingServiceManager;
 
 public class RangingInjector {
 
