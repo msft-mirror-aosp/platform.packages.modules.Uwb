@@ -20,6 +20,11 @@ import android.app.UiAutomation;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.os.RemoteException;
+import android.ranging.DataNotificationConfig;
+import android.ranging.RangingDevice;
+import android.ranging.uwb.UwbAddress;
+import android.ranging.uwb.UwbComplexChannel;
+import android.ranging.uwb.UwbRangingParameters;
 import android.util.Log;
 import android.uwb.UwbManager;
 
@@ -28,18 +33,15 @@ import androidx.annotation.Nullable;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.android.ranging.uwb.backend.internal.Utils;
-import com.android.ranging.uwb.backend.internal.UwbAddress;
-import com.android.ranging.uwb.backend.internal.UwbComplexChannel;
-import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
+import com.android.server.ranging.RangingConfig;
 import com.android.server.ranging.RangingData;
+import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingParameters;
 import com.android.server.ranging.RangingParameters.DeviceRole;
-import com.android.server.ranging.RangingPeer;
 import com.android.server.ranging.RangingSession;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.uwb.UwbAdapter;
-import com.android.server.ranging.uwb.UwbParameters;
 
 import com.google.android.mobly.snippet.Snippet;
 import com.google.android.mobly.snippet.event.EventCache;
@@ -47,7 +49,6 @@ import com.google.android.mobly.snippet.event.SnippetEvent;
 import com.google.android.mobly.snippet.rpc.AsyncRpc;
 import com.google.android.mobly.snippet.rpc.Rpc;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -59,10 +60,8 @@ import org.json.JSONObject;
 
 import java.lang.reflect.Method;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -177,34 +176,26 @@ public class GenericRangingSnippet implements Snippet {
         if (j == null) {
             return null;
         }
-        List<UwbAddress> peerAddresses = new ArrayList<>();
+        ImmutableMap.Builder<RangingDevice, UwbAddress> peerAddressesBuilder =
+                new ImmutableMap.Builder<>();
         if (j.has("peerAddresses")) {
             JSONArray jArray = j.getJSONArray("peerAddresses");
-            UwbAddress[] destinationUwbAddresses = new UwbAddress[jArray.length()];
             for (int i = 0; i < jArray.length(); i++) {
-                destinationUwbAddresses[i] = UwbAddress.fromBytes(
-                        convertJSONArrayToByteArray(jArray.getJSONArray(i)));
+                peerAddressesBuilder.put(new RangingDevice(UUID.randomUUID()),
+                        UwbAddress.fromBytes(convertJSONArrayToByteArray(jArray.getJSONArray(i))));
             }
-            peerAddresses = Arrays.asList(destinationUwbAddresses);
         }
-        UwbComplexChannel uwbComplexChannel = new UwbComplexChannel(
-                Utils.channelForTesting, Utils.preambleIndexForTesting);
-        UwbRangeDataNtfConfig rangeDataNtfConfig = new UwbRangeDataNtfConfig.Builder()
-                .setRangeDataConfigType(j.getInt("rangeDataConfigType"))
-                .build();
 
-        UwbParameters.Builder uwbParamsBuilder = new UwbParameters.Builder()
-                .setCountryCode("US")
-                .setLocalAddress(UwbAddress.fromBytes(
-                        convertJSONArrayToByteArray(j.getJSONArray("deviceAddress"))))
-                .setPeerAddresses(ImmutableSet.copyOf(peerAddresses))
-                .setConfigType(j.getInt("configType"))
+        UwbRangingParameters.Builder uwbParamsBuilder = new UwbRangingParameters.Builder()
+                .setPeerAddresses(peerAddressesBuilder.build())
+                .setConfigId(j.getInt("configType"))
                 .setSessionId(j.getInt("sessionId"))
                 .setSubSessionId(j.getInt("subSessionId"))
-                .setSessionKeyInfo(convertJSONArrayToByteArray(j.getJSONArray("sessionKeyInfo")))
-                .setComplexChannel(uwbComplexChannel)
-                .setUpdateRateType(j.getInt("updateRateType"))
-                .setRangeDataNtfConfig(rangeDataNtfConfig)
+                .setSessionKeyInfo(
+                        convertJSONArrayToByteArray(j.getJSONArray("sessionKeyInfo")))
+                .setComplexChannel(new UwbComplexChannel(
+                        Utils.channelForTesting, Utils.preambleIndexForTesting))
+                .setRangingUpdateRate(j.getInt("updateRateType"))
                 .setSlotDurationMs(j.getInt("slotDurationMillis"))
                 .setAoaDisabled(j.getBoolean("isAoaDisabled"));
 
@@ -213,12 +204,20 @@ public class GenericRangingSnippet implements Snippet {
                     convertJSONArrayToByteArray(j.getJSONArray("subSessionKeyInfo")));
         }
 
+        DataNotificationConfig dataNotificationConfig = new DataNotificationConfig.Builder()
+                .setNotificationConfig(j.getInt("rangeDataConfigType"))
+                .build();
+
         DeviceRole role = DeviceRole.ROLES.get(j.getInt("deviceRole"));
         return new RangingParameters.Builder(role)
                 .setNoInitialDataTimeout(Duration.ofSeconds(3))
                 .setNoUpdatedDataTimeout(Duration.ofSeconds(2))
+                .setDataNotificationConfig(dataNotificationConfig)
                 .useUwb(uwbParamsBuilder.build())
                 .useSensorFusion(new DataFusers.PreferentialDataFuser(RangingTechnology.UWB))
+                .setLocalUwbAddressForTesting(
+                        com.android.ranging.uwb.backend.internal.UwbAddress.fromBytes(
+                                convertJSONArrayToByteArray(j.getJSONArray("deviceAddress"))))
                 .build();
     }
 
@@ -240,25 +239,18 @@ public class GenericRangingSnippet implements Snippet {
     @AsyncRpc(description = "Start UWB ranging session")
     public void startUwbRanging(String callbackId, JSONObject config)
             throws JSONException, RemoteException {
-        UwbAdapter uwbAdapter = new UwbAdapter(
-                mContext, mExecutor, DeviceRole.ROLES.get(config.getInt("deviceRole")));
-        uwbAdapter.setLocalAddressForTesting(UwbAddress.fromBytes(
-                convertJSONArrayToByteArray(config.getJSONArray("deviceAddress"))));
-
         ListeningExecutorService adapterExecutor = MoreExecutors.listeningDecorator(
                 Executors.newSingleThreadExecutor());
         ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor();
 
-        RangingPeer peer = new RangingPeer(mContext, adapterExecutor, timeoutExecutor);
-        peer.useAdapterForTesting(RangingTechnology.UWB, uwbAdapter);
-
-        UUID peerId = UUID.randomUUID();
         RangingSession session = new RangingSession(mContext, adapterExecutor, timeoutExecutor);
-        session.usePeerForTesting(peerId, peer);
 
-        ImmutableMap<UUID, RangingParameters> parameters =
-                new ImmutableMap.Builder<UUID, RangingParameters>()
-                        .put(peerId, generateRangingParameters(config))
+        ImmutableMap<UUID, RangingConfig> parameters =
+                new ImmutableMap.Builder<UUID, RangingConfig>()
+                        .put(UUID.randomUUID(),
+                                new RangingConfig(new RangingInjector(mContext),
+                                        generateRangingParameters(config))
+                        )
                         .build();
         GenericRangingCallback callback =
                 new GenericRangingCallback(callbackId, Event.EventAll.getType());

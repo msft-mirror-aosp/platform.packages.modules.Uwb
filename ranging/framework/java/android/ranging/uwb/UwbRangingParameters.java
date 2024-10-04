@@ -24,11 +24,15 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.ranging.RangingDevice;
 
+import androidx.annotation.IntRange;
+
 import com.android.ranging.flags.Flags;
+
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -39,189 +43,229 @@ import java.util.Objects;
 public class UwbRangingParameters implements Parcelable {
 
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef(value = {
-            CONTROLEE,
-            CONTROLLER})
-    @interface DeviceRole {}
-    public static final int CONTROLEE = 1;
-    public static final int CONTROLLER = 2;
+    @IntDef({
+            DeviceType.CONTROLEE,
+            DeviceType.CONTROLLER
+    })
+    public @interface DeviceType {
+        int CONTROLEE = 0;
+        int CONTROLLER = 1;
+    }
 
-    @DeviceRole
-    private final int mDeviceRole;
+    private final @DeviceType int mDeviceType;
 
     private final int mSessionId;
+
     private final int mSubSessionId;
 
-    private final int mUwbConfigId;
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            ConfigId.UNICAST_DS_TWR,
+            ConfigId.MULTICAST_DS_TWR,
+            ConfigId.UNICAST_DS_TWR_NO_AOA,
+            ConfigId.PROVISIONED_UNICAST_DS_TWR,
+            ConfigId.PROVISIONED_MULTICAST_DS_TWR,
+            ConfigId.PROVISIONED_UNICAST_DS_TWR_NO_AOA,
+            ConfigId.PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
+    })
+    public @interface ConfigId {
+        /**
+         * FiRa-defined unicast {@code STATIC STS DS-TWR} ranging, deferred mode, ranging interval
+         * 240 ms. Typical use case: device tracking tags.
+         */
+        int UNICAST_DS_TWR = 1;
+        int MULTICAST_DS_TWR = 2;
+        /** Same as {@code CONFIG_ID_1}, except Angle-of-arrival (AoA) data is not reported. */
+        int UNICAST_DS_TWR_NO_AOA = 3;
+        /** Same as {@code CONFIG_ID_1}, except P-STS security mode is enabled. */
+        int PROVISIONED_UNICAST_DS_TWR = 4;
+        /** Same as {@code CONFIG_ID_2}, except P-STS security mode is enabled. */
+        int PROVISIONED_MULTICAST_DS_TWR = 5;
+        /** Same as {@code CONFIG_ID_3}, except P-STS security mode is enabled. */
+        int PROVISIONED_UNICAST_DS_TWR_NO_AOA = 6;
+        /** Same as {@code CONFIG_ID_2}, except P-STS individual controlee key mode is enabled. */
+        int PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 7;
+    }
+
+    private final @ConfigId int mConfigId;
+
     private final byte[] mSessionKeyInfo;
+
     private final byte[] mSubSessionKeyInfo;
 
-    @NonNull
-    private final UwbComplexChannel mUwbComplexChannel;
+    private final UwbComplexChannel mComplexChannel;
 
-    @NonNull
-    private final Map<RangingDevice, UwbAddress> mPeerAddressMap;
+    private final ImmutableMap<RangingDevice, UwbAddress> mPeerAddresses;
 
-    private final int mRangingUpdateRate;
-    @Nullable
-    private final UwbRangeDataNtfConfig mUwbRangeDataNtfConfig;
 
-    private final int mSlotDuration;
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            RangingUpdateRate.NORMAL,
+            RangingUpdateRate.INFREQUENT,
+            RangingUpdateRate.FAST,
+    })
+    public @interface RangingUpdateRate {
+        int NORMAL = 1;
+        int INFREQUENT = 2;
+        int FAST = 3;
+    }
+
+    private final @RangingUpdateRate int mRangingUpdateRate;
+
+    private final @IntRange(from = 1, to = 2) int mSlotDurationMs;
 
     private final boolean mIsAoaDisabled;
 
     private UwbRangingParameters(Builder builder) {
-        this.mDeviceRole = builder.mDeviceRole;
-        this.mSessionId = builder.mSessionId;
-        this.mSubSessionId = builder.mSubSessionId;
-        this.mUwbConfigId = builder.mUwbConfigId;
-        this.mSessionKeyInfo = builder.mSessionKeyInfo;
-        this.mSubSessionKeyInfo = builder.mSubSessionKeyInfo;
-        this.mUwbComplexChannel = builder.mUwbComplexChannel;
-        this.mPeerAddressMap = builder.mPeerAddressMap;
-        this.mRangingUpdateRate = builder.mRangingUpdateRate;
-        this.mUwbRangeDataNtfConfig = builder.mUwbRangeDataNtfConfig;
-        this.mSlotDuration = builder.mSlotDuration;
-        this.mIsAoaDisabled = builder.mIsAoaDisabled;
+        Preconditions.checkNotNull(builder.mConfigId,
+                "Missing required parameter config id");
+        Preconditions.checkNotNull(builder.mPeerAddresses,
+                "Missing required parameter peer addresses");
+        mDeviceType = builder.mDeviceType;
+        mSessionId = builder.mSessionId;
+        mSubSessionId = builder.mSubSessionId;
+        mConfigId = builder.mConfigId;
+        mSessionKeyInfo = builder.mSessionKeyInfo;
+        mSubSessionKeyInfo = builder.mSubSessionKeyInfo;
+        mComplexChannel = builder.mComplexChannel;
+        mPeerAddresses = builder.mPeerAddresses;
+        mRangingUpdateRate = builder.mRangingUpdateRate;
+        mSlotDurationMs = builder.mSlotDurationMs;
+        mIsAoaDisabled = builder.mIsAoaDisabled;
     }
 
+    public UwbRangingParameters(UwbRangingParameters other) {
+        mDeviceType = other.mDeviceType;
+        mSessionId = other.mSessionId;
+        mSubSessionId = other.mSubSessionId;
+        mConfigId = other.mConfigId;
+        mSessionKeyInfo = other.mSessionKeyInfo;
+        mSubSessionKeyInfo = other.mSubSessionKeyInfo;
+        mComplexChannel = other.mComplexChannel;
+        mPeerAddresses = other.mPeerAddresses;
+        mRangingUpdateRate = other.mRangingUpdateRate;
+        mSlotDurationMs = other.mSlotDurationMs;
+        mIsAoaDisabled = other.mIsAoaDisabled;
+    }
 
-    // Static Builder class
     public static class Builder {
-        private int mDeviceRole = CONTROLEE;
+        private int mDeviceType = DeviceType.CONTROLEE;
         private int mSessionId;
         private int mSubSessionId;
-
-        private int mUwbConfigId;
-        private byte[] mSessionKeyInfo;
-        private byte[] mSubSessionKeyInfo;
-
-        @NonNull
-        private UwbComplexChannel mUwbComplexChannel;
-
-        @NonNull
-        private Map<RangingDevice, UwbAddress> mPeerAddressMap;
-
-        private int mRangingUpdateRate;
-        @Nullable
-        private android.ranging.uwb.UwbRangeDataNtfConfig mUwbRangeDataNtfConfig;
-
-        private int mSlotDuration;
-
-        private boolean mIsAoaDisabled;
-
-        public Builder setDeviceRole(@DeviceRole int deviceRole) {
-            this.mDeviceRole = deviceRole;
-            return this;
-        }
-
-        public Builder sessionId(int sessionId) {
-            this.mSessionId = sessionId;
-            return this;
-        }
-
-        public Builder subSessionId(int subSessionId) {
-            this.mSubSessionId = subSessionId;
-            return this;
-        }
-
-        public Builder uwbConfigId(int uwbConfigId) {
-            this.mUwbConfigId = uwbConfigId;
-            return this;
-        }
-
-        public Builder sessionKeyInfo(byte[] sessionKeyInfo) {
-            this.mSessionKeyInfo = sessionKeyInfo;
-            return this;
-        }
-
-        public Builder subSessionKeyInfo(byte[] subSessionKeyInfo) {
-            this.mSubSessionKeyInfo = subSessionKeyInfo;
-            return this;
-        }
-
-        public Builder complexChannel(
-                @NonNull android.ranging.uwb.UwbComplexChannel complexChannel) {
-            this.mUwbComplexChannel = complexChannel;
-            return this;
-        }
-
-        public Builder peerAddresses(
-                @NonNull Map<RangingDevice, android.ranging.uwb.UwbAddress> peerAddresses) {
-            this.mPeerAddressMap = peerAddresses;
-            return this;
-        }
-
-        public Builder rangingUpdateRate(int rangingUpdateRate) {
-            this.mRangingUpdateRate = rangingUpdateRate;
-            return this;
-        }
-
-        public Builder uwbRangeDataNtfConfig(
-                @Nullable android.ranging.uwb.UwbRangeDataNtfConfig uwbRangeDataNtfConfig) {
-            this.mUwbRangeDataNtfConfig = uwbRangeDataNtfConfig;
-            return this;
-        }
-
-        public Builder slotDuration(int slotDuration) {
-            this.mSlotDuration = slotDuration;
-            return this;
-        }
-
-        public Builder isAoaDisabled(boolean isAoaDisabled) {
-            this.mIsAoaDisabled = isAoaDisabled;
-            return this;
-        }
+        private Integer mConfigId = null;
+        private byte[] mSessionKeyInfo = null;
+        private byte[] mSubSessionKeyInfo = null;
+        private UwbComplexChannel mComplexChannel;
+        private ImmutableMap<RangingDevice, UwbAddress> mPeerAddresses = null;
+        private @RangingUpdateRate int mRangingUpdateRate;
+        private int mSlotDurationMs = 1;
+        private boolean mIsAoaDisabled = false;
 
         // Build method to create an instance of RangingConfiguration
         public UwbRangingParameters build() {
             return new UwbRangingParameters(this);
         }
+
+        public Builder setDeviceType(@DeviceType int type) {
+            mDeviceType = type;
+            return this;
+        }
+
+        public Builder setPeerAddresses(
+                @NonNull ImmutableMap<RangingDevice, UwbAddress> addresses
+        ) {
+            mPeerAddresses = addresses;
+            return this;
+        }
+
+        public Builder setConfigId(@ConfigId int config) {
+            mConfigId = config;
+            return this;
+        }
+
+        public Builder setSessionId(int sessionId) {
+            mSessionId = sessionId;
+            return this;
+        }
+
+        public Builder setSubSessionId(int subSessionId) {
+            mSubSessionId = subSessionId;
+            return this;
+        }
+
+        public Builder setSessionKeyInfo(byte[] sessionKeyInfo) {
+            mSessionKeyInfo = sessionKeyInfo;
+            return this;
+        }
+
+        public Builder setSubSessionKeyInfo(byte[] subSessionKeyInfo) {
+            mSubSessionKeyInfo = subSessionKeyInfo;
+            return this;
+        }
+
+        public Builder setComplexChannel(@Nullable UwbComplexChannel complexChannel) {
+            mComplexChannel = complexChannel;
+            return this;
+        }
+
+        public Builder setRangingUpdateRate(@RangingUpdateRate int rate) {
+            mRangingUpdateRate = rate;
+            return this;
+        }
+
+        public Builder setSlotDurationMs(@IntRange(from = 1, to = 2) int durationMs) {
+            mSlotDurationMs = durationMs;
+            return this;
+        }
+
+        public Builder setAoaDisabled(boolean isAoaDisabled) {
+            mIsAoaDisabled = isAoaDisabled;
+            return this;
+        }
     }
 
     protected UwbRangingParameters(Parcel in) {
-        mDeviceRole = in.readInt();
+        mDeviceType = in.readInt();
         mSessionId = in.readInt();
         mSubSessionId = in.readInt();
-        mUwbConfigId = in.readInt();
+        mConfigId = in.readInt();
         mSessionKeyInfo = in.readBlob();
         mSubSessionKeyInfo = in.readBlob();
-        mUwbComplexChannel = Objects.requireNonNull(
+        mComplexChannel = Objects.requireNonNull(
                 in.readParcelable(
                         UwbComplexChannel.class.getClassLoader(), UwbComplexChannel.class));
         mRangingUpdateRate = in.readInt();
-        mUwbRangeDataNtfConfig = in.readParcelable(
-                UwbRangeDataNtfConfig.class.getClassLoader(), UwbRangeDataNtfConfig.class);
-        mSlotDuration = in.readInt();
+        mSlotDurationMs = in.readInt();
         mIsAoaDisabled = in.readByte() != 0;
+
         // Deserialize peerAddresses (Map<RangingDevice, UwbAddress>)
-        int size = in.readInt();  // Get size of the Map
-        mPeerAddressMap = new HashMap<>();
-        for (int i = 0; i < size; i++) {
+        int numPeers = in.readInt();
+        ImmutableMap.Builder<RangingDevice, UwbAddress> peers = new ImmutableMap.Builder<>();
+        for (int i = 0; i < numPeers; i++) {
             RangingDevice device = Objects.requireNonNull(
                     in.readParcelable(RangingDevice.class.getClassLoader(), RangingDevice.class));
             UwbAddress address = Objects.requireNonNull(
                     in.readParcelable(UwbAddress.class.getClassLoader(), UwbAddress.class));
-            mPeerAddressMap.put(device, address);
+            peers.put(device, address);
         }
+        mPeerAddresses = peers.build();
     }
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeInt(mDeviceRole);
+        dest.writeInt(mDeviceType);
         dest.writeInt(mSessionId);
         dest.writeInt(mSubSessionId);
-        dest.writeInt(mUwbConfigId);
+        dest.writeInt(mConfigId);
         dest.writeBlob(mSessionKeyInfo);
         dest.writeBlob(mSubSessionKeyInfo);
-        dest.writeParcelable(mUwbComplexChannel, flags);
+        dest.writeParcelable(mComplexChannel, flags);
         dest.writeInt(mRangingUpdateRate);
-        dest.writeParcelable(mUwbRangeDataNtfConfig, flags);
-        dest.writeInt(mSlotDuration);
+        dest.writeInt(mSlotDurationMs);
         dest.writeByte((byte) (mIsAoaDisabled ? 1 : 0));
         // Serialize peerAddresses (Map<RangingDevice, UwbAddress>)
-        dest.writeInt(mPeerAddressMap.size());  // Write the size of the Map
-        for (Map.Entry<RangingDevice, UwbAddress> entry : mPeerAddressMap.entrySet()) {
+        dest.writeInt(mPeerAddresses.size());  // Write the size of the Map
+        for (Map.Entry<RangingDevice, UwbAddress> entry : mPeerAddresses.entrySet()) {
             dest.writeParcelable(entry.getKey(), flags);  // Write each RangingDevice
             dest.writeParcelable(entry.getValue(), flags);  // Write each UwbAddress
         }
@@ -245,10 +289,11 @@ public class UwbRangingParameters implements Parcelable {
                 }
             };
 
-    @DeviceRole
-    public int getDeviceRole() {
-        return  mDeviceRole;
+
+    public @DeviceType int getDeviceType() {
+        return mDeviceType;
     }
+
     public int getSessionId() {
         return mSessionId;
     }
@@ -257,39 +302,34 @@ public class UwbRangingParameters implements Parcelable {
         return mSubSessionId;
     }
 
-    public int getUwbConfigId() {
-        return mUwbConfigId;
+    public @ConfigId int getConfigId() {
+        return mConfigId;
     }
 
-    public byte[] getSessionKeyInfo() {
+    public @Nullable byte[] getSessionKeyInfo() {
         return mSessionKeyInfo;
     }
 
-    public byte[] getSubSessionKeyInfo() {
+    public @Nullable byte[] getSubSessionKeyInfo() {
         return mSubSessionKeyInfo;
     }
 
-    @NonNull
-    public UwbComplexChannel getUwbComplexChannel() {
-        return mUwbComplexChannel;
+
+    public @Nullable UwbComplexChannel getComplexChannel() {
+        return mComplexChannel;
     }
 
-    @NonNull
-    public Map<RangingDevice, UwbAddress> getPeerAddresses() {
-        return mPeerAddressMap;
+
+    public @NonNull ImmutableMap<RangingDevice, UwbAddress> getPeerAddresses() {
+        return mPeerAddresses;
     }
 
-    public int getRangingUpdateRate() {
+    public @RangingUpdateRate int getRangingUpdateRate() {
         return mRangingUpdateRate;
     }
 
-    @Nullable
-    public UwbRangeDataNtfConfig getUwbRangeDataNtfConfig() {
-        return mUwbRangeDataNtfConfig;
-    }
-
-    public int getSlotDuration() {
-        return mSlotDuration;
+    public @IntRange(from = 1, to = 2) int getSlotDurationMs() {
+        return mSlotDurationMs;
     }
 
     public boolean isAoaDisabled() {
