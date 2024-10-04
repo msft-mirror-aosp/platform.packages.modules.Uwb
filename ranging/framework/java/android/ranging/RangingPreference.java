@@ -37,7 +37,8 @@ public class RangingPreference implements Parcelable {
     }
 
     protected RangingPreference(Parcel in) {
-        mRangingParameters = in.readParcelable(RangingParameters.class.getClassLoader());
+        mRangingParameters = in.readParcelable(
+                RangingParameters.class.getClassLoader(), RangingParameters.class);
     }
 
     public static final Creator<RangingPreference> CREATOR = new Creator<RangingPreference>() {

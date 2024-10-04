@@ -17,7 +17,6 @@
 package com.android.server.ranging;
 
 import android.content.Context;
-import android.server.ranging.RangingInjector;
 import android.util.Log;
 
 import com.android.server.SystemService;
