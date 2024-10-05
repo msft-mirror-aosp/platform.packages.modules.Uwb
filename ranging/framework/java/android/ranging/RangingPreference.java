@@ -21,6 +21,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.android.ranging.flags.Flags;
 
@@ -32,13 +33,18 @@ public class RangingPreference implements Parcelable {
 
     private final RangingParameters mRangingParameters;
 
+    private final DataNotificationConfig mDataNotificationConfig;
+
     private RangingPreference(Builder builder) {
         mRangingParameters = builder.mRangingParameters;
+        mDataNotificationConfig = builder.mDataNotificationConfig;
     }
 
     protected RangingPreference(Parcel in) {
         mRangingParameters = in.readParcelable(
                 RangingParameters.class.getClassLoader(), RangingParameters.class);
+        mDataNotificationConfig = in.readParcelable(
+                DataNotificationConfig.class.getClassLoader(), DataNotificationConfig.class);
     }
 
     public static final Creator<RangingPreference> CREATOR = new Creator<RangingPreference>() {
@@ -57,6 +63,10 @@ public class RangingPreference implements Parcelable {
         return mRangingParameters;
     }
 
+    public @Nullable DataNotificationConfig getNotificationConfig() {
+        return mDataNotificationConfig;
+    }
+
     @Override
     public int describeContents() {
         return 0;
@@ -69,11 +79,16 @@ public class RangingPreference implements Parcelable {
 
     public static class Builder {
         private RangingParameters mRangingParameters;
+        private DataNotificationConfig mDataNotificationConfig;
 
         public Builder setRangingParameters(RangingParameters rangingParameters) {
             mRangingParameters = rangingParameters;
             return this;
         }
-    }
 
+        public Builder setDataNotificationConfig(DataNotificationConfig config) {
+            mDataNotificationConfig = config;
+            return this;
+        }
+    }
 }

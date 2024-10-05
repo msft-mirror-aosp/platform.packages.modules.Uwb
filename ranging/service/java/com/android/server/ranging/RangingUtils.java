@@ -18,8 +18,6 @@ package com.android.server.ranging;
 
 import static java.lang.Math.min;
 
-import androidx.annotation.NonNull;
-
 import com.google.common.collect.ImmutableList;
 
 import java.nio.ByteBuffer;
@@ -127,40 +125,5 @@ public class RangingUtils {
             buffer.put(byteArray).rewind();
             return buffer.getInt();
         }
-
-        public static int toOobDeviceRole(@NonNull RangingParameters.DeviceRole role) {
-            switch (role) {
-                case INITIATOR: return 0x01;
-                case RESPONDER: return 0x02;
-                default: return 0x00;
-            }
-        }
-
-        public static @NonNull RangingParameters.DeviceRole fromOobDeviceRole(int role) {
-            switch (role) {
-                case 0x01: return RangingParameters.DeviceRole.INITIATOR;
-                case 0x02: return RangingParameters.DeviceRole.RESPONDER;
-                default: throw new IllegalArgumentException(
-                        "Unknown device role with value " + role);
-            }
-        }
-
-        public static int toOobDeviceType(@NonNull RangingParameters.DeviceRole role) {
-            switch (role) {
-                case RESPONDER: return 0x02;
-                case INITIATOR: return 0x01;
-                default: return 0x00;
-            }
-        }
-
-        public static @NonNull RangingParameters.DeviceRole fromOobDeviceType(int type) {
-            switch (type) {
-                case 0x01: return RangingParameters.DeviceRole.INITIATOR;
-                case 0x02: return RangingParameters.DeviceRole.RESPONDER;
-                default: throw new IllegalArgumentException(
-                        "Unknown device type with value " + type);
-            }
-        }
-
     }
 }
