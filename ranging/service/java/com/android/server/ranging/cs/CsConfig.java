@@ -14,25 +14,12 @@
  * limitations under the License.
  */
 
-package com.android.server.ranging.uwb;
+package com.android.server.ranging.cs;
 
-/** UWB Device Mode, whether it's a controller or a controlee. */
-public enum UwbDeviceMode {
-    UNKNOWN(0),
-    CONTROLLER(1),
-    CONTROLEE(2);
+import com.android.server.ranging.RangingConfig.TechnologyConfig;
 
-    private final int mValue;
-
-    UwbDeviceMode(int value) {
-        this.mValue = value;
-    }
-
-    public int getValue() {
-        return mValue;
-    }
-
-    public static UwbDeviceMode fromValue(int value) {
-        return value < 0 || value > 2 ? UNKNOWN : UwbDeviceMode.values()[value];
+public class CsConfig extends CsParameters implements TechnologyConfig {
+    public CsConfig() {
+        throw new UnsupportedOperationException("Not implemented!");
     }
 }
