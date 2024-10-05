@@ -26,11 +26,11 @@ public class RangingInjector {
     private final Context mContext;
     private final RangingServiceManager mRangingServiceManager;
 
-    private final RangingCapabilitiesProvider mRangingCapabilitiesProvider;
+    private final AdapterProvider mAdapterProvider;
 
     public RangingInjector(@NonNull Context context) {
         mContext = context;
-        mRangingCapabilitiesProvider = new RangingCapabilitiesProvider(this);
+        mAdapterProvider = new AdapterProvider(this);
         mRangingServiceManager = new RangingServiceManager(this);
     }
 
@@ -38,8 +38,8 @@ public class RangingInjector {
         return mContext;
     }
 
-    public RangingCapabilitiesProvider getRangingCapabilitiesProvider() {
-        return mRangingCapabilitiesProvider;
+    public AdapterProvider getAdapterProvider() {
+        return mAdapterProvider;
     }
 
     public RangingServiceManager getRangingServiceManager() {
