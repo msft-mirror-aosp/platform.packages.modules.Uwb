@@ -17,13 +17,13 @@
 package com.android.server.ranging;
 
 import android.annotation.NonNull;
+import android.content.AttributionSource;
 import android.content.Context;
 import android.ranging.IRangingAdapter;
 import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
-import android.server.ranging.RangingInjector;
 
 public class RangingServiceImpl extends IRangingAdapter.Stub {
 
@@ -42,10 +42,11 @@ public class RangingServiceImpl extends IRangingAdapter.Stub {
     }
 
     @Override
-    public void startRanging(SessionHandle sessionHandle, RangingPreference rangingPreference,
+    public void startRanging(AttributionSource attributionSource, SessionHandle sessionHandle,
+            RangingPreference rangingPreference,
                IRangingCallbacks callbacks) {
-        mRangingInjector.getRangingServiceManager().startRanging(sessionHandle, rangingPreference,
-                callbacks);
+        mRangingInjector.getRangingServiceManager().startRanging(attributionSource, sessionHandle,
+                rangingPreference, callbacks);
     }
 
     @Override
