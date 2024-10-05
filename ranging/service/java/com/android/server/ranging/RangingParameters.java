@@ -16,24 +16,24 @@
 
 package com.android.server.ranging;
 
-import androidx.annotation.NonNull;
+import android.ranging.DataNotificationConfig;
+import android.ranging.uwb.UwbParameters;
 
-import com.android.server.ranging.RangingAdapter.TechnologyConfig;
-import com.android.server.ranging.cs.CsConfig;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
+
+import com.android.ranging.uwb.backend.internal.UwbAddress;
 import com.android.server.ranging.cs.CsParameters;
 import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.fusion.FusionEngine;
-import com.android.server.ranging.uwb.UwbConfig;
-import com.android.server.ranging.uwb.UwbParameters;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.uwb.support.base.RequiredParam;
 
 import java.time.Duration;
-import java.util.Optional;
 
-/** Parameters for a generic ranging session. */
+/** Framework-configurable parameters for a ranging session. */
 public class RangingParameters {
     public enum DeviceRole {
         RESPONDER,
@@ -47,28 +47,33 @@ public class RangingParameters {
     private final DeviceRole mDeviceRole;
     private final Duration mNoInitialDataTimeout;
     private final Duration mNoUpdatedDataTimeout;
+    private final DataNotificationConfig mDataNotificationConfig;
     private final FusionEngine.DataFuser mDataFuser;
-    private final ImmutableMap<RangingTechnology, TechnologyConfig> mTechConfigs;
+    private final UwbParameters mUwbParameters;
+
+    private final CsParameters mCsParameters;
+    private final UwbAddress mLocalUwbAddress;
 
     private RangingParameters(@NonNull Builder builder) {
         mDeviceRole = builder.mDeviceRole;
         mNoInitialDataTimeout = builder.mNoInitialDataTimeout.get();
         mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout.get();
+        mDataNotificationConfig = builder.mDataNotificationConfig;
         mDataFuser = builder.mDataFuser;
+        mUwbParameters = builder.mUwbParameters;
+        mCsParameters = builder.mCsParameters;
+        mLocalUwbAddress = builder.mLocalUwbAddress;
+    }
 
-        ImmutableMap.Builder<RangingTechnology, TechnologyConfig> techConfigs =
-                new ImmutableMap.Builder<>();
-        if (builder.mUwbParameters != null) {
-            techConfigs.put(RangingTechnology.UWB,
-                    new UwbConfig.Builder()
-                            .setDeviceRole(mDeviceRole)
-                            .setParameters(builder.mUwbParameters)
-                            .build());
-        }
-        if (builder.mCsParameters != null) {
-            techConfigs.put(RangingTechnology.CS, new CsConfig());
-        }
-        mTechConfigs = techConfigs.build();
+    public RangingParameters(@NonNull RangingParameters other) {
+        mDeviceRole = other.mDeviceRole;
+        mNoInitialDataTimeout = other.mNoInitialDataTimeout;
+        mNoUpdatedDataTimeout = other.mNoUpdatedDataTimeout;
+        mDataNotificationConfig = other.mDataNotificationConfig;
+        mDataFuser = other.mDataFuser;
+        mUwbParameters = other.mUwbParameters;
+        mCsParameters = other.mCsParameters;
+        mLocalUwbAddress = other.mLocalUwbAddress;
     }
 
     /** @return The device's role within the session. */
@@ -91,25 +96,41 @@ public class RangingParameters {
         return mNoUpdatedDataTimeout;
     }
 
+    /** @return configuration for when ranging data should be reported based on proximity. */
+    public @NonNull DataNotificationConfig getDataNotificationConfig() {
+        return mDataNotificationConfig;
+    }
+
     /**
      * @return the configured data fuser, or {@code Optional.empty()} if fusion wasn't set.
      */
-    public Optional<FusionEngine.DataFuser> getDataFuser() {
-        return Optional.ofNullable(mDataFuser);
+    public @Nullable FusionEngine.DataFuser getDataFuser() {
+        return mDataFuser;
     }
 
-    /** @return A map between technologies and their corresponding generic parameters object. */
-    public @NonNull ImmutableMap<RangingTechnology, TechnologyConfig> getTechnologyConfigs() {
-        return mTechConfigs;
+    /** @return ranging parameters for UWB, if they were provided */
+    public @Nullable UwbParameters getUwbParameters() {
+        return mUwbParameters;
+    }
+
+    /** @return ranging parameters for CS, if they were provided */
+    public @Nullable CsParameters getCsParameters() {
+        return mCsParameters;
+    }
+
+    public @Nullable UwbAddress getLocalUwbAddressSetForTesting() {
+        return mLocalUwbAddress;
     }
 
     public static class Builder {
         private final DeviceRole mDeviceRole;
         private final RequiredParam<Duration> mNoInitialDataTimeout = new RequiredParam<>();
         private final RequiredParam<Duration> mNoUpdatedDataTimeout = new RequiredParam<>();
+        private DataNotificationConfig mDataNotificationConfig = null;
         private FusionEngine.DataFuser mDataFuser = null;
         private UwbParameters mUwbParameters = null;
         private CsParameters mCsParameters = null;
+        private UwbAddress mLocalUwbAddress = null;
 
         /**
          * @param role of the device within the session.
@@ -141,6 +162,12 @@ public class RangingParameters {
             return this;
         }
 
+        /** @param config for when ranging data should be reported based on proximity. */
+        public Builder setDataNotificationConfig(@NonNull DataNotificationConfig config) {
+            mDataNotificationConfig = config;
+            return this;
+        }
+
         /**
          * @param fuser to use. See {@link DataFusers}.
          */
@@ -166,6 +193,12 @@ public class RangingParameters {
          */
         public Builder useCs(CsParameters csParameters) {
             mCsParameters = csParameters;
+            return this;
+        }
+
+        @VisibleForTesting
+        public Builder setLocalUwbAddressForTesting(@NonNull UwbAddress address) {
+            mLocalUwbAddress = address;
             return this;
         }
     }

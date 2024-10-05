@@ -38,6 +38,7 @@ import com.android.ranging.uwb.backend.internal.UwbDevice;
 import com.android.ranging.uwb.backend.internal.UwbFeatureFlags;
 import com.android.ranging.uwb.backend.internal.UwbServiceImpl;
 import com.android.server.ranging.RangingAdapter;
+import com.android.server.ranging.RangingConfig;
 import com.android.server.ranging.RangingData;
 import com.android.server.ranging.RangingParameters.DeviceRole;
 import com.android.server.ranging.RangingTechnology;
@@ -122,7 +123,7 @@ public class UwbAdapter implements RangingAdapter {
     }
 
     @Override
-    public void start(@NonNull TechnologyConfig config, @NonNull Callback callbacks) {
+    public void start(@NonNull RangingConfig.TechnologyConfig config, @NonNull Callback callbacks) {
         Log.i(TAG, "Start called.");
         if (!mStateMachine.transition(State.STOPPED, State.STARTED)) {
             Log.v(TAG, "Attempted to start adapter when it was already started");
@@ -136,11 +137,10 @@ public class UwbAdapter implements RangingAdapter {
             return;
         }
         mUwbClient.setRangingParameters(uwbConfig.asBackendParameters());
-        if (uwbConfig.getParameters().getLocalAddress() != null) {
-            mUwbClient.setLocalAddress(uwbConfig.getParameters().getLocalAddress());
-        }
+        mUwbClient.setLocalAddress(uwbConfig.getLocalAddress());
         if (mUwbClient instanceof RangingController controller) {
-            controller.setComplexChannel(uwbConfig.getParameters().getComplexChannel());
+            controller.setComplexChannel(
+                    UwbConfig.toBackend(uwbConfig.getComplexChannel()));
         }
 
         var future = Futures.submit(() -> {
@@ -161,8 +161,8 @@ public class UwbAdapter implements RangingAdapter {
         Futures.addCallback(future, mUwbClientResultHandlers.stopRanging, mExecutorService);
     }
 
-    public ListenableFuture<UwbAddress> getLocalAddress() {
-        return Futures.submit(() -> mUwbClient.getLocalAddress(), mExecutorService);
+    public UwbAddress getLocalAddress() {
+        return mUwbClient.getLocalAddress();
     }
 
     public ListenableFuture<UwbComplexChannel> getComplexChannel() {

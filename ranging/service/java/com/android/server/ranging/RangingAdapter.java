@@ -23,10 +23,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 /** RangingAdapter representing a common ranging class for multiple ranging technologies. */
 public interface RangingAdapter {
 
-    /** Configuration for a specific generic ranging technology */
-    interface TechnologyConfig {
-    }
-
     /** Returns {@link RangingTechnology} of this adapter. */
     RangingTechnology getType();
 
@@ -44,7 +40,7 @@ public interface RangingAdapter {
      * @param config for the ranging session.
      * @param callback to be called on the occurrence of ranging events.
      */
-    void start(TechnologyConfig config, Callback callback);
+    void start(RangingConfig.TechnologyConfig config, Callback callback);
 
     /** Stop ranging. */
     void stop();
