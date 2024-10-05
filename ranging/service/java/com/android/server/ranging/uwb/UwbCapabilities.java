@@ -120,7 +120,7 @@ public abstract class UwbCapabilities {
         ImmutableList.Builder<DeviceRole> deviceRoles = new ImmutableList.Builder<>();
         for (byte role : Arrays.copyOfRange(
                 capabilitiesBytes, parseCursor, parseCursor + DEVICE_ROLE_SIZE)) {
-            deviceRoles.add(Conversions.fromOobDeviceRole(role));
+            deviceRoles.add(UwbConfig.fromOobDeviceRole(role));
         }
         parseCursor += DEVICE_ROLE_SIZE;
 
@@ -154,7 +154,7 @@ public abstract class UwbCapabilities {
                 .put(
                         Conversions.intListToByteArrayBitmap(
                                 getSupportedDeviceRole().stream()
-                                        .map(Conversions::toOobDeviceRole)
+                                        .map(UwbConfig::toOobDeviceRole)
                                         .collect(Collectors.toList()),
                                 DEVICE_ROLE_SIZE,
                                 DEVICE_ROLE_SHIFT));
