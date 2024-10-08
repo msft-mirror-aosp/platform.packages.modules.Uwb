@@ -73,4 +73,18 @@ public class RangingDevice implements Parcelable {
     public UUID getId() {
         return mId;
     }
+
+    @Override
+    public int hashCode() {
+        return mId.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof RangingDevice device) {
+            return mId.equals(device.getId());
+        } else {
+            return false;
+        }
+    }
 }
