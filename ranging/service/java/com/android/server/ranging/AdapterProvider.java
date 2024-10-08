@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 
-package android.server.ranging;
+package com.android.server.ranging;
 
 import android.annotation.Nullable;
-import android.os.RemoteException;
 
-import com.android.server.ranging.RangingParameters;
 import com.android.server.ranging.cs.CsAdapter;
 import com.android.server.ranging.uwb.UwbAdapter;
 
@@ -27,15 +25,14 @@ import com.google.common.util.concurrent.MoreExecutors;
 
 import java.util.concurrent.Executors;
 
-public class RangingCapabilitiesProvider {
+public class AdapterProvider {
 
     private final RangingInjector mRangingInjector;
-    @Nullable
-    private com.android.server.ranging.uwb.UwbAdapter mUwbAdapter;
-    @Nullable
-    private com.android.server.ranging.cs.CsAdapter mCsAdapter;
 
-    public RangingCapabilitiesProvider(RangingInjector rangingInjector) {
+    private @Nullable UwbAdapter mUwbAdapter;
+    private @Nullable CsAdapter mCsAdapter;
+
+    public AdapterProvider(RangingInjector rangingInjector) {
         mRangingInjector = rangingInjector;
         if (UwbAdapter.isSupported(mRangingInjector.getContext())) {
             mUwbAdapter = new UwbAdapter(mRangingInjector.getContext(),
@@ -47,8 +44,11 @@ public class RangingCapabilitiesProvider {
         }
     }
 
-    public android.ranging.RangingCapabilities getCapabilities() throws RemoteException {
-        //TODO: Implement this.
-        return null;
+    public @Nullable UwbAdapter getUwbAdapter() {
+        return mUwbAdapter;
+    }
+
+    public @Nullable CsAdapter getCsAdapter() {
+        return mCsAdapter;
     }
 }
