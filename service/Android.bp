@@ -113,6 +113,7 @@ java_library {
 
     jarjar_rules: ":uwb-jarjar-rules",
     optimize: {
+        optimize: true,
         proguard_flags_files: ["proguard.flags"],
     },
     visibility: [
