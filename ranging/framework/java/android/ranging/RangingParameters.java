@@ -29,7 +29,7 @@ import com.android.ranging.flags.Flags;
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public class RangingParameters implements Parcelable {
+public final class RangingParameters implements Parcelable {
 
     private final UwbParameters mUwbParameters;
 
