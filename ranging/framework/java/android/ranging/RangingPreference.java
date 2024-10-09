@@ -29,7 +29,7 @@ import com.android.ranging.flags.Flags;
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public class RangingPreference implements Parcelable {
+public final class RangingPreference implements Parcelable {
 
     private final RangingParameters mRangingParameters;
 
