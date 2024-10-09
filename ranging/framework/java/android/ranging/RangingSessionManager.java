@@ -29,7 +29,7 @@ import java.util.concurrent.Executor;
 /**
  * @hide
  */
-public class RangingSessionManager extends IRangingCallbacks.Stub {
+public final class RangingSessionManager extends IRangingCallbacks.Stub {
 
     private static final String TAG = "RangingSessionManager";
     private final IRangingAdapter mRangingAdapter;
