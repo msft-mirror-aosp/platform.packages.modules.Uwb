@@ -29,10 +29,10 @@ import androidx.annotation.IntRange;
 import com.android.ranging.flags.Flags;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -95,7 +95,7 @@ public class UwbParameters implements Parcelable {
 
     private final UwbComplexChannel mComplexChannel;
 
-    private final ImmutableMap<RangingDevice, UwbAddress> mPeerAddresses;
+    private final Map<RangingDevice, UwbAddress> mPeerAddresses;
 
 
     @Retention(RetentionPolicy.SOURCE)
@@ -156,7 +156,7 @@ public class UwbParameters implements Parcelable {
         private byte[] mSessionKeyInfo = null;
         private byte[] mSubSessionKeyInfo = null;
         private UwbComplexChannel mComplexChannel;
-        private ImmutableMap<RangingDevice, UwbAddress> mPeerAddresses = null;
+        private Map<RangingDevice, UwbAddress> mPeerAddresses = new HashMap<>();
         private @RangingUpdateRate int mRangingUpdateRate;
         private int mSlotDurationMs = 1;
         private boolean mIsAoaDisabled = false;
@@ -171,9 +171,7 @@ public class UwbParameters implements Parcelable {
             return this;
         }
 
-        public Builder setPeerAddresses(
-                @NonNull ImmutableMap<RangingDevice, UwbAddress> addresses
-        ) {
+        public Builder setPeerAddresses(@NonNull Map<RangingDevice, UwbAddress> addresses) {
             mPeerAddresses = addresses;
             return this;
         }
@@ -240,15 +238,14 @@ public class UwbParameters implements Parcelable {
 
         // Deserialize peerAddresses (Map<RangingDevice, UwbAddress>)
         int numPeers = in.readInt();
-        ImmutableMap.Builder<RangingDevice, UwbAddress> peers = new ImmutableMap.Builder<>();
+        mPeerAddresses = new HashMap<>();
         for (int i = 0; i < numPeers; i++) {
             RangingDevice device = Objects.requireNonNull(
                     in.readParcelable(RangingDevice.class.getClassLoader(), RangingDevice.class));
             UwbAddress address = Objects.requireNonNull(
                     in.readParcelable(UwbAddress.class.getClassLoader(), UwbAddress.class));
-            peers.put(device, address);
+            mPeerAddresses.put(device, address);
         }
-        mPeerAddresses = peers.build();
     }
 
     @Override
@@ -320,8 +317,8 @@ public class UwbParameters implements Parcelable {
     }
 
 
-    public @NonNull ImmutableMap<RangingDevice, UwbAddress> getPeerAddresses() {
-        return mPeerAddresses;
+    public @NonNull Map<RangingDevice, UwbAddress> getPeerAddresses() {
+        return Map.copyOf(mPeerAddresses);
     }
 
     public @RangingUpdateRate int getRangingUpdateRate() {
