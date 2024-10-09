@@ -35,7 +35,7 @@ import java.lang.annotation.RetentionPolicy;
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public class DataNotificationConfig implements Parcelable {
+public final class DataNotificationConfig implements Parcelable {
 
     private final @NotificationConfig int mRangeDataNtfConfigType;
     private final int mProximityNearCm;
