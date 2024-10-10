@@ -19,7 +19,7 @@ package android.ranging;
 import android.annotation.FlaggedApi;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.uwb.UwbParameters;
 
 import androidx.annotation.NonNull;
 
@@ -29,17 +29,17 @@ import com.android.ranging.flags.Flags;
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public class RangingParameters implements Parcelable {
+public final class RangingParameters implements Parcelable {
 
-    private final UwbRangingParameters mUwbRangingParameters;
+    private final UwbParameters mUwbParameters;
 
     private RangingParameters(Builder builder) {
-        mUwbRangingParameters = builder.mUwbRangingParameters;
+        mUwbParameters = builder.mUwbParameters;
     }
 
     protected RangingParameters(Parcel in) {
-        mUwbRangingParameters = in.readParcelable(
-                UwbRangingParameters.class.getClassLoader(), UwbRangingParameters.class);
+        mUwbParameters = in.readParcelable(
+                UwbParameters.class.getClassLoader(), UwbParameters.class);
     }
 
     public static final Creator<RangingParameters> CREATOR = new Creator<RangingParameters>() {
@@ -54,8 +54,8 @@ public class RangingParameters implements Parcelable {
         }
     };
 
-    public UwbRangingParameters getUwbRangingParameters() {
-        return mUwbRangingParameters;
+    public @NonNull UwbParameters getUwbParameters() {
+        return mUwbParameters;
     }
 
     @Override
@@ -65,14 +65,18 @@ public class RangingParameters implements Parcelable {
 
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        dest.writeParcelable(mUwbRangingParameters, flags);
+        dest.writeParcelable(mUwbParameters, flags);
     }
 
     public static class Builder {
-        private UwbRangingParameters mUwbRangingParameters;
+        private UwbParameters mUwbParameters;
 
-        public Builder setUwbRangingParameters(UwbRangingParameters uwbRangingParameters) {
-            mUwbRangingParameters = uwbRangingParameters;
+        public RangingParameters build() {
+            return new RangingParameters(this);
+        }
+
+        public Builder setUwbParameters(UwbParameters uwbParameters) {
+            mUwbParameters = uwbParameters;
             return this;
         }
     }
