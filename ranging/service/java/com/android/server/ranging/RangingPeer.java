@@ -27,13 +27,11 @@ import androidx.annotation.VisibleForTesting;
 
 import com.android.ranging.uwb.backend.internal.RangingCapabilities;
 import com.android.server.ranging.RangingConfig.TechnologyConfig;
-import com.android.server.ranging.RangingParameters.DeviceRole;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.cs.CsAdapter;
-import com.android.server.ranging.fusion.DataFusers;
-import com.android.server.ranging.fusion.FilteringFusionEngine;
 import com.android.server.ranging.fusion.FusionEngine;
 import com.android.server.ranging.uwb.UwbAdapter;
+import com.android.server.ranging.uwb.UwbConfig;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.Futures;
@@ -46,7 +44,6 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -115,11 +112,13 @@ public final class RangingPeer {
     }
 
     private @NonNull RangingAdapter newAdapter(
-            @NonNull RangingTechnology technology, DeviceRole role
+            @NonNull RangingTechnology technology, @NonNull TechnologyConfig config
     ) {
         switch (technology) {
             case UWB:
-                return new UwbAdapter(mContext, mAdapterExecutor, role);
+                return new UwbAdapter(
+                        mContext, mAdapterExecutor,
+                        ((UwbConfig) config).getParameters().getDeviceRole());
             case CS:
                 return new CsAdapter();
             default:
@@ -140,17 +139,17 @@ public final class RangingPeer {
         mCallback = callback;
         mConfig = config;
 
-        if (config.getDataFuser() != null) {
-            mFusionEngine = new FilteringFusionEngine(config.getDataFuser());
-        } else {
-            mFusionEngine = new NoOpFusionEngine();
-        }
+        mFusionEngine = config.getFusionEngine();
 
         ImmutableMap<RangingTechnology, TechnologyConfig> techConfigs =
                 config.getTechnologyConfigs();
         mAdapters.keySet().retainAll(techConfigs.keySet());
         mFusionEngine.start(new FusionEngineListener());
-        for (RangingTechnology technology : techConfigs.keySet()) {
+
+        for (Map.Entry<RangingTechnology, TechnologyConfig> entry : techConfigs.entrySet()) {
+            RangingTechnology technology = entry.getKey();
+            TechnologyConfig technologyConfig = entry.getValue();
+
             if (!technology.isSupported(mContext)) {
                 Log.w(TAG, "Attempted to range with unsupported technology " + technology
                         + ", skipping");
@@ -160,11 +159,9 @@ public final class RangingPeer {
             synchronized (mAdapters) {
                 // Do not overwrite any adapters that were supplied for testing
                 if (!mAdapters.containsKey(technology)) {
-                    mAdapters.put(technology,
-                            newAdapter(technology, config.getDeviceRole()));
+                    mAdapters.put(technology, newAdapter(technology, technologyConfig));
                 }
-                mAdapters.get(technology)
-                        .start(techConfigs.get(technology), new AdapterListener(technology));
+                mAdapters.get(technology).start(technologyConfig, new AdapterListener(technology));
             }
         }
 
@@ -363,24 +360,6 @@ public final class RangingPeer {
         }
     }
 
-    private class NoOpFusionEngine extends FusionEngine {
-        NoOpFusionEngine() {
-            super(new DataFusers.PassthroughDataFuser());
-        }
-
-        @Override
-        protected @NonNull Set<RangingTechnology> getDataSources() {
-            return mAdapters.keySet();
-        }
-
-        @Override
-        public void addDataSource(@NonNull RangingTechnology technology) {
-        }
-
-        @Override
-        public void removeDataSource(@NonNull RangingTechnology technology) {
-        }
-    }
 
     @VisibleForTesting
     public void useAdapterForTesting(RangingTechnology technology, RangingAdapter adapter) {

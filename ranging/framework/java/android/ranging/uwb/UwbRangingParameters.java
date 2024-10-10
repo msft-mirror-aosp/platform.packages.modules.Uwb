@@ -40,19 +40,20 @@ import java.util.Objects;
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public class UwbParameters implements Parcelable {
+public final class UwbRangingParameters implements Parcelable {
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
-            DeviceType.CONTROLEE,
-            DeviceType.CONTROLLER
+            DeviceRole.RESPONDER,
+            DeviceRole.INITIATOR,
     })
-    public @interface DeviceType {
-        int CONTROLEE = 0;
-        int CONTROLLER = 1;
+    public @interface DeviceRole {
+        int RESPONDER = 0;
+        /** The device that initiates the session. */
+        int INITIATOR = 1;
     }
 
-    private final @DeviceType int mDeviceType;
+    private final @DeviceRole int mDeviceRole;
 
     private final int mSessionId;
 
@@ -89,6 +90,8 @@ public class UwbParameters implements Parcelable {
 
     private final @ConfigId int mConfigId;
 
+    private final UwbAddress mDeviceAddress;
+
     private final byte[] mSessionKeyInfo;
 
     private final byte[] mSubSessionKeyInfo;
@@ -116,15 +119,19 @@ public class UwbParameters implements Parcelable {
 
     private final boolean mIsAoaDisabled;
 
-    private UwbParameters(Builder builder) {
-        Preconditions.checkNotNull(builder.mConfigId,
-                "Missing required parameter config id");
+    private UwbRangingParameters(Builder builder) {
+        Preconditions.checkNotNull(builder.mConfigId, "Missing required parameter: configId");
         Preconditions.checkNotNull(builder.mPeerAddresses,
-                "Missing required parameter peer addresses");
-        mDeviceType = builder.mDeviceType;
+                "Missing required parameter: peerAddresses");
+        Preconditions.checkNotNull(builder.mDeviceAddress,
+                "Missing required parameter: deviceAddress");
+        Preconditions.checkNotNull(builder.mComplexChannel,
+                "Missing required parameter: complexChannel");
+        mDeviceRole = builder.mDeviceRole;
         mSessionId = builder.mSessionId;
         mSubSessionId = builder.mSubSessionId;
         mConfigId = builder.mConfigId;
+        mDeviceAddress = builder.mDeviceAddress;
         mSessionKeyInfo = builder.mSessionKeyInfo;
         mSubSessionKeyInfo = builder.mSubSessionKeyInfo;
         mComplexChannel = builder.mComplexChannel;
@@ -134,25 +141,12 @@ public class UwbParameters implements Parcelable {
         mIsAoaDisabled = builder.mIsAoaDisabled;
     }
 
-    public UwbParameters(UwbParameters other) {
-        mDeviceType = other.mDeviceType;
-        mSessionId = other.mSessionId;
-        mSubSessionId = other.mSubSessionId;
-        mConfigId = other.mConfigId;
-        mSessionKeyInfo = other.mSessionKeyInfo;
-        mSubSessionKeyInfo = other.mSubSessionKeyInfo;
-        mComplexChannel = other.mComplexChannel;
-        mPeerAddresses = other.mPeerAddresses;
-        mRangingUpdateRate = other.mRangingUpdateRate;
-        mSlotDurationMs = other.mSlotDurationMs;
-        mIsAoaDisabled = other.mIsAoaDisabled;
-    }
-
     public static class Builder {
-        private int mDeviceType = DeviceType.CONTROLEE;
+        private @DeviceRole int mDeviceRole = DeviceRole.RESPONDER;
         private int mSessionId;
         private int mSubSessionId;
         private Integer mConfigId = null;
+        private UwbAddress mDeviceAddress = null;
         private byte[] mSessionKeyInfo = null;
         private byte[] mSubSessionKeyInfo = null;
         private UwbComplexChannel mComplexChannel;
@@ -162,12 +156,13 @@ public class UwbParameters implements Parcelable {
         private boolean mIsAoaDisabled = false;
 
         // Build method to create an instance of RangingConfiguration
-        public UwbParameters build() {
-            return new UwbParameters(this);
+        public UwbRangingParameters build() {
+            return new UwbRangingParameters(this);
         }
 
-        public Builder setDeviceType(@DeviceType int type) {
-            mDeviceType = type;
+        /** @param role of the device within the session. */
+        public Builder setDeviceRole(@DeviceRole int role) {
+            mDeviceRole = role;
             return this;
         }
 
@@ -178,6 +173,11 @@ public class UwbParameters implements Parcelable {
 
         public Builder setConfigId(@ConfigId int config) {
             mConfigId = config;
+            return this;
+        }
+
+        public Builder setDeviceAddress(@NonNull UwbAddress address) {
+            mDeviceAddress = address;
             return this;
         }
 
@@ -201,7 +201,7 @@ public class UwbParameters implements Parcelable {
             return this;
         }
 
-        public Builder setComplexChannel(@Nullable UwbComplexChannel complexChannel) {
+        public Builder setComplexChannel(@NonNull UwbComplexChannel complexChannel) {
             mComplexChannel = complexChannel;
             return this;
         }
@@ -222,11 +222,12 @@ public class UwbParameters implements Parcelable {
         }
     }
 
-    protected UwbParameters(Parcel in) {
-        mDeviceType = in.readInt();
+    UwbRangingParameters(Parcel in) {
+        mDeviceRole = in.readInt();
         mSessionId = in.readInt();
         mSubSessionId = in.readInt();
         mConfigId = in.readInt();
+        mDeviceAddress = in.readParcelable(UwbAddress.class.getClassLoader(), UwbAddress.class);
         mSessionKeyInfo = in.readBlob();
         mSubSessionKeyInfo = in.readBlob();
         mComplexChannel = Objects.requireNonNull(
@@ -250,10 +251,11 @@ public class UwbParameters implements Parcelable {
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeInt(mDeviceType);
+        dest.writeInt(mDeviceRole);
         dest.writeInt(mSessionId);
         dest.writeInt(mSubSessionId);
         dest.writeInt(mConfigId);
+        dest.writeParcelable(mDeviceAddress, flags);
         dest.writeBlob(mSessionKeyInfo);
         dest.writeBlob(mSubSessionKeyInfo);
         dest.writeParcelable(mComplexChannel, flags);
@@ -273,22 +275,21 @@ public class UwbParameters implements Parcelable {
         return 0;
     }
 
-    public static final Creator<UwbParameters> CREATOR =
-            new Creator<UwbParameters>() {
-                @Override
-                public UwbParameters createFromParcel(Parcel in) {
-                    return new UwbParameters(in);
-                }
+    public static final Creator<UwbRangingParameters> CREATOR = new Creator<>() {
+        @Override
+        public UwbRangingParameters createFromParcel(Parcel in) {
+            return new UwbRangingParameters(in);
+        }
 
-                @Override
-                public UwbParameters[] newArray(int size) {
-                    return new UwbParameters[size];
-                }
-            };
+        @Override
+        public UwbRangingParameters[] newArray(int size) {
+            return new UwbRangingParameters[size];
+        }
+    };
 
-
-    public @DeviceType int getDeviceType() {
-        return mDeviceType;
+    /** @return the device's role within the session. */
+    public @DeviceRole int getDeviceRole() {
+        return mDeviceRole;
     }
 
     public int getSessionId() {
@@ -303,6 +304,10 @@ public class UwbParameters implements Parcelable {
         return mConfigId;
     }
 
+    public @NonNull UwbAddress getDeviceAddress() {
+        return mDeviceAddress;
+    }
+
     public @Nullable byte[] getSessionKeyInfo() {
         return mSessionKeyInfo;
     }
@@ -312,7 +317,7 @@ public class UwbParameters implements Parcelable {
     }
 
 
-    public @Nullable UwbComplexChannel getComplexChannel() {
+    public @NonNull UwbComplexChannel getComplexChannel() {
         return mComplexChannel;
     }
 
