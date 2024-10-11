@@ -38,7 +38,6 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.android.ranging.uwb.backend.internal.Utils;
 import com.android.server.ranging.RangingConfig;
 import com.android.server.ranging.RangingData;
-import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingSession;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.uwb.UwbAdapter;
@@ -241,7 +240,6 @@ public class GenericRangingSnippet implements Snippet {
                 .build();
 
         RangingConfig rangingConfig = new RangingConfig.Builder(
-                new RangingInjector(mContext),
                 new RangingPreference.Builder()
                         .setRangingParameters(generateRangingParameters(config))
                         .setSensorFusionParameters(new SensorFusionParameters.Builder().build())
