@@ -29,7 +29,6 @@ import com.android.server.ranging.fusion.FusionEngine;
 import com.android.server.ranging.uwb.UwbConfig;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.uwb.support.base.RequiredParam;
 
 import java.time.Duration;
 import java.util.Set;
@@ -42,8 +41,6 @@ import java.util.Set;
 public class RangingConfig {
 
     private static final String TAG = RangingConfig.class.getSimpleName();
-
-    private final RangingInjector mRangingInjector;
 
     private final RangingPreference mPreference;
     private final ImmutableMap<RangingTechnology, TechnologyConfig> mTechnologyConfigs;
@@ -59,9 +56,8 @@ public class RangingConfig {
 
     private RangingConfig(Builder builder) {
         mPreference = builder.mPreference;
-        mRangingInjector = builder.mRangingInjector;
-        mNoInitialDataTimeout = builder.mNoInitialDataTimeout.get();
-        mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout.get();
+        mNoInitialDataTimeout = builder.mNoInitialDataTimeout;
+        mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout;
 
         // Technology-specific configurations
         ImmutableMap.Builder<RangingTechnology, TechnologyConfig> technologyConfigsBuilder =
@@ -124,19 +120,15 @@ public class RangingConfig {
     }
 
     public static class Builder {
-        private final RangingInjector mRangingInjector;
         private final RangingPreference mPreference;
-        private final RequiredParam<Duration> mNoInitialDataTimeout = new RequiredParam<>();
-        private final RequiredParam<Duration> mNoUpdatedDataTimeout = new RequiredParam<>();
+        private Duration mNoInitialDataTimeout = Duration.ofSeconds(999);
+        private Duration mNoUpdatedDataTimeout = Duration.ofSeconds(999);
 
         public RangingConfig build() {
             return new RangingConfig(this);
         }
 
-        public Builder(
-                @NonNull RangingInjector rangingInjector, @NonNull RangingPreference preference
-        ) {
-            mRangingInjector = rangingInjector;
+        public Builder(@NonNull RangingPreference preference) {
             mPreference = preference;
         }
 
@@ -145,7 +137,7 @@ public class RangingConfig {
          *                directly after starting.
          */
         public Builder setNoInitialDataTimeout(@NonNull Duration timeout) {
-            mNoInitialDataTimeout.set(timeout);
+            mNoInitialDataTimeout = timeout;
             return this;
         }
 
@@ -154,7 +146,7 @@ public class RangingConfig {
          *                produced.
          */
         public Builder setNoUpdatedDataTimeout(@NonNull Duration timeout) {
-            mNoUpdatedDataTimeout.set(timeout);
+            mNoUpdatedDataTimeout = timeout;
             return this;
         }
     }

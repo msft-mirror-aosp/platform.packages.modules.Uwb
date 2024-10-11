@@ -28,8 +28,6 @@ import androidx.annotation.IntRange;
 
 import com.android.ranging.flags.Flags;
 
-import com.google.common.base.Preconditions;
-
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.HashMap;
@@ -120,13 +118,18 @@ public final class UwbRangingParameters implements Parcelable {
     private final boolean mIsAoaDisabled;
 
     private UwbRangingParameters(Builder builder) {
-        Preconditions.checkNotNull(builder.mConfigId, "Missing required parameter: configId");
-        Preconditions.checkNotNull(builder.mPeerAddresses,
-                "Missing required parameter: peerAddresses");
-        Preconditions.checkNotNull(builder.mDeviceAddress,
-                "Missing required parameter: deviceAddress");
-        Preconditions.checkNotNull(builder.mComplexChannel,
-                "Missing required parameter: complexChannel");
+        if (builder.mConfigId == null) {
+            throw new IllegalArgumentException("Missing required parameter: configId");
+        }
+        if (builder.mPeerAddresses == null) {
+            throw new IllegalArgumentException("Missing required parameter: peerAddresses");
+        }
+        if (builder.mDeviceAddress == null) {
+            throw new IllegalArgumentException("Missing required parameter: deviceAddress");
+        }
+        if (builder.mComplexChannel == null) {
+            throw new IllegalArgumentException("Missing required parameter: complexChannel");
+        }
         mDeviceRole = builder.mDeviceRole;
         mSessionId = builder.mSessionId;
         mSubSessionId = builder.mSubSessionId;
@@ -150,7 +153,7 @@ public final class UwbRangingParameters implements Parcelable {
         private byte[] mSessionKeyInfo = null;
         private byte[] mSubSessionKeyInfo = null;
         private UwbComplexChannel mComplexChannel;
-        private Map<RangingDevice, UwbAddress> mPeerAddresses = new HashMap<>();
+        private Map<RangingDevice, UwbAddress> mPeerAddresses = null;
         private @RangingUpdateRate int mRangingUpdateRate;
         private int mSlotDurationMs = 1;
         private boolean mIsAoaDisabled = false;
@@ -235,7 +238,7 @@ public final class UwbRangingParameters implements Parcelable {
                         UwbComplexChannel.class.getClassLoader(), UwbComplexChannel.class));
         mRangingUpdateRate = in.readInt();
         mSlotDurationMs = in.readInt();
-        mIsAoaDisabled = in.readByte() != 0;
+        mIsAoaDisabled = in.readBoolean();
 
         // Deserialize peerAddresses (Map<RangingDevice, UwbAddress>)
         int numPeers = in.readInt();
@@ -261,7 +264,7 @@ public final class UwbRangingParameters implements Parcelable {
         dest.writeParcelable(mComplexChannel, flags);
         dest.writeInt(mRangingUpdateRate);
         dest.writeInt(mSlotDurationMs);
-        dest.writeByte((byte) (mIsAoaDisabled ? 1 : 0));
+        dest.writeBoolean(mIsAoaDisabled);
         // Serialize peerAddresses (Map<RangingDevice, UwbAddress>)
         dest.writeInt(mPeerAddresses.size());  // Write the size of the Map
         for (Map.Entry<RangingDevice, UwbAddress> entry : mPeerAddresses.entrySet()) {
@@ -316,11 +319,9 @@ public final class UwbRangingParameters implements Parcelable {
         return mSubSessionKeyInfo;
     }
 
-
     public @NonNull UwbComplexChannel getComplexChannel() {
         return mComplexChannel;
     }
-
 
     public @NonNull Map<RangingDevice, UwbAddress> getPeerAddresses() {
         return Map.copyOf(mPeerAddresses);

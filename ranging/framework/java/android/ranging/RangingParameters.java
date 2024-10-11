@@ -61,7 +61,6 @@ public final class RangingParameters implements Parcelable {
         }
     };
 
-
     /** @return ranging parameters for UWB, if they were provided */
     public @Nullable UwbRangingParameters getUwbParameters() {
         return mUwbParameters;
