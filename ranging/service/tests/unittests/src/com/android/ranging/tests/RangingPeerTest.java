@@ -29,16 +29,15 @@ import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
-import android.ranging.uwb.UwbParameters;
+import android.ranging.uwb.UwbRangingParameters;
 
 import androidx.test.filters.SmallTest;
 
-import com.android.ranging.uwb.backend.internal.UwbAddress;
 import com.android.server.ranging.RangingAdapter;
 import com.android.server.ranging.RangingConfig;
 import com.android.server.ranging.RangingData;
-import com.android.server.ranging.RangingParameters.DeviceRole;
 import com.android.server.ranging.RangingPeer;
 import com.android.server.ranging.RangingSession;
 import com.android.server.ranging.RangingTechnology;
@@ -115,19 +114,19 @@ public class RangingPeerTest {
                 .build();
     }
 
-    private UwbParameters.Builder getUwbParams() {
-        return new UwbParameters.Builder()
-                .setConfigId(UwbParameters.ConfigId.UNICAST_DS_TWR)
+    private UwbRangingParameters.Builder getUwbParams() {
+        return new UwbRangingParameters.Builder()
+                .setDeviceRole(UwbRangingParameters.DeviceRole.INITIATOR)
+                .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
+                .setComplexChannel(new UwbComplexChannel(9, 11))
+                .setConfigId(UwbRangingParameters.ConfigId.UNICAST_DS_TWR)
                 .setPeerAddresses(ImmutableMap.of())
-                .setRangingUpdateRate(UwbParameters.RangingUpdateRate.NORMAL);
+                .setRangingUpdateRate(UwbRangingParameters.RangingUpdateRate.NORMAL);
     }
 
-    private UwbConfig.Builder getUwbConfig(UwbParameters parameters) {
+    private UwbConfig.Builder getUwbConfig(UwbRangingParameters parameters) {
         return new UwbConfig.Builder(parameters)
-                .setCountryCode("US")
-                .setDeviceRole(DeviceRole.INITIATOR)
-                .setLocalAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
-                .setComplexChannel(new UwbComplexChannel(9, 11));
+                .setCountryCode("US");
     }
 
     @Before
@@ -136,7 +135,7 @@ public class RangingPeerTest {
                 .thenReturn(true);
         when(mMockConfig.getNoInitialDataTimeout()).thenReturn(Duration.ZERO);
         when(mMockConfig.getNoUpdatedDataTimeout()).thenReturn(Duration.ZERO);
-        when(mMockConfig.getDataFuser()).thenReturn(null);
+        when(mMockConfig.getFusionEngine()).thenReturn(new RangingConfig.NoOpFusionEngine());
 
         mSession = new RangingPeer(
                 mMockContext, MoreExecutors.newDirectExecutorService(), mMockTimeoutExecutor);
