@@ -80,6 +80,10 @@ public final class RangingSession implements AutoCloseable {
         mExecutor.execute(() -> mCallback.onClosed(reason));
     }
 
+    public void onData(RangingDevice device, RangingData data) {
+        mExecutor.execute(() -> mCallback.onResults(device, data));
+    }
+
     public interface Callback {
         void onStarted(@RangingManager.RangingTechnology int technology);
 
@@ -91,9 +95,7 @@ public final class RangingSession implements AutoCloseable {
                 params);*/
         void onRangingStopped(@NonNull RangingDevice device);
 
-        void onResults(@NonNull RangingDevice device,
-                @NonNull RangingData data);
-
+        void onResults(@NonNull RangingDevice device, @NonNull RangingData data);
     }
 
     /**
