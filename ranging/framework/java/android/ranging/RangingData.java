@@ -25,11 +25,13 @@ import androidx.annotation.NonNull;
 
 import com.android.ranging.flags.Flags;
 
+import java.util.Objects;
+
 /**
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public class RangingData implements Parcelable {
+public final class RangingData implements Parcelable {
 
     @RangingManager.RangingTechnology
     private final int mRangingTechnology;
@@ -50,9 +52,14 @@ public class RangingData implements Parcelable {
 
     protected RangingData(Parcel in) {
         mRangingTechnology = in.readInt();
-        mDistance = in.readParcelable(RangingMeasurement.class.getClassLoader());
-        mAzimuth = in.readParcelable(RangingMeasurement.class.getClassLoader());
-        mElevation = in.readParcelable(RangingMeasurement.class.getClassLoader());
+        mDistance = Objects.requireNonNull(
+                in.readParcelable(
+                        RangingMeasurement.class.getClassLoader(), RangingMeasurement.class));
+        mAzimuth = in.readParcelable(
+                RangingMeasurement.class.getClassLoader(), RangingMeasurement.class);
+        mElevation = in.readParcelable(
+                RangingMeasurement.class.getClassLoader(),
+                RangingMeasurement.class);
         mRssi = in.readInt();
         mTimestamp = in.readLong();
     }
@@ -77,11 +84,11 @@ public class RangingData implements Parcelable {
         return mDistance;
     }
 
-    public RangingMeasurement getAzimuth() {
+    public @Nullable RangingMeasurement getAzimuth() {
         return mAzimuth;
     }
 
-    public RangingMeasurement getElevation() {
+    public @Nullable RangingMeasurement getElevation() {
         return mElevation;
     }
 

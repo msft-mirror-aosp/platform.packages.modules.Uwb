@@ -30,7 +30,7 @@ import java.util.concurrent.Executor;
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public class RangingSession implements AutoCloseable {
+public final class RangingSession implements AutoCloseable {
 
     private final AttributionSource mAttributionSource;
     private final SessionHandle mSessionHandle;
