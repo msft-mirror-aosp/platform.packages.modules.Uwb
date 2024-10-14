@@ -17,8 +17,10 @@
 package com.android.server.ranging;
 
 import android.content.AttributionSource;
+import android.os.RemoteException;
 import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
+import android.ranging.RangingCapabilities;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
 
@@ -45,8 +47,11 @@ public class RangingServiceManager {
         mSessions = new ConcurrentHashMap<>();
     }
 
-    public void getRangingCapabilities(IRangingCapabilitiesCallback callback) {
-
+    public void getRangingCapabilities(IRangingCapabilitiesCallback callback)
+            throws RemoteException {
+        RangingCapabilities rangingCapabilities =
+                mRangingInjector.getCapabilitiesProvider().getCapabilities();
+        callback.onRangingCapabilities(rangingCapabilities);
     }
 
     public void startRanging(AttributionSource attributionSource, SessionHandle sessionHandle,
