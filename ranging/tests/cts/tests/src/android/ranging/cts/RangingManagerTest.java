@@ -24,6 +24,8 @@ import android.app.UiAutomation;
 import android.content.Context;
 import android.platform.test.annotations.AppModeFull;
 import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.ranging.RangingCapabilities;
+import android.ranging.RangingCapabilitiesListener;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.RangingManager;
@@ -32,6 +34,7 @@ import android.ranging.RangingPreference;
 import android.ranging.RangingSession;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
+import android.ranging.uwb.UwbRangingCapabilities;
 import android.ranging.uwb.UwbRangingParameters;
 
 import androidx.annotation.NonNull;
@@ -51,6 +54,7 @@ import org.junit.runner.RunWith;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 @SmallTest
@@ -205,6 +209,45 @@ public class RangingManagerTest {
         @Override
         public void onResults(@NonNull RangingDevice device, @NonNull RangingData data) {
 
+        }
+    }
+
+    @Test
+    @CddTest(requirements = {"7.3.13/C-1-1,C-1-2"})
+    @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
+    public void testGetRangingCapabilities() throws InterruptedException {
+        RangingCapListener rangingCapListener = new RangingCapListener(new CountDownLatch(1));
+        mRangingManager.getRangingCapabilities(
+                Executors.newSingleThreadExecutor(), rangingCapListener
+        );
+
+        assertThat(rangingCapListener.mOnCapabilitiesReceived.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(rangingCapListener.mOnRangingCapabilitiesCalled).isTrue();
+        assertThat(rangingCapListener.mRangingCapabilities).isNotNull();
+
+        UwbRangingCapabilities uwbRangingCapabilities =
+                rangingCapListener.mRangingCapabilities.getUwbCapabilities();
+        if (uwbRangingCapabilities != null) {
+            assertThat(uwbRangingCapabilities.isSupportsDistance()).isTrue();
+            assertThat(uwbRangingCapabilities.getSupportedChannels()).isNotNull();
+        }
+    }
+
+    private static class RangingCapListener implements RangingCapabilitiesListener {
+        private final CountDownLatch mOnCapabilitiesReceived;
+
+        private boolean mOnRangingCapabilitiesCalled = false;
+
+        private RangingCapabilities mRangingCapabilities;
+
+        RangingCapListener(CountDownLatch countDownLatch) {
+            mOnCapabilitiesReceived = countDownLatch;
+        }
+        @Override
+        public void onRangingCapabilities(RangingCapabilities capabilities) {
+            mOnCapabilitiesReceived.countDown();
+            mOnRangingCapabilitiesCalled = true;
+            mRangingCapabilities = capabilities;
         }
     }
 }
