@@ -24,6 +24,8 @@ import android.annotation.Nullable;
 import android.annotation.SystemService;
 import android.content.AttributionSource;
 import android.content.Context;
+import android.os.RemoteException;
+import android.util.Log;
 
 import com.android.ranging.flags.Flags;
 
@@ -108,6 +110,22 @@ public final class RangingManager {
     public void getRangingCapabilities(
             @NonNull @CallbackExecutor Executor executor,
             @NonNull RangingCapabilitiesListener listener) {
+        IRangingCapabilitiesCallback.Stub rangingCapabilitiesCallback =
+                new IRangingCapabilitiesCallback.Stub() {
+
+                    @Override
+                    public void onRangingCapabilities(
+                            RangingCapabilities rangingCapabilities)
+                            throws RemoteException {
+                        executor.execute(() -> listener.onRangingCapabilities(
+                                rangingCapabilities));
+                    }
+                };
+        try {
+            mRangingAdapter.getRangingCapabilities(rangingCapabilitiesCallback);
+        } catch (RemoteException e) {
+            Log.e(TAG, "Get capabilities failed" + e.toString());
+        }
     }
 
     @Nullable
