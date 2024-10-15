@@ -19,6 +19,7 @@ package com.android.server.ranging;
 import android.annotation.NonNull;
 import android.content.AttributionSource;
 import android.content.Context;
+import android.os.RemoteException;
 import android.ranging.IRangingAdapter;
 import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
@@ -37,7 +38,8 @@ public class RangingServiceImpl extends IRangingAdapter.Stub {
     }
 
     @Override
-    public void getRangingCapabilities(IRangingCapabilitiesCallback callback) {
+    public void getRangingCapabilities(IRangingCapabilitiesCallback callback)
+            throws RemoteException {
         mRangingInjector.getRangingServiceManager().getRangingCapabilities(callback);
     }
 
