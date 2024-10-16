@@ -16,9 +16,30 @@
 
 package android.ranging;
 
+import android.annotation.FlaggedApi;
+import android.annotation.NonNull;
+
+import com.android.ranging.flags.Flags;
+
 /**
- *  @hide
+ * Listener interface to receive the availabilities and capabilities of all the ranging technology
+ * supported by the device.
+ *
+ * <p>This interface is used to asynchronously provide information about the
+ * supported ranging capabilities of the device. The listener's callback
+ * is invoked when the capabilities data is available.</p>
+ *
+ * @hide
  */
+@FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public interface RangingCapabilitiesListener {
-    void onRangingCapabilities(RangingCapabilities capabilities);
+
+    /**
+     * Called when the ranging capabilities are available.
+     *
+     * @param capabilities the {@link RangingCapabilities} object containing
+     *                     detailed information about the supported features
+     *                     and limitations of the ranging technology.
+     */
+    void onRangingCapabilities(@NonNull RangingCapabilities capabilities);
 }
