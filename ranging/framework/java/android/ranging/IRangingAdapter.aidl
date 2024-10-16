@@ -17,8 +17,10 @@
 package android.ranging;
 
 import android.content.AttributionSource;
+import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingCapabilitiesCallback;
 import android.ranging.IRangingCallbacks;
+import android.ranging.OobHandle;
 import android.ranging.SessionHandle;
 import android.ranging.RangingPreference;
 
@@ -32,4 +34,10 @@ interface IRangingAdapter {
                  in RangingPreference rangingPreference, in IRangingCallbacks callbacks);
 
     void stopRanging(in SessionHandle sessionHandle);
+
+    void oobDataReceived(in OobHandle oobHandle, in byte[] data);
+    void deviceOobDisconnected(in OobHandle oobHandle);
+    void deviceOobReconnected(in OobHandle oobHandle);
+    void deviceOobClosed(in OobHandle oobHandle);
+    void registerOobSendDataListener(in IOobSendDataListener oobSendDataListener);
 }

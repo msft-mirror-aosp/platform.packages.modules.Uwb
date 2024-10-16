@@ -19,9 +19,12 @@ package com.android.server.ranging;
 import android.annotation.NonNull;
 import android.content.AttributionSource;
 import android.content.Context;
+import android.os.RemoteException;
+import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingAdapter;
 import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
+import android.ranging.OobHandle;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
 
@@ -37,7 +40,8 @@ public class RangingServiceImpl extends IRangingAdapter.Stub {
     }
 
     @Override
-    public void getRangingCapabilities(IRangingCapabilitiesCallback callback) {
+    public void getRangingCapabilities(IRangingCapabilitiesCallback callback)
+            throws RemoteException {
         mRangingInjector.getRangingServiceManager().getRangingCapabilities(callback);
     }
 
@@ -51,5 +55,31 @@ public class RangingServiceImpl extends IRangingAdapter.Stub {
     @Override
     public void stopRanging(SessionHandle sessionHandle) {
         mRangingInjector.getRangingServiceManager().stopRanging(sessionHandle);
+    }
+
+    @Override
+    public void oobDataReceived(OobHandle oobHandle, byte[] data) {
+        mRangingInjector.getRangingServiceManager().oobDataReceived(oobHandle, data);
+    }
+
+    @Override
+    public void deviceOobDisconnected(OobHandle oobHandle) {
+        mRangingInjector.getRangingServiceManager().deviceOobDisconnected(oobHandle);
+    }
+
+    @Override
+    public void deviceOobReconnected(OobHandle oobHandle) {
+        mRangingInjector.getRangingServiceManager().deviceOobReconnected(oobHandle);
+    }
+
+    @Override
+    public void deviceOobClosed(OobHandle oobHandle) {
+        mRangingInjector.getRangingServiceManager().deviceOobClosed(oobHandle);
+    }
+
+    @Override
+    public void registerOobSendDataListener(IOobSendDataListener oobSendDataListener) {
+        mRangingInjector.getRangingServiceManager().registerOobSendDataListener(
+                oobSendDataListener);
     }
 }
