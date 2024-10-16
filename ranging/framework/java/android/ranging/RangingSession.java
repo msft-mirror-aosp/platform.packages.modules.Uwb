@@ -21,23 +21,29 @@ import android.annotation.NonNull;
 import android.content.AttributionSource;
 import android.os.CancellationSignal;
 import android.os.RemoteException;
+import android.util.Log;
 
 import com.android.ranging.flags.Flags;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+
 
 /**
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class RangingSession implements AutoCloseable {
-
+    private static final String TAG = "RangingSession";
     private final AttributionSource mAttributionSource;
     private final SessionHandle mSessionHandle;
     private final IRangingAdapter mRangingAdapter;
     private final RangingSessionManager mRangingSessionManager;
     private final Callback mCallback;
     private final Executor mExecutor;
+    private final Map<RangingDevice, ITransportHandle> mTransportHandles =
+            new ConcurrentHashMap<>();
 
 
     public RangingSession(RangingSessionManager rangingSessionManager,
@@ -61,7 +67,17 @@ public final class RangingSession implements AutoCloseable {
         }
         CancellationSignal cancellationSignal = new CancellationSignal();
         cancellationSignal.setOnCancelListener(() -> this.close());
+
+        // TODO: if SmartRangingParams then setupTransportHandles();
         return cancellationSignal;
+    }
+
+    private void setupTransportHandles() {
+        // TODO: Add TransportHandle initialization
+        //      foreach deviceHandle:
+        //          mTransportHandles.add(rangingDevice, transportHandle)
+        //          transportHandle.registerReceiveCallback(new TransportHandleReceiveCallback
+        //          (device))
     }
 
     public void stop() {
@@ -84,6 +100,22 @@ public final class RangingSession implements AutoCloseable {
         mExecutor.execute(() -> mCallback.onResults(device, data));
     }
 
+    void sendOobData(RangingDevice toDevice, byte[] data) {
+        if (!mTransportHandles.containsKey(toDevice)) {
+            Log.e(TAG, "TransportHandle not found for session: " + mSessionHandle + ", device: "
+                    + toDevice);
+        }
+        mTransportHandles.get(toDevice).sendData(data);
+    }
+
+    /**
+     * @hide
+     */
+    @Override
+    public void close() {
+        stop();
+    }
+
     public interface Callback {
         void onStarted(@RangingManager.RangingTechnology int technology);
 
@@ -98,11 +130,32 @@ public final class RangingSession implements AutoCloseable {
         void onResults(@NonNull RangingDevice device, @NonNull RangingData data);
     }
 
-    /**
-     * @hide
-     */
-    @Override
-    public void close() {
-        stop();
+    class TransportHandleReceiveCallback implements ITransportHandle.ReceiveCallback {
+
+        private final OobHandle mOobHandle;
+
+        TransportHandleReceiveCallback(RangingDevice device) {
+            mOobHandle = new OobHandle(mSessionHandle, device);
+        }
+
+        @Override
+        public void onReceiveData(byte[] data) {
+            mRangingSessionManager.oobDataReceived(mOobHandle, data);
+        }
+
+        @Override
+        public void onDisconnect() {
+            mRangingSessionManager.deviceOobDisconnected(mOobHandle);
+        }
+
+        @Override
+        public void onReconnect() {
+            mRangingSessionManager.deviceOobReconnected(mOobHandle);
+        }
+
+        @Override
+        public void onClose() {
+            mRangingSessionManager.deviceOobClosed(mOobHandle);
+        }
     }
 }
