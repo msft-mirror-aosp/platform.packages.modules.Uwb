@@ -18,12 +18,15 @@ package com.android.server.uwb.params;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.junit.Assume.assumeTrue;
+
 import android.platform.test.annotations.Presubmit;
 import android.test.suitebuilder.annotation.SmallTest;
 import android.uwb.UwbAddress;
 
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.uwb.UwbInjector;
 import com.android.server.uwb.util.UwbUtil;
 
@@ -146,6 +149,7 @@ public class RfTestEncoderTest {
 
     @Test
     public void testRfTestOpenSessionParamsViaTlvEncoder() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastV());
         RfTestOpenSessionParams params = TEST_RFTEST_OPEN_SESSION_PARAMS.build();
 
         verifyRfTestOpenSessionParamsTlvBuffer(
@@ -155,6 +159,7 @@ public class RfTestEncoderTest {
 
     @Test
     public void testRfTestOpenSessionParams() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastV());
         RfTestOpenSessionParams params = TEST_RFTEST_OPEN_SESSION_PARAMS.build();
 
         verifyRfTestOpenSessionParamsTlvBuffer(mRfTestEncoder.getTlvBuffer(params,
@@ -163,6 +168,7 @@ public class RfTestEncoderTest {
 
     @Test
     public void testRfTestParamsViaTlvEncoder() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastV());
         RfTestOpenSessionParams params = TEST_RFTEST_OPEN_SESSION_PARAMS.build();
 
         verifyRfTestOpenSessionParamsTlvBuffer(
@@ -172,6 +178,7 @@ public class RfTestEncoderTest {
 
     @Test
     public void testRfTestParams() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastV());
         RfTestOpenSessionParams params = TEST_RFTEST_OPEN_SESSION_PARAMS.build();
 
         verifyRfTestOpenSessionParamsTlvBuffer(mRfTestEncoder.getTlvBuffer(params,
