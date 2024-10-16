@@ -21,12 +21,14 @@ import static android.ranging.RangingPreference.DEVICE_ROLE_RESPONDER;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
+import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
 import android.ranging.params.DataNotificationConfig;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
 import android.ranging.uwb.UwbRangingParams;
 import android.util.Log;
+import android.util.Pair;
 
 import androidx.annotation.NonNull;
 
@@ -81,6 +83,7 @@ public class UwbConfig implements TechnologyConfig {
     private final UwbRangingParams mParameters;
     private final int mDeviceRole;
     private final boolean mIsAoaNeeded;
+    private final Pair<RangingDevice, UwbAddress> mPeer;
 
     private UwbConfig(Builder builder) {
         mParameters = builder.mParameters;
@@ -88,6 +91,7 @@ public class UwbConfig implements TechnologyConfig {
         mDataNotificationConfig = builder.mDataNotificationConfig;
         mDeviceRole = builder.mDeviceRole;
         mIsAoaNeeded = builder.mIsAoaNeeded;
+        mPeer = new Pair<>(builder.mPeerDevice.get(), builder.mParameters.getPeerAddress());
     }
 
     /**
@@ -262,6 +266,10 @@ public class UwbConfig implements TechnologyConfig {
         return mIsAoaNeeded;
     }
 
+    public @NonNull Pair<RangingDevice, UwbAddress> getPeer() {
+        return mPeer;
+    }
+
     /**
      * @return the configuration converted to a
      * {@link androidx.core.uwb.backend.impl.internal.RangingParameters} accepted by the UWB
@@ -360,6 +368,7 @@ public class UwbConfig implements TechnologyConfig {
     /** Builder for {@link UwbConfig}. */
     public static class Builder {
         private final UwbRangingParams mParameters;
+        private final RequiredParam<RangingDevice> mPeerDevice = new RequiredParam<>();
         private final RequiredParam<String> mCountryCode = new RequiredParam<>();
         private DataNotificationConfig mDataNotificationConfig =
                 new DataNotificationConfig.Builder().build();
@@ -373,6 +382,11 @@ public class UwbConfig implements TechnologyConfig {
 
         public @NonNull UwbConfig build() {
             return new UwbConfig(this);
+        }
+
+        public Builder setPeerDevice(@NonNull RangingDevice device) {
+            mPeerDevice.set(device);
+            return this;
         }
 
         public Builder setCountryCode(@NonNull String countryCode) {

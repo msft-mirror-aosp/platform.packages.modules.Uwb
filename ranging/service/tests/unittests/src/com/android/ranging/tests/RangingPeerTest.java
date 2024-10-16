@@ -31,7 +31,9 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.RemoteException;
 import android.ranging.IRangingCallbacks;
+import android.ranging.RangingData;
 import android.ranging.RangingDevice;
+import android.ranging.RangingMeasurement;
 import android.ranging.SessionHandle;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
@@ -41,7 +43,6 @@ import androidx.test.filters.SmallTest;
 
 import com.android.server.ranging.RangingAdapter;
 import com.android.server.ranging.RangingConfig;
-import com.android.server.ranging.RangingData;
 import com.android.server.ranging.RangingPeer;
 import com.android.server.ranging.RangingSession;
 import com.android.server.ranging.RangingTechnology;
@@ -112,10 +113,9 @@ public class RangingPeerTest {
     /** @param technology to generate data for */
     private RangingData generateData(RangingTechnology technology) {
         return new RangingData.Builder()
-                .setTechnology(technology)
-                .setRangeDistance(123)
-                .setTimestamp(Duration.ofSeconds(1))
-                .setPeerAddress(new byte[]{0x1, 0x2})
+                .setRangingTechnology(technology.getValue())
+                .setDistance(new RangingMeasurement.Builder().setMeasurement(123).build())
+                .setTimestamp(1)
                 .build();
     }
 
@@ -140,7 +140,8 @@ public class RangingPeerTest {
                 .thenReturn(true);
         when(mMockConfig.getNoInitialDataTimeout()).thenReturn(Duration.ZERO);
         when(mMockConfig.getNoUpdatedDataTimeout()).thenReturn(Duration.ZERO);
-        when(mMockConfig.getFusionEngine()).thenReturn(new RangingConfig.NoOpFusionEngine());
+        when(mMockConfig.createConfiguredFusionEngine()).thenReturn(
+                new RangingConfig.NoOpFusionEngine());
 
         mSession = new RangingPeer(
                 mMockContext, MoreExecutors.newDirectExecutorService(), mMockTimeoutExecutor,
@@ -244,7 +245,7 @@ public class RangingPeerTest {
         EnumMap<RangingTechnology, RangingAdapter.Callback> adapterCallbacks =
                 startSession(ImmutableMap.of(UWB, getUwbConfig(getUwbParams().build()).build()));
 
-        adapterCallbacks.get(UWB).onRangingData(generateData(UWB));
+        adapterCallbacks.get(UWB).onRangingData(mock(RangingDevice.class), generateData(UWB));
 
         verify(mMockCallback).onData(eq(mMockSessionHandle),
                 any(RangingDevice.class),
