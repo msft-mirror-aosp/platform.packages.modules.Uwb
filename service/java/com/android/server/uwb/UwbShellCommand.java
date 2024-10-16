@@ -410,6 +410,10 @@ public class UwbShellCommand extends BasicShellCommandHandler {
 
         public void onHybridSessionControleeConfigurationFailed(SessionHandle sessionHandle,
                 int reason, PersistableBundle parameters) {}
+
+
+        public void onRfTestNotificationReceived(SessionHandle sessionHandle,
+                PersistableBundle parameters) {}
     }
 
 
