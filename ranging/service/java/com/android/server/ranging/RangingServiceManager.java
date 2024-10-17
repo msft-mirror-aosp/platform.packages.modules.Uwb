@@ -18,8 +18,10 @@ package com.android.server.ranging;
 
 import android.content.AttributionSource;
 import android.os.RemoteException;
+import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
+import android.ranging.OobHandle;
 import android.ranging.RangingCapabilities;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
@@ -83,5 +85,51 @@ public class RangingServiceManager {
     public void stopRanging(SessionHandle handle) {
         mSessions.get(handle).stop();
         mSessions.remove(handle);
+    }
+
+    /**
+     * Received data from the peer device.
+     *
+     * @param oobHandle unique session/device pair identifier.
+     * @param data      payload
+     */
+    public void oobDataReceived(OobHandle oobHandle, byte[] data) {
+        // Call OobController
+    }
+
+    /**
+     * Device disconnected from the OOB channel.
+     *
+     * @param oobHandle unique session/device pair identifier.
+     */
+    public void deviceOobDisconnected(OobHandle oobHandle) {
+        // Call OobController
+    }
+
+    /**
+     * Device reconnected to the OOB channel
+     *
+     * @param oobHandle unique session/device pair identifier.
+     */
+    public void deviceOobReconnected(OobHandle oobHandle) {
+        // Call OobController
+    }
+
+    /**
+     * Device closed the OOB channel.
+     *
+     * @param oobHandle unique session/device pair identifier.
+     */
+    public void deviceOobClosed(OobHandle oobHandle) {
+        // Call OobController
+    }
+
+    /**
+     * Register send data listener.
+     *
+     * @param oobSendDataListener listener for sending the data via OOB.
+     */
+    public void registerOobSendDataListener(IOobSendDataListener oobSendDataListener) {
+        // Call OobController
     }
 }
