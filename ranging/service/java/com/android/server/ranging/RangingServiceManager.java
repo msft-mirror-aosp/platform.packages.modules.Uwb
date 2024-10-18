@@ -17,6 +17,7 @@
 package com.android.server.ranging;
 
 import android.content.AttributionSource;
+import android.os.RemoteCallbackList;
 import android.os.RemoteException;
 import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingCallbacks;
@@ -25,6 +26,7 @@ import android.ranging.OobHandle;
 import android.ranging.RangingCapabilities;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
+import android.util.Log;
 
 import com.android.server.ranging.oob.CapabilityRequestMessage;
 import com.android.server.ranging.oob.CapabilityResponseMessage;
@@ -42,6 +44,7 @@ import java.util.concurrent.ScheduledExecutorService;
 
 public class RangingServiceManager {
 
+    private static final String TAG = RangingServiceManager.class.getSimpleName();
     private final RangingInjector mRangingInjector;
     private final OobController mOobController;
 
@@ -49,6 +52,8 @@ public class RangingServiceManager {
     private final ScheduledExecutorService mTimeoutExecutor;
 
     private final ConcurrentHashMap<SessionHandle, RangingPeer> mSessions;
+    private final RemoteCallbackList<IRangingCapabilitiesCallback> mCapabilitiesCallbackList =
+            new RemoteCallbackList<>();
 
     public RangingServiceManager(RangingInjector rangingInjector) {
         mRangingInjector = rangingInjector;
@@ -58,7 +63,23 @@ public class RangingServiceManager {
         mOobController = new OobController(new OobDataReceiveCallback());
     }
 
-    public void getRangingCapabilities(IRangingCapabilitiesCallback callback)
+    public void registerCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback)
+            throws RemoteException {
+        synchronized (mCapabilitiesCallbackList) {
+            mCapabilitiesCallbackList.register(capabilitiesCallback);
+        }
+        Log.w(TAG, "Registering ranging capabilities callback");
+        getRangingCapabilities(capabilitiesCallback);
+    }
+
+    public void unregisterCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback)
+            throws RemoteException {
+        synchronized (mCapabilitiesCallbackList) {
+            mCapabilitiesCallbackList.unregister(capabilitiesCallback);
+        }
+    }
+
+    private void getRangingCapabilities(IRangingCapabilitiesCallback callback)
             throws RemoteException {
         RangingCapabilities rangingCapabilities =
                 mRangingInjector.getCapabilitiesProvider().getCapabilities();

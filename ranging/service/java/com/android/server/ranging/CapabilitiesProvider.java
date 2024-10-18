@@ -50,6 +50,8 @@ public class CapabilitiesProvider {
     private final ExecutorService mExecutorService;
 
 
+    //TODO: Add support for registering state changes for each ranging technologies and update
+    // all callbacks registered.
     public CapabilitiesProvider(RangingInjector rangingInjector) {
         mRangingInjector = rangingInjector;
         mExecutorService = Executors.newSingleThreadExecutor();
