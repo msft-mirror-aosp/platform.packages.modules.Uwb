@@ -29,13 +29,13 @@ import android.ranging.RangingCapabilitiesListener;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.RangingManager;
-import android.ranging.RangingParameters;
+import android.ranging.RangingParams;
 import android.ranging.RangingPreference;
 import android.ranging.RangingSession;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
 import android.ranging.uwb.UwbRangingCapabilities;
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.uwb.UwbRangingParams;
 
 import androidx.annotation.NonNull;
 import androidx.test.InstrumentationRegistry;
@@ -52,7 +52,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -86,21 +85,22 @@ public class RangingManagerTest {
         CallbackVerifier callback = new CallbackVerifier();
 
         RangingSession rangingSession = mRangingManager.createRangingSession(
-                callback, MoreExecutors.directExecutor());
+                MoreExecutors.directExecutor(), callback);
         assertThat(rangingSession).isNotNull();
 
         RangingPreference preference = new RangingPreference.Builder()
-                .setRangingParameters(new RangingParameters.Builder()
-                        .setUwbParameters(new UwbRangingParameters.Builder()
+                .setRangingParameters(new RangingParams.Builder()
+                        .setUwbParameters(new UwbRangingParams.Builder()
                                 .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
-                                .setComplexChannel(new UwbComplexChannel(9, 11))
+                                .setComplexChannel(new UwbComplexChannel.Builder().setChannel(
+                                        9).setPreambleIndex(11).build())
                                 .setSessionKeyInfo(
                                         new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1})
-                                .setConfigId(UwbRangingParameters.ConfigId.UNICAST_DS_TWR)
+                                .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
                                 .setPeerAddresses(Map.of(
-                                        new RangingDevice(UUID.randomUUID()),
+                                        new RangingDevice.Builder().build(),
                                         UwbAddress.fromBytes(new byte[]{3, 4})))
-                                .setRangingUpdateRate(UwbRangingParameters.RangingUpdateRate.NORMAL)
+                                .setRangingUpdateRate(UwbRangingParams.RangingUpdateRate.NORMAL)
                                 .build())
                         .build())
                 .build();
@@ -125,43 +125,43 @@ public class RangingManagerTest {
         CallbackVerifier callback2 = new CallbackVerifier();
 
         RangingSession rangingSession1 = mRangingManager.createRangingSession(
-                callback1, MoreExecutors.directExecutor());
+                MoreExecutors.directExecutor(), callback1);
         assertThat(rangingSession1).isNotNull();
 
         RangingSession rangingSession2 = mRangingManager.createRangingSession(
-                callback2, MoreExecutors.directExecutor());
+                MoreExecutors.directExecutor(), callback2);
         assertThat(rangingSession2).isNotNull();
 
         RangingPreference preference1 = new RangingPreference.Builder()
-                .setRangingParameters(new RangingParameters.Builder()
-                        .setUwbParameters(new UwbRangingParameters.Builder()
+                .setRangingParameters(new RangingParams.Builder()
+                        .setUwbParameters(new UwbRangingParams.Builder()
                                 .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
-                                .setComplexChannel(
-                                        new UwbComplexChannel(9, 11))
+                                .setComplexChannel(new UwbComplexChannel.Builder().setChannel(
+                                        9).setPreambleIndex(11).build())
                                 .setSessionKeyInfo(
                                         new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1})
-                                .setConfigId(UwbRangingParameters.ConfigId.UNICAST_DS_TWR)
+                                .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
                                 .setPeerAddresses(Map.of(
-                                        new RangingDevice(UUID.randomUUID()),
+                                        new RangingDevice.Builder().build(),
                                         UwbAddress.fromBytes(new byte[]{3, 4})))
-                                .setRangingUpdateRate(UwbRangingParameters.RangingUpdateRate.NORMAL)
+                                .setRangingUpdateRate(UwbRangingParams.RangingUpdateRate.NORMAL)
                                 .build())
                         .build())
                 .build();
 
         RangingPreference preference2 = new RangingPreference.Builder()
-                .setRangingParameters(new RangingParameters.Builder()
-                        .setUwbParameters(new UwbRangingParameters.Builder()
+                .setRangingParameters(new RangingParams.Builder()
+                        .setUwbParameters(new UwbRangingParams.Builder()
                                 .setDeviceAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
-                                .setComplexChannel(
-                                        new UwbComplexChannel(9, 11))
+                                .setComplexChannel(new UwbComplexChannel.Builder().setChannel(
+                                        9).setPreambleIndex(11).build())
                                 .setSessionKeyInfo(
                                         new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1})
-                                .setConfigId(UwbRangingParameters.ConfigId.UNICAST_DS_TWR)
+                                .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
                                 .setPeerAddresses(Map.of(
-                                        new RangingDevice(UUID.randomUUID()),
+                                        new RangingDevice.Builder().build(),
                                         UwbAddress.fromBytes(new byte[]{1, 2})))
-                                .setRangingUpdateRate(UwbRangingParameters.RangingUpdateRate.NORMAL)
+                                .setRangingUpdateRate(UwbRangingParams.RangingUpdateRate.NORMAL)
                                 .build())
                         .build())
                 .build();
@@ -243,6 +243,7 @@ public class RangingManagerTest {
         RangingCapListener(CountDownLatch countDownLatch) {
             mOnCapabilitiesReceived = countDownLatch;
         }
+
         @Override
         public void onRangingCapabilities(RangingCapabilities capabilities) {
             mOnCapabilitiesReceived.countDown();
