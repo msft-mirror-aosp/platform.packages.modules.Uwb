@@ -22,7 +22,7 @@ import android.content.Context;
 import android.os.RemoteException;
 import android.ranging.IRangingCallbacks;
 import android.ranging.SessionHandle;
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.uwb.UwbRangingParams;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -127,7 +127,7 @@ public final class RangingPeer {
                 return new UwbAdapter(
                         mContext, mAdapterExecutor,
                         ((UwbConfig) config).getParameters().getDeviceRole()
-                                == UwbRangingParameters.DeviceRole.INITIATOR
+                                == UwbRangingParams.DeviceRole.INITIATOR
                                 ? FiraParams.RANGING_DEVICE_TYPE_CONTROLLER
                                 : FiraParams.RANGING_DEVICE_TYPE_CONTROLEE);
             case CS:

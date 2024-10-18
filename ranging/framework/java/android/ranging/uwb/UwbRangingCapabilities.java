@@ -17,10 +17,9 @@
 package android.ranging.uwb;
 
 import android.annotation.FlaggedApi;
+import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
-
-import androidx.annotation.NonNull;
 
 import com.android.ranging.flags.Flags;
 
@@ -28,7 +27,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The type Uwb ranging capabilities.
+ * Represents the capabilities of Ultra-Wideband (UWB) ranging technology.
+ *
+ * <p>This class encapsulates various UWB-related features, including support for specific
+ * measurement types (e.g., distance, azimuth, elevation), ranging configurations, and
+ * operational parameters like update rates and channel availability.</p>
  *
  * @hide
  */
@@ -61,7 +64,7 @@ public final class UwbRangingCapabilities implements Parcelable {
         mHasBackgroundRangingSupport = builder.mHasBackgroundRangingSupport;
     }
 
-    protected UwbRangingCapabilities(Parcel in) {
+    private UwbRangingCapabilities(Parcel in) {
         mSupportsDistance = in.readByte() != 0;
         mSupportsAzimuthalAngle = in.readByte() != 0;
         mSupportsElevationAngle = in.readByte() != 0;
@@ -80,6 +83,7 @@ public final class UwbRangingCapabilities implements Parcelable {
         mHasBackgroundRangingSupport = in.readByte() != 0;
     }
 
+    @NonNull
     public static final Creator<UwbRangingCapabilities> CREATOR =
             new Creator<UwbRangingCapabilities>() {
                 @Override
@@ -94,104 +98,112 @@ public final class UwbRangingCapabilities implements Parcelable {
             };
 
     /**
-     * Is supports distance boolean.
+     * Checks if the device supports distance measurement.
      *
-     * @return the boolean
+     * @return {@code true} if distance measurement is supported; {@code false} otherwise.
      */
     public boolean isSupportsDistance() {
         return mSupportsDistance;
     }
 
     /**
-     * Is supports azimuthal angle boolean.
+     * Checks if the device supports azimuthal angle measurement.
      *
-     * @return the boolean
+     * @return {@code true} if azimuthal angle measurement is supported; {@code false} otherwise.
      */
     public boolean isSupportsAzimuthalAngle() {
         return mSupportsAzimuthalAngle;
     }
 
     /**
-     * Is supports elevation angle boolean.
+     * Checks if the device supports elevation angle measurement.
      *
-     * @return the boolean
+     * @return {@code true} if elevation angle measurement is supported; {@code false} otherwise.
      */
     public boolean isSupportsElevationAngle() {
         return mSupportsElevationAngle;
     }
 
     /**
-     * Is supports ranging interval reconfigure boolean.
+     * Checks if the ranging interval can be reconfigured.
      *
-     * @return the boolean
+     * @return {@code true} if the interval is configurable; {@code false} otherwise.
      */
     public boolean isSupportsRangingIntervalReconfigure() {
         return mSupportsRangingIntervalReconfigure;
     }
 
     /**
-     * Gets min ranging interval.
+     * Gets the minimum supported ranging interval in milliseconds.
      *
-     * @return the min ranging interval
+     * @return the minimum ranging interval.
      */
     public int getMinRangingInterval() {
         return mMinRangingInterval;
     }
 
     /**
-     * Gets supported channels.
+     * Gets the list of supported UWB channels.
      *
-     * @return the supported channels
+     * @return a list of supported channel numbers.
      */
+    @NonNull
     public List<Integer> getSupportedChannels() {
         return mSupportedChannels;
     }
 
     /**
-     * Gets supported ntf configs.
+     * Gets the list of supported notification configurations.
      *
-     * @return the supported ntf configs
+     * @return a list of supported notification configuration IDs.
      */
+    @NonNull
     public List<Integer> getSupportedNtfConfigs() {
         return mSupportedNtfConfigs;
     }
 
     /**
-     * Gets supported config ids.
+     * Gets the list of supported configuration IDs.
      *
-     * @return the supported config ids
+     * @return a list of supported configuration IDs.
      */
+    @NonNull
     public List<Integer> getSupportedConfigIds() {
         return mSupportedConfigIds;
     }
 
     /**
-     * Gets supported slot durations.
+     * Gets the list of supported slot durations in microseconds.
      *
-     * @return the supported slot durations
+     * @return a list of supported slot durations.
      */
+    @NonNull
     public List<Integer> getSupportedSlotDurations() {
         return mSupportedSlotDurations;
     }
 
     /**
-     * Gets supported ranging update rates.
+     * Gets the list of supported ranging update rates.
      *
-     * @return the supported ranging update rates
+     * @return a list of supported update rates.
      */
+    @NonNull
     public List<Integer> getSupportedRangingUpdateRates() {
         return mSupportedRangingUpdateRates;
     }
 
     /**
-     * Is has background ranging support boolean.
+     * Checks if background ranging is supported.
      *
-     * @return the boolean
+     * @return {@code true} if background ranging is supported; {@code false} otherwise.
      */
     public boolean isHasBackgroundRangingSupport() {
         return mHasBackgroundRangingSupport;
     }
 
+    /**
+     * @hide
+     */
     @Override
     public int describeContents() {
         return 0;
@@ -213,7 +225,9 @@ public final class UwbRangingCapabilities implements Parcelable {
     }
 
     /**
-     * The type Builder.
+     * Builder for {@link UwbRangingCapabilities}
+     *
+     * @hide
      */
     public static class Builder {
         private boolean mSupportsDistance;
@@ -234,6 +248,7 @@ public final class UwbRangingCapabilities implements Parcelable {
          * @param supportsDistance the supports distance
          * @return the supports distance
          */
+        @NonNull
         public Builder setSupportsDistance(boolean supportsDistance) {
             this.mSupportsDistance = supportsDistance;
             return this;
@@ -245,6 +260,7 @@ public final class UwbRangingCapabilities implements Parcelable {
          * @param supportsAzimuthalAngle the supports azimuthal angle
          * @return the supports azimuthal angle
          */
+        @NonNull
         public Builder setSupportsAzimuthalAngle(boolean supportsAzimuthalAngle) {
             this.mSupportsAzimuthalAngle = supportsAzimuthalAngle;
             return this;
@@ -256,6 +272,7 @@ public final class UwbRangingCapabilities implements Parcelable {
          * @param supportsElevationAngle the supports elevation angle
          * @return the supports elevation angle
          */
+        @NonNull
         public Builder setSupportsElevationAngle(boolean supportsElevationAngle) {
             this.mSupportsElevationAngle = supportsElevationAngle;
             return this;
@@ -267,6 +284,7 @@ public final class UwbRangingCapabilities implements Parcelable {
          * @param supportsRangingIntervalReconfigure the supports ranging interval reconfigure
          * @return the supports ranging interval reconfigure
          */
+        @NonNull
         public Builder setSupportsRangingIntervalReconfigure(
                 boolean supportsRangingIntervalReconfigure) {
             this.mSupportsRangingIntervalReconfigure = supportsRangingIntervalReconfigure;
@@ -279,6 +297,7 @@ public final class UwbRangingCapabilities implements Parcelable {
          * @param minRangingInterval the min ranging interval
          * @return the min ranging interval
          */
+        @NonNull
         public Builder setMinRangingInterval(int minRangingInterval) {
             this.mMinRangingInterval = minRangingInterval;
             return this;
@@ -289,7 +308,10 @@ public final class UwbRangingCapabilities implements Parcelable {
          *
          * @param supportedChannels the supported channels
          * @return the supported channels
+         *
+         * @throws IllegalArgumentException if the provided list is null.
          */
+        @NonNull
         public Builder setSupportedChannels(List<Integer> supportedChannels) {
             this.mSupportedChannels = supportedChannels;
             return this;
@@ -300,8 +322,11 @@ public final class UwbRangingCapabilities implements Parcelable {
          *
          * @param supportedNtfConfigs the supported ntf configs
          * @return the supported ntf configs
+         *
+         * @throws IllegalArgumentException if the provided list is null.
          */
-        public Builder setSupportedNtfConfigs(List<Integer> supportedNtfConfigs) {
+        @NonNull
+        public Builder setSupportedNtfConfigs(@NonNull List<Integer> supportedNtfConfigs) {
             this.mSupportedNtfConfigs = supportedNtfConfigs;
             return this;
         }
@@ -311,8 +336,11 @@ public final class UwbRangingCapabilities implements Parcelable {
          *
          * @param supportedConfigIds the supported config ids
          * @return the supported config ids
+         *
+         * @throws IllegalArgumentException if the provided list is null.
          */
-        public Builder setSupportedConfigIds(List<Integer> supportedConfigIds) {
+        @NonNull
+        public Builder setSupportedConfigIds(@NonNull List<Integer> supportedConfigIds) {
             this.mSupportedConfigIds = supportedConfigIds;
             return this;
         }
@@ -322,8 +350,11 @@ public final class UwbRangingCapabilities implements Parcelable {
          *
          * @param supportedSlotDurations the supported slot durations
          * @return the supported slot durations
+         *
+         * @throws IllegalArgumentException if the provided list is null.
          */
-        public Builder setSupportedSlotDurations(List<Integer> supportedSlotDurations) {
+        @NonNull
+        public Builder setSupportedSlotDurations(@NonNull List<Integer> supportedSlotDurations) {
             this.mSupportedSlotDurations = supportedSlotDurations;
             return this;
         }
@@ -333,8 +364,12 @@ public final class UwbRangingCapabilities implements Parcelable {
          *
          * @param supportedRangingUpdateRates the supported ranging update rates
          * @return the supported ranging update rates
+         *
+         * @throws IllegalArgumentException if the provided list is null.
          */
-        public Builder setSupportedRangingUpdateRates(List<Integer> supportedRangingUpdateRates) {
+        @NonNull
+        public Builder setSupportedRangingUpdateRates(
+                @NonNull List<Integer> supportedRangingUpdateRates) {
             this.mSupportedRangingUpdateRates = supportedRangingUpdateRates;
             return this;
         }
@@ -345,6 +380,7 @@ public final class UwbRangingCapabilities implements Parcelable {
          * @param hasBackgroundRangingSupport the has background ranging support
          * @return the has background ranging support
          */
+        @NonNull
         public Builder setHasBackgroundRangingSupport(boolean hasBackgroundRangingSupport) {
             this.mHasBackgroundRangingSupport = hasBackgroundRangingSupport;
             return this;
@@ -355,6 +391,7 @@ public final class UwbRangingCapabilities implements Parcelable {
          *
          * @return the uwb ranging capabilities
          */
+        @NonNull
         public UwbRangingCapabilities build() {
             return new UwbRangingCapabilities(this);
         }
