@@ -132,6 +132,8 @@ public final class RangingPeer {
                                 : FiraParams.RANGING_DEVICE_TYPE_CONTROLEE);
             case CS:
                 return new CsAdapter();
+//            case RTT:
+//                return new RttAdapter(mContext, mAdapterExecutor, role);
             default:
                 throw new IllegalArgumentException(
                         "Tried to create adapter for unknown technology" + technology);
