@@ -13,12 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package androidx.core.uwb.backend;
 
-package android.ranging;
-
-/**
- *  @hide
- */
-public interface RangingCapabilitiesListener {
-    void onRangingCapabilities(RangingCapabilities capabilities);
+/** Gms Reference: com.google.android.gms.nearby.uwb.UwbAvailabilityObserver */
+interface IUwbAvailabilityObserver {
+    void onUwbStateChanged(boolean isAvailable, int reason);
 }

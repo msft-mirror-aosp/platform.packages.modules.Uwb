@@ -50,6 +50,8 @@ public class CapabilitiesProvider {
     private final ExecutorService mExecutorService;
 
 
+    //TODO: Add support for registering state changes for each ranging technologies and update
+    // all callbacks registered.
     public CapabilitiesProvider(RangingInjector rangingInjector) {
         mRangingInjector = rangingInjector;
         mExecutorService = Executors.newSingleThreadExecutor();
@@ -67,7 +69,7 @@ public class CapabilitiesProvider {
         RangingCapabilities.Builder builder = new RangingCapabilities.Builder();
         FutureTask<Void> uwbFutureTask = new FutureTask<>(() -> {
             if (mUwbAdapter == null) {
-                builder.addAvailablility(RangingManager.RangingTechnology.UWB,
+                builder.addAvailability(RangingManager.RangingTechnology.UWB,
                         RangingManager.RangingTechnologyAvailability.NOT_SUPPORTED);
             } else {
                 ListenableFuture<com.android.ranging.uwb.backend.internal.RangingCapabilities>
@@ -97,7 +99,7 @@ public class CapabilitiesProvider {
                                             capabilities.hasBackgroundRangingSupport())
                                     .build();
 
-                    builder.addAvailablility(RangingManager.RangingTechnology.UWB,
+                    builder.addAvailability(RangingManager.RangingTechnology.UWB,
                                     RangingManager.RangingTechnologyAvailability.ENABLED)
                             .setUwbRangingCapabilities(uwbRangingCapabilities);
                 } catch (InterruptedException | ExecutionException | TimeoutException e) {
@@ -109,7 +111,7 @@ public class CapabilitiesProvider {
 
         FutureTask<Void> csFutureTask = new FutureTask<>(() -> {
             if (mCsAdapter == null) {
-                builder.addAvailablility(RangingManager.RangingTechnology.BT_CS,
+                builder.addAvailability(RangingManager.RangingTechnology.BT_CS,
                         RangingManager.RangingTechnologyAvailability.NOT_SUPPORTED);
             } else {
                 // TODO add CS support
