@@ -24,8 +24,6 @@ import android.annotation.Nullable;
 import android.annotation.SystemService;
 import android.content.AttributionSource;
 import android.content.Context;
-import android.os.RemoteException;
-import android.util.Log;
 
 import com.android.ranging.flags.Flags;
 
@@ -53,6 +51,7 @@ public final class RangingManager {
 
     private final Context mContext;
     private final IRangingAdapter mRangingAdapter;
+    private final CapabilitiesListener mCapabilitiesListener;
 
     private final RangingSessionManager mRangingSessionManager;
 
@@ -133,48 +132,39 @@ public final class RangingManager {
     public RangingManager(@NonNull Context context, @NonNull IRangingAdapter adapter) {
         mContext = context;
         mRangingAdapter = adapter;
+        mCapabilitiesListener = new CapabilitiesListener(adapter);
         mRangingSessionManager = new RangingSessionManager(adapter);
     }
 
     /**
-     * Gets all the available ranging  technologies and ranging capabilities supported by the
-     * device. This method is asynchronous and will invoke the provided
-     * {@link RangingCapabilitiesListener#onRangingCapabilities} with {@link RangingCapabilities}.
+     * Registers a callback to receive ranging capabilities updates.
      *
-     * <p>Ranging capabilities may include support for technologies such as
-     * UWB (Ultra Wideband), WiFi RTT (Round Trip Time), and channel sounding.
-     *
-     * <p>This method uses a callback mechanism to deliver the results on the
-     * provided {@link Executor}.
-     *
-     * @param executor the {@link Executor} on which the listener will be invoked.
-     * @param listener the {@link RangingCapabilitiesListener} to be notified
-     *                 when the ranging availability and capabilities.
-     *
-     * @throws NullPointerException if {@code executor} or {@code listener} is null.
+     * @param executor The {@link Executor} on which the callback will be executed.
+     *                 Must not be null.
+     * @param callback The {@link RangingCapabilitiesCallback} that will handle the
+     *                 capabilities updates. Must not be null.
+     * @throws NullPointerException if the {@code executor} or {@code callback} is null.
      */
     @NonNull
-    public void getRangingCapabilities(
+    public void registerCapabilitiesCallback(
             @NonNull @CallbackExecutor Executor executor,
-            @NonNull RangingCapabilitiesListener listener) {
+            @NonNull RangingCapabilitiesCallback callback) {
         Objects.requireNonNull(executor, "Executor cannot be null");
-        Objects.requireNonNull(listener, "Capabilities listener cannot be null");
-        IRangingCapabilitiesCallback.Stub rangingCapabilitiesCallback =
-                new IRangingCapabilitiesCallback.Stub() {
+        Objects.requireNonNull(callback, "Capabilities callback cannot be null");
+        mCapabilitiesListener.register(executor, callback);
+    }
 
-                    @Override
-                    public void onRangingCapabilities(
-                            RangingCapabilities rangingCapabilities)
-                            throws RemoteException {
-                        executor.execute(() -> listener.onRangingCapabilities(
-                                rangingCapabilities));
-                    }
-                };
-        try {
-            mRangingAdapter.getRangingCapabilities(rangingCapabilitiesCallback);
-        } catch (RemoteException e) {
-            Log.e(TAG, "Get capabilities failed" + e.toString());
-        }
+    /**
+     * Unregisters a previously registered ranging capabilities callback.
+     *
+     * @param callback The {@link RangingCapabilitiesCallback} to be unregistered.
+     *                 Must not be null.
+     * @throws NullPointerException if the {@code callback} is null.
+     */
+    @NonNull
+    public void unregisterCapabilitiesCallback(@NonNull RangingCapabilitiesCallback callback) {
+        Objects.requireNonNull(callback, "Capabilities callback cannot be null");
+        mCapabilitiesListener.unregister(callback);
     }
 
     /**
@@ -195,10 +185,10 @@ public final class RangingManager {
      * @param executor the {@link Executor} on which the callback will be invoked.
      *                 Must not be {@code null}.
      * @return the {@link RangingSession} instance if the session was successfully created,
-     *         or {@code null} if the session could not be created.
+     * or {@code null} if the session could not be created.
      * @throws NullPointerException if {@code callback} or {@code executor} is null.
-     * @throws SecurityException if the calling app does not have the necessary permissions
-     *                           to create a ranging session.
+     * @throws SecurityException    if the calling app does not have the necessary permissions
+     *                              to create a ranging session.
      */
     @Nullable
     public RangingSession createRangingSession(@NonNull Executor executor,
@@ -212,5 +202,25 @@ public final class RangingManager {
             RangingSession.Callback callback, Executor executor) {
         return mRangingSessionManager.createRangingSessionInstance(attributionSource, callback,
                 executor);
+    }
+
+    /**
+     * Callback interface to receive the availabilities and capabilities of all the ranging
+     * technology supported by the device.
+     *
+     * <p>This interface is used to asynchronously provide information about the
+     * supported ranging capabilities of the device. The callback is invoked first time when
+     * registered and if any capabilities are updated until it is unregistered. </p>
+     */
+    public interface RangingCapabilitiesCallback {
+
+        /**
+         * Called when the ranging capabilities are available.
+         *
+         * @param capabilities the {@link RangingCapabilities} object containing
+         *                     detailed information about the supported features
+         *                     and limitations of the ranging technology.
+         */
+        void onRangingCapabilities(@NonNull RangingCapabilities capabilities);
     }
 }
