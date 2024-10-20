@@ -16,10 +16,4 @@
 
 package android.ranging;
 
-import android.ranging.RangingCapabilities;
-/**
-*  @hide
-*/
-oneway interface IRangingCapabilitiesCallback {
-    void onRangingCapabilities(in RangingCapabilities rangingCapabilities);
-}
+parcelable OobHandle;

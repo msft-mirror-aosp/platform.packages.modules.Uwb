@@ -16,10 +16,13 @@
 
 package android.ranging;
 
-import android.ranging.RangingCapabilities;
+import android.ranging.OobHandle;
+
 /**
+* Interface for sending data over the OOB channel.
+*
 *  @hide
 */
-oneway interface IRangingCapabilitiesCallback {
-    void onRangingCapabilities(in RangingCapabilities rangingCapabilities);
+oneway interface IOobSendDataListener {
+    void sendOobData(in OobHandle oobHandle, in byte[] data);
 }
