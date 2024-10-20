@@ -17,6 +17,7 @@
 package com.android.server.ranging;
 
 import android.content.AttributionSource;
+import android.os.RemoteCallbackList;
 import android.os.RemoteException;
 import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingCallbacks;
@@ -25,6 +26,14 @@ import android.ranging.OobHandle;
 import android.ranging.RangingCapabilities;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
+import android.util.Log;
+
+import com.android.server.ranging.oob.CapabilityRequestMessage;
+import com.android.server.ranging.oob.CapabilityResponseMessage;
+import com.android.server.ranging.oob.OobController;
+import com.android.server.ranging.oob.SetConfigurationMessage;
+import com.android.server.ranging.oob.StartRangingMessage;
+import com.android.server.ranging.oob.StopRangingMessage;
 
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -35,21 +44,42 @@ import java.util.concurrent.ScheduledExecutorService;
 
 public class RangingServiceManager {
 
+    private static final String TAG = RangingServiceManager.class.getSimpleName();
     private final RangingInjector mRangingInjector;
+    private final OobController mOobController;
 
     private final ListeningExecutorService mAdapterExecutor;
     private final ScheduledExecutorService mTimeoutExecutor;
 
     private final ConcurrentHashMap<SessionHandle, RangingPeer> mSessions;
+    private final RemoteCallbackList<IRangingCapabilitiesCallback> mCapabilitiesCallbackList =
+            new RemoteCallbackList<>();
 
     public RangingServiceManager(RangingInjector rangingInjector) {
         mRangingInjector = rangingInjector;
         mAdapterExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor());
         mTimeoutExecutor = Executors.newSingleThreadScheduledExecutor();
         mSessions = new ConcurrentHashMap<>();
+        mOobController = new OobController(new OobDataReceiveCallback());
     }
 
-    public void getRangingCapabilities(IRangingCapabilitiesCallback callback)
+    public void registerCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback)
+            throws RemoteException {
+        synchronized (mCapabilitiesCallbackList) {
+            mCapabilitiesCallbackList.register(capabilitiesCallback);
+        }
+        Log.w(TAG, "Registering ranging capabilities callback");
+        getRangingCapabilities(capabilitiesCallback);
+    }
+
+    public void unregisterCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback)
+            throws RemoteException {
+        synchronized (mCapabilitiesCallbackList) {
+            mCapabilitiesCallbackList.unregister(capabilitiesCallback);
+        }
+    }
+
+    private void getRangingCapabilities(IRangingCapabilitiesCallback callback)
             throws RemoteException {
         RangingCapabilities rangingCapabilities =
                 mRangingInjector.getCapabilitiesProvider().getCapabilities();
@@ -72,12 +102,17 @@ public class RangingServiceManager {
         }
     }
 
-    public void startPassthroughRanging(
-            SessionHandle sessionHandle, IRangingCallbacks callbacks, RangingPreference preference
-    ) {
+    /**
+     *
+     * @param sessionHandle
+     * @param callbacks
+     * @param preference
+     */
+    public void startPassthroughRanging(SessionHandle sessionHandle, IRangingCallbacks callbacks,
+            RangingPreference preference) {
         RangingConfig config = new RangingConfig.Builder(preference).build();
-        RangingPeer session = new RangingPeer(
-                mRangingInjector.getContext(), mAdapterExecutor, mTimeoutExecutor, sessionHandle);
+        RangingPeer session = new RangingPeer(mRangingInjector.getContext(), mAdapterExecutor,
+                mTimeoutExecutor, sessionHandle);
         mSessions.put(sessionHandle, session);
         session.start(config, callbacks);
     }
@@ -94,7 +129,7 @@ public class RangingServiceManager {
      * @param data      payload
      */
     public void oobDataReceived(OobHandle oobHandle, byte[] data) {
-        // Call OobController
+        mOobController.receiveData(oobHandle, data);
     }
 
     /**
@@ -130,6 +165,36 @@ public class RangingServiceManager {
      * @param oobSendDataListener listener for sending the data via OOB.
      */
     public void registerOobSendDataListener(IOobSendDataListener oobSendDataListener) {
-        // Call OobController
+        mOobController.setOobSendDataListener(oobSendDataListener);
+    }
+
+    class OobDataReceiveCallback implements OobController.IOobDataReceiveCallback {
+
+        @Override
+        public void onCapabilityRequestMessage(OobHandle oobHandle,
+                CapabilityRequestMessage message) {
+            // Do stuff
+        }
+
+        @Override
+        public void onCapabilityResponseMessage(OobHandle oobHandle,
+                CapabilityResponseMessage message) {
+            // Do stuff
+        }
+
+        @Override
+        public void onConfigurationMessage(OobHandle oobHandle, SetConfigurationMessage message) {
+            // Do stuff
+        }
+
+        @Override
+        public void onStartRangingMessage(OobHandle oobHandle, StartRangingMessage message) {
+            // Do stuff
+        }
+
+        @Override
+        public void onStopRangingMessage(OobHandle oobHandle, StopRangingMessage message) {
+            // Do stuff
+        }
     }
 }

@@ -41,6 +41,11 @@ public final class OobHandle implements Parcelable {
     private final SessionHandle mSessionHandle;
     private final RangingDevice mRangingDevice;
 
+    public OobHandle(SessionHandle sessionHandle, RangingDevice device) {
+        mSessionHandle = sessionHandle;
+        mRangingDevice = device;
+    }
+
     protected OobHandle(Parcel in) {
         mSessionHandle = in.readParcelable(SessionHandle.class.getClassLoader(),
                 SessionHandle.class);
