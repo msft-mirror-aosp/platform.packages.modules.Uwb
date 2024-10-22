@@ -39,10 +39,17 @@ public class RangingServiceImpl extends IRangingAdapter.Stub {
         mRangingInjector = rangingInjector;
     }
 
+
     @Override
-    public void getRangingCapabilities(IRangingCapabilitiesCallback callback)
+    public void registerCapabilitiesCallback(IRangingCapabilitiesCallback callback)
             throws RemoteException {
-        mRangingInjector.getRangingServiceManager().getRangingCapabilities(callback);
+        mRangingInjector.getRangingServiceManager().registerCapabilitiesCallback(callback);
+    }
+
+    @Override
+    public void unregisterCapabilitiesCallback(IRangingCapabilitiesCallback callback)
+            throws RemoteException {
+        mRangingInjector.getRangingServiceManager().unregisterCapabilitiesCallback(callback);
     }
 
     @Override

@@ -29,6 +29,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
+ * Represents the capabilities and availability of various ranging technologies.
+ *
+ * <p>The {@code RangingCapabilities} class encapsulates the status of different ranging
+ * technologies. It also allows querying the availability of other ranging technologies through a
+ * mapping of technology identifiers to availability statuses.</p>
+ *
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
@@ -46,40 +52,58 @@ public final class RangingCapabilities implements Parcelable {
         mTechnologyAvailabilityMap = builder.mTechnologyAvailabilityMap;
     }
 
-    protected RangingCapabilities(Parcel in) {
+    private RangingCapabilities(Parcel in) {
         mUwbRangingCapabilities = in.readParcelable(UwbRangingCapabilities.class.getClassLoader(),
                 UwbRangingCapabilities.class);
+        int size = in.readInt();
+        mTechnologyAvailabilityMap = new HashMap<>(size);
+        for (int i = 0; i < size; i++) {
+            int key = in.readInt();
+            int value = in.readInt();
+            mTechnologyAvailabilityMap.put(key, value);
+        }
     }
 
-    public static final Creator<RangingCapabilities> CREATOR = new Creator<RangingCapabilities>() {
-        @Override
-        public RangingCapabilities createFromParcel(Parcel in) {
-            return new RangingCapabilities(in);
-        }
+    @NonNull
+    public static final Creator<RangingCapabilities> CREATOR =
+            new Creator<RangingCapabilities>() {
+                @Override
+                public RangingCapabilities createFromParcel(Parcel in) {
+                    return new RangingCapabilities(in);
+                }
 
-        @Override
-        public RangingCapabilities[] newArray(int size) {
-            return new RangingCapabilities[size];
-        }
-    };
+                @Override
+                public RangingCapabilities[] newArray(int size) {
+                    return new RangingCapabilities[size];
+                }
+            };
 
-    /** Gets the availability and statues of all ranging technologies. */
+    /**
+     * Gets a map containing the availability of various ranging technologies.
+     *
+     * <p>The map uses technology identifiers as keys and their respective availability
+     * statuses as values.</p>
+     *
+     * @return a {@link Map} containing technology availability statuses.
+     */
     @NonNull
     public Map<Integer, Integer> getTechnologyAvailabilityMap() {
-        return new HashMap<>();
+        return mTechnologyAvailabilityMap;
     }
 
-    /** Gets ultrawideband capabilities. */
+    /**
+     * Gets the UWB ranging capabilities.
+     *
+     * @return a {@link UwbRangingCapabilities} object or {@code null} if not available.
+     */
     @Nullable
     public UwbRangingCapabilities getUwbCapabilities() {
         return mUwbRangingCapabilities;
     }
 
-    public HashMap<Integer,
-            Integer> getTechnologyAvailablitiyMap() {
-        return mTechnologyAvailabilityMap;
-    }
-
+    /**
+     * @hide
+     */
     @Override
     public int describeContents() {
         return 0;
@@ -88,8 +112,18 @@ public final class RangingCapabilities implements Parcelable {
     @Override
     public void writeToParcel(@androidx.annotation.NonNull Parcel dest, int flags) {
         dest.writeParcelable(mUwbRangingCapabilities, flags);
+        dest.writeInt(mTechnologyAvailabilityMap.size()); // Write map size
+        for (Map.Entry<Integer, Integer> entry : mTechnologyAvailabilityMap.entrySet()) {
+            dest.writeInt(entry.getKey()); // Write the key
+            dest.writeInt(entry.getValue()); // Write the value
+        }
     }
 
+    /**
+     * Builder for {@link UwbRangingCapabilities}
+     *
+     * @hide
+     */
     public static class Builder {
         private UwbRangingCapabilities mUwbRangingCapabilities = null;
         private final HashMap<Integer, Integer> mTechnologyAvailabilityMap = new HashMap<>();
@@ -99,7 +133,7 @@ public final class RangingCapabilities implements Parcelable {
             return this;
         }
 
-        public Builder addAvailablility(int technology, int availability) {
+        public Builder addAvailability(int technology, int availability) {
             mTechnologyAvailabilityMap.put(technology, availability);
             return this;
         }
