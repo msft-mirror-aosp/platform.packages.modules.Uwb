@@ -192,7 +192,6 @@ public final class RangingPeer {
      * @param reason why the session was stopped.
      */
     private void stopForReason(@RangingSession.Callback.StoppedReason int reason) {
-        Log.i(TAG, "stop ranging with reason: " + reason);
         synchronized (mStateMachine) {
             if (mStateMachine.getState() == State.STOPPING
                     || mStateMachine.getState() == State.STOPPED
@@ -329,10 +328,13 @@ public final class RangingPeer {
         @Override
         public void onStopped(@RangingAdapter.Callback.StoppedReason int reason) {
             synchronized (mStateMachine) {
+                if (mStateMachine.getState() != State.STOPPING) {
+                    mAdapters.get(mTechnology).stop();
+                }
                 mAdapters.remove(mTechnology);
                 mFusionEngines.values().forEach(engine -> engine.removeDataSource(mTechnology));
-                if (mAdapters.isEmpty()
-                        && mStateMachine.transition(State.STOPPING, State.STOPPED)) {
+                if (mAdapters.isEmpty()) {
+                    mStateMachine.setState(State.STOPPED);
                     // The last technology in the session has stopped, so signal that the entire
                     // session has stopped.
                     try {
