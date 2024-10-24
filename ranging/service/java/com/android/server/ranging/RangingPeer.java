@@ -21,8 +21,8 @@ import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
 import android.content.Context;
 import android.os.RemoteException;
 import android.ranging.IRangingCallbacks;
+import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
-import android.ranging.uwb.UwbRangingParams;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -128,15 +128,15 @@ public final class RangingPeer {
             case UWB:
                 return new UwbAdapter(
                         mContext, mAdapterExecutor,
-                        ((UwbConfig) config).getParameters().getDeviceRole()
-                                == UwbRangingParams.DeviceRole.INITIATOR
+                        ((UwbConfig) config).getDeviceRole()
+                                == RangingPreference.DEVICE_ROLE_INITIATOR
                                 ? FiraParams.RANGING_DEVICE_TYPE_CONTROLLER
                                 : FiraParams.RANGING_DEVICE_TYPE_CONTROLEE);
             case CS:
                 return new CsAdapter();
             case RTT:
                 return new RttAdapter(mContext, mAdapterExecutor,
-                        ((RttConfig) config).getRangingParams().getDeviceRole());
+                        ((RttConfig) config).getDeviceRole());
             default:
                 throw new IllegalArgumentException(
                         "Tried to create adapter for unknown technology" + technology);
