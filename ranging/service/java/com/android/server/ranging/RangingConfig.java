@@ -16,7 +16,8 @@
 package com.android.server.ranging;
 
 import android.ranging.RangingPreference;
-import android.ranging.uwb.UwbRangingParameters;
+import android.ranging.rtt.RttRangingParams;
+import android.ranging.uwb.UwbRangingParams;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -26,11 +27,14 @@ import com.android.server.ranging.cs.CsConfig;
 import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.fusion.FilteringFusionEngine;
 import com.android.server.ranging.fusion.FusionEngine;
+import com.android.server.ranging.rtt.RttConfig;
 import com.android.server.ranging.uwb.UwbConfig;
 
 import com.google.common.collect.ImmutableMap;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -76,7 +80,7 @@ public class RangingConfig {
         mTechnologyConfigs = technologyConfigsBuilder.build();
 
         // Sensor fusion configuration
-        if (builder.mPreference.getSensorFusionParameters().getUseSensorFusion()) {
+        if (builder.mPreference.getSensorFusionParameters().isSensorFusionEnabled()) {
             mFusionEngine = new FilteringFusionEngine(
                     new DataFusers.PreferentialDataFuser(RangingTechnology.UWB)
             );
@@ -104,7 +108,7 @@ public class RangingConfig {
 
     private @Nullable UwbConfig getUwbConfig() {
         if (mPreference.getRangingParameters() == null) return null;
-        UwbRangingParameters uwbParameters = mPreference.getRangingParameters().getUwbParameters();
+        UwbRangingParams uwbParameters = mPreference.getRangingParameters().getUwbParameters();
         if (uwbParameters == null) return null;
 
         UwbConfig.Builder configBuilder = new UwbConfig.Builder(uwbParameters)
@@ -113,6 +117,21 @@ public class RangingConfig {
                 .setDataNotificationConfig(mPreference.getDataNotificationConfig());
 
         return configBuilder.build();
+    }
+
+    @Nullable
+    private List<RttConfig> getRttConfigList() {
+        if (mPreference.getRangingParameters() == null
+                || mPreference.getRangingParameters().getRttRangingParams().isEmpty()) {
+            return null;
+        }
+        List<RttConfig> rttConfigList = new ArrayList<>();
+        List<RttRangingParams> rangingParams =
+                mPreference.getRangingParameters().getRttRangingParams();
+        for (RttRangingParams params : rangingParams) {
+            rttConfigList.add(new RttConfig(params, mPreference.getDataNotificationConfig()));
+        }
+        return rttConfigList;
     }
 
     private @Nullable CsConfig getCsConfig() {

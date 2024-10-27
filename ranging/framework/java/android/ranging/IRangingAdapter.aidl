@@ -28,12 +28,15 @@ import android.ranging.RangingPreference;
 *  @hide
 */
 interface IRangingAdapter {
-    void getRangingCapabilities(in IRangingCapabilitiesCallback rangingCapabilitiesCallback);
 
     void startRanging(in AttributionSource attributionSource, in SessionHandle sessionHandle,
                  in RangingPreference rangingPreference, in IRangingCallbacks callbacks);
 
     void stopRanging(in SessionHandle sessionHandle);
+
+    void registerCapabilitiesCallback(in IRangingCapabilitiesCallback rangingCapabilitiesCallback);
+
+    void unregisterCapabilitiesCallback(in IRangingCapabilitiesCallback rangingCapabilitiesCallback);
 
     void oobDataReceived(in OobHandle oobHandle, in byte[] data);
     void deviceOobDisconnected(in OobHandle oobHandle);
