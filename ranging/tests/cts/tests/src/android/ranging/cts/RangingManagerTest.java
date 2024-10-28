@@ -93,7 +93,7 @@ public class RangingManagerTest {
                 .setRangingParameters(new RawInitiatorRangingParams.Builder()
                         .addRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
-                                .addRangingParams(new UwbRangingParams.Builder()
+                                .setUwbRangingParams(new UwbRangingParams.Builder()
                                         .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
                                         .setComplexChannel(
                                                 new UwbComplexChannel.Builder().setChannel(
@@ -141,7 +141,7 @@ public class RangingManagerTest {
                 .setRangingParameters(new RawInitiatorRangingParams.Builder()
                         .addRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
-                                .addRangingParams(new UwbRangingParams.Builder()
+                                .setUwbRangingParams(new UwbRangingParams.Builder()
                                         .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
                                         .setComplexChannel(
                                                 new UwbComplexChannel.Builder().setChannel(
@@ -163,7 +163,7 @@ public class RangingManagerTest {
                 .setRangingParameters(new RawInitiatorRangingParams.Builder()
                         .addRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
-                                .addRangingParams(new UwbRangingParams.Builder()
+                                .setUwbRangingParams(new UwbRangingParams.Builder()
                                         .setDeviceAddress(UwbAddress.fromBytes(new byte[]{3, 5}))
                                         .setComplexChannel(
                                                 new UwbComplexChannel.Builder().setChannel(

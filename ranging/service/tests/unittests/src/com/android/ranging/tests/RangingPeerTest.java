@@ -96,7 +96,7 @@ public class RangingPeerTest {
                 new EnumMap<>(RangingTechnology.class);
 
         when(mMockConfig.getTechnologyConfigs()).thenReturn(configs);
-        mSession.start(mMockConfig, mMockCallback);
+        mSession.start();
 
         for (RangingTechnology technology : configs.keySet()) {
             ArgumentCaptor<RangingAdapter.Callback> callbackCaptor =
@@ -144,7 +144,7 @@ public class RangingPeerTest {
 
         mSession = new RangingPeer(
                 mMockContext, MoreExecutors.newDirectExecutorService(), mMockTimeoutExecutor,
-                mMockSessionHandle);
+                mMockSessionHandle, mMockConfig, mMockCallback);
 
         for (RangingTechnology technology : RangingTechnology.values()) {
             RangingAdapter adapter = mock(RangingAdapter.class);
@@ -174,7 +174,7 @@ public class RangingPeerTest {
                 ImmutableMap.of(UWB, getUwbConfig(getUwbParams().build()).build());
         when(mMockConfig.getTechnologyConfigs()).thenReturn(configs);
 
-        mSession.start(mMockConfig, mMockCallback);
+        mSession.start();
 
         verify(mMockAdapters.get(UWB), never()).start(any(), any());
         verify(mMockCallback, never()).onStarted(any(), any());
