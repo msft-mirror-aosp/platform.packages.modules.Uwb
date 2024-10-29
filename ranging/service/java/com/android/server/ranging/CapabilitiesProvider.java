@@ -59,7 +59,7 @@ public class CapabilitiesProvider {
     // all callbacks registered.
     public CapabilitiesProvider(RangingInjector rangingInjector) {
         mRangingInjector = rangingInjector;
-        mExecutorService = Executors.newSingleThreadExecutor();
+        mExecutorService = Executors.newCachedThreadPool();
         if (UwbAdapter.isSupported(mRangingInjector.getContext())) {
             mUwbAdapter = new UwbAdapter(mRangingInjector.getContext(),
                     MoreExecutors.listeningDecorator(mExecutorService),
