@@ -16,10 +16,8 @@
 package com.android.server.ranging;
 
 import android.ranging.RangingPreference;
-import android.ranging.params.RangingParams;
-import android.ranging.params.RawInitiatorRangingParams;
-import android.ranging.params.RawRangingDevice;
-import android.ranging.params.RawResponderRangingParams;
+import android.ranging.cs.CsRangingParams;
+import android.ranging.rtt.RttRangingParams;
 import android.ranging.uwb.UwbRangingParams;
 
 import androidx.annotation.NonNull;
@@ -36,7 +34,6 @@ import com.android.server.ranging.uwb.UwbConfig;
 import com.google.common.collect.ImmutableMap;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -64,21 +61,22 @@ public class RangingConfig {
         mPreference = builder.mPreference;
         mNoInitialDataTimeout = builder.mNoInitialDataTimeout;
         mNoUpdatedDataTimeout = builder.mNoUpdatedDataTimeout;
-
         // Technology-specific configurations
         ImmutableMap.Builder<RangingTechnology, TechnologyConfig> technologyConfigsBuilder =
                 new ImmutableMap.Builder<>();
 
-        UwbConfig uwbConfig = getUwbConfig();
-        if (uwbConfig != null) {
+        if (builder.mUwbRangingParams != null) {
+            UwbConfig uwbConfig = getUwbConfig(builder.mUwbRangingParams);
             technologyConfigsBuilder.put(RangingTechnology.UWB, uwbConfig);
         }
-
-        CsConfig csConfig = getCsConfig();
-        if (csConfig != null) {
+        if (builder.mCsRangingParams != null) {
+            CsConfig csConfig = getCsConfig();
             technologyConfigsBuilder.put(RangingTechnology.CS, csConfig);
         }
-
+        if (builder.mRttRangingParams != null) {
+            RttConfig rttConfig = getRttConfig(builder.mRttRangingParams);
+            technologyConfigsBuilder.put(RangingTechnology.RTT, rttConfig);
+        }
         mTechnologyConfigs = technologyConfigsBuilder.build();
 
         // Sensor fusion configuration
@@ -107,30 +105,7 @@ public class RangingConfig {
         return mNoUpdatedDataTimeout;
     }
 
-
-    private @Nullable UwbConfig getUwbConfig() {
-        if (mPreference.getRangingParameters() == null) return null;
-
-        // TODO: Optimize this
-        RangingParams rangingParams = mPreference.getRangingParameters();
-        UwbRangingParams uwbParameters = null;
-        if (rangingParams instanceof RawInitiatorRangingParams
-                || rangingParams instanceof RawResponderRangingParams) {
-            RawRangingDevice rangingDevice;
-            if (rangingParams instanceof RawResponderRangingParams) {
-                rangingDevice = ((RawResponderRangingParams) rangingParams).getRawRangingDevice();
-            } else {
-                rangingDevice =
-                        ((RawInitiatorRangingParams) rangingParams).getRawRangingDevices().get(0);
-            }
-//            for (TechnologySpecificRangingParams params : rangingDevice.getRangingParamsList()) {
-//                if (params instanceof UwbRangingParams) {
-//                    uwbParameters = (UwbRangingParams) params;
-//                }
-//            }
-        }
-        if (uwbParameters == null) return null;
-
+    private UwbConfig getUwbConfig(UwbRangingParams uwbParameters) {
         UwbConfig.Builder configBuilder = new UwbConfig.Builder(uwbParameters)
                 // TODO(370077264): Set country code based on geolocation.
                 .setCountryCode("US")
@@ -139,22 +114,9 @@ public class RangingConfig {
         return configBuilder.build();
     }
 
-    @Nullable
-    private List<RttConfig> getRttConfigList() {
-//        if (mPreference.getRangingParameters() == null
-//                || mPreference.getRangingParameters().getRttRangingParams().isEmpty()) {
-//            return null;
-//        }
-//        List<RttConfig> rttConfigList = new ArrayList<>();
-//        List<RttRangingParams> rangingParams =
-//                mPreference.getRangingParameters().getRttRangingParams();
-//        for (RttRangingParams params : rangingParams) {
-//            rttConfigList.add(new RttConfig(
-//                    mPreference.getDeviceRole(),
-//                    params, mPreference.getDataNotificationConfig()));
-//        }
-//        return rttConfigList;
-        return null;
+    private RttConfig getRttConfig(RttRangingParams rttRangingParams) {
+        return new RttConfig(mPreference.getDeviceRole(), rttRangingParams,
+                mPreference.getDataNotificationConfig());
     }
 
     private @Nullable CsConfig getCsConfig() {
@@ -163,11 +125,29 @@ public class RangingConfig {
 
     public static class Builder {
         private final RangingPreference mPreference;
+        private UwbRangingParams mUwbRangingParams;
+        private CsRangingParams mCsRangingParams;
+        private RttRangingParams mRttRangingParams;
         private Duration mNoInitialDataTimeout = Duration.ofSeconds(999);
         private Duration mNoUpdatedDataTimeout = Duration.ofSeconds(999);
 
         public RangingConfig build() {
             return new RangingConfig(this);
+        }
+
+        public Builder setUwbRangingParams(UwbRangingParams params) {
+            mUwbRangingParams = params;
+            return this;
+        }
+
+        public Builder setRttRangingParams(RttRangingParams params) {
+            mRttRangingParams = params;
+            return this;
+        }
+
+        public Builder setCsRangingParams(CsRangingParams params) {
+            mCsRangingParams = params;
+            return this;
         }
 
         public Builder(@NonNull RangingPreference preference) {

@@ -238,29 +238,29 @@ public class GenericRangingSnippet implements Snippet {
         DataNotificationConfig dataNotificationConfig = new DataNotificationConfig.Builder()
                 .setNotificationConfigType(config.getInt("rangeDataConfigType"))
                 .build();
-
-        RangingConfig rangingConfig = new RangingConfig.Builder(
-                new RangingPreference.Builder()
-                        //.setRangingParameters(generateRangingParameters(config))
-                        .setSensorFusionParameters(new SensorFusionParams.Builder().build())
-                        .setDataNotificationConfig(dataNotificationConfig)
-                        .build()
-        )
-                .setNoInitialDataTimeout(Duration.ofSeconds(3))
-                .setNoUpdatedDataTimeout(Duration.ofSeconds(2))
-                .build();
-
-        ImmutableMap<UUID, RangingConfig> parameters =
-                new ImmutableMap.Builder<UUID, RangingConfig>()
-                        .put(UUID.randomUUID(), rangingConfig)
-                        .build();
-        GenericRangingCallback callback =
-                new GenericRangingCallback(callbackId, Event.EventAll.getType());
-        String uwbSessionKey = getUwbSessionKeyFromId(config.getInt("sessionId"));
-
-        sRangingHashMap.put(uwbSessionKey, session);
-        session.start(parameters, callback);
-        sRangingCallbackHashMap.put(uwbSessionKey, callback);
+//
+//        RangingConfig rangingConfig = new RangingConfig.Builder(
+//                new RangingPreference.Builder()
+//                        //.setRangingParameters(generateRangingParameters(config))
+//                        .setSensorFusionParameters(new SensorFusionParams.Builder().build())
+//                        .setDataNotificationConfig(dataNotificationConfig)
+//                        .build()
+//        )
+//                .setNoInitialDataTimeout(Duration.ofSeconds(3))
+//                .setNoUpdatedDataTimeout(Duration.ofSeconds(2))
+//                .build();
+//
+//        ImmutableMap<UUID, RangingConfig> parameters =
+//                new ImmutableMap.Builder<UUID, RangingConfig>()
+//                        .put(UUID.randomUUID(), rangingConfig)
+//                        .build();
+//        GenericRangingCallback callback =
+//                new GenericRangingCallback(callbackId, Event.EventAll.getType());
+//        String uwbSessionKey = getUwbSessionKeyFromId(config.getInt("sessionId"));
+//
+//        sRangingHashMap.put(uwbSessionKey, session);
+//        session.start(parameters, callback);
+//        sRangingCallbackHashMap.put(uwbSessionKey, callback);
     }
 
     @Rpc(description = "Stop UWB ranging session")
