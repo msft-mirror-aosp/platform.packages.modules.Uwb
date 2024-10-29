@@ -21,13 +21,12 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.cs.CsRangingParameters;
+import android.ranging.cs.CsRangingParams;
 import android.ranging.rtt.RttRangingParams;
 import android.ranging.uwb.UwbRangingParams;
 
 import com.android.ranging.flags.Flags;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -42,7 +41,7 @@ public final class RangingParams implements Parcelable {
 
     private final UwbRangingParams mUwbParameters;
 
-    private final CsRangingParameters mCsParameters;
+    private final List<CsRangingParams> mCsParameters;
 
     private final List<RttRangingParams> mRttRangingParams;
 
@@ -56,8 +55,7 @@ public final class RangingParams implements Parcelable {
     private RangingParams(Parcel in) {
         mUwbParameters = in.readParcelable(UwbRangingParams.class.getClassLoader(),
                 UwbRangingParams.class);
-        mCsParameters = in.readParcelable(CsRangingParameters.class.getClassLoader(),
-                CsRangingParameters.class);
+        mCsParameters = in.createTypedArrayList(CsRangingParams.CREATOR);
         mRttRangingParams = in.createTypedArrayList(RttRangingParams.CREATOR);
     }
 
@@ -86,17 +84,19 @@ public final class RangingParams implements Parcelable {
     /**
      * Gets the Channel Sounding ranging parameters.
      *
-     * @return the {@link CsRangingParameters} if present, otherwise {@code null}.
+     * @return the {@link CsRangingParams} if present, otherwise {@code null}.
      * @hide
      */
     @Nullable
-    public CsRangingParameters getCsParameters() {
+    @FlaggedApi(Flags.FLAG_RANGING_CS_ENABLED)
+    public List<CsRangingParams> getCsParameters() {
         return mCsParameters;
     }
 
     /**
      * @hide
      */
+    @Nullable
     @FlaggedApi(Flags.FLAG_RANGING_RTT_ENABLED)
     public List<RttRangingParams> getRttRangingParams() {
         return mRttRangingParams;
@@ -116,7 +116,7 @@ public final class RangingParams implements Parcelable {
     @Override
     public void writeToParcel(Parcel dest, int flags) {
         dest.writeParcelable(mUwbParameters, flags);
-        dest.writeParcelable(mCsParameters, flags);
+        dest.writeTypedList(mCsParameters);
         dest.writeTypedList(mRttRangingParams);
     }
 
@@ -125,8 +125,8 @@ public final class RangingParams implements Parcelable {
      */
     public static final class Builder {
         private UwbRangingParams mUwbParameters = null;
-        private CsRangingParameters mCsParameters = null;
-        private List<RttRangingParams> mRttRangingParams = new ArrayList<>();
+        private List<CsRangingParams> mCsParameters = null;
+        private List<RttRangingParams> mRttRangingParams = null;
 
         /**
          * Sets the UWB ranging parameters.
@@ -150,7 +150,7 @@ public final class RangingParams implements Parcelable {
          * @hide
          */
         @NonNull
-        public Builder setCsParameters(@NonNull CsRangingParameters csParameters) {
+        public Builder setCsParameters(@NonNull List<CsRangingParams> csParameters) {
             mCsParameters = csParameters;
             return this;
         }
