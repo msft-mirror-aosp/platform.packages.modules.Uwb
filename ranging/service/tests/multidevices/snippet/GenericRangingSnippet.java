@@ -20,11 +20,10 @@ import android.app.UiAutomation;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.os.RemoteException;
-import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
-import android.ranging.RangingParams;
 import android.ranging.RangingPreference;
-import android.ranging.SensorFusionParams;
+import android.ranging.params.DataNotificationConfig;
+import android.ranging.params.SensorFusionParams;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
 import android.ranging.uwb.UwbRangingParams;
@@ -171,46 +170,46 @@ public class GenericRangingSnippet implements Snippet {
         }
     }
 
-    private RangingParams generateRangingParameters(JSONObject j) throws JSONException {
-        if (j == null) {
-            return null;
-        }
-        ImmutableMap.Builder<RangingDevice, UwbAddress> peerAddressesBuilder =
-                new ImmutableMap.Builder<>();
-        if (j.has("peerAddresses")) {
-            JSONArray jArray = j.getJSONArray("peerAddresses");
-            for (int i = 0; i < jArray.length(); i++) {
-                peerAddressesBuilder.put(new RangingDevice.Builder().build(),
-                        UwbAddress.fromBytes(convertJSONArrayToByteArray(jArray.getJSONArray(i))));
-            }
-        }
-
-        UwbRangingParams.Builder uwbParamsBuilder = new UwbRangingParams.Builder()
-                .setDeviceRole(j.getInt("deviceRole"))
-                .setPeerAddresses(peerAddressesBuilder.build())
-                .setConfigId(j.getInt("configType"))
-                .setDeviceAddress(UwbAddress.fromBytes(
-                        convertJSONArrayToByteArray(j.getJSONArray("deviceAddress"))))
-                .setSessionId(j.getInt("sessionId"))
-                .setSubSessionId(j.getInt("subSessionId"))
-                .setSessionKeyInfo(
-                        convertJSONArrayToByteArray(j.getJSONArray("sessionKeyInfo")))
-                .setComplexChannel(new UwbComplexChannel.Builder().setChannel(
-                                Utils.channelForTesting)
-                        .setPreambleIndex(Utils.preambleIndexForTesting).build())
-                .setRangingUpdateRate(j.getInt("updateRateType"))
-                .setSlotDurationMillis(j.getInt("slotDurationMillis"))
-                .setAoaDisabled(j.getBoolean("isAoaDisabled"));
-
-        if (j.has("subSessionKeyInfo")) {
-            uwbParamsBuilder.setSubSessionKeyInfo(
-                    convertJSONArrayToByteArray(j.getJSONArray("subSessionKeyInfo")));
-        }
-
-        return new RangingParams.Builder()
-                .setUwbParameters(uwbParamsBuilder.build())
-                .build();
-    }
+//    private RangingParamsOld generateRangingParameters(JSONObject j) throws JSONException {
+//        if (j == null) {
+//            return null;
+//        }
+//        ImmutableMap.Builder<RangingDevice, UwbAddress> peerAddressesBuilder =
+//                new ImmutableMap.Builder<>();
+//        if (j.has("peerAddresses")) {
+//            JSONArray jArray = j.getJSONArray("peerAddresses");
+//            for (int i = 0; i < jArray.length(); i++) {
+//                peerAddressesBuilder.put(new RangingDevice.Builder().build(),
+//                        UwbAddress.fromBytes(convertJSONArrayToByteArray(jArray.getJSONArray(i))));
+//            }
+//        }
+//
+//        UwbRangingParams.Builder uwbParamsBuilder = new UwbRangingParams.Builder()
+//                .setDeviceRole(j.getInt("deviceRole"))
+//                .setPeerAddresses(peerAddressesBuilder.build())
+//                .setConfigId(j.getInt("configType"))
+//                .setDeviceAddress(UwbAddress.fromBytes(
+//                        convertJSONArrayToByteArray(j.getJSONArray("deviceAddress"))))
+//                .setSessionId(j.getInt("sessionId"))
+//                .setSubSessionId(j.getInt("subSessionId"))
+//                .setSessionKeyInfo(
+//                        convertJSONArrayToByteArray(j.getJSONArray("sessionKeyInfo")))
+//                .setComplexChannel(new UwbComplexChannel.Builder().setChannel(
+//                                Utils.channelForTesting)
+//                        .setPreambleIndex(Utils.preambleIndexForTesting).build())
+//                .setRangingUpdateRate(j.getInt("updateRateType"))
+//                .setSlotDurationMillis(j.getInt("slotDurationMillis"))
+//                .setAoaDisabled(j.getBoolean("isAoaDisabled"));
+//
+//        if (j.has("subSessionKeyInfo")) {
+//            uwbParamsBuilder.setSubSessionKeyInfo(
+//                    convertJSONArrayToByteArray(j.getJSONArray("subSessionKeyInfo")));
+//        }
+//
+//        return new RangingParamsOld.Builder()
+//                .setUwbParameters(uwbParamsBuilder.build())
+//                .build();
+//    }
 
     private byte[] convertJSONArrayToByteArray(JSONArray jArray) throws JSONException {
         if (jArray == null) {
@@ -239,29 +238,29 @@ public class GenericRangingSnippet implements Snippet {
         DataNotificationConfig dataNotificationConfig = new DataNotificationConfig.Builder()
                 .setNotificationConfigType(config.getInt("rangeDataConfigType"))
                 .build();
-
-        RangingConfig rangingConfig = new RangingConfig.Builder(
-                new RangingPreference.Builder()
-                        .setRangingParameters(generateRangingParameters(config))
-                        .setSensorFusionParameters(new SensorFusionParams.Builder().build())
-                        .setDataNotificationConfig(dataNotificationConfig)
-                        .build()
-        )
-                .setNoInitialDataTimeout(Duration.ofSeconds(3))
-                .setNoUpdatedDataTimeout(Duration.ofSeconds(2))
-                .build();
-
-        ImmutableMap<UUID, RangingConfig> parameters =
-                new ImmutableMap.Builder<UUID, RangingConfig>()
-                        .put(UUID.randomUUID(), rangingConfig)
-                        .build();
-        GenericRangingCallback callback =
-                new GenericRangingCallback(callbackId, Event.EventAll.getType());
-        String uwbSessionKey = getUwbSessionKeyFromId(config.getInt("sessionId"));
-
-        sRangingHashMap.put(uwbSessionKey, session);
-        session.start(parameters, callback);
-        sRangingCallbackHashMap.put(uwbSessionKey, callback);
+//
+//        RangingConfig rangingConfig = new RangingConfig.Builder(
+//                new RangingPreference.Builder()
+//                        //.setRangingParameters(generateRangingParameters(config))
+//                        .setSensorFusionParameters(new SensorFusionParams.Builder().build())
+//                        .setDataNotificationConfig(dataNotificationConfig)
+//                        .build()
+//        )
+//                .setNoInitialDataTimeout(Duration.ofSeconds(3))
+//                .setNoUpdatedDataTimeout(Duration.ofSeconds(2))
+//                .build();
+//
+//        ImmutableMap<UUID, RangingConfig> parameters =
+//                new ImmutableMap.Builder<UUID, RangingConfig>()
+//                        .put(UUID.randomUUID(), rangingConfig)
+//                        .build();
+//        GenericRangingCallback callback =
+//                new GenericRangingCallback(callbackId, Event.EventAll.getType());
+//        String uwbSessionKey = getUwbSessionKeyFromId(config.getInt("sessionId"));
+//
+//        sRangingHashMap.put(uwbSessionKey, session);
+//        session.start(parameters, callback);
+//        sRangingCallbackHashMap.put(uwbSessionKey, callback);
     }
 
     @Rpc(description = "Stop UWB ranging session")

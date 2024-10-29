@@ -26,6 +26,7 @@ import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.ranging.RangingPreference;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
 import android.ranging.uwb.UwbRangingParams;
@@ -44,7 +45,6 @@ import com.android.server.ranging.cs.CsConfig;
 import com.android.server.ranging.uwb.UwbAdapter;
 import com.android.server.ranging.uwb.UwbConfig;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import org.junit.Assert;
@@ -84,11 +84,10 @@ public class UwbAdapterTest {
         return new UwbConfig.Builder(
                 new UwbRangingParams.Builder()
                         .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
-                        .setDeviceRole(UwbRangingParams.DeviceRole.INITIATOR)
                         .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
                         .setComplexChannel(new UwbComplexChannel.Builder().setChannel(
                                 9).setPreambleIndex(11).build())
-                        .setPeerAddresses(ImmutableMap.of())
+                        .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
                         .setRangingUpdateRate(UwbRangingParams.RangingUpdateRate.NORMAL)
                         .build()
         )
@@ -101,7 +100,7 @@ public class UwbAdapterTest {
                 .thenReturn(true);
         when(mMockUwbService.getController(any())).thenReturn(mMockUwbClient);
         mUwbAdapter = new UwbAdapter(mMockContext, MoreExecutors.newDirectExecutorService(),
-                mMockUwbService, UwbRangingParams.DeviceRole.INITIATOR);
+                mMockUwbService, RangingPreference.DEVICE_ROLE_INITIATOR);
     }
 
     @Test
