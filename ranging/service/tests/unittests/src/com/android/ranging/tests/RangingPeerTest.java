@@ -121,12 +121,11 @@ public class RangingPeerTest {
 
     private UwbRangingParams.Builder getUwbParams() {
         return new UwbRangingParams.Builder()
-                .setDeviceRole(UwbRangingParams.DeviceRole.INITIATOR)
                 .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
                 .setComplexChannel(new UwbComplexChannel.Builder().setChannel(9).setPreambleIndex(
                         11).build())
                 .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
-                .setPeerAddresses(ImmutableMap.of())
+                .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
                 .setRangingUpdateRate(UwbRangingParams.RangingUpdateRate.NORMAL);
     }
 
