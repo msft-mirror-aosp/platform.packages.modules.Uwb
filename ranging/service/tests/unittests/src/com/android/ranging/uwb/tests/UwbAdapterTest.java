@@ -16,6 +16,8 @@
 
 package com.android.server.ranging.uwb.tests;
 
+import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -88,7 +90,7 @@ public class UwbAdapterTest {
                         .setComplexChannel(new UwbComplexChannel.Builder().setChannel(
                                 9).setPreambleIndex(11).build())
                         .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
-                        .setRangingUpdateRate(UwbRangingParams.RangingUpdateRate.NORMAL)
+                        .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                         .build()
         )
                 .setCountryCode("US");
