@@ -16,7 +16,10 @@
 package com.android.server.ranging;
 
 import android.ranging.RangingPreference;
-import android.ranging.rtt.RttRangingParams;
+import android.ranging.params.RangingParams;
+import android.ranging.params.RawInitiatorRangingParams;
+import android.ranging.params.RawRangingDevice;
+import android.ranging.params.RawResponderRangingParams;
 import android.ranging.uwb.UwbRangingParams;
 
 import androidx.annotation.NonNull;
@@ -33,7 +36,6 @@ import com.android.server.ranging.uwb.UwbConfig;
 import com.google.common.collect.ImmutableMap;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -108,7 +110,25 @@ public class RangingConfig {
 
     private @Nullable UwbConfig getUwbConfig() {
         if (mPreference.getRangingParameters() == null) return null;
-        UwbRangingParams uwbParameters = mPreference.getRangingParameters().getUwbParameters();
+
+        // TODO: Optimize this
+        RangingParams rangingParams = mPreference.getRangingParameters();
+        UwbRangingParams uwbParameters = null;
+        if (rangingParams instanceof RawInitiatorRangingParams
+                || rangingParams instanceof RawResponderRangingParams) {
+            RawRangingDevice rangingDevice;
+            if (rangingParams instanceof RawResponderRangingParams) {
+                rangingDevice = ((RawResponderRangingParams) rangingParams).getRawRangingDevice();
+            } else {
+                rangingDevice =
+                        ((RawInitiatorRangingParams) rangingParams).getRawRangingDevices().get(0);
+            }
+//            for (TechnologySpecificRangingParams params : rangingDevice.getRangingParamsList()) {
+//                if (params instanceof UwbRangingParams) {
+//                    uwbParameters = (UwbRangingParams) params;
+//                }
+//            }
+        }
         if (uwbParameters == null) return null;
 
         UwbConfig.Builder configBuilder = new UwbConfig.Builder(uwbParameters)
@@ -121,17 +141,20 @@ public class RangingConfig {
 
     @Nullable
     private List<RttConfig> getRttConfigList() {
-        if (mPreference.getRangingParameters() == null
-                || mPreference.getRangingParameters().getRttRangingParams().isEmpty()) {
-            return null;
-        }
-        List<RttConfig> rttConfigList = new ArrayList<>();
-        List<RttRangingParams> rangingParams =
-                mPreference.getRangingParameters().getRttRangingParams();
-        for (RttRangingParams params : rangingParams) {
-            rttConfigList.add(new RttConfig(params, mPreference.getDataNotificationConfig()));
-        }
-        return rttConfigList;
+//        if (mPreference.getRangingParameters() == null
+//                || mPreference.getRangingParameters().getRttRangingParams().isEmpty()) {
+//            return null;
+//        }
+//        List<RttConfig> rttConfigList = new ArrayList<>();
+//        List<RttRangingParams> rangingParams =
+//                mPreference.getRangingParameters().getRttRangingParams();
+//        for (RttRangingParams params : rangingParams) {
+//            rttConfigList.add(new RttConfig(
+//                    mPreference.getDeviceRole(),
+//                    params, mPreference.getDataNotificationConfig()));
+//        }
+//        return rttConfigList;
+        return null;
     }
 
     private @Nullable CsConfig getCsConfig() {
