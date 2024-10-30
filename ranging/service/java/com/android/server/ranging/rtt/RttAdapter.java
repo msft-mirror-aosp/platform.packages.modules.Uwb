@@ -16,9 +16,11 @@
 
 package com.android.server.ranging.rtt;
 
+import static android.ranging.RangingPreference.DEVICE_ROLE_INITIATOR;
+
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.ranging.rtt.RttRangingParams;
+import android.ranging.RangingPreference;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -69,21 +71,21 @@ public class RttAdapter implements RangingAdapter {
 
     public RttAdapter(
             @NonNull Context context, @NonNull ListeningExecutorService executorService,
-            @RttRangingParams.DeviceRole int role
+            @RangingPreference.DeviceRole int role
     ) {
         this(context, executorService, new RttServiceImpl(context), role);
     }
 
     @VisibleForTesting
     public RttAdapter(@NonNull Context context, @NonNull ListeningExecutorService executorService,
-            @NonNull RttService rttService, @RttRangingParams.DeviceRole int role) {
+            @NonNull RttService rttService, @RangingPreference.DeviceRole int role) {
         if (!RttAdapter.isSupported(context)) {
             throw new IllegalArgumentException("WiFi RTT system feature not found.");
         }
 
         mStateMachine = new StateMachine<>(State.STOPPED);
         mRttService = rttService;
-        mRttClient = role == RttRangingParams.DEVICE_ROLE_SUBSCRIBER
+        mRttClient = role == DEVICE_ROLE_INITIATOR
                 ? mRttService.getSubscriber(context)
                 : mRttService.getPublisher(context);
 
