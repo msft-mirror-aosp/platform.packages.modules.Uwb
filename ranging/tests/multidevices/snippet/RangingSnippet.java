@@ -116,7 +116,7 @@ public class RangingSnippet implements Snippet {
         }
 
         @Override
-        public void onRangingStopped(@NonNull RangingDevice device) {
+        public void onStopped(@NonNull RangingDevice device) {
         }
 
         @Override
@@ -161,7 +161,7 @@ public class RangingSnippet implements Snippet {
     private class AvailabilityListener implements RangingManager.RangingCapabilitiesCallback {
         @Override
         public void onRangingCapabilities(@NonNull RangingCapabilities capabilities) {
-            Map<Integer, Integer> availabilities = capabilities.getTechnologyAvailabilityMap();
+            Map<Integer, Integer> availabilities = capabilities.getTechnologyAvailability();
             mTechnologyAvailability.putAll(availabilities);
         }
     }
@@ -209,14 +209,14 @@ public class RangingSnippet implements Snippet {
     public boolean isTechnologyEnabled(int technology) {
         Integer availability = mTechnologyAvailability.get(technology);
         return availability != null
-                && availability == RangingManager.RangingTechnologyAvailability.ENABLED;
+                && availability == RangingCapabilities.ENABLED;
     }
 
     @Rpc(description = "Check whether the provided ranging technology is supported")
     public boolean isTechnologySupported(int technology) {
         Integer availability = mTechnologyAvailability.get(technology);
         return availability != null
-                && availability != RangingManager.RangingTechnologyAvailability.NOT_SUPPORTED;
+                && availability != RangingCapabilities.NOT_SUPPORTED;
     }
 
     @Rpc(description = "Set airplane mode")

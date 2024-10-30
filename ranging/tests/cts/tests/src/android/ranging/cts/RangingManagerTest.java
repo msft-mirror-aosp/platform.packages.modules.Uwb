@@ -16,6 +16,9 @@
 
 package android.ranging.cts;
 
+import static android.ranging.RangingCapabilities.NOT_SUPPORTED;
+import static android.ranging.RangingPreference.DEVICE_ROLE_INITIATOR;
+import static android.ranging.RangingPreference.DEVICE_ROLE_RESPONDER;
 import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
 import static android.ranging.uwb.UwbRangingParams.CONFIG_UNICAST_DS_TWR;
 
@@ -85,6 +88,7 @@ public class RangingManagerTest {
     @CddTest(requirements = {"7.3.13/C-1-1,C-1-2"})
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testStartStopRangingSession() throws Exception {
+        int sessionId = 10;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
 
@@ -94,21 +98,20 @@ public class RangingManagerTest {
                 MoreExecutors.directExecutor(), callback);
         assertThat(rangingSession).isNotNull();
 
-        RangingPreference preference = new RangingPreference.Builder()
-                .setDeviceRole(RangingPreference.DEVICE_ROLE_INITIATOR)
+        RangingPreference preference = new RangingPreference.Builder(DEVICE_ROLE_INITIATOR)
                 .setRangingParameters(new RawInitiatorRangingParams.Builder()
                         .addRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
-                                .setUwbRangingParams(new UwbRangingParams.Builder()
-                                        .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
+                                .setUwbRangingParams(new UwbRangingParams.Builder(
+                                        sessionId, CONFIG_UNICAST_DS_TWR,
+                                        UwbAddress.fromBytes(new byte[]{1, 2}),
+                                        UwbAddress.fromBytes(new byte[]{3, 4}))
                                         .setComplexChannel(
                                                 new UwbComplexChannel.Builder().setChannel(
                                                         9).setPreambleIndex(11).build())
                                         .setSessionKeyInfo(
                                                 new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3,
                                                         2, 1})
-                                        .setConfigId(CONFIG_UNICAST_DS_TWR)
-                                        .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
                                         .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                                         .build())
                                 .build())
@@ -128,6 +131,7 @@ public class RangingManagerTest {
     @CddTest(requirements = {"7.3.13/C-1-1,C-1-2"})
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testStartStopMultipleRangingSessions() throws Exception {
+        int sessionId = 10;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
 
@@ -141,42 +145,40 @@ public class RangingManagerTest {
         RangingSession rangingSession2 = mRangingManager.createRangingSession(
                 MoreExecutors.directExecutor(), callback2);
         assertThat(rangingSession2).isNotNull();
-        RangingPreference preference1 = new RangingPreference.Builder()
-                .setDeviceRole(RangingPreference.DEVICE_ROLE_INITIATOR)
+        RangingPreference preference1 = new RangingPreference.Builder(DEVICE_ROLE_INITIATOR)
                 .setRangingParameters(new RawInitiatorRangingParams.Builder()
                         .addRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
-                                .setUwbRangingParams(new UwbRangingParams.Builder()
-                                        .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
+                                .setUwbRangingParams(new UwbRangingParams.Builder(sessionId,
+                                        CONFIG_UNICAST_DS_TWR,
+                                        UwbAddress.fromBytes(new byte[]{1, 2}),
+                                        UwbAddress.fromBytes(new byte[]{3, 4}))
                                         .setComplexChannel(
                                                 new UwbComplexChannel.Builder().setChannel(
                                                         9).setPreambleIndex(11).build())
                                         .setSessionKeyInfo(
                                                 new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3,
                                                         2, 1})
-                                        .setConfigId(CONFIG_UNICAST_DS_TWR)
-                                        .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
                                         .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                                         .build())
                                 .build())
                         .build())
                 .build();
 
-        RangingPreference preference2 = new RangingPreference.Builder()
-                .setDeviceRole(RangingPreference.DEVICE_ROLE_INITIATOR)
+        RangingPreference preference2 = new RangingPreference.Builder(DEVICE_ROLE_INITIATOR)
                 .setRangingParameters(new RawInitiatorRangingParams.Builder()
                         .addRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
-                                .setUwbRangingParams(new UwbRangingParams.Builder()
-                                        .setDeviceAddress(UwbAddress.fromBytes(new byte[]{3, 5}))
+                                .setUwbRangingParams(new UwbRangingParams.Builder(sessionId,
+                                        CONFIG_UNICAST_DS_TWR,
+                                        UwbAddress.fromBytes(new byte[]{3, 5}),
+                                        UwbAddress.fromBytes(new byte[]{1, 2}))
                                         .setComplexChannel(
                                                 new UwbComplexChannel.Builder().setChannel(
                                                         9).setPreambleIndex(11).build())
                                         .setSessionKeyInfo(
                                                 new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3,
                                                         2, 1})
-                                        .setConfigId(CONFIG_UNICAST_DS_TWR)
-                                        .setPeerAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
                                         .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                                         .build())
                                 .build())
@@ -219,7 +221,7 @@ public class RangingManagerTest {
         }
 
         @Override
-        public void onRangingStopped(@NonNull RangingDevice device) {
+        public void onStopped(@NonNull RangingDevice device) {
 
         }
 
@@ -276,14 +278,12 @@ public class RangingManagerTest {
         assertThat(capabilitiesCallback.mOnCapabilitiesReceived).isTrue();
         assertThat(capabilitiesCallback.mRangingCapabilities).isNotNull();
         assertThat(
-                capabilitiesCallback.mRangingCapabilities.getTechnologyAvailabilityMap())
+                capabilitiesCallback.mRangingCapabilities.getTechnologyAvailability())
                 .isNotNull();
 
-        assumeTrue(capabilitiesCallback.mRangingCapabilities.getTechnologyAvailabilityMap().get(
-                RangingManager.WIFI_NAN_RTT)
-                != RangingManager.RangingTechnologyAvailability.NOT_SUPPORTED);
-        RangingPreference preference = new RangingPreference.Builder()
-                .setDeviceRole(RangingPreference.DEVICE_ROLE_INITIATOR)
+        assumeTrue(capabilitiesCallback.mRangingCapabilities.getTechnologyAvailability().get(
+                RangingManager.WIFI_NAN_RTT) != NOT_SUPPORTED);
+        RangingPreference preference = new RangingPreference.Builder(DEVICE_ROLE_INITIATOR)
                 .setRangingParameters(new RawInitiatorRangingParams.Builder()
                         .addRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
@@ -327,14 +327,12 @@ public class RangingManagerTest {
         assertThat(capabilitiesCallback.mOnCapabilitiesReceived).isTrue();
         assertThat(capabilitiesCallback.mRangingCapabilities).isNotNull();
         assertThat(
-                capabilitiesCallback.mRangingCapabilities.getTechnologyAvailabilityMap())
+                capabilitiesCallback.mRangingCapabilities.getTechnologyAvailability())
                 .isNotNull();
 
-        assumeTrue(capabilitiesCallback.mRangingCapabilities.getTechnologyAvailabilityMap().get(
-                RangingManager.WIFI_NAN_RTT)
-                != RangingManager.RangingTechnologyAvailability.NOT_SUPPORTED);
-        RangingPreference preference = new RangingPreference.Builder()
-                .setDeviceRole(RangingPreference.DEVICE_ROLE_RESPONDER)
+        assumeTrue(capabilitiesCallback.mRangingCapabilities.getTechnologyAvailability().get(
+                RangingManager.WIFI_NAN_RTT) != NOT_SUPPORTED);
+        RangingPreference preference = new RangingPreference.Builder(DEVICE_ROLE_RESPONDER)
                 .setRangingParameters(new RawResponderRangingParams.Builder()
                         .setRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
@@ -362,6 +360,7 @@ public class RangingManagerTest {
     @CddTest(requirements = {"7.3.13/C-1-1,C-1-2"})
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_rtt_enabled")
     public void testMultiRangingResponder() throws InterruptedException {
+        int sessionId = 10;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
         CapabilitiesCallback capabilitiesCallback = new CapabilitiesCallback(new CountDownLatch(1));
@@ -372,33 +371,29 @@ public class RangingManagerTest {
         assertThat(capabilitiesCallback.mOnCapabilitiesReceived).isTrue();
         assertThat(capabilitiesCallback.mRangingCapabilities).isNotNull();
         assertThat(
-                capabilitiesCallback.mRangingCapabilities.getTechnologyAvailabilityMap())
+                capabilitiesCallback.mRangingCapabilities.getTechnologyAvailability())
                 .isNotNull();
 
-        assumeTrue(capabilitiesCallback.mRangingCapabilities.getTechnologyAvailabilityMap().get(
-                RangingManager.WIFI_NAN_RTT)
-                != RangingManager.RangingTechnologyAvailability.NOT_SUPPORTED);
-        assumeTrue(capabilitiesCallback.mRangingCapabilities.getTechnologyAvailabilityMap().get(
-                RangingManager.UWB)
-                != RangingManager.RangingTechnologyAvailability.NOT_SUPPORTED);
-        RangingPreference preference = new RangingPreference.Builder()
-                .setDeviceRole(RangingPreference.DEVICE_ROLE_RESPONDER)
+        assumeTrue(capabilitiesCallback.mRangingCapabilities.getTechnologyAvailability().get(
+                RangingManager.WIFI_NAN_RTT) != NOT_SUPPORTED);
+        assumeTrue(capabilitiesCallback.mRangingCapabilities.getTechnologyAvailability().get(
+                RangingManager.UWB) != NOT_SUPPORTED);
+        RangingPreference preference = new RangingPreference.Builder(DEVICE_ROLE_RESPONDER)
                 .setRangingParameters(new RawResponderRangingParams.Builder()
                         .setRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
                                 .setRttRangingParams(new RttRangingParams.Builder("test_rtt_multi")
                                         .build())
-                                .setUwbRangingParams(new UwbRangingParams.Builder()
-                                        .setSessionId(10)
-                                        .setDeviceAddress(UwbAddress.fromBytes(new byte[]{3, 5}))
+                                .setUwbRangingParams(new UwbRangingParams.Builder(
+                                        sessionId, DEVICE_ROLE_RESPONDER,
+                                        UwbAddress.fromBytes(new byte[]{3, 5}),
+                                        UwbAddress.fromBytes(new byte[]{1, 2}))
                                         .setComplexChannel(
                                                 new UwbComplexChannel.Builder().setChannel(
                                                         9).setPreambleIndex(11).build())
                                         .setSessionKeyInfo(
                                                 new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3,
                                                         2, 1})
-                                        .setConfigId(CONFIG_UNICAST_DS_TWR)
-                                        .setPeerAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
                                         .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                                         .build())
                                 .build())

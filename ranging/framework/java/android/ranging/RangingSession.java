@@ -49,7 +49,6 @@ import java.util.concurrent.Executor;
  * <p>This class implements {@link AutoCloseable}, ensuring that resources can be
  * automatically released when the session is closed.
  *
- * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class RangingSession implements AutoCloseable {
@@ -232,7 +231,6 @@ public final class RangingSession implements AutoCloseable {
          *
          * @param technology {@link android.ranging.RangingManager.RangingTechnology }
          *                   the ranging technology used for the session.
-         * @hide
          */
         void onStarted(@RangingManager.RangingTechnology int technology);
 
@@ -241,7 +239,7 @@ public final class RangingSession implements AutoCloseable {
          *
          * @param reason the reason for the failure, limited to values defined by {@link Reason}.
          */
-        void onStartFailed(@Reason int reason, RangingDevice device);
+        void onStartFailed(@Reason int reason, @NonNull RangingDevice device);
 
         /**
          * Called when the ranging session is closed.
@@ -251,15 +249,12 @@ public final class RangingSession implements AutoCloseable {
          */
         void onClosed(@Reason int reason);
 
-        /*public void onRangingStarted(@NonNull RangingStartedParameters
-                params);*/
-
         /**
          * Called when ranging operations stop for a device.
          *
          * @param device the {@link RangingDevice} for which the ranging operation stopped.
          */
-        void onRangingStopped(@NonNull RangingDevice device);
+        void onStopped(@NonNull RangingDevice device);
 
         /**
          * Called when ranging data is available for the ranging device.
