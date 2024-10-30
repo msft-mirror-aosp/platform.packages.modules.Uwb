@@ -17,6 +17,7 @@
 package android.ranging.params;
 
 import android.annotation.FlaggedApi;
+import android.annotation.IntDef;
 import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -27,16 +28,40 @@ import android.ranging.uwb.UwbRangingParams;
 
 import com.android.ranging.flags.Flags;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+
 /**
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class RawRangingDevice implements Parcelable {
 
+    /**
+     * Defines the configuration IDs for different ranging scenarios.
+     *
+     * @hide
+     */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            UPDATE_RATE_NORMAL,
+            UPDATE_RATE_INFREQUENT,
+            UPDATE_RATE_FAST,
+    })
+    public @interface RangingUpdateRate {
+    }
+
+    /** Ranging interval between 200ms - 240ms for UWB, 2 seconds for BT-CS. */
+    public static final int UPDATE_RATE_NORMAL = 1;
+    /** Ranging interval between 600ms - 800ms for UWB, 5 seconds for BT-CS. */
+    public static final int UPDATE_RATE_INFREQUENT = 2;
+    /** Ranging interval between 100ms - 200ms for UWB, 1 second for BT-CS. */
+    public static final int UPDATE_RATE_FAST = 3;
     private final RangingDevice mRangingDevice;
     private final UwbRangingParams mUwbRangingParams;
     private final CsRangingParams mCsRangingParams;
     private final RttRangingParams mRttRangingParams;
+
 
     private RawRangingDevice(Builder builder) {
         mRangingDevice = builder.mRangingDevice;
