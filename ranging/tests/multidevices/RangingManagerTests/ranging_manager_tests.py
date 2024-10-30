@@ -15,6 +15,7 @@ import sys
 import time
 from typing import Set
 from lib import ranging_base_test
+from lib import rtt
 from lib import utils
 from lib import uwb
 from lib.params import *
@@ -28,6 +29,7 @@ _TEST_CASES = (
     "test_one_to_one_uwb_ranging",
     "test_one_to_one_uwb_ranging_provisioned_sts",
     "test_one_to_one_uwb_ranging_disable_range_data_ntf",
+    "test_one_to_one_rtt_ranging",
 )
 
 
@@ -283,6 +285,63 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     self.responder.stop_ranging_and_assert_stopped(SESSION_HANDLE)
 
 
+  def test_one_to_one_rtt_ranging(self):
+    """Verifies uwb ranging with peer device, devices range for 10 seconds."""
+    SESSION_HANDLE = str(uuid4())
+    TECHNOLOGIES = {RangingTechnology.WIFI_RTT}
+
+    initiator_preference = RangingPreference(
+        device_role=DeviceRole.INITIATOR,
+        ranging_params=RawInitiatorRangingParams(
+            peer_params=[
+                DeviceParams(
+                    peer_id=self.responder.id,
+                    rtt_params=rtt.RttRangingParams(
+                        service_name="test_service_name1",
+                    ),
+                )
+            ],
+        ),
+    )
+
+    responder_preference = RangingPreference(
+        device_role=DeviceRole.RESPONDER,
+        ranging_params=RawResponderRangingParams(
+            peer_params=DeviceParams(
+                peer_id=self.initiator.id,
+                rtt_params=rtt.RttRangingParams(
+                    service_name="test_service_name1",
+                ),
+            ),
+        ),
+    )
+
+    self._start_mutual_ranging_and_assert_started(
+        SESSION_HANDLE,
+        initiator_preference,
+        responder_preference,
+        TECHNOLOGIES,
+    )
+
+    time.sleep(10)
+
+    asserts.assert_true(
+        self.initiator.verify_peer_found_with_technologies(
+            SESSION_HANDLE, self.responder.id, TECHNOLOGIES
+        ),
+        "Initiator did not find responder",
+    )
+    asserts.assert_true(
+        self.responder.verify_peer_found_with_technologies(
+            SESSION_HANDLE,
+            self.initiator.id,
+            TECHNOLOGIES,
+        ),
+        "Responder did not find initiator",
+    )
+
+    self.initiator.stop_ranging_and_assert_stopped(SESSION_HANDLE)
+    self.responder.stop_ranging_and_assert_stopped(SESSION_HANDLE)
 if __name__ == "__main__":
   if "--" in sys.argv:
     index = sys.argv.index("--")
