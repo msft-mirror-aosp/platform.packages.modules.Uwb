@@ -147,6 +147,10 @@ public class UwbAdapter implements RangingAdapter {
         );
         mUwbClient.setRangingParameters(uwbConfig.asBackendParameters());
         mUwbClient.setLocalAddress(toBackend(uwbConfig.getParameters().getDeviceAddress()));
+        if (mUwbClient instanceof RangingController controller) {
+            controller.setComplexChannel(
+                    toBackend(uwbConfig.getParameters().getComplexChannel()));
+        }
 
         var future = Futures.submit(() -> {
             mUwbClient.startRanging(mUwbListener, Executors.newSingleThreadExecutor());
