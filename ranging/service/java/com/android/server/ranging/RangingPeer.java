@@ -21,8 +21,8 @@ import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
 import android.content.Context;
 import android.os.RemoteException;
 import android.ranging.IRangingCallbacks;
+import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
-import android.ranging.uwb.UwbRangingParams;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -108,7 +108,9 @@ public final class RangingPeer {
             @NonNull Context context,
             @NonNull ListeningExecutorService adapterExecutor,
             @NonNull ScheduledExecutorService timeoutExecutor,
-            @NonNull SessionHandle sessionHandle
+            @NonNull SessionHandle sessionHandle,
+            RangingConfig rangingConfig,
+            IRangingCallbacks rangingCallbacks
     ) {
         mContext = context;
         mStateMachine = new StateMachine<>(State.STOPPED);
@@ -119,6 +121,8 @@ public final class RangingPeer {
         mAdapterExecutor = adapterExecutor;
         mPendingTimeout = null;
         mSessionHandle = sessionHandle;
+        mConfig = rangingConfig;
+        mCallback = rangingCallbacks;
     }
 
     private @NonNull RangingAdapter newAdapter(
@@ -128,15 +132,15 @@ public final class RangingPeer {
             case UWB:
                 return new UwbAdapter(
                         mContext, mAdapterExecutor,
-                        ((UwbConfig) config).getParameters().getDeviceRole()
-                                == UwbRangingParams.DeviceRole.INITIATOR
+                        ((UwbConfig) config).getDeviceRole()
+                                == RangingPreference.DEVICE_ROLE_INITIATOR
                                 ? FiraParams.RANGING_DEVICE_TYPE_CONTROLLER
                                 : FiraParams.RANGING_DEVICE_TYPE_CONTROLEE);
             case CS:
                 return new CsAdapter();
             case RTT:
                 return new RttAdapter(mContext, mAdapterExecutor,
-                        ((RttConfig) config).getRangingParams().getDeviceRole());
+                        ((RttConfig) config).getDeviceRole());
             default:
                 throw new IllegalArgumentException(
                         "Tried to create adapter for unknown technology" + technology);
@@ -144,20 +148,16 @@ public final class RangingPeer {
     }
 
     /** Start a ranging session with this peer */
-    public void start(
-            @NonNull RangingConfig config, @NonNull IRangingCallbacks callback
-    ) {
+    public void start() {
         if (!mStateMachine.transition(State.STOPPED, State.STARTING)) {
             Log.w(TAG, "Failed transition STOPPED -> STARTING");
             return;
         }
-        mCallback = callback;
-        mConfig = config;
 
-        mFusionEngine = config.getFusionEngine();
+        mFusionEngine = mConfig.getFusionEngine();
 
         ImmutableMap<RangingTechnology, TechnologyConfig> techConfigs =
-                config.getTechnologyConfigs();
+                mConfig.getTechnologyConfigs();
         mAdapters.keySet().retainAll(techConfigs.keySet());
         mFusionEngine.start(new FusionEngineListener());
 
@@ -180,7 +180,7 @@ public final class RangingPeer {
             }
         }
 
-        scheduleTimeout(config.getNoInitialDataTimeout(),
+        scheduleTimeout(mConfig.getNoInitialDataTimeout(),
                 RangingSession.Callback.StoppedReason.NO_INITIAL_DATA_TIMEOUT);
     }
 
