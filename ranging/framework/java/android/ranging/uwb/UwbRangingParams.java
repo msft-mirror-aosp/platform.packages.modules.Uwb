@@ -23,6 +23,7 @@ import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.ranging.RangingDevice;
+import android.ranging.params.RawRangingDevice;
 
 import androidx.annotation.IntRange;
 
@@ -135,28 +136,7 @@ public final class UwbRangingParams implements Parcelable {
 
     private final UwbAddress mPeerAddress;
 
-
-    /**
-     * Defines the configuration IDs for different ranging scenarios.
-     *
-     * @hide
-     */
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
-            RangingUpdateRate.NORMAL,
-            RangingUpdateRate.INFREQUENT,
-            RangingUpdateRate.FAST,
-    })
-    public @interface RangingUpdateRate {
-        /** Ranging interval between 200ms - 240ms */
-        int NORMAL = 1;
-        /** Ranging interval between 600ms - 800ms */
-        int INFREQUENT = 2;
-        /** Ranging interval between 100ms - 200ms */
-        int FAST = 3;
-    }
-
-    @RangingUpdateRate
+    @RawRangingDevice.RangingUpdateRate
     private final int mRangingUpdateRate;
 
     @IntRange(from = 1, to = 2)
@@ -270,7 +250,7 @@ public final class UwbRangingParams implements Parcelable {
      *
      * @return The ranging update rate as an integer.
      */
-    @RangingUpdateRate
+    @RawRangingDevice.RangingUpdateRate
     public int getRangingUpdateRate() {
         return mRangingUpdateRate;
     }
@@ -298,7 +278,7 @@ public final class UwbRangingParams implements Parcelable {
         private byte[] mSubSessionKeyInfo = null;
         private UwbComplexChannel mComplexChannel;
         private UwbAddress mPeerAddress = null;
-        @RangingUpdateRate
+        @RawRangingDevice.RangingUpdateRate
         private int mRangingUpdateRate;
         private int mSlotDurationMillis = 1;
         private boolean mIsAoaDisabled = false;
@@ -412,11 +392,11 @@ public final class UwbRangingParams implements Parcelable {
          * Sets the ranging update rate for the session.
          *
          * @param rate the ranging update rate, defined as one of the constants in
-         *             {@link RangingUpdateRate}.
+         *             {@link RawRangingDevice.RangingUpdateRate}.
          * @return this Builder instance.
          */
         @NonNull
-        public Builder setRangingUpdateRate(@RangingUpdateRate int rate) {
+        public Builder setRangingUpdateRate(@RawRangingDevice.RangingUpdateRate int rate) {
             mRangingUpdateRate = rate;
             return this;
         }
