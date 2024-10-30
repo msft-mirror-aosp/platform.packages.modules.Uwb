@@ -31,7 +31,6 @@ import com.android.ranging.flags.Flags;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.util.Map;
 
 /**
  * UwbRangingParameters encapsulates the parameters required for a UWB ranging session.
@@ -236,9 +235,9 @@ public final class UwbRangingParams implements Parcelable {
     }
 
     /**
-     * Returns a map of peer devices and their UWB addresses.
+     * Returns the UwbAddress of the peer device.
      *
-     * @return An immutable {@link Map} with peer devices as keys and their UWB addresses as values.
+     * @return A {@link UwbAddress} corresponding to the peer device to range with.
      */
     @NonNull
     public UwbAddress getPeerAddress() {
