@@ -17,6 +17,7 @@
 package com.android.server.ranging.uwb.tests;
 
 import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
+import static android.ranging.uwb.UwbRangingParams.CONFIG_UNICAST_DS_TWR;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -85,7 +86,7 @@ public class UwbAdapterTest {
     private UwbConfig.Builder generateConfig() {
         return new UwbConfig.Builder(
                 new UwbRangingParams.Builder()
-                        .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
+                        .setConfigId(CONFIG_UNICAST_DS_TWR)
                         .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
                         .setComplexChannel(new UwbComplexChannel.Builder().setChannel(
                                 9).setPreambleIndex(11).build())

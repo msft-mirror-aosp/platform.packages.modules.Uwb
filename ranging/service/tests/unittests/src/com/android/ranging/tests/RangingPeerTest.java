@@ -17,6 +17,7 @@
 package com.android.server.ranging.tests;
 
 import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
+import static android.ranging.uwb.UwbRangingParams.CONFIG_UNICAST_DS_TWR;
 
 import static com.android.server.ranging.RangingTechnology.CS;
 import static com.android.server.ranging.RangingTechnology.UWB;
@@ -126,7 +127,7 @@ public class RangingPeerTest {
                 .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
                 .setComplexChannel(new UwbComplexChannel.Builder().setChannel(9).setPreambleIndex(
                         11).build())
-                .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
+                .setConfigId(CONFIG_UNICAST_DS_TWR)
                 .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
                 .setRangingUpdateRate(UPDATE_RATE_NORMAL);
     }
