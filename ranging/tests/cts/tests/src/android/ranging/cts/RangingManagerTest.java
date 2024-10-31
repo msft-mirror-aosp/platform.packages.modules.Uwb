@@ -16,6 +16,8 @@
 
 package android.ranging.cts;
 
+import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
+
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
 import static com.google.common.truth.Truth.assertThat;
@@ -103,8 +105,7 @@ public class RangingManagerTest {
                                                         2, 1})
                                         .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
                                         .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
-                                        .setRangingUpdateRate(
-                                                UwbRangingParams.RangingUpdateRate.NORMAL)
+                                        .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                                         .build())
                                 .build())
                         .build())
@@ -151,8 +152,7 @@ public class RangingManagerTest {
                                                         2, 1})
                                         .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
                                         .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
-                                        .setRangingUpdateRate(
-                                                UwbRangingParams.RangingUpdateRate.NORMAL)
+                                        .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                                         .build())
                                 .build())
                         .build())
@@ -173,8 +173,7 @@ public class RangingManagerTest {
                                                         2, 1})
                                         .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
                                         .setPeerAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
-                                        .setRangingUpdateRate(
-                                                UwbRangingParams.RangingUpdateRate.NORMAL)
+                                        .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                                         .build())
                                 .build())
                         .build())
