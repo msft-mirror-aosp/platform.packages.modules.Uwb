@@ -16,9 +16,13 @@
 
 package com.android.server.ranging.rtt;
 
+import static android.ranging.RangingPreference.DEVICE_ROLE_INITIATOR;
+
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.ranging.rtt.RttRangingParams;
+import android.ranging.RangingData;
+import android.ranging.RangingMeasurement;
+import android.ranging.RangingPreference;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -31,7 +35,6 @@ import com.android.ranging.rtt.backend.internal.RttService;
 import com.android.ranging.rtt.backend.internal.RttServiceImpl;
 import com.android.server.ranging.RangingAdapter;
 import com.android.server.ranging.RangingConfig;
-import com.android.server.ranging.RangingData;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
 
@@ -41,7 +44,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 
-import java.time.Duration;
 import java.util.concurrent.Executors;
 
 /** Ranging adapter for WiFi Round-To-Trip(RTT). */
@@ -69,21 +71,21 @@ public class RttAdapter implements RangingAdapter {
 
     public RttAdapter(
             @NonNull Context context, @NonNull ListeningExecutorService executorService,
-            @RttRangingParams.DeviceRole int role
+            @RangingPreference.DeviceRole int role
     ) {
         this(context, executorService, new RttServiceImpl(context), role);
     }
 
     @VisibleForTesting
     public RttAdapter(@NonNull Context context, @NonNull ListeningExecutorService executorService,
-            @NonNull RttService rttService, @RttRangingParams.DeviceRole int role) {
+            @NonNull RttService rttService, @RangingPreference.DeviceRole int role) {
         if (!RttAdapter.isSupported(context)) {
             throw new IllegalArgumentException("WiFi RTT system feature not found.");
         }
 
         mStateMachine = new StateMachine<>(State.STOPPED);
         mRttService = rttService;
-        mRttClient = role == RttRangingParams.DEVICE_ROLE_SUBSCRIBER
+        mRttClient = role == DEVICE_ROLE_INITIATOR
                 ? mRttService.getSubscriber(context)
                 : mRttService.getPublisher(context);
 
@@ -152,21 +154,27 @@ public class RttAdapter implements RangingAdapter {
         @Override
         public void onRangingResult(RttDevice peerDevice, RttRangingPosition position) {
             RangingData.Builder dataBuilder = new RangingData.Builder()
-                    .setTechnology(RangingTechnology.RTT)
-                    .setRangeDistance(position.getDistance())
+                    .setRangingTechnology((int) RangingTechnology.RTT.getValue())
+                    .setDistance(new RangingMeasurement.Builder()
+                            .setMeasurement(position.getDistance())
+                            .build())
                     .setRssi(position.getRssiDbm())
-                    .setTimestamp(Duration.ofMillis(position.getRangingTimestampMillis()))
-                    .setPeerAddress(peerDevice.getAddress().toBytes());
+                    .setTimestamp(position.getRangingTimestampMillis());
 
             if (position.getAzimuth() != null) {
-                dataBuilder.setAzimuthRadians(position.getAzimuth().getValue());
+                dataBuilder.setAzimuth(new RangingMeasurement.Builder()
+                        .setMeasurement(position.getAzimuth().getValue())
+                        .build());
             }
             if (position.getElevation() != null) {
-                dataBuilder.setElevationRadians(position.getElevation().getValue());
+                dataBuilder.setElevation(new RangingMeasurement.Builder()
+                        .setMeasurement(position.getElevation().getValue())
+                        .build());
             }
             synchronized (mStateMachine) {
                 if (mStateMachine.getState() == State.STARTED) {
-                    mCallbacks.onRangingData(dataBuilder.build());
+                    // TODO
+                    // mCallbacks.onRangingData(dataBuilder.build());
                 }
             }
         }

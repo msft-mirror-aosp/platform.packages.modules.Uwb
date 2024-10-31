@@ -18,11 +18,10 @@ package android.ranging.cs;
 
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
-import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.RangingDevice;
+import android.ranging.params.RawRangingDevice;
 
 import com.android.ranging.flags.Flags;
 
@@ -64,25 +63,9 @@ public final class CsRangingParams implements Parcelable {
     public static final int LOCATION_TYPE_UNKNOWN = 0;
     public static final int LOCATION_TYPE_INDOOR = 1;
     public static final int LOCATION_TYPE_OUTDOOR = 2;
-
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef(
-            value = {
-                    REPORT_FREQUENCY_LOW,
-                    REPORT_FREQUENCY_MEDIUM,
-                    REPORT_FREQUENCY_HIGH,
-            })
-    @interface ReportFrequency {
-    }
-
-    public static final int REPORT_FREQUENCY_LOW = 0;
-    public static final int REPORT_FREQUENCY_MEDIUM = 1;
-    public static final int REPORT_FREQUENCY_HIGH = 2;
-    private final RangingDevice mPeerDevice;
     private final byte[] mPeerBluetoothAddress;
-    @ReportFrequency
-    private final int mReportFrequency;
-    private final int mDurationSeconds;
+    @RawRangingDevice.RangingUpdateRate
+    private final int mRangingUpdateRate;
     @SightType
     private final int mSightType;
     @LocationType
@@ -91,20 +74,16 @@ public final class CsRangingParams implements Parcelable {
     private final int mSecurityLevel;
 
     private CsRangingParams(Builder builder) {
-        mPeerDevice = builder.mPeerDevice;
         mPeerBluetoothAddress = builder.mPeerBluetoothAddress;
-        mReportFrequency = builder.mReportFrequency;
-        mDurationSeconds = builder.mDurationSeconds;
+        mRangingUpdateRate = builder.mRangingUpdateRate;
         mSightType = builder.mSightType;
         mLocationType = builder.mLocationType;
         mSecurityLevel = builder.mSecurityLevel;
     }
 
     private CsRangingParams(Parcel in) {
-        mPeerDevice = in.readParcelable(RangingDevice.class.getClassLoader(), RangingDevice.class);
         mPeerBluetoothAddress = in.readBlob();
-        mReportFrequency = in.readInt();
-        mDurationSeconds = in.readInt();
+        mRangingUpdateRate = in.readInt();
         mSightType = in.readInt();
         mLocationType = in.readInt();
         mSecurityLevel = in.readInt();
@@ -112,10 +91,8 @@ public final class CsRangingParams implements Parcelable {
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeParcelable(mPeerDevice, flags);
         dest.writeByteArray(mPeerBluetoothAddress);
-        dest.writeInt(mReportFrequency);
-        dest.writeInt(mDurationSeconds);
+        dest.writeInt(mRangingUpdateRate);
         dest.writeInt(mSightType);
         dest.writeInt(mLocationType);
         dest.writeInt(mSecurityLevel);
@@ -133,9 +110,6 @@ public final class CsRangingParams implements Parcelable {
         }
     };
 
-    public RangingDevice getPeerDevice() {
-        return mPeerDevice;
-    }
 
     /**
      * Returns the bluetooth peer device address.
@@ -144,12 +118,8 @@ public final class CsRangingParams implements Parcelable {
         return mPeerBluetoothAddress;
     }
 
-    public int getReportFrequency() {
-        return mReportFrequency;
-    }
-
-    public int getDurationSeconds() {
-        return mDurationSeconds;
+    public int getRangingUpdateRate() {
+        return mRangingUpdateRate;
     }
 
     public int getSightType() {
@@ -164,13 +134,11 @@ public final class CsRangingParams implements Parcelable {
         return mSecurityLevel;
     }
 
+
     public static final class Builder {
-        private RangingDevice mPeerDevice;
         private byte[] mPeerBluetoothAddress;
-        @ReportFrequency
-        private int mReportFrequency;
-        @IntRange(from = 60, to = 3600)
-        private int mDurationSeconds;
+        @RawRangingDevice.RangingUpdateRate
+        private int mRangingUpdateRate;
         @SightType
         private int mSightType;
         @LocationType
@@ -178,23 +146,13 @@ public final class CsRangingParams implements Parcelable {
         @CsRangingCapabilities.SecurityLevel
         private int mSecurityLevel;
 
-        public Builder setPeerDevice(@NonNull RangingDevice peerDevice) {
-            mPeerDevice = peerDevice;
-            return this;
-        }
-
         public Builder setPeerBluetoothAddress(@NonNull byte[] peerBluetoothAddress) {
             mPeerBluetoothAddress = peerBluetoothAddress;
             return this;
         }
 
-        public Builder setReportFrequency(@ReportFrequency int reportFrequency) {
-            mReportFrequency = reportFrequency;
-            return this;
-        }
-
-        public Builder setDurationSeconds(@IntRange(from = 60, to = 3600) int durationSeconds) {
-            mDurationSeconds = durationSeconds;
+        public Builder setRangingUpdateRate(@RawRangingDevice.RangingUpdateRate int updateRate) {
+            mRangingUpdateRate = updateRate;
             return this;
         }
 
