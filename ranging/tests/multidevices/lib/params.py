@@ -3,6 +3,7 @@ import dataclasses
 from enum import IntEnum
 from typing import List, Optional
 from lib.uwb import UwbRangingParams
+from lib.rtt import RttRangingParams
 
 
 class DeviceRole(IntEnum):
@@ -20,7 +21,7 @@ class DeviceParams:
   peer_id: str
   uwb_params: Optional[UwbRangingParams] = None
   cs_params = None
-  rtt_params = None
+  rtt_params: Optional[RttRangingParams] = None
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)

@@ -6,7 +6,7 @@ from lib.params import RangingPreference
 from mobly.controllers import android_device
 
 
-CALLBACK_WAIT_TIME_SEC = 3
+CALLBACK_WAIT_TIME_SEC = 5
 
 
 class RangingTechnology(IntEnum):
