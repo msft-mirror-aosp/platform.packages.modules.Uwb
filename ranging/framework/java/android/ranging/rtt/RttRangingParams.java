@@ -19,7 +19,7 @@ package android.ranging.rtt;
 import android.annotation.FlaggedApi;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.RangingManager;
+import android.ranging.params.RawRangingDevice;
 
 import androidx.annotation.NonNull;
 
@@ -34,6 +34,7 @@ public class RttRangingParams implements Parcelable {
     protected RttRangingParams(Parcel in) {
         mServiceName = in.readString();
         mMatchFilter = in.createByteArray();
+        mRangingUpdateRate = in.readInt();
     }
 
     public static final Creator<RttRangingParams> CREATOR = new Creator<RttRangingParams>() {
@@ -57,11 +58,15 @@ public class RttRangingParams implements Parcelable {
     public void writeToParcel(@NonNull Parcel dest, int flags) {
         dest.writeString(mServiceName);
         dest.writeByteArray(mMatchFilter);
+        dest.writeInt(mRangingUpdateRate);
     }
 
     private final String mServiceName;
 
     private final byte[] mMatchFilter;
+
+    @RawRangingDevice.RangingUpdateRate
+    private final int mRangingUpdateRate;
 
     public String getServiceName() {
         return mServiceName;
@@ -71,15 +76,23 @@ public class RttRangingParams implements Parcelable {
         return mMatchFilter;
     }
 
+    @RawRangingDevice.RangingUpdateRate
+    public int getRangingUpdateRate() {
+        return mRangingUpdateRate;
+    }
+
     private RttRangingParams(Builder builder) {
         mServiceName = builder.mServiceName;
         mMatchFilter = builder.mMatchFilter;
+        mRangingUpdateRate = builder.mRangingUpdateRate;
     }
 
     public static final class Builder {
         private String mServiceName = "";
 
         private byte[] mMatchFilter = new byte[0];
+        @RawRangingDevice.RangingUpdateRate
+        private int mRangingUpdateRate;
 
         public Builder setServiceName(String serviceName) {
             if (serviceName != null) {
@@ -92,6 +105,11 @@ public class RttRangingParams implements Parcelable {
             if (matchFilter != null) {
                 this.mMatchFilter = matchFilter.clone();
             }
+            return this;
+        }
+
+        public Builder setRangingUpdateRate(@RawRangingDevice.RangingUpdateRate int updateRate) {
+            mRangingUpdateRate = updateRate;
             return this;
         }
 

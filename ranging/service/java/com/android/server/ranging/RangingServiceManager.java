@@ -155,6 +155,7 @@ public class RangingServiceManager {
 
         RangingConfig rangingConfig = new RangingConfig.Builder(
                 rangingSessionInfo.mRangingPreference)
+                .setPeerDevice(rangingDevice.getRangingDevice())
                 .setUwbRangingParams(rangingDevice.getUwbRangingParams())
                 .setCsRangingParams(rangingDevice.getCsRangingParams())
                 .setRttRangingParams(rangingDevice.getRttRangingParams())
