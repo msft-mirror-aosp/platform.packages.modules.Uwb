@@ -16,6 +16,7 @@
 
 package com.android.server.ranging.rtt;
 
+import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
 import android.ranging.params.DataNotificationConfig;
 import android.ranging.rtt.RttRangingParams;
@@ -27,16 +28,19 @@ public class RttConfig implements RangingConfig.TechnologyConfig {
 
     private final DataNotificationConfig mDataNotificationConfig;
     private final RttRangingParams mRangingParams;
+    private final RangingDevice mPeerDevice;
 
     @RangingPreference.DeviceRole
     private final int mDeviceRole;
 
     public RttConfig(int deviceRole,
             RttRangingParams rttRangingParams,
-            DataNotificationConfig dataNotificationConfig) {
+            DataNotificationConfig dataNotificationConfig,
+            RangingDevice peerDevice) {
         mDeviceRole = deviceRole;
         mRangingParams = rttRangingParams;
         mDataNotificationConfig = dataNotificationConfig;
+        mPeerDevice = peerDevice;
     }
 
     public DataNotificationConfig getDataNotificationConfig() {
@@ -49,6 +53,10 @@ public class RttConfig implements RangingConfig.TechnologyConfig {
 
     public int getDeviceRole() {
         return mDeviceRole;
+    }
+
+    public RangingDevice getPeerDevice() {
+        return mPeerDevice;
     }
 
     public RttRangingParameters asBackendParameters() {

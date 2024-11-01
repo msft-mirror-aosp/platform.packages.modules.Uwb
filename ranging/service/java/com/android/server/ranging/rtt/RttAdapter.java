@@ -21,6 +21,7 @@ import static android.ranging.RangingPreference.DEVICE_ROLE_INITIATOR;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.ranging.RangingData;
+import android.ranging.RangingDevice;
 import android.ranging.RangingMeasurement;
 import android.ranging.RangingPreference;
 import android.util.Log;
@@ -54,6 +55,7 @@ public class RttAdapter implements RangingAdapter {
     private final RttService mRttService;
 
     private final RttRangingDevice mRttClient;
+    private RangingDevice mRangingDevice;
 
     private final ListeningExecutorService mExecutorService;
     private final ExecutorResultHandlers mRttClientResultHandlers = new ExecutorResultHandlers();
@@ -113,13 +115,18 @@ public class RttAdapter implements RangingAdapter {
         }
 
         mCallbacks = callbacks;
-        if (!(config instanceof RttConfig)) {
+        if (!(config instanceof RttConfig rttConfig)) {
             Log.w(TAG, "Tried to start adapter with invalid ranging parameters");
             mCallbacks.onStopped(Callback.StoppedReason.FAILED_TO_START);
             return;
         }
         mRttClient.setRangingParameters(
-                ((RttConfig) config).asBackendParameters());
+                (rttConfig).asBackendParameters());
+        if (rttConfig.getPeerDevice() == null) {
+            Log.e(TAG, "Peer device is null");
+            return;
+        }
+        mRangingDevice = rttConfig.getPeerDevice();
 
         var future = Futures.submit(() -> {
             mRttClient.startRanging(mRttListener, Executors.newSingleThreadExecutor());
@@ -173,8 +180,7 @@ public class RttAdapter implements RangingAdapter {
             }
             synchronized (mStateMachine) {
                 if (mStateMachine.getState() == State.STARTED) {
-                    // TODO
-                    // mCallbacks.onRangingData(dataBuilder.build());
+                    mCallbacks.onRangingData(mRangingDevice, dataBuilder.build());
                 }
             }
         }
