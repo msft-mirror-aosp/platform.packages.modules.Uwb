@@ -17,6 +17,7 @@
 package android.ranging.params;
 
 import android.annotation.FlaggedApi;
+import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
 
@@ -26,6 +27,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * Represents the parameters for initiating a raw ranging session.
+ * This class encapsulates a list of {@link RawRangingDevice} objects that participate in the
+ * session.
+ *
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
@@ -67,18 +72,39 @@ public class RawInitiatorRangingParams extends RangingParams implements Parcelab
                 }
             };
 
+    /**
+     * Returns the list of {@link RawRangingDevice} objects involved in this session.
+     *
+     * @return a list of ranging devices.
+     */
     public List<RawRangingDevice> getRawRangingDevices() {
         return mRawRangingDevices;
     }
 
+    /**
+     * Builder class for constructing instances of {@link RawInitiatorRangingParams}.
+     */
     public static final class Builder {
         private final List<RawRangingDevice> mRawRangingDeviceList = new ArrayList<>();
 
+        /**
+         * Adds a {@link RawRangingDevice} to the list of devices for this session.
+         *
+         * @param rangingDevice the device to be added.
+         * @return this {@link Builder} instance.
+         */
+        @NonNull
         public Builder addRawRangingDevice(RawRangingDevice rangingDevice) {
             mRawRangingDeviceList.add(rangingDevice);
             return this;
         }
 
+        /**
+         * Builds and returns a new {@link RawInitiatorRangingParams} instance.
+         *
+         * @return a configured instance of {@link RawInitiatorRangingParams}.
+         */
+        @NonNull
         public RawInitiatorRangingParams build() {
             return new RawInitiatorRangingParams(this);
         }

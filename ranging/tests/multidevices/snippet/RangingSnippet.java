@@ -106,7 +106,7 @@ public class RangingSnippet implements Snippet {
         }
 
         @Override
-        public void onStartFailed(int reason) {
+        public void onStartFailed(int reason, RangingDevice device) {
         }
 
         @Override

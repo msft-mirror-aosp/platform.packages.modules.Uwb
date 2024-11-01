@@ -17,14 +17,16 @@
 package android.ranging.params;
 
 import android.annotation.FlaggedApi;
+import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
-
-import androidx.annotation.NonNull;
 
 import com.android.ranging.flags.Flags;
 
 /**
+ * Represents the parameters for a raw ranging session initiated by a responder device.
+ * This class holds a {@link RawRangingDevice} object that participates in the session.
+ *
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
@@ -55,6 +57,12 @@ public class RawResponderRangingParams extends RangingParams implements Parcelab
                 }
             };
 
+    /**
+     * Returns the {@link RawRangingDevice} participating in this session as the responder.
+     *
+     * @return the raw ranging device.
+     */
+    @NonNull
     public RawRangingDevice getRawRangingDevice() {
         return mRawRangingDevice;
     }
@@ -70,14 +78,30 @@ public class RawResponderRangingParams extends RangingParams implements Parcelab
         dest.writeParcelable(mRawRangingDevice, flags);
     }
 
+    /**
+     * Builder class for constructing instances of {@link RawResponderRangingParams}.
+     */
     public static final class Builder {
         private RawRangingDevice mRawRangingDevice;
 
-        public Builder setRawRangingDevice(RawRangingDevice rangingDevice) {
+        /**
+         * Sets the {@link RawRangingDevice} for this responder session.
+         *
+         * @param rangingDevice the raw ranging device.
+         * @return this {@link Builder} instance.
+         */
+        @NonNull
+        public Builder setRawRangingDevice(@NonNull RawRangingDevice rangingDevice) {
             mRawRangingDevice = rangingDevice;
             return this;
         }
 
+        /**
+         * Builds and returns a new {@link RawResponderRangingParams} instance.
+         *
+         * @return a configured instance of {@link RawResponderRangingParams}.
+         */
+        @NonNull
         public RawResponderRangingParams build() {
             return new RawResponderRangingParams(this);
         }

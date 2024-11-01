@@ -16,6 +16,7 @@
 
 package android.ranging.cts;
 
+import static android.ranging.uwb.UwbRangingParams.CONFIG_UNICAST_DS_TWR;
 import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
 
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
@@ -103,7 +104,7 @@ public class RangingManagerTest {
                                         .setSessionKeyInfo(
                                                 new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3,
                                                         2, 1})
-                                        .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
+                                        .setConfigId(CONFIG_UNICAST_DS_TWR)
                                         .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
                                         .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                                         .build())
@@ -150,7 +151,7 @@ public class RangingManagerTest {
                                         .setSessionKeyInfo(
                                                 new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3,
                                                         2, 1})
-                                        .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
+                                        .setConfigId(CONFIG_UNICAST_DS_TWR)
                                         .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
                                         .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                                         .build())
@@ -171,7 +172,7 @@ public class RangingManagerTest {
                                         .setSessionKeyInfo(
                                                 new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3,
                                                         2, 1})
-                                        .setConfigId(UwbRangingParams.ConfigId.UNICAST_DS_TWR)
+                                        .setConfigId(CONFIG_UNICAST_DS_TWR)
                                         .setPeerAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
                                         .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                                         .build())
@@ -209,7 +210,7 @@ public class RangingManagerTest {
         }
 
         @Override
-        public void onStartFailed(int reason) {
+        public void onStartFailed(int reason, RangingDevice device) {
 
         }
 
