@@ -75,7 +75,7 @@ public class RangingConfig {
             technologyConfigsBuilder.put(RangingTechnology.CS, csConfig);
         }
         if (builder.mRttRangingParams != null) {
-            RttConfig rttConfig = getRttConfig(builder.mRttRangingParams);
+            RttConfig rttConfig = getRttConfig(builder);
             technologyConfigsBuilder.put(RangingTechnology.RTT, rttConfig);
         }
         mTechnologyConfigs = technologyConfigsBuilder.build();
@@ -118,9 +118,10 @@ public class RangingConfig {
         return configBuilder.build();
     }
 
-    private RttConfig getRttConfig(RttRangingParams rttRangingParams) {
+    private RttConfig getRttConfig(Builder builder) {
+        RttRangingParams rttRangingParams = builder.mRttRangingParams;
         return new RttConfig(mPreference.getDeviceRole(), rttRangingParams,
-                mPreference.getDataNotificationConfig());
+                mPreference.getDataNotificationConfig(), builder.mPeerDevice);
     }
 
     private @Nullable CsConfig getCsConfig() {
