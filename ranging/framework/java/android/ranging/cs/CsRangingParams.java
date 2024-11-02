@@ -18,11 +18,10 @@ package android.ranging.cs;
 
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
-import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.RangingManager;
+import android.ranging.params.RawRangingDevice;
 
 import com.android.ranging.flags.Flags;
 
@@ -30,13 +29,17 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 /**
- * Parameters for Bluetooth Channel Sounding ranging.
+ * CsRangingParams encapsulates the parameters required for a bluetooth channel sounding ranging
+ * session.
  *
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_CS_ENABLED)
 public final class CsRangingParams implements Parcelable {
 
+    /**
+     * @hide
+     */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(
             value = {
@@ -47,8 +50,17 @@ public final class CsRangingParams implements Parcelable {
     @interface SightType {
     }
 
+    /**
+     * Sight type is unknown.
+     */
     public static final int SIGHT_TYPE_UNKNOWN = 0;
+    /**
+     * Remote device is in line of sight.
+     */
     public static final int SIGHT_TYPE_LINE_OF_SIGHT = 1;
+    /**
+     * Remote device is not in line of sight.
+     */
     public static final int SIGHT_TYPE_NON_LINE_OF_SIGHT = 2;
 
     @Retention(RetentionPolicy.SOURCE)
@@ -61,27 +73,22 @@ public final class CsRangingParams implements Parcelable {
     @interface LocationType {
     }
 
+    /**
+     * Location type is unknown.
+     */
     public static final int LOCATION_TYPE_UNKNOWN = 0;
+    /**
+     * Location of the use-case is indoor.
+     */
     public static final int LOCATION_TYPE_INDOOR = 1;
+    /**
+     * Location of the use-case is outdoor.
+     */
     public static final int LOCATION_TYPE_OUTDOOR = 2;
 
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef(
-            value = {
-                    REPORT_FREQUENCY_LOW,
-                    REPORT_FREQUENCY_MEDIUM,
-                    REPORT_FREQUENCY_HIGH,
-            })
-    @interface ReportFrequency {
-    }
-
-    public static final int REPORT_FREQUENCY_LOW = 0;
-    public static final int REPORT_FREQUENCY_MEDIUM = 1;
-    public static final int REPORT_FREQUENCY_HIGH = 2;
     private final byte[] mPeerBluetoothAddress;
-    @ReportFrequency
-    private final int mReportFrequency;
-    private final int mDurationSeconds;
+    @RawRangingDevice.RangingUpdateRate
+    private final int mRangingUpdateRate;
     @SightType
     private final int mSightType;
     @LocationType
@@ -91,8 +98,7 @@ public final class CsRangingParams implements Parcelable {
 
     private CsRangingParams(Builder builder) {
         mPeerBluetoothAddress = builder.mPeerBluetoothAddress;
-        mReportFrequency = builder.mReportFrequency;
-        mDurationSeconds = builder.mDurationSeconds;
+        mRangingUpdateRate = builder.mRangingUpdateRate;
         mSightType = builder.mSightType;
         mLocationType = builder.mLocationType;
         mSecurityLevel = builder.mSecurityLevel;
@@ -100,8 +106,7 @@ public final class CsRangingParams implements Parcelable {
 
     private CsRangingParams(Parcel in) {
         mPeerBluetoothAddress = in.readBlob();
-        mReportFrequency = in.readInt();
-        mDurationSeconds = in.readInt();
+        mRangingUpdateRate = in.readInt();
         mSightType = in.readInt();
         mLocationType = in.readInt();
         mSecurityLevel = in.readInt();
@@ -110,8 +115,7 @@ public final class CsRangingParams implements Parcelable {
     @Override
     public void writeToParcel(Parcel dest, int flags) {
         dest.writeByteArray(mPeerBluetoothAddress);
-        dest.writeInt(mReportFrequency);
-        dest.writeInt(mDurationSeconds);
+        dest.writeInt(mRangingUpdateRate);
         dest.writeInt(mSightType);
         dest.writeInt(mLocationType);
         dest.writeInt(mSecurityLevel);
@@ -131,38 +135,57 @@ public final class CsRangingParams implements Parcelable {
 
 
     /**
-     * Returns the bluetooth peer device address.
+     * Returns the Bluetooth address of the peer device.
+     *
+     * @return byte array representing the Bluetooth address.
      */
     public byte[] getPeerBluetoothAddress() {
         return mPeerBluetoothAddress;
     }
 
-    public int getReportFrequency() {
-        return mReportFrequency;
+    /**
+     * Returns the reporting frequency.
+     *
+     * @return one of {@link RawRangingDevice.RangingUpdateRate}.
+     */
+    public int getRangingUpdateRate() {
+        return mRangingUpdateRate;
     }
 
-    public int getDurationSeconds() {
-        return mDurationSeconds;
-    }
-
+    /**
+     * Returns the duration of the ranging session in seconds.
+     *
+     * @return the duration in seconds.
+     */
     public int getSightType() {
         return mSightType;
     }
 
+    /**
+     * Returns the sight type for the ranging session.
+     *
+     * @return one of {@link SightType}.
+     */
     public int getLocationType() {
         return mLocationType;
     }
 
+    /**
+     * Returns the location type for the ranging session.
+     *
+     * @return one of {@link LocationType}.
+     */
     public int getSecurityLevel() {
         return mSecurityLevel;
     }
 
+    /**
+     * Builder class to create {@link CsRangingParams} instances.
+     */
     public static final class Builder {
         private byte[] mPeerBluetoothAddress;
-        @ReportFrequency
-        private int mReportFrequency;
-        @IntRange(from = 60, to = 3600)
-        private int mDurationSeconds;
+        @RawRangingDevice.RangingUpdateRate
+        private int mRangingUpdateRate;
         @SightType
         private int mSightType;
         @LocationType
@@ -170,36 +193,73 @@ public final class CsRangingParams implements Parcelable {
         @CsRangingCapabilities.SecurityLevel
         private int mSecurityLevel;
 
+        /**
+         * Sets the Bluetooth address of the peer device.
+         *
+         * @param peerBluetoothAddress the Bluetooth address as a byte array.
+         * @return this {@link Builder} instance.
+         */
+        @NonNull
         public Builder setPeerBluetoothAddress(@NonNull byte[] peerBluetoothAddress) {
             mPeerBluetoothAddress = peerBluetoothAddress;
             return this;
         }
 
-        public Builder setReportFrequency(@ReportFrequency int reportFrequency) {
-            mReportFrequency = reportFrequency;
+        /**
+         * Sets the update rate of the ranging session.
+         *
+         * @param updateRate the reporting frequency, one of
+         *                   {@link RawRangingDevice.RangingUpdateRate}.
+         * @return this {@link Builder} instance.
+         */
+        @NonNull
+        public Builder setRangingUpdateRate(@RawRangingDevice.RangingUpdateRate int updateRate) {
+            mRangingUpdateRate = updateRate;
             return this;
         }
 
-        public Builder setDurationSeconds(@IntRange(from = 60, to = 3600) int durationSeconds) {
-            mDurationSeconds = durationSeconds;
-            return this;
-        }
-
+        /**
+         * Sets the sight type for the ranging session.
+         *
+         * @param sightType the sight type, one of {@link SightType}.
+         * @return this {@link Builder} instance.
+         */
+        @NonNull
         public Builder setSightType(@SightType int sightType) {
             mSightType = sightType;
             return this;
         }
 
+        /**
+         * Sets the location type for the ranging session.
+         *
+         * @param locationType the location type, one of {@link LocationType}.
+         * @return this {@link Builder} instance.
+         */
+        @NonNull
         public Builder setLocationType(@LocationType int locationType) {
             mLocationType = locationType;
             return this;
         }
 
+        /**
+         * Sets the security level for the ranging session.
+         *
+         * @param securityLevel the security level.
+         * @return this {@link Builder} instance.
+         */
+        @NonNull
         public Builder setSecurityLevel(@CsRangingCapabilities.SecurityLevel int securityLevel) {
             mSecurityLevel = securityLevel;
             return this;
         }
 
+        /**
+         * Builds and returns a {@link CsRangingParams} instance.
+         *
+         * @return a new {@link CsRangingParams}.
+         */
+        @NonNull
         public CsRangingParams build() {
             return new CsRangingParams(this);
         }
