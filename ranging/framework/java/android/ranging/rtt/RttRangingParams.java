@@ -17,21 +17,22 @@
 package android.ranging.rtt;
 
 import android.annotation.FlaggedApi;
+import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.ranging.params.RawRangingDevice;
 
-import androidx.annotation.NonNull;
-
 import com.android.ranging.flags.Flags;
 
 /**
+ * Represents the parameters required to perform Wi-Fi Round Trip Time (RTT) ranging.
+ *
  * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_RTT_ENABLED)
 public class RttRangingParams implements Parcelable {
 
-    protected RttRangingParams(Parcel in) {
+    private RttRangingParams(Parcel in) {
         mServiceName = in.readString();
         mMatchFilter = in.createByteArray();
         mRangingUpdateRate = in.readInt();
@@ -68,10 +69,21 @@ public class RttRangingParams implements Parcelable {
     @RawRangingDevice.RangingUpdateRate
     private final int mRangingUpdateRate;
 
+
+    /**
+     * Returns the service name associated with this RTT ranging session.
+     *
+     * @return the service name as a {@link String}.
+     */
     public String getServiceName() {
         return mServiceName;
     }
 
+    /**
+     * Returns the match filter.
+     *
+     * @return a byte array representing the match filter.
+     */
     public byte[] getMatchFilter() {
         return mMatchFilter;
     }
@@ -87,32 +99,64 @@ public class RttRangingParams implements Parcelable {
         mRangingUpdateRate = builder.mRangingUpdateRate;
     }
 
+    /**
+     * Builder class for {@link RttRangingParams}.
+     */
     public static final class Builder {
         private String mServiceName = "";
 
-        private byte[] mMatchFilter = new byte[0];
+        private byte[] mMatchFilter = null;
         @RawRangingDevice.RangingUpdateRate
         private int mRangingUpdateRate;
 
-        public Builder setServiceName(String serviceName) {
+        /**
+         * Sets the service name for the RTT session.
+         *
+         * @param serviceName the service name to be set.
+         * @return this {@link Builder} instance for chaining calls.
+         */
+        @NonNull
+        public Builder setServiceName(@NonNull String serviceName) {
             if (serviceName != null) {
                 this.mServiceName = serviceName;
             }
             return this;
         }
 
-        public Builder setMatchFilter(byte[] matchFilter) {
+        /**
+         * Sets the match filter to identify specific devices or services for RTT.
+         *
+         * @param matchFilter a byte array representing the filter. If {@code null}, it will be
+         *                    ignored.
+         * @return this {@link Builder} instance for chaining calls.
+         */
+        @NonNull
+        public Builder setMatchFilter(@NonNull byte[] matchFilter) {
             if (matchFilter != null) {
                 this.mMatchFilter = matchFilter.clone();
             }
             return this;
         }
 
+        /**
+         * Sets the update rate for the RTT ranging session.
+         *
+         * @param updateRate the update rate, as defined by
+         *                   {@link RawRangingDevice.RangingUpdateRate}.
+         * @return this {@link Builder} instance for chaining calls.
+         */
+        @NonNull
         public Builder setRangingUpdateRate(@RawRangingDevice.RangingUpdateRate int updateRate) {
             mRangingUpdateRate = updateRate;
             return this;
         }
 
+        /**
+         * Builds and returns a new {@link RttRangingParams} instance.
+         *
+         * @return a new {@link RttRangingParams} object configured with the provided parameters.
+         */
+        @NonNull
         public RttRangingParams build() {
             return new RttRangingParams(this);
         }
