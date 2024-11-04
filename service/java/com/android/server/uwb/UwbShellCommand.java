@@ -750,6 +750,18 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 int keyRotationRate = Integer.parseInt(getNextArgRequired());
                 builder.setKeyRotationRate(keyRotationRate);
             }
+            if (option.equals("--max-ranging-round-retries")) {
+                int maxRangingRoundRetries = Integer.parseInt(getNextArgRequired());
+                builder.setMaxRangingRoundRetries(maxRangingRoundRetries);
+            }
+            if (option.equals("--max-number-of-measurements")) {
+                int maxNumberOfMeasurements = Integer.parseInt(getNextArgRequired());
+                builder.setMaxNumberOfMeasurements(maxNumberOfMeasurements);
+            }
+            if (option.equals("--in-band-termination-attempt-count")) {
+                int inBandTerminationAttemptCount = Integer.parseInt(getNextArgRequired());
+                builder.setInBandTerminationAttemptCount(inBandTerminationAttemptCount);
+            }
             option = getNextOption();
         }
         if (aoaResultReqEnabled && interleavingEnabled) {
@@ -1550,8 +1562,12 @@ public class UwbShellCommand extends BasicShellCommandHandler {
                 + "    [-A enabled|disabled](tx-adaptive-power, default = disabled)\n"
                 + "    [-S <sfd_id>](sfd-id 0-4, default = 2)\n"
                 + "    [--is-key-rotation-enabled enabled|disabled]\n"
-                + "    [--key-rotation-rate <int>]");
-        pw.println("    Starts a FIRA ranging session with the provided params."
+                + "    [--key-rotation-rate <int>]\n"
+                + "    [--max-ranging-round-retries <int>]\n"
+                + "    [--max-number-of-measurements <int>]\n"
+                + "    [--in-band-termination-attempt-count <int>]\n"
+                + ""
+                + "    Starts a FIRA ranging session with the provided params."
                 + " Note: default behavior is to cache the latest ranging reports which can be"
                 + " retrieved using |get-ranging-session-reports|");
         pw.println("  start-dl-tdoa-ranging-session\n"
