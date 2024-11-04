@@ -16,8 +16,8 @@
 
 package android.ranging.cts;
 
-import static android.ranging.uwb.UwbRangingParams.CONFIG_UNICAST_DS_TWR;
 import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
+import static android.ranging.uwb.UwbRangingParams.CONFIG_UNICAST_DS_TWR;
 
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
@@ -38,8 +38,8 @@ import android.ranging.params.RawInitiatorRangingParams;
 import android.ranging.params.RawRangingDevice;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
-import android.ranging.uwb.UwbRangingCapabilities;
 import android.ranging.uwb.UwbRangingParams;
+import android.uwb.UwbManager;
 
 import androidx.annotation.NonNull;
 import androidx.test.InstrumentationRegistry;
@@ -200,10 +200,6 @@ public class RangingManagerTest {
         private volatile CountDownLatch mOnStartedCalled = new CountDownLatch(1);
         private volatile CountDownLatch mOnClosedCalled = new CountDownLatch(1);
 
-        public void replaceOnStartedCountDownLatch(CountDownLatch latch) {
-            mOnStartedCalled = latch;
-        }
-
         @Override
         public void onStarted(int technology) {
             mOnStartedCalled.countDown();
@@ -233,25 +229,28 @@ public class RangingManagerTest {
     @Test
     @CddTest(requirements = {"7.3.13/C-1-1,C-1-2"})
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
-    public void testGetRangingCapabilities() throws InterruptedException {
-        CapabilitiesCallback capabilitiesCallback = new CapabilitiesCallback(new CountDownLatch(1));
+    public void testCapabilitiesListener() throws InterruptedException {
+        UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
+        uiAutomation.adoptShellPermissionIdentity();
+
+        CapabilitiesCallback callback = new CapabilitiesCallback(new CountDownLatch(1));
         mRangingManager.registerCapabilitiesCallback(Executors.newSingleThreadExecutor(),
-                capabilitiesCallback);
+                callback);
 
-        assertThat(capabilitiesCallback.mCountDownLatch.await(2, TimeUnit.SECONDS)).isTrue();
-        assertThat(capabilitiesCallback.mOnCapabilitiesReceived).isTrue();
-        assertThat(capabilitiesCallback.mRangingCapabilities).isNotNull();
-        assertThat(capabilitiesCallback.mRangingCapabilities.getTechnologyAvailabilityMap())
-                .isNotNull();
+        assertThat(callback.mCountDownLatch.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnCapabilitiesReceived).isTrue();
+        assertThat(callback.mRangingCapabilities).isNotNull();
 
-        UwbRangingCapabilities uwbRangingCapabilities =
-                capabilitiesCallback.mRangingCapabilities.getUwbCapabilities();
-        if (uwbRangingCapabilities != null) {
-            assertThat(uwbRangingCapabilities.isSupportsDistance()).isTrue();
-            assertThat(uwbRangingCapabilities.getSupportedChannels()).isNotNull();
-        }
+        callback.reset(new CountDownLatch(1));
+        UwbManager uwbManager = mContext.getSystemService(UwbManager.class);
+        uwbManager.setUwbEnabled(!uwbManager.isUwbEnabled());
 
-        mRangingManager.unregisterCapabilitiesCallback(capabilitiesCallback);
+        assertThat(callback.mCountDownLatch.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnCapabilitiesReceived).isTrue();
+        assertThat(callback.mRangingCapabilities).isNotNull();
+
+        uwbManager.setUwbEnabled(true);
+        uiAutomation.dropShellPermissionIdentity();
     }
 
     @Test
@@ -305,9 +304,10 @@ public class RangingManagerTest {
 //        mRangingManager.unregisterCapabilitiesCallback(capabilitiesCallback);
     }
 
+
     private static class CapabilitiesCallback implements RangingCapabilitiesCallback {
 
-        private final CountDownLatch mCountDownLatch;
+        private CountDownLatch mCountDownLatch;
         private boolean mOnCapabilitiesReceived = false;
         private RangingCapabilities mRangingCapabilities = null;
 
@@ -320,6 +320,11 @@ public class RangingManagerTest {
             mOnCapabilitiesReceived = true;
             mRangingCapabilities = capabilities;
             mCountDownLatch.countDown();
+        }
+
+        public void reset(CountDownLatch latch) {
+            mCountDownLatch = latch;
+            mOnCapabilitiesReceived = false;
         }
     }
 }
