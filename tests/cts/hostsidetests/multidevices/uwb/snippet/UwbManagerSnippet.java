@@ -662,6 +662,9 @@ public class UwbManagerSnippet implements Snippet {
         if (j.has("maxRangingRoundRetries")) {
             builder.setMaxRangingRoundRetries(j.getInt("maxRangingRoundRetries"));
         }
+        if (j.has("maxNumberOfMeasurements")) {
+            builder.setMaxNumberOfMeasurements(j.getInt("maxNumberOfMeasurements"));
+        }
         if (j.has("sessionPriority")) {
             builder.setSessionPriority(j.getInt("sessionPriority"));
         }
