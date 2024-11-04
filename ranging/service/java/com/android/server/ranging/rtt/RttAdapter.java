@@ -22,6 +22,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
+import android.ranging.RangingManager;
 import android.ranging.RangingMeasurement;
 import android.ranging.RangingPreference;
 import android.util.Log;
@@ -161,7 +162,7 @@ public class RttAdapter implements RangingAdapter {
         @Override
         public void onRangingResult(RttDevice peerDevice, RttRangingPosition position) {
             RangingData.Builder dataBuilder = new RangingData.Builder()
-                    .setRangingTechnology((int) RangingTechnology.RTT.getValue())
+                    .setRangingTechnology(RangingManager.WIFI_NAN_RTT)
                     .setDistance(new RangingMeasurement.Builder()
                             .setMeasurement(position.getDistance())
                             .build())
