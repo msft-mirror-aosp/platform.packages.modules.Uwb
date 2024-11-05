@@ -19,7 +19,6 @@ package com.android.server.ranging.rtt;
 import static android.ranging.RangingPreference.DEVICE_ROLE_INITIATOR;
 
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.RangingMeasurement;
@@ -42,7 +41,6 @@ import com.android.server.ranging.RangingUtils.StateMachine;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 
 import java.util.concurrent.Executors;
@@ -66,11 +64,6 @@ public class RttAdapter implements RangingAdapter {
     /** Invariant: non-null while a ranging session is active */
     private Callback mCallbacks;
 
-    /** @return true if WiFi RTT is supported in the provided context, false otherwise */
-    public static boolean isSupported(Context context) {
-        return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_AWARE);
-    }
-
     public RttAdapter(
             @NonNull Context context, @NonNull ListeningExecutorService executorService,
             @RangingPreference.DeviceRole int role
@@ -81,7 +74,7 @@ public class RttAdapter implements RangingAdapter {
     @VisibleForTesting
     public RttAdapter(@NonNull Context context, @NonNull ListeningExecutorService executorService,
             @NonNull RttService rttService, @RangingPreference.DeviceRole int role) {
-        if (!RttAdapter.isSupported(context)) {
+        if (!RttCapabilitiesAdapter.isSupported(context)) {
             throw new IllegalArgumentException("WiFi RTT system feature not found.");
         }
 
@@ -98,11 +91,6 @@ public class RttAdapter implements RangingAdapter {
     @Override
     public RangingTechnology getType() {
         return RangingTechnology.RTT;
-    }
-
-    @Override
-    public ListenableFuture<Boolean> isEnabled() {
-        return Futures.immediateFuture(mRttService.isAvailable());
     }
 
     @Override
