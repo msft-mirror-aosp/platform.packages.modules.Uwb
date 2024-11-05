@@ -16,9 +16,10 @@
 
 package com.android.server.ranging.fusion;
 
+import android.ranging.RangingData;
+
 import androidx.annotation.NonNull;
 
-import com.android.server.ranging.RangingData;
 import com.android.server.ranging.RangingTechnology;
 
 import java.util.Optional;
@@ -29,7 +30,11 @@ public class DataFusers {
      * A data fuser that passes through all provided data as fused data.
      */
     public static class PassthroughDataFuser implements FusionEngine.DataFuser {
-
+        /**
+         * {@inheritDoc}
+         *
+         * @param sources is ignored
+         */
         @Override
         public Optional<RangingData> fuse(
                 @NonNull RangingData data, final @NonNull Set<RangingTechnology> sources
@@ -63,7 +68,7 @@ public class DataFusers {
                 @NonNull RangingData data, final @NonNull Set<RangingTechnology> sources
         ) {
             if (sources.contains(mPreferred)) {
-                if (data.getTechnology().isPresent() && mPreferred == data.getTechnology().get()) {
+                if (data.getRangingTechnology() == (int) mPreferred.getValue()) {
                     return Optional.of(data);
                 } else {
                     return Optional.empty();

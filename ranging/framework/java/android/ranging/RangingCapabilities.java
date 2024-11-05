@@ -21,7 +21,9 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.uwb.UwbCapabilities;
+import android.ranging.RangingManager.RangingTechnology;
+import android.ranging.RangingManager.RangingTechnologyAvailability;
+import android.ranging.uwb.UwbRangingCapabilities;
 
 import com.android.ranging.flags.Flags;
 
@@ -29,37 +31,93 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- *  @hide
+ * Represents the capabilities and availability of various ranging technologies.
+ *
+ * <p>The {@code RangingCapabilities} class encapsulates the status of different ranging
+ * technologies. It also allows querying the availability of other ranging technologies through a
+ * mapping of technology identifiers to availability statuses.</p>
+ *
+ * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public class RangingCapabilities implements Parcelable {
+public final class RangingCapabilities implements Parcelable {
 
-    protected RangingCapabilities(Parcel in) {
+    /**
+     * Capabilities object for an individual ranging technology.
+     *
+     * @hide
+     */
+    public interface TechnologyCapabilities {
+        /** @return the technology that these capabilities are associated with. */
+        @RangingManager.RangingTechnology
+        int getTechnology();
     }
 
-    public static final Creator<RangingCapabilities> CREATOR = new Creator<RangingCapabilities>() {
-        @Override
-        public RangingCapabilities createFromParcel(Parcel in) {
-            return new RangingCapabilities(in);
-        }
+    @Nullable
+    private final UwbRangingCapabilities mUwbCapabilities;
 
-        @Override
-        public RangingCapabilities[] newArray(int size) {
-            return new RangingCapabilities[size];
-        }
-    };
+    @NonNull
+    private final HashMap<Integer, Integer> mAvailabilities;
 
-    /** Gets the availability and statues of all ranging technologies. */
+    private RangingCapabilities(Builder builder) {
+        mUwbCapabilities =
+                (UwbRangingCapabilities) builder.mCapabilities.get(RangingManager.UWB);
+        mAvailabilities = builder.mAvailabilities;
+    }
+
+    private RangingCapabilities(Parcel in) {
+        mUwbCapabilities = in.readParcelable(
+                UwbRangingCapabilities.class.getClassLoader(),
+                UwbRangingCapabilities.class);
+        int size = in.readInt();
+        mAvailabilities = new HashMap<>(size);
+        for (int i = 0; i < size; i++) {
+            int key = in.readInt();
+            int value = in.readInt();
+            mAvailabilities.put(key, value);
+        }
+    }
+
+    @NonNull
+    public static final Creator<RangingCapabilities> CREATOR =
+            new Creator<RangingCapabilities>() {
+                @Override
+                public RangingCapabilities createFromParcel(Parcel in) {
+                    return new RangingCapabilities(in);
+                }
+
+                @Override
+                public RangingCapabilities[] newArray(int size) {
+                    return new RangingCapabilities[size];
+                }
+            };
+
+    /**
+     * Gets a map containing the availability of various ranging technologies.
+     *
+     * <p>The map uses technology identifiers as keys and their respective availability
+     * statuses as values.</p>
+     *
+     * @return a {@link Map} containing technology availability statuses.
+     */
     @NonNull
     public Map<Integer, Integer> getTechnologyAvailabilityMap() {
-        return new HashMap<>();
-    }
-    /** Gets ultrawideband capabilities.*/
-    @Nullable
-    public UwbCapabilities getUwbCapabilities() {
-        return null;
+        return mAvailabilities;
     }
 
+    /**
+     * Gets the UWB ranging capabilities.
+     *
+     * @return a {@link UwbRangingCapabilities} object or {@code null} if not available.
+     */
+    @Nullable
+    public UwbRangingCapabilities getUwbCapabilities() {
+        return mUwbCapabilities;
+    }
+
+    /**
+     * @hide
+     */
     @Override
     public int describeContents() {
         return 0;
@@ -67,5 +125,37 @@ public class RangingCapabilities implements Parcelable {
 
     @Override
     public void writeToParcel(@androidx.annotation.NonNull Parcel dest, int flags) {
+        dest.writeParcelable(mUwbCapabilities, flags);
+        dest.writeInt(mAvailabilities.size()); // Write map size
+        for (Map.Entry<Integer, Integer> entry : mAvailabilities.entrySet()) {
+            dest.writeInt(entry.getKey()); // Write the key
+            dest.writeInt(entry.getValue()); // Write the value
+        }
+    }
+
+    /**
+     * Builder for {@link RangingCapabilities}
+     *
+     * @hide
+     */
+    public static class Builder {
+        private final HashMap<Integer, TechnologyCapabilities> mCapabilities = new HashMap<>();
+        private final HashMap<Integer, Integer> mAvailabilities = new HashMap<>();
+
+        public Builder addCapabilities(@NonNull TechnologyCapabilities capabilities) {
+            mCapabilities.put(capabilities.getTechnology(), capabilities);
+            return this;
+        }
+
+        public Builder addAvailability(
+                @RangingTechnology int technology, @RangingTechnologyAvailability int availability
+        ) {
+            mAvailabilities.put(technology, availability);
+            return this;
+        }
+
+        public RangingCapabilities build() {
+            return new RangingCapabilities(this);
+        }
     }
 }

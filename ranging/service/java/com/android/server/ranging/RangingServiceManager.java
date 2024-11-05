@@ -16,44 +16,244 @@
 
 package com.android.server.ranging;
 
+import static android.ranging.params.RangingParams.RANGING_SESSION_RAW;
+
 import android.content.AttributionSource;
-import android.content.Context;
-import android.content.ContextParams;
+import android.os.RemoteCallbackList;
+import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
+import android.ranging.OobHandle;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
+import android.ranging.params.RangingParams;
+import android.ranging.params.RawInitiatorRangingParams;
+import android.ranging.params.RawRangingDevice;
+import android.ranging.params.RawResponderRangingParams;
+import android.util.Log;
+
+import com.android.server.ranging.oob.CapabilityRequestMessage;
+import com.android.server.ranging.oob.CapabilityResponseMessage;
+import com.android.server.ranging.oob.OobController;
+import com.android.server.ranging.oob.SetConfigurationMessage;
+import com.android.server.ranging.oob.StartRangingMessage;
+import com.android.server.ranging.oob.StopRangingMessage;
+
+import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.MoreExecutors;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 public class RangingServiceManager {
 
+    private static final String TAG = RangingServiceManager.class.getSimpleName();
     private final RangingInjector mRangingInjector;
+    private final OobController mOobController;
+
+    private final ListeningExecutorService mAdapterExecutor;
+    private final ScheduledExecutorService mTimeoutExecutor;
+    private final RemoteCallbackList<IRangingCapabilitiesCallback> mCapabilitiesCallbackList =
+            new RemoteCallbackList<>();
+
+    private final Map<SessionHandle, RangingSessionInfo> mRangingSessionInfoMap =
+            new ConcurrentHashMap<>();
 
     public RangingServiceManager(RangingInjector rangingInjector) {
         mRangingInjector = rangingInjector;
+        mAdapterExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor());
+        mTimeoutExecutor = Executors.newSingleThreadScheduledExecutor();
+        mOobController = new OobController(new OobDataReceiveCallback());
     }
 
-    public void getRangingCapabilities(IRangingCapabilitiesCallback callback) {
+    public void registerCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback) {
+        Log.w(TAG, "Registering ranging capabilities callback");
+        mRangingInjector
+                .getCapabilitiesProvider()
+                .registerCapabilitiesCallback(capabilitiesCallback);
+    }
 
+    public void unregisterCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback) {
+        mRangingInjector
+                .getCapabilitiesProvider()
+                .unregisterCapabilitiesCallback(capabilitiesCallback);
     }
 
     public void startRanging(AttributionSource attributionSource, SessionHandle sessionHandle,
             RangingPreference rangingPreference, IRangingCallbacks callbacks) {
         // TODO android.permission.RANGING permission check here
-        Context context = mRangingInjector.getContext()
-                .createContext(new ContextParams
-                        .Builder()
-                        .setNextAttributionSource(attributionSource)
-                        .build());
+//        Context context = mRangingInjector.getContext()
+//                .createContext(new ContextParams
+//                        .Builder()
+//                        .setNextAttributionSource(attributionSource)
+//                        .build());
 
-        //Use new context for creating RangingSession or SmartRangingSession.
+        RangingSessionInfo sessionInfo = new RangingSessionInfo(sessionHandle, rangingPreference,
+                callbacks);
+        mRangingSessionInfoMap.put(sessionHandle, sessionInfo);
+        RangingParams rangingParams = rangingPreference.getRangingParameters();
+        if (rangingPreference.getRangingParameters().getRangingSessionType()
+                == RANGING_SESSION_RAW) {
+            sessionInfo.mRangingSessionType = RANGING_SESSION_RAW;
+            sessionInfo.mRangingPeers = getRawRangingSessions(rangingParams, sessionInfo);
+            startRawRanging(sessionInfo);
+        } else {
+            throw new UnsupportedOperationException("Smart ranging is not yet supported");
+        }
     }
 
-    public void stopRanging(SessionHandle sessionHandle) {
+    public void startRawRanging(RangingSessionInfo rangingSessionInfo) {
+        // TODO: call this through an executor.
+        for (RangingPeer rangingPeer : rangingSessionInfo.mRangingPeers) {
+            rangingPeer.start();
+            rangingSessionInfo.mRangingStartedPeers.add(rangingPeer);
+        }
+        rangingSessionInfo.mRangingPeers.clear();
     }
 
-    public static class RangingSessionInfo {
-        SessionHandle mSessionHandle;
-        RangingPreference mRangingPreference;
+    public void stopRawRanging(RangingSessionInfo rangingSessionInfo) {
+        for (RangingPeer rangingPeer : rangingSessionInfo.mRangingStartedPeers) {
+            rangingPeer.stop();
+        }
+        rangingSessionInfo.mRangingStartedPeers.clear();
+    }
 
+    public List<RangingPeer> getRawRangingSessions(RangingParams rangingParams,
+            RangingSessionInfo rangingSessionInfo) {
+        List<RangingPeer> rangingPeerList = new ArrayList<>();
+        if (rangingParams instanceof RawResponderRangingParams) {
+            rangingPeerList.add(getRangingPeer(
+                    ((RawResponderRangingParams) rangingParams).getRawRangingDevice(),
+                    rangingSessionInfo));
+        } else if (rangingParams instanceof RawInitiatorRangingParams) {
+            for (RawRangingDevice rangingDevice :
+                    ((RawInitiatorRangingParams) rangingParams).getRawRangingDevices()) {
+                rangingPeerList.add(getRangingPeer(rangingDevice, rangingSessionInfo));
+            }
+        }
+        return rangingPeerList;
+    }
+
+    public RangingPeer getRangingPeer(RawRangingDevice rangingDevice,
+            RangingSessionInfo rangingSessionInfo) {
+
+        RangingConfig rangingConfig = new RangingConfig.Builder(
+                rangingSessionInfo.mRangingPreference)
+                .setPeerDevice(rangingDevice.getRangingDevice())
+                .setUwbRangingParams(rangingDevice.getUwbRangingParams())
+                .setCsRangingParams(rangingDevice.getCsRangingParams())
+                .setRttRangingParams(rangingDevice.getRttRangingParams())
+                .build();
+
+        RangingPeer rangingPeer = new RangingPeer(mRangingInjector.getContext(), mAdapterExecutor,
+                mTimeoutExecutor, rangingSessionInfo.mSessionHandle, rangingConfig,
+                rangingSessionInfo.mRangingCallbacks);
+        return rangingPeer;
+    }
+
+    public void stopRanging(SessionHandle handle) {
+        RangingSessionInfo rangingSessionInfo = mRangingSessionInfoMap.get(handle);
+        if (rangingSessionInfo.mRangingSessionType == RANGING_SESSION_RAW) {
+            stopRawRanging(rangingSessionInfo);
+        } else {
+            //TODO stop Oob ranging
+        }
+        mRangingSessionInfoMap.remove(handle);
+    }
+
+    public static final class RangingSessionInfo {
+        public final SessionHandle mSessionHandle;
+        public final RangingPreference mRangingPreference;
+        public final IRangingCallbacks mRangingCallbacks;
+        public List<RangingPeer> mRangingPeers = new ArrayList<>();
+        public final List<RangingPeer> mRangingStartedPeers = new ArrayList<>();
+        public int mRangingSessionType;
+
+        public RangingSessionInfo(SessionHandle sessionHandle, RangingPreference rangingPreference,
+                IRangingCallbacks rangingCallbacks) {
+            mSessionHandle = sessionHandle;
+            mRangingPreference = rangingPreference;
+            mRangingCallbacks = rangingCallbacks;
+        }
+    }
+
+    /**
+     * Received data from the peer device.
+     *
+     * @param oobHandle unique session/device pair identifier.
+     * @param data      payload
+     */
+    public void oobDataReceived(OobHandle oobHandle, byte[] data) {
+        mOobController.receiveData(oobHandle, data);
+    }
+
+    /**
+     * Device disconnected from the OOB channel.
+     *
+     * @param oobHandle unique session/device pair identifier.
+     */
+    public void deviceOobDisconnected(OobHandle oobHandle) {
+        // Call OobController
+    }
+
+    /**
+     * Device reconnected to the OOB channel
+     *
+     * @param oobHandle unique session/device pair identifier.
+     */
+    public void deviceOobReconnected(OobHandle oobHandle) {
+        // Call OobController
+    }
+
+    /**
+     * Device closed the OOB channel.
+     *
+     * @param oobHandle unique session/device pair identifier.
+     */
+    public void deviceOobClosed(OobHandle oobHandle) {
+        // Call OobController
+    }
+
+    /**
+     * Register send data listener.
+     *
+     * @param oobSendDataListener listener for sending the data via OOB.
+     */
+    public void registerOobSendDataListener(IOobSendDataListener oobSendDataListener) {
+        mOobController.setOobSendDataListener(oobSendDataListener);
+    }
+
+    class OobDataReceiveCallback implements OobController.IOobDataReceiveCallback {
+
+        @Override
+        public void onCapabilityRequestMessage(OobHandle oobHandle,
+                CapabilityRequestMessage message) {
+            // Do stuff
+        }
+
+        @Override
+        public void onCapabilityResponseMessage(OobHandle oobHandle,
+                CapabilityResponseMessage message) {
+            // Do stuff
+        }
+
+        @Override
+        public void onConfigurationMessage(OobHandle oobHandle, SetConfigurationMessage message) {
+            // Do stuff
+        }
+
+        @Override
+        public void onStartRangingMessage(OobHandle oobHandle, StartRangingMessage message) {
+            // Do stuff
+        }
+
+        @Override
+        public void onStopRangingMessage(OobHandle oobHandle, StopRangingMessage message) {
+            // Do stuff
+        }
     }
 }

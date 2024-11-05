@@ -33,6 +33,7 @@ import static com.android.ranging.uwb.backend.internal.UwbAvailabilityCallback.R
 
 import static java.util.Objects.requireNonNull;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
@@ -53,6 +54,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -70,6 +72,7 @@ public class UwbServiceImpl {
     @NonNull
     private final UwbAvailabilityCallback mUwbAvailabilityCallback;
 
+    public static final UwbFeatureFlags FEATURE_FLAGS = new UwbFeatureFlags.Builder().build();
 
     /** A serial thread used to handle session callback */
     private final ExecutorService mSerialExecutor = Executors.newSingleThreadExecutor();
@@ -112,19 +115,17 @@ public class UwbServiceImpl {
     }
 
     /** Gets a Ranging Controller session with given context. */
-    public RangingController getController(Context context) {
+    public static RangingController getController(Context context, Executor executor) {
         UwbManager uwbManagerWithContext = context.getSystemService(UwbManager.class);
-        return new RangingController(
-                uwbManagerWithContext, mSerialExecutor, new OpAsyncCallbackRunner<>(),
-                mUwbFeatureFlags);
+        return new RangingController(uwbManagerWithContext, executor,
+                new OpAsyncCallbackRunner<>(), FEATURE_FLAGS);
     }
 
     /** Gets a Ranging Controlee session with given context. */
-    public RangingControlee getControlee(Context context) {
+    public static RangingControlee getControlee(Context context, Executor executor) {
         UwbManager uwbManagerWithContext = context.getSystemService(UwbManager.class);
-        return new RangingControlee(
-                uwbManagerWithContext, mSerialExecutor, new OpAsyncCallbackRunner<>(),
-                mUwbFeatureFlags);
+        return new RangingControlee(uwbManagerWithContext, executor,
+                new OpAsyncCallbackRunner<>(), FEATURE_FLAGS);
     }
 
     /** Returns multi-chip information. */
@@ -164,12 +165,17 @@ public class UwbServiceImpl {
     }
 
     /** Gets ranging capabilities of the device. */
+    @SuppressLint("NewApi")
     public RangingCapabilities getRangingCapabilities() {
         requireNonNull(mUwbManager);
         requireNonNull(mUwbFeatureFlags);
 
-        if (mUwbFeatureFlags.skipRangingCapabilitiesCheck()
-                && VERSION.SDK_INT < VERSION_CODES.TIRAMISU) {
+        PersistableBundle bundle = new PersistableBundle();
+        if (!mUwbFeatureFlags.skipRangingCapabilitiesCheck()
+                || VERSION.SDK_INT >= VERSION_CODES.TIRAMISU) {
+            bundle = mUwbManager.getSpecificationInfo();
+        }
+        if (bundle.isEmpty()) {
             return new RangingCapabilities(
                     /* supportsDistance= */ true,
                     mUwbFeatureFlags.hasAzimuthSupport(),
@@ -184,7 +190,6 @@ public class UwbServiceImpl {
                     /* hasBackgroundRangingSupport */ false);
         }
 
-        PersistableBundle bundle = mUwbManager.getSpecificationInfo();
         if (bundle.keySet().contains(FIRA_SPECIFICATION_BUNDLE_KEY)) {
             bundle = requireNonNull(bundle.getPersistableBundle(FIRA_SPECIFICATION_BUNDLE_KEY));
         }

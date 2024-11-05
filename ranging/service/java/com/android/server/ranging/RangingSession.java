@@ -35,6 +35,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 
 /** A multi-technology ranging session in the Android generic ranging service */
+@SuppressWarnings("unused")
 public class RangingSession {
     private static final String TAG = RangingSession.class.getSimpleName();
 
@@ -120,11 +121,11 @@ public class RangingSession {
             synchronized (mPeers) {
                 // Don't overwrite peers inserted for testing.
                 if (!mPeers.containsKey(peerId)) {
-                    mPeers.put(peerId,
-                            new RangingPeer(mContext, mAdapterExecutor, mTimeoutExecutor));
+//                    mPeers.put(peerId,
+//                            new RangingPeer(mContext, mAdapterExecutor, mTimeoutExecutor));
                 }
 
-                mPeers.get(peerId).start(peerConfig, new PeerListener(peerId, callback));
+//                mPeers.get(peerId).start(peerConfig, new PeerListener(peerId, callback));
             }
         }
     }
