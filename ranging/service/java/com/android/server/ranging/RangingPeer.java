@@ -16,8 +16,6 @@
 
 package com.android.server.ranging;
 
-import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
-
 import android.content.Context;
 import android.os.RemoteException;
 import android.ranging.IRangingCallbacks;
@@ -30,7 +28,6 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
-import com.android.ranging.uwb.backend.internal.RangingCapabilities;
 import com.android.server.ranging.RangingConfig.TechnologyConfig;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.cs.CsAdapter;
@@ -41,22 +38,17 @@ import com.android.server.ranging.uwb.UwbAdapter;
 import com.android.server.ranging.uwb.UwbConfig;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
-import com.google.errorprone.annotations.DoNotCall;
 import com.google.uwb.support.fira.FiraParams;
 
 import java.time.Duration;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /** A peer device within a generic ranging session. */
 public final class RangingPeer {
@@ -208,71 +200,6 @@ public final class RangingPeer {
                 }
             }
         }
-    }
-
-    /** Returns UWB capabilities if UWB was requested. */
-    public ListenableFuture<RangingCapabilities> getUwbCapabilities() {
-        if (!mAdapters.containsKey(RangingTechnology.UWB)) {
-            return immediateFailedFuture(
-                    new IllegalStateException("UWB was not requested for this session."));
-        }
-        UwbAdapter uwbAdapter = (UwbAdapter) mAdapters.get(RangingTechnology.UWB);
-        try {
-            return uwbAdapter.getCapabilities();
-        } catch (RemoteException e) {
-            Log.e(TAG, "Failed to get Uwb capabilities");
-            return null;
-        }
-    }
-
-    /** Returns CS capabilities if CS was requested. */
-    @DoNotCall("Not implemented")
-    public void getCsCapabilities() {
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
-    /**
-     * Returns a map that describes the {@link RangingSession.TechnologyStatus} of every
-     * {@link RangingTechnology}
-     */
-    public ListenableFuture<EnumMap<RangingTechnology, Integer>> getTechnologyStatus() {
-        // Combine all isEnabled futures for each technology into a single future. The resulting
-        // future contains a list of technologies grouped with their corresponding
-        // enabled state.
-        ListenableFuture<List<Map.Entry<RangingTechnology, Boolean>>> enabledStatesFuture;
-        synchronized (mAdapters) {
-            enabledStatesFuture = Futures.allAsList(mAdapters.entrySet().stream()
-                    .map((var entry) -> Futures.transform(
-                            entry.getValue().isEnabled(),
-                            (Boolean isEnabled) -> Map.entry(entry.getKey(), isEnabled),
-                            mAdapterExecutor)
-                    )
-                    .collect(Collectors.toList())
-            );
-        }
-
-        // Transform the list of enabled states into a technology status map.
-        return Futures.transform(
-                enabledStatesFuture,
-                (List<Map.Entry<RangingTechnology, Boolean>> enabledStates) -> {
-                    EnumMap<RangingTechnology, Integer> statuses =
-                            new EnumMap<>(RangingTechnology.class);
-                    for (RangingTechnology technology : RangingTechnology.values()) {
-                        statuses.put(technology, RangingSession.TechnologyStatus.UNUSED);
-                    }
-
-                    for (Map.Entry<RangingTechnology, Boolean> enabledState : enabledStates) {
-                        RangingTechnology technology = enabledState.getKey();
-                        if (enabledState.getValue()) {
-                            statuses.put(technology, RangingSession.TechnologyStatus.ENABLED);
-                        } else {
-                            statuses.put(technology, RangingSession.TechnologyStatus.DISABLED);
-                        }
-                    }
-                    return statuses;
-                },
-                mAdapterExecutor
-        );
     }
 
     /** If there is a pending timeout, cancel it. */
