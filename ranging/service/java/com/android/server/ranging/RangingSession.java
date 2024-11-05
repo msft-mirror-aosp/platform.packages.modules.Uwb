@@ -35,6 +35,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 
 /** A multi-technology ranging session in the Android generic ranging service */
+@SuppressWarnings("unused")
 public class RangingSession {
     private static final String TAG = RangingSession.class.getSimpleName();
 

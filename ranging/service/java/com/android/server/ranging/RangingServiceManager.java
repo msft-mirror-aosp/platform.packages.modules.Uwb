@@ -20,12 +20,10 @@ import static android.ranging.params.RangingParams.RANGING_SESSION_RAW;
 
 import android.content.AttributionSource;
 import android.os.RemoteCallbackList;
-import android.os.RemoteException;
 import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
 import android.ranging.OobHandle;
-import android.ranging.RangingCapabilities;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
 import android.ranging.params.RangingParams;
@@ -72,27 +70,17 @@ public class RangingServiceManager {
         mOobController = new OobController(new OobDataReceiveCallback());
     }
 
-    public void registerCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback)
-            throws RemoteException {
-        synchronized (mCapabilitiesCallbackList) {
-            mCapabilitiesCallbackList.register(capabilitiesCallback);
-        }
+    public void registerCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback) {
         Log.w(TAG, "Registering ranging capabilities callback");
-        getRangingCapabilities(capabilitiesCallback);
+        mRangingInjector
+                .getCapabilitiesProvider()
+                .registerCapabilitiesCallback(capabilitiesCallback);
     }
 
-    public void unregisterCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback)
-            throws RemoteException {
-        synchronized (mCapabilitiesCallbackList) {
-            mCapabilitiesCallbackList.unregister(capabilitiesCallback);
-        }
-    }
-
-    private void getRangingCapabilities(IRangingCapabilitiesCallback callback)
-            throws RemoteException {
-        RangingCapabilities rangingCapabilities =
-                mRangingInjector.getCapabilitiesProvider().getCapabilities();
-        callback.onRangingCapabilities(rangingCapabilities);
+    public void unregisterCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback) {
+        mRangingInjector
+                .getCapabilitiesProvider()
+                .unregisterCapabilitiesCallback(capabilitiesCallback);
     }
 
     public void startRanging(AttributionSource attributionSource, SessionHandle sessionHandle,
