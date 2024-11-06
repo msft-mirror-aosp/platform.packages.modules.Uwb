@@ -101,12 +101,12 @@ public class RangingSnippet implements Snippet {
 
         @Override
         public void onStarted(int technology) {
-            Log.d(TAG, "RangingCallback#onStarted() called");
+            Log.d(TAG, "RangingCallback#onStarted() called technology: " + technology);
             mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.STARTED.toString()));
         }
 
         @Override
-        public void onStartFailed(int reason) {
+        public void onStartFailed(int reason, RangingDevice device) {
         }
 
         @Override

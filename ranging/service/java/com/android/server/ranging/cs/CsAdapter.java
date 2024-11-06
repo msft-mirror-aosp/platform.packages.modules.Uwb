@@ -16,21 +16,14 @@
 
 package com.android.server.ranging.cs;
 
-import android.content.Context;
-
 import com.android.server.ranging.RangingAdapter;
 import com.android.server.ranging.RangingConfig;
 import com.android.server.ranging.RangingTechnology;
 
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
 /** Channel Sounding adapter for ranging. */
 public class CsAdapter implements RangingAdapter {
-
-    public static boolean isSupported(Context context) {
-        return false;
-    }
 
     public CsAdapter() {
         throw new UnsupportedOperationException("Not implemented.");
@@ -43,11 +36,6 @@ public class CsAdapter implements RangingAdapter {
     @Override
     public RangingTechnology getType() {
         return RangingTechnology.CS;
-    }
-
-    @Override
-    public ListenableFuture<Boolean> isEnabled() {
-        return Futures.immediateFuture(false);
     }
 
     @Override
