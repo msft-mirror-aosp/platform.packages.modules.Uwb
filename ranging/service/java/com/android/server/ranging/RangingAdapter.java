@@ -34,7 +34,7 @@ public interface RangingAdapter {
      * @param config for the ranging session.
      * @param callback to be called on the occurrence of ranging events.
      */
-    void start(RangingConfig.TechnologyConfig config, Callback callback);
+    void start(RangingPeerConfig.TechnologyConfig config, Callback callback);
 
     /** Stop ranging. */
     void stop();
