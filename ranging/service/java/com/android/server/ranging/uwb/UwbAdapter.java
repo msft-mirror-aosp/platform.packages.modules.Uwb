@@ -21,6 +21,7 @@ import static com.android.server.ranging.uwb.UwbConfig.toBackend;
 import android.content.Context;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
+import android.ranging.RangingPreference;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
 import android.util.Log;
@@ -36,7 +37,7 @@ import com.android.ranging.uwb.backend.internal.Utils;
 import com.android.ranging.uwb.backend.internal.UwbDevice;
 import com.android.ranging.uwb.backend.internal.UwbServiceImpl;
 import com.android.server.ranging.RangingAdapter;
-import com.android.server.ranging.RangingConfig;
+import com.android.server.ranging.RangingPeerConfig;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
 
@@ -44,7 +45,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListeningExecutorService;
-import com.google.uwb.support.fira.FiraParams;
 
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -69,18 +69,18 @@ public class UwbAdapter implements RangingAdapter {
 
     public UwbAdapter(
             @NonNull Context context, @NonNull ListeningExecutorService executor,
-            @FiraParams.RangingDeviceType int type
+            @RangingPreference.DeviceRole int role
     ) {
-        this(context, executor, Executors.newSingleThreadExecutor(), type);
+        this(context, executor, Executors.newSingleThreadExecutor(), role);
     }
 
     /** Intermediary constructor used to make an additional reference to backendExecutor. */
     private UwbAdapter(
             @NonNull Context context, @NonNull ListeningExecutorService executor,
-            @NonNull ExecutorService backendExecutor, @FiraParams.RangingDeviceType int type
+            @NonNull ExecutorService backendExecutor, @RangingPreference.DeviceRole int role
     ) {
         this(context, executor, backendExecutor,
-                type == FiraParams.RANGING_DEVICE_TYPE_CONTROLLER
+                role == RangingPreference.DEVICE_ROLE_INITIATOR
                         ? UwbServiceImpl.getController(context, backendExecutor)
                         : UwbServiceImpl.getControlee(context, backendExecutor));
     }
@@ -109,7 +109,8 @@ public class UwbAdapter implements RangingAdapter {
     }
 
     @Override
-    public void start(@NonNull RangingConfig.TechnologyConfig config, @NonNull Callback callbacks) {
+    public void start(@NonNull RangingPeerConfig.TechnologyConfig config,
+            @NonNull Callback callbacks) {
         Log.i(TAG, "Start called.");
         if (!mStateMachine.transition(State.STOPPED, State.STARTED)) {
             Log.v(TAG, "Attempted to start adapter when it was already started");

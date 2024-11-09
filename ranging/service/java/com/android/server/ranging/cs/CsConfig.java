@@ -16,7 +16,7 @@
 
 package com.android.server.ranging.cs;
 
-import com.android.server.ranging.RangingConfig.TechnologyConfig;
+import com.android.server.ranging.RangingPeerConfig.TechnologyConfig;
 
 public class CsConfig implements TechnologyConfig {
     public CsConfig() {
