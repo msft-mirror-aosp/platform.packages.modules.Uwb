@@ -20,6 +20,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.ranging.RangingManager.RangingTechnologyAvailability;
 import android.ranging.uwb.UwbRangingCapabilities;
+import android.util.Log;
 
 import androidx.annotation.Nullable;
 
@@ -29,6 +30,8 @@ import com.android.server.ranging.CapabilitiesProvider.AvailabilityCallback;
 import com.android.server.ranging.CapabilitiesProvider.CapabilitiesAdapter;
 
 public class UwbCapabilitiesAdapter extends CapabilitiesAdapter {
+    private static final String TAG = UwbCapabilitiesAdapter.class.getSimpleName();
+
     private final Context mContext;
     /** Null if UWB is not available on this device */
     private final UwbServiceImpl mUwbService;
@@ -92,10 +95,13 @@ public class UwbCapabilitiesAdapter extends CapabilitiesAdapter {
     @Override
     public @Nullable UwbRangingCapabilities getCapabilities() {
         if (getAvailability() == RangingTechnologyAvailability.ENABLED) {
-            return convertCapabilities(mUwbService.getRangingCapabilities());
-        } else {
-            return null;
+            try {
+                return convertCapabilities(mUwbService.getRangingCapabilities());
+            } catch (IllegalStateException e) {
+                Log.w(TAG, "Failed to get capabilities from UWB backend " + e);
+            }
         }
+        return null;
     }
 
     private class AvailabilityListener implements UwbAvailabilityCallback {
