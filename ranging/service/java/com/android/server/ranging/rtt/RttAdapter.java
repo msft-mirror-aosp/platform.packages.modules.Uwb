@@ -35,7 +35,7 @@ import com.android.ranging.rtt.backend.internal.RttRangingSessionCallback;
 import com.android.ranging.rtt.backend.internal.RttService;
 import com.android.ranging.rtt.backend.internal.RttServiceImpl;
 import com.android.server.ranging.RangingAdapter;
-import com.android.server.ranging.RangingConfig;
+import com.android.server.ranging.RangingPeerConfig;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
 
@@ -95,7 +95,7 @@ public class RttAdapter implements RangingAdapter {
     }
 
     @Override
-    public void start(@NonNull RangingConfig.TechnologyConfig config,
+    public void start(@NonNull RangingPeerConfig.TechnologyConfig config,
             @NonNull Callback callbacks) {
         Log.i(TAG, "Start called.");
         if (!mStateMachine.transition(State.STOPPED, State.STARTED)) {
