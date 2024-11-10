@@ -65,7 +65,7 @@ public final class RangingSessionManager extends IRangingCallbacks.Stub {
     }
 
     @Override
-    public void onStarted(SessionHandle sessionHandle, int technology) {
+    public void onStarted(SessionHandle sessionHandle, RangingDevice peer, int technology) {
         if (!mSessions.containsKey(sessionHandle)) {
             Log.e(TAG, "SessionHandle not found");
             return;
@@ -74,7 +74,7 @@ public final class RangingSessionManager extends IRangingCallbacks.Stub {
     }
 
     @Override
-    public void onClosed(SessionHandle sessionHandle, int reason) {
+    public void onClosed(SessionHandle sessionHandle, RangingDevice peer, int reason) {
         if (!mSessions.containsKey(sessionHandle)) {
             Log.e(TAG, "SessionHandle not found");
             return;
