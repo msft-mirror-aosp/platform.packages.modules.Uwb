@@ -26,6 +26,7 @@ import android.ranging.params.RawInitiatorRangingParams;
 import android.ranging.params.RawRangingDevice;
 import android.ranging.params.RawResponderRangingParams;
 import android.ranging.params.SensorFusionParams;
+import android.ranging.rtt.RttRangingParams;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
 import android.ranging.uwb.UwbRangingParams;
@@ -115,7 +116,7 @@ public class RangingPreferenceConverter implements SnippetObjectConverter {
             throw new UnsupportedOperationException("cs params not implemented");
         }
         if (!j.isNull("rtt_params")) {
-            throw new UnsupportedOperationException("rtt params not implemented");
+            builder.setRttRangingParams(getRttParams(j.getJSONObject("rtt_params")));
         }
         return builder.build();
     }
@@ -132,13 +133,20 @@ public class RangingPreferenceConverter implements SnippetObjectConverter {
                 .setComplexChannel(
                         new UwbComplexChannel.Builder().setChannel(9).setPreambleIndex(11).build())
                 .setRangingUpdateRate(j.getInt("ranging_update_rate"))
-                .setSlotDurationMillis(j.getInt("slot_duration_ms"))
-                .setAoaDisabled(j.getBoolean("is_aoa_disabled"));
+                .setSlotDurationMillis(j.getInt("slot_duration_ms"));
 
         if (!j.isNull("sub_session_key_info")) {
             builder.setSubSessionKeyInfo(toBytes(j.getJSONArray("sub_session_key_info")));
         }
         return builder.build();
+    }
+
+    private RttRangingParams getRttParams(JSONObject j) throws JSONException {
+        RttRangingParams.Builder builder = new RttRangingParams.Builder();
+
+        return builder.setServiceName(j.getString("service_name"))
+                .setRangingUpdateRate(j.getInt("ranging_update_rate"))
+                .build();
     }
 
 

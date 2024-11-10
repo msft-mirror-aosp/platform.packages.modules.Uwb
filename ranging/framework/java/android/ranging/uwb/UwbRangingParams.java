@@ -33,7 +33,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 /**
- * UwbRangingParameters encapsulates the parameters required for a UWB ranging session.
+ * UwbRangingParams encapsulates the parameters required for a UWB ranging session.
  *
  * @hide
  */
@@ -95,32 +95,44 @@ public final class UwbRangingParams implements Parcelable {
      */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
-            ConfigId.UNICAST_DS_TWR,
-            ConfigId.MULTICAST_DS_TWR,
-            ConfigId.UNICAST_DS_TWR_NO_AOA,
-            ConfigId.PROVISIONED_UNICAST_DS_TWR,
-            ConfigId.PROVISIONED_MULTICAST_DS_TWR,
-            ConfigId.PROVISIONED_UNICAST_DS_TWR_NO_AOA,
-            ConfigId.PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
+            CONFIG_UNICAST_DS_TWR,
+            CONFIG_MULTICAST_DS_TWR,
+            CONFIG_UNICAST_DS_TWR_NO_AOA,
+            CONFIG_PROVISIONED_UNICAST_DS_TWR,
+            CONFIG_PROVISIONED_MULTICAST_DS_TWR,
+            CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA,
+            CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
     })
     public @interface ConfigId {
-        /**
-         * FiRa-defined unicast {@code STATIC STS DS-TWR} ranging, deferred mode, ranging interval
-         * 240 ms.
-         */
-        int UNICAST_DS_TWR = 1;
-        int MULTICAST_DS_TWR = 2;
-        /** Same as {@code CONFIG_ID_1}, except Angle-of-arrival (AoA) data is not reported. */
-        int UNICAST_DS_TWR_NO_AOA = 3;
-        /** Same as {@code CONFIG_ID_1}, except P-STS security mode is enabled. */
-        int PROVISIONED_UNICAST_DS_TWR = 4;
-        /** Same as {@code CONFIG_ID_2}, except P-STS security mode is enabled. */
-        int PROVISIONED_MULTICAST_DS_TWR = 5;
-        /** Same as {@code CONFIG_ID_3}, except P-STS security mode is enabled. */
-        int PROVISIONED_UNICAST_DS_TWR_NO_AOA = 6;
-        /** Same as {@code CONFIG_ID_2}, except P-STS individual controlee key mode is enabled. */
-        int PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 7;
     }
+
+    /**
+     * FiRa-defined unicast {@code STATIC STS DS-TWR} ranging, deferred mode, ranging interval
+     * Fast (120ms), Normal (240ms), Infrequent (600ms)
+     */
+    public static final int CONFIG_UNICAST_DS_TWR = 1;
+
+    /**
+     * FiRa-defined multicast {@code STATIC STS DS-TWR} ranging, deferred mode, ranging interval
+     * Fast (120ms), Normal (200ms), Infrequent (600ms)
+     */
+    public static final int CONFIG_MULTICAST_DS_TWR = 2;
+    /**
+     * Same as {@code CONFIG_UNICAST_DS_TWR}, except Angle-of-arrival (AoA) data is not reported
+     * .
+     */
+    public static final int CONFIG_UNICAST_DS_TWR_NO_AOA = 3;
+    /** Same as {@code CONFIG_UNICAST_DS_TWR}, except P-STS security mode is enabled. */
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR = 4;
+    /** Same as {@code CONFIG_MULTICAST_DS_TWR}, except P-STS security mode is enabled. */
+    public static final int CONFIG_PROVISIONED_MULTICAST_DS_TWR = 5;
+    /** Same as {@code CONFIG_UNICAST_DS_TWR_NO_AOA}, except P-STS security mode is enabled. */
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA = 6;
+    /**
+     * Same as {@code CONFIG_UNICAST_DS_TWR}, except P-STS individual controlee key mode is
+     * enabled.
+     */
+    public static final int CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 7;
 
     @ConfigId
     private final int mConfigId;
@@ -135,10 +147,29 @@ public final class UwbRangingParams implements Parcelable {
 
     private final UwbAddress mPeerAddress;
 
+    /**
+     * Defines slot supported slot durations.
+     *
+     * @hide
+     */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            DURATION_1_MS,
+            DURATION_2_MS,
+    })
+    public @interface SlotDuration {
+    }
+
+    /** 1 millisecond slot duration */
+    public static final int DURATION_1_MS = 1;
+
+    /** 2 millisecond slot duration */
+    public static final int DURATION_2_MS = 2;
+
     @RawRangingDevice.RangingUpdateRate
     private final int mRangingUpdateRate;
 
-    @IntRange(from = 1, to = 2)
+    @SlotDuration
     private final int mSlotDurationMillis;
 
     private UwbRangingParams(Builder builder) {
@@ -255,11 +286,11 @@ public final class UwbRangingParams implements Parcelable {
     }
 
     /**
-     * Returns the slot duration in milliseconds.
+     * Returns slot duration of the session,
      *
-     * @return The slot duration in milliseconds, within the range [1, 2].
+     * @return The {@link SlotDuration} in milliseconds.
      */
-    @IntRange(from = 1, to = 2)
+    @SlotDuration
     public int getSlotDurationMillis() {
         return mSlotDurationMillis;
     }
@@ -279,17 +310,15 @@ public final class UwbRangingParams implements Parcelable {
         private UwbAddress mPeerAddress = null;
         @RawRangingDevice.RangingUpdateRate
         private int mRangingUpdateRate;
-        private int mSlotDurationMillis = 1;
-        private boolean mIsAoaDisabled = false;
-
+        @SlotDuration
+        private int mSlotDurationMillis = DURATION_2_MS;
 
         /**
          * Sets the peer addresses for the ranging session.
          *
-         * @param address a non-null map of {@link RangingDevice} to {@link UwbAddress} for the
-         *                peers in the session.
+         * @param address a non-null {@link UwbAddress} of the peer.
          * @return this Builder instance.
-         * @throws IllegalArgumentException if the provided map is null.
+         * @throws IllegalArgumentException if the address is null
          */
         @NonNull
         public Builder setPeerAddress(@NonNull UwbAddress address) {
@@ -403,25 +432,13 @@ public final class UwbRangingParams implements Parcelable {
         /**
          * Sets the slot duration in milliseconds for the ranging session.
          *
-         * @param durationMs the duration of each slot, must be between 1 and 2 milliseconds.
+         * @param durationMs the slot duration {@link SlotDuration}
          * @return this Builder instance.
          * @throws IllegalArgumentException if the provided duration is out of range.
          */
         @NonNull
-        public Builder setSlotDurationMillis(@IntRange(from = 1, to = 2) int durationMs) {
+        public Builder setSlotDurationMillis(@SlotDuration int durationMs) {
             mSlotDurationMillis = durationMs;
-            return this;
-        }
-
-        /**
-         * Sets whether angle-of-arrival (AoA) measurements are disabled for the session.
-         *
-         * @param isAoaDisabled true if AoA measurements should be disabled, false otherwise.
-         * @return this Builder instance.
-         */
-        @NonNull
-        public Builder setAoaDisabled(boolean isAoaDisabled) {
-            mIsAoaDisabled = isAoaDisabled;
             return this;
         }
 
