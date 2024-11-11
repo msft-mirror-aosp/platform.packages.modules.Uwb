@@ -94,6 +94,15 @@ public class CapabilitiesProvider {
     public CapabilitiesProvider(RangingInjector rangingInjector) {
         mRangingInjector = rangingInjector;
         mCapabilityAdapters = new HashMap<>();
+    }
+
+    /**
+     * Registers an availability listener for each technology supported by the ranging API. This
+     * needs to be called after the system services for these technologies have been started, but
+     * before any capabilities callbacks are registered through the ranging api.
+     */
+    public synchronized void registerTechnologyAvailabilityListeners() {
+        Log.i(TAG, "Registering availability listeners for each technology");
         mCapabilityAdapters.put(
                 RangingManager.UWB,
                 new UwbCapabilitiesAdapter(mRangingInjector.getContext()));
@@ -102,7 +111,7 @@ public class CapabilitiesProvider {
                 new CsCapabilitiesAdapter());
         mCapabilityAdapters.put(
                 RangingManager.WIFI_NAN_RTT,
-                new RttCapabilitiesAdapter(rangingInjector.getContext())
+                new RttCapabilitiesAdapter(mRangingInjector.getContext())
         );
 
         for (@RangingManager.RangingTechnology int technology : mCapabilityAdapters.keySet()) {
