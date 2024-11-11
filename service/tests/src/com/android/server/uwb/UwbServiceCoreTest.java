@@ -119,6 +119,7 @@ import com.google.uwb.support.radar.RadarOpenSessionParams;
 import com.google.uwb.support.radar.RadarParams;
 import com.google.uwb.support.rftest.RfTestOpenSessionParams;
 import com.google.uwb.support.rftest.RfTestParams;
+import com.google.uwb.support.rftest.RfTestStartSessionParams;
 
 import org.junit.After;
 import org.junit.Before;
@@ -257,7 +258,12 @@ public class UwbServiceCoreTest {
                             .setRmarkerTxStart(0)
                             .setRmarkerRxStart(0)
                             .setStsIndexAutoIncr(0)
-                                        .setStsDetectBitmap(0);
+                            .setStsDetectBitmap(0);
+
+    private static final RfTestStartSessionParams.Builder TEST_RFTEST_START_SESSION_PARAMS =
+            new RfTestStartSessionParams.Builder()
+                    .setRfTestOperationType(RfTestParams.TEST_PERIODIC_TX)
+                    .setPsduData(new byte[] {});
 
     private static final UwbDeviceInfoResponse UWB_DEVICE_INFO_RESPONSE =
             new UwbDeviceInfoResponse(
@@ -1239,6 +1245,20 @@ public class UwbServiceCoreTest {
                 eq(RfTestParams.PROTOCOL_NAME),
                 argThat(p -> ((RfTestOpenSessionParams) p).getSessionId() == params.getSessionId()),
                 eq(cb), eq(TEST_DEFAULT_CHIP_ID));
+    }
+
+    @Test
+    public void testStartRfTest() throws Exception {
+        enableUwbWithCountryCodeChangedCallback();
+
+        SessionHandle sessionHandle = mock(SessionHandle.class);
+        RfTestStartSessionParams params = TEST_RFTEST_START_SESSION_PARAMS.build();
+        mUwbServiceCore.startRanging(sessionHandle, params.toBundle());
+
+        verify(mUwbSessionManager).startRanging(eq(sessionHandle),
+                argThat(p ->
+                ((RfTestStartSessionParams) p).getRfTestOperationType()
+                        == params.getRfTestOperationType()));
     }
 
     @Test
