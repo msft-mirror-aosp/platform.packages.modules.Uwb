@@ -16,6 +16,8 @@
 
 package com.android.server.ranging.uwb;
 
+import static com.android.ranging.uwb.backend.internal.RangingMeasurement.CONFIDENCE_HIGH;
+import static com.android.ranging.uwb.backend.internal.RangingMeasurement.CONFIDENCE_MEDIUM;
 import static com.android.server.ranging.uwb.UwbConfig.toBackend;
 
 import android.content.Context;
@@ -185,7 +187,7 @@ public class UwbAdapter implements RangingAdapter {
         ) {
             return new android.ranging.RangingMeasurement.Builder()
                     .setMeasurement(measurement.getValue())
-                    .setConfidence(measurement.getConfidence())
+                    .setConfidence(convertConfidence(measurement.getConfidence()))
                     .build();
         }
 
@@ -291,6 +293,14 @@ public class UwbAdapter implements RangingAdapter {
                 mCallbacks.onStopped(Callback.StoppedReason.ERROR);
                 clear();
             }
+        };
+    }
+
+    public static int convertConfidence(int confidence) {
+        return switch (confidence) {
+            case CONFIDENCE_HIGH -> android.ranging.RangingMeasurement.CONFIDENCE_HIGH;
+            case CONFIDENCE_MEDIUM -> android.ranging.RangingMeasurement.CONFIDENCE_MEDIUM;
+            default -> android.ranging.RangingMeasurement.CONFIDENCE_LOW;
         };
     }
 }

@@ -18,6 +18,7 @@ package android.ranging;
 
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
+import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.content.AttributionSource;
 import android.os.CancellationSignal;
@@ -26,6 +27,7 @@ import android.ranging.params.DeviceHandle;
 import android.ranging.params.OobInitiatorRangingParams;
 import android.ranging.params.OobResponderRangingParams;
 import android.ranging.params.RangingParams;
+import android.ranging.params.RawResponderRangingParams;
 import android.util.Log;
 
 import com.android.ranging.flags.Flags;
@@ -129,6 +131,83 @@ public final class RangingSession implements AutoCloseable {
             deviceHandle.getTransportHandle().registerReceiveCallback(receiveCallback);
             mTransportHandles.put(deviceHandle.getRangingDevice(),
                     deviceHandle.getTransportHandle());
+        }
+    }
+
+    /**
+     * Adds a new device to an ongoing ranging session.
+     * <p>
+     * This method allows for adding a new device to an active ranging session using either
+     * raw or out-of-band (OOB) ranging parameters. Only devices represented by
+     * {@link RawResponderRangingParams} or {@link OobResponderRangingParams} are supported.
+     * If the provided {@link RangingParams} does not match one of these types, the addition fails
+     * and invokes {@link Callback#onStartFailed} with a reason of
+     * {@link Callback#REASON_UNSUPPORTED}.
+     * </p>
+     *
+     * @param deviceRangingParams the ranging parameters for the device to be added,
+     *                            which must be an instance of either
+     *                            {@link RawResponderRangingParams}
+     *                            or {@link OobResponderRangingParams}.
+     *
+     * @apiNote If the underlying ranging technology cannot support this dynamic addition, failure
+     * will be indicated via {@code Callback#onStartFailed(REASON_UNSUPPORTED, RangingDevice)}
+     *
+     * @hide
+     */
+    public void addDeviceToRangingSession(@NonNull RangingParams deviceRangingParams) {
+        try {
+            if (deviceRangingParams instanceof RawResponderRangingParams) {
+                mRangingAdapter.addRawDevice(mSessionHandle,
+                        (RawResponderRangingParams) deviceRangingParams);
+            } else if (deviceRangingParams instanceof OobResponderRangingParams) {
+                mRangingAdapter.addOobDevice(mSessionHandle,
+                        (OobResponderRangingParams) deviceRangingParams);
+            } else {
+                mCallback.onStartFailed(Callback.REASON_UNSUPPORTED, null);
+            }
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Removes a specific device from an ongoing ranging session.
+     * <p>
+     * This method removes a specified device from the active ranging session, stopping
+     * further ranging operations for that device. The operation is handled by the system
+     * server and may throw a {@link RemoteException} in case of server-side communication
+     * issues.
+     * </p>
+     *
+     * @param rangingDevice the device to be removed from the session.
+     * @apiNote Currently, this API is supported only for UWB multicast session if using
+     * {@link RangingParams#RANGING_SESSION_RAW}.
+     *
+     * @hide
+     */
+    public void removeDeviceFromRangingSession(@NonNull RangingDevice rangingDevice) {
+        try {
+            mRangingAdapter.removeDevice(mSessionHandle, rangingDevice);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Reconfigures the ranging interval for the current session by setting the interval
+     * skip count. The {@code intervalSkipCount} defines how many intervals should be skipped
+     * between successive ranging rounds. Valid values range from 0 to 255.
+     *
+     * @param intervalSkipCount the number of intervals to skip, ranging from 0 to 255.
+     *
+     * @hide
+     */
+    public void reconfigureRangingInterval(@IntRange(from = 0, to = 255) int intervalSkipCount) {
+        try {
+            mRangingAdapter.reconfigureRangingInterval(mSessionHandle, intervalSkipCount);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
         }
     }
 
