@@ -212,6 +212,13 @@ public class RangingSnippet implements Snippet {
                 && availability == RangingManager.RangingTechnologyAvailability.ENABLED;
     }
 
+    @Rpc(description = "Check whether the provided ranging technology is supported")
+    public boolean isTechnologySupported(int technology) {
+        Integer availability = mTechnologyAvailability.get(technology);
+        return availability != null
+                && availability != RangingManager.RangingTechnologyAvailability.NOT_SUPPORTED;
+    }
+
     @Rpc(description = "Set airplane mode")
     public void setAirplaneMode(boolean enabled) {
         mConnectivityManager.setAirplaneMode(enabled);
