@@ -153,6 +153,7 @@ public class CapabilityParam {
 
     public static final int CONTENTION_BASED_RANGING = 0x1;
     public static final int TIME_SCHEDULED_RANGING = 0x2;
+    public static final int HYBRID_SCHEDULED_RANGING = 0x4;
 
     public static final int CONSTRAINT_LENGTH_3 = 0x1;
     public static final int CONSTRAINT_LENGTH_7 = 0x2;
