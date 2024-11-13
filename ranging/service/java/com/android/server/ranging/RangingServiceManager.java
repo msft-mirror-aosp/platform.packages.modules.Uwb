@@ -193,7 +193,7 @@ public class RangingServiceManager {
                 .setDeviceRole(preference.getDeviceRole())
                 .setSensorFusionConfig(preference.getSensorFusionParameters())
                 .setDataNotificationConfig(preference.getDataNotificationConfig())
-                .setAoaNeeded(preference.isAoaNeeded())
+                .setAoaNeeded(preference.isAngleOfArrivalNeeded())
                 .build();
     }
 }

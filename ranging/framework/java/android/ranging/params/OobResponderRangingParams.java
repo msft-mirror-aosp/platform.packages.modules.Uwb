@@ -36,19 +36,19 @@ public class OobResponderRangingParams extends RangingParams implements Parcelab
     private final DeviceHandle mDeviceHandle;
 
     private OobResponderRangingParams(Builder builder) {
-        mRangingSessionType = RangingParams.RANGING_SESSION_OOB;
+        setRangingSessionType(RangingParams.RANGING_SESSION_OOB);
         mDeviceHandle = builder.mDeviceHandle;
     }
 
 
     protected OobResponderRangingParams(Parcel in) {
-        mRangingSessionType = in.readInt();
+        setRangingSessionType(in.readInt());
         mDeviceHandle = in.readParcelable(DeviceHandle.class.getClassLoader(), DeviceHandle.class);
     }
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeInt(mRangingSessionType);
+        dest.writeInt(getRangingSessionType());
         dest.writeParcelable(mDeviceHandle, flags);
     }
 

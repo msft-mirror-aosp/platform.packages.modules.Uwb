@@ -17,6 +17,7 @@
 package android.ranging;
 
 import android.annotation.FlaggedApi;
+import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -28,7 +29,6 @@ import com.android.ranging.flags.Flags;
  *
  * <p>This class provides a measurement result, such as a distance or angle.
  *
- * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class RangingMeasurement implements Parcelable {
@@ -71,10 +71,11 @@ public final class RangingMeasurement implements Parcelable {
     }
 
     /**
-     * Returns the confidence score for this measurement.
+     * Returns the confidence score for this measurement - [0, 100].
      *
      * @hide
      */
+    @IntRange(from = 0, to = 100)
     public int getConfidence() {
         return mConfidence;
     }

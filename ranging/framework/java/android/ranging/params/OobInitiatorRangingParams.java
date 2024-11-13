@@ -108,7 +108,7 @@ public class OobInitiatorRangingParams extends RangingParams implements Parcelab
     private final int mRangingMode;
 
     private OobInitiatorRangingParams(Builder builder) {
-        mRangingSessionType = RangingParams.RANGING_SESSION_OOB;
+        setRangingSessionType(RangingParams.RANGING_SESSION_OOB);
         mDeviceHandles = new ArrayList<>(builder.mDeviceHandles);
         mSecurityLevel = builder.mSecurityLevel;
         mRangingMode = builder.mRangingMode;
@@ -116,7 +116,7 @@ public class OobInitiatorRangingParams extends RangingParams implements Parcelab
     }
 
     protected OobInitiatorRangingParams(Parcel in) {
-        mRangingSessionType = in.readInt();
+        setRangingSessionType(in.readInt());
         mDeviceHandles = in.createTypedArrayList(DeviceHandle.CREATOR);
         mSecurityLevel = in.readInt();
         mRangingMode = in.readInt();
@@ -126,7 +126,7 @@ public class OobInitiatorRangingParams extends RangingParams implements Parcelab
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeInt(mRangingSessionType);
+        dest.writeInt(getRangingSessionType());
         dest.writeTypedList(mDeviceHandles);
         dest.writeInt(mSecurityLevel);
         dest.writeInt(mRangingMode);
