@@ -168,14 +168,18 @@ public class CapabilitiesProvider {
             RangingCapabilities capabilities = getCapabilities()
                     .addAvailability(mTechnology, availability)
                     .build();
-            for (int i = mCallbacks.beginBroadcast() - 1; i >= 0; i--) {
-                try {
-                    mCallbacks.getBroadcastItem(i).onRangingCapabilities(capabilities);
-                } catch (RemoteException e) {
-                    Log.w(TAG, "Failed to notify callback " + i + " of availability change");
+            synchronized (mCallbacks) {
+                int i = mCallbacks.beginBroadcast();
+                while (i > 0) {
+                    i--;
+                    try {
+                        mCallbacks.getBroadcastItem(i).onRangingCapabilities(capabilities);
+                    } catch (RemoteException e) {
+                        Log.w(TAG, "Failed to notify callback " + i + " of availability change");
+                    }
                 }
+                mCallbacks.finishBroadcast();
             }
-            mCallbacks.finishBroadcast();
         }
     }
 }
