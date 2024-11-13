@@ -124,7 +124,7 @@ public class UwbAdapter implements RangingAdapter {
         }
         // TODO(b/376273627): Support multiple peer devices here
         mDeviceFromUwbAddress = Map.of(
-                UwbAddress.fromBytes(uwbConfig.getPeer().second.toBytes()),
+                UwbAddress.fromBytes(uwbConfig.getPeer().second.getAddressBytes()),
                 uwbConfig.getPeer().first
         );
         mUwbClient.setRangingParameters(uwbConfig.asBackendParameters());
@@ -194,7 +194,7 @@ public class UwbAdapter implements RangingAdapter {
             RangingData.Builder dataBuilder = new RangingData.Builder()
                     .setRangingTechnology((int) RangingTechnology.UWB.getValue())
                     .setDistance(convertMeasurement(position.getDistance()))
-                    .setTimestamp(position.getElapsedRealtimeNanos());
+                    .setTimestampMillis(position.getElapsedRealtimeNanos());
 
             if (position.getAzimuth() != null) {
                 dataBuilder.setAzimuth(convertMeasurement(position.getAzimuth()));
