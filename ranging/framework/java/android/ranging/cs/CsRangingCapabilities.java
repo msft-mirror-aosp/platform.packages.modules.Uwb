@@ -65,8 +65,10 @@ public final class CsRangingCapabilities implements TechnologyCapabilities {
      * Returns a list of the supported security levels.
      *
      * @return a {@link List} of integers representing the security levels,
-     *         where each level is one of {@link SecurityLevel}.
+     * where each level is one of {@link SecurityLevel}.
      */
+    @NonNull
+    @SecurityLevel
     public List<Integer> getSupportedSecurityLevels() {
         return mSupportedSecurityLevels;
     }
@@ -86,6 +88,8 @@ public final class CsRangingCapabilities implements TechnologyCapabilities {
     /**
      * Builder class for {@link CsRangingCapabilities}.
      * This class provides a fluent API for constructing instances of {@link CsRangingCapabilities}.
+     *
+     * @hide
      */
     public static final class Builder {
         private final List<Integer> mSupportedSecurityLevels = new ArrayList<>();
@@ -112,6 +116,4 @@ public final class CsRangingCapabilities implements TechnologyCapabilities {
             return new CsRangingCapabilities(this);
         }
     }
-
-
 }
