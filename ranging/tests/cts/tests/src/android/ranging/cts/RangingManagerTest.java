@@ -92,7 +92,7 @@ public class RangingManagerTest {
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
 
-        CallbackVerifier callback = new CallbackVerifier();
+        RangingSessionCallback callback = new RangingSessionCallback();
 
         RangingSession rangingSession = mRangingManager.createRangingSession(
                 MoreExecutors.directExecutor(), callback);
@@ -119,7 +119,7 @@ public class RangingManagerTest {
                 .build();
 
         rangingSession.start(preference);
-        assertThat(callback.mOnStartedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
 
         rangingSession.stop();
         assertThat(callback.mOnClosedCalled.await(1, TimeUnit.SECONDS)).isTrue();
@@ -135,8 +135,8 @@ public class RangingManagerTest {
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
 
-        CallbackVerifier callback1 = new CallbackVerifier();
-        CallbackVerifier callback2 = new CallbackVerifier();
+        RangingSessionCallback callback1 = new RangingSessionCallback();
+        RangingSessionCallback callback2 = new RangingSessionCallback();
 
         RangingSession rangingSession1 = mRangingManager.createRangingSession(
                 MoreExecutors.directExecutor(), callback1);
@@ -188,8 +188,8 @@ public class RangingManagerTest {
         rangingSession1.start(preference1);
         rangingSession2.start(preference2);
 
-        assertThat(callback1.mOnStartedCalled.await(1, TimeUnit.SECONDS)).isTrue();
-        assertThat(callback2.mOnStartedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback1.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback2.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
 
         rangingSession1.stop();
         rangingSession2.stop();
@@ -200,19 +200,32 @@ public class RangingManagerTest {
         uiAutomation.dropShellPermissionIdentity();
     }
 
-    private static class CallbackVerifier implements RangingSession.Callback {
+    private static class RangingSessionCallback implements RangingSession.Callback {
 
-        private volatile CountDownLatch mOnStartedCalled = new CountDownLatch(1);
-        private volatile CountDownLatch mOnClosedCalled = new CountDownLatch(1);
+        private final CountDownLatch mOnOpenedCalled = new CountDownLatch(1);
+        private final CountDownLatch mOnClosedCalled = new CountDownLatch(1);
 
         @Override
-        public void onStarted(int technology) {
-            mOnStartedCalled.countDown();
+        public void onOpened() {
+            mOnOpenedCalled.countDown();
         }
 
         @Override
-        public void onStartFailed(int reason, RangingDevice device) {
+        public void onOpenFailed(int reason) {
+        }
 
+        @Override
+        public void onStarted(@NonNull RangingDevice peer,
+                @RangingManager.RangingTechnology int technology) {
+        }
+
+        @Override
+        public void onResults(@NonNull RangingDevice peer, @NonNull RangingData data) {
+        }
+
+        @Override
+        public void onStopped(@NonNull RangingDevice peer,
+                @RangingManager.RangingTechnology int technology) {
         }
 
         @Override
@@ -220,14 +233,19 @@ public class RangingManagerTest {
             mOnClosedCalled.countDown();
         }
 
+        /* TODO(shreshtabm): Remove once new callbacks are approved. */
         @Override
-        public void onStopped(@NonNull RangingDevice device) {
-
+        public void onStartFailed(int reason, @NonNull RangingDevice peer) {
         }
 
+        /* TODO(shreshtabm): Remove once new callbacks are approved. */
         @Override
-        public void onResults(@NonNull RangingDevice device, @NonNull RangingData data) {
+        public void onStarted(int technology) {
+        }
 
+        /* TODO(shreshtabm): Remove once new callbacks are approved. */
+        @Override
+        public void onStopped(@NonNull RangingDevice peer) {
         }
     }
 
@@ -298,14 +316,13 @@ public class RangingManagerTest {
                         .build())
                 .build();
 
-        CallbackVerifier callback = new CallbackVerifier();
+        RangingSessionCallback callback = new RangingSessionCallback();
         RangingSession rangingSession = mRangingManager.createRangingSession(
                 MoreExecutors.directExecutor(), callback);
         assertThat(rangingSession).isNotNull();
 
-        callback.mOnStartedCalled = new CountDownLatch(2);
         rangingSession.start(preference);
-        assertThat(callback.mOnStartedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
         rangingSession.stop();
         assertThat(callback.mOnClosedCalled.await(1, TimeUnit.SECONDS)).isTrue();
 
@@ -342,13 +359,13 @@ public class RangingManagerTest {
                         .build())
                 .build();
 
-        CallbackVerifier callback = new CallbackVerifier();
+        RangingSessionCallback callback = new RangingSessionCallback();
         RangingSession rangingSession = mRangingManager.createRangingSession(
                 MoreExecutors.directExecutor(), callback);
         assertThat(rangingSession).isNotNull();
 
         rangingSession.start(preference);
-        assertThat(callback.mOnStartedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
         rangingSession.stop();
         assertThat(callback.mOnClosedCalled.await(1, TimeUnit.SECONDS)).isTrue();
 
@@ -400,14 +417,13 @@ public class RangingManagerTest {
                         .build())
                 .build();
 
-        CallbackVerifier callback = new CallbackVerifier();
+        RangingSessionCallback callback = new RangingSessionCallback();
         RangingSession rangingSession = mRangingManager.createRangingSession(
                 MoreExecutors.directExecutor(), callback);
         assertThat(rangingSession).isNotNull();
 
         rangingSession.start(preference);
-        callback.mOnStartedCalled = new CountDownLatch(2);
-        assertThat(callback.mOnStartedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
 
         rangingSession.stop();
         assertThat(callback.mOnClosedCalled.await(2, TimeUnit.SECONDS)).isTrue();
