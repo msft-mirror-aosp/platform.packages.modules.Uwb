@@ -248,6 +248,17 @@ public class UwbAdapter implements RangingAdapter {
                 clear();
             }
         }
+
+        @Override
+        public void onPeerDisconnected(UwbDevice peer, @PeerDisconnectedReason int reason) {
+            // TODO(b/376273627): Use multicast sessions
+            Log.i(TAG, "onPeerDisconnected: " + reason);
+
+            synchronized (mStateMachine) {
+                mCallbacks.onStopped(Callback.StoppedReason.LOST_CONNECTION);
+                clear();
+            }
+        }
     }
 
     private void clear() {
