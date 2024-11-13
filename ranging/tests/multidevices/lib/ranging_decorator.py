@@ -52,6 +52,12 @@ class RangingDecorator:
     self._event_handlers[session_handle] = handler
     self.assert_ranging_event_received(session_handle, Event.STARTED)
 
+  def is_ranging_technology_supported(self, ranging_technology : RangingTechnology) -> bool:
+
+    """Checks whether a specific ranging technology is supported by the device"""
+    return self.ad.ranging.isTechnologySupported(ranging_technology)
+
+
   def stop_ranging_and_assert_stopped(self, session_handle: str):
     """Stop ranging and wait for onStopped event.
 

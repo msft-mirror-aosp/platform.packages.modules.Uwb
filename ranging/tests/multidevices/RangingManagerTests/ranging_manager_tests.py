@@ -116,6 +116,15 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     UWB_SESSION_ID = 5
     TECHNOLOGIES = {RangingTechnology.UWB}
 
+    asserts.skip_if(
+        not self.responder.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by responder",
+    )
+    asserts.skip_if(
+        not self.initiator.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by initiator",
+    )
+
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
         ranging_params=RawInitiatorRangingParams(
@@ -181,6 +190,15 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     UWB_SESSION_ID = 5
     TECHNOLOGIES = {RangingTechnology.UWB}
 
+    asserts.skip_if(
+        not self.responder.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by responder",
+    )
+    asserts.skip_if(
+      not self.initiator.is_ranging_technology_supported(RangingTechnology.UWB),
+      f"UWB not supported by initiator",
+  )
+
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
         ranging_params=RawInitiatorRangingParams(
@@ -224,7 +242,14 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     """Verifies device does not receive range data after disabling range data notifications"""
     SESSION_HANDLE = str(uuid4())
     UWB_SESSION_ID = 5
-
+    asserts.skip_if(
+        not self.responder.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by responder",
+    )
+    asserts.skip_if(
+        not self.initiator.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by initiator",
+    )
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
         ranging_params=RawInitiatorRangingParams(
@@ -289,6 +314,15 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     """Verifies uwb ranging with peer device, devices range for 10 seconds."""
     SESSION_HANDLE = str(uuid4())
     TECHNOLOGIES = {RangingTechnology.WIFI_RTT}
+
+    asserts.skip_if(
+        not self.responder.is_ranging_technology_supported(RangingTechnology.WIFI_RTT),
+        f"Wifi nan rtt not supported by responder",
+    )
+    asserts.skip_if(
+        not self.initiator.is_ranging_technology_supported(RangingTechnology.WIFI_RTT),
+        f"Wifi nan rtt not supported by initiator",
+    )
 
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
