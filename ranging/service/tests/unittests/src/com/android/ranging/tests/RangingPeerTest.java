@@ -158,8 +158,7 @@ public class RangingPeerTest {
         if (technologies.contains(RTT)) {
             RttConfig config = new RttConfig(
                     DEVICE_ROLE_INITIATOR,
-                    new RttRangingParams.Builder()
-                            .setServiceName("servicename")
+                    new RttRangingParams.Builder("servicename")
                             .build(),
                     new DataNotificationConfig.Builder().build(),
                     mMockDevice

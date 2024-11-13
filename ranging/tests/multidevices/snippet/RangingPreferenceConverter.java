@@ -142,10 +142,10 @@ public class RangingPreferenceConverter implements SnippetObjectConverter {
     }
 
     private RttRangingParams getRttParams(JSONObject j) throws JSONException {
-        RttRangingParams.Builder builder = new RttRangingParams.Builder();
+        RttRangingParams.Builder builder = new RttRangingParams.Builder(
+                j.getString("service_name"));
 
-        return builder.setServiceName(j.getString("service_name"))
-                .setRangingUpdateRate(j.getInt("ranging_update_rate"))
+        return builder.setRangingUpdateRate(j.getInt("ranging_update_rate"))
                 .build();
     }
 
