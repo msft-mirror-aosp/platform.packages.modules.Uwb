@@ -22,9 +22,9 @@ import android.os.RemoteCallbackList;
 import android.os.RemoteException;
 import android.ranging.IRangingCapabilitiesCallback;
 import android.ranging.RangingCapabilities;
+import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
 import android.ranging.RangingCapabilities.TechnologyCapabilities;
 import android.ranging.RangingManager;
-import android.ranging.RangingManager.RangingTechnologyAvailability;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -107,7 +107,7 @@ public class CapabilitiesProvider {
                 RangingManager.UWB,
                 new UwbCapabilitiesAdapter(mRangingInjector.getContext()));
         mCapabilityAdapters.put(
-                RangingManager.BT_CS,
+                RangingManager.BLE_CS,
                 new CsCapabilitiesAdapter());
         mCapabilityAdapters.put(
                 RangingManager.WIFI_NAN_RTT,
