@@ -242,6 +242,8 @@ public class CapabilityParam {
     // Protocol Agnostic
     public static final int SUPPORTED_POWER_STATS_QUERY =
             UwbVendorCapabilityTlvTypes.SUPPORTED_POWER_STATS_QUERY;
+    public static final int SUPPORTED_MAX_SESSION_COUNT =
+            UwbVendorCapabilityTlvTypes.SUPPORTED_MAX_SESSION_COUNT;
 
     public static final int SUPPORTED_ANTENNA_MODES =
             UwbVendorCapabilityTlvTypes.SUPPORTED_ANTENNA_MODES;
