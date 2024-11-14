@@ -46,11 +46,11 @@ import android.ranging.wifi.rtt.RttRangingParams;
 import androidx.test.filters.SmallTest;
 
 import com.android.server.ranging.RangingAdapter;
-import com.android.server.ranging.RangingAdapter.Callback.StoppedReason;
+import com.android.server.ranging.RangingAdapter.Callback.ClosedReason;
 import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingPeer;
 import com.android.server.ranging.RangingPeerConfig;
-import com.android.server.ranging.RangingPeerConfig.TechnologyConfig;
+import com.android.server.ranging.RangingSessionConfig.TechnologyConfig;
 import com.android.server.ranging.RangingServiceManager;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.rtt.RttConfig;
@@ -216,10 +216,10 @@ public class RangingPeerTest {
 
         verify(mMockAdapters.get(UWB)).stop();
 
-        adapterCallbacks.get(UWB).onStopped(StoppedReason.REQUESTED);
+        adapterCallbacks.get(UWB).onStopped(ClosedReason.REQUESTED);
 
         verify(mMockSessionListener).onTechnologyStopped(eq(mMockDevice), eq(UWB.getValue()));
-        verify(mMockSessionListener).onPeerStopped(eq(mMockDevice), eq(StoppedReason.REQUESTED));
+        verify(mMockSessionListener).onPeerStopped(eq(mMockDevice), eq(ClosedReason.REQUESTED));
     }
 
     @Test
@@ -232,12 +232,12 @@ public class RangingPeerTest {
         verify(mMockAdapters.get(UWB)).stop();
         verify(mMockAdapters.get(RTT)).stop();
 
-        adapterCallbacks.get(UWB).onStopped(StoppedReason.REQUESTED);
-        adapterCallbacks.get(RTT).onStopped(StoppedReason.REQUESTED);
+        adapterCallbacks.get(UWB).onStopped(ClosedReason.REQUESTED);
+        adapterCallbacks.get(RTT).onStopped(ClosedReason.REQUESTED);
 
         verify(mMockSessionListener).onTechnologyStopped(eq(mMockDevice), eq(UWB.getValue()));
         verify(mMockSessionListener).onTechnologyStopped(eq(mMockDevice), eq(RTT.getValue()));
-        verify(mMockSessionListener).onPeerStopped(eq(mMockDevice), eq(StoppedReason.REQUESTED));
+        verify(mMockSessionListener).onPeerStopped(eq(mMockDevice), eq(ClosedReason.REQUESTED));
     }
 
     @Test
@@ -245,11 +245,11 @@ public class RangingPeerTest {
         Map<RangingTechnology, RangingAdapter.Callback> adapterCallbacks =
                 startSession(Set.of(UWB));
 
-        adapterCallbacks.get(UWB).onStopped(StoppedReason.LOST_CONNECTION);
+        adapterCallbacks.get(UWB).onStopped(ClosedReason.LOST_CONNECTION);
 
         verify(mMockSessionListener).onTechnologyStopped(eq(mMockDevice), eq(UWB.getValue()));
         verify(mMockSessionListener).onPeerStopped(
-                eq(mMockDevice), eq(StoppedReason.LOST_CONNECTION));
+                eq(mMockDevice), eq(ClosedReason.LOST_CONNECTION));
     }
 
     @Test
@@ -260,10 +260,10 @@ public class RangingPeerTest {
         ArgumentCaptor<RangingAdapter.Callback> adapterCallback =
                 ArgumentCaptor.forClass(RangingAdapter.Callback.class);
         verify(mMockAdapters.get(UWB)).start(any(), adapterCallback.capture());
-        adapterCallback.getValue().onStopped(StoppedReason.FAILED_TO_START);
+        adapterCallback.getValue().onStopped(ClosedReason.FAILED_TO_START);
 
         verify(mMockSessionListener).onPeerStopped(
-                eq(mMockDevice), eq(StoppedReason.FAILED_TO_START));
+                eq(mMockDevice), eq(ClosedReason.FAILED_TO_START));
     }
 
     @Test

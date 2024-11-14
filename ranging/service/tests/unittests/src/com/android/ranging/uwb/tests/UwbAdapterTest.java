@@ -99,14 +99,14 @@ public class UwbAdapterTest {
     }
 
     @Test
-    public void getType_returnsUwb() {
-        Assert.assertEquals(RangingTechnology.UWB, mUwbAdapter.getType());
+    public void getTechnology_returnsUwb() {
+        Assert.assertEquals(RangingTechnology.UWB, mUwbAdapter.getTechnology());
     }
 
     @Test
     public void start_failsWhenParamsInvalid() {
         mUwbAdapter.start(mock(CsConfig.class), mMockCallback);
-        verify(mMockCallback).onStopped(eq(RangingAdapter.Callback.StoppedReason.FAILED_TO_START));
+        verify(mMockCallback).onStopped(eq(RangingAdapter.Callback.ClosedReason.FAILED_TO_START));
         verify(mMockCallback, never()).onStarted();
     }
 
