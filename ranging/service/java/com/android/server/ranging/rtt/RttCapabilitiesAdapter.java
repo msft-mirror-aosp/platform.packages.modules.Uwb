@@ -17,6 +17,9 @@
 package com.android.server.ranging.rtt;
 
 import static android.net.wifi.aware.WifiAwareManager.ACTION_WIFI_AWARE_STATE_CHANGED;
+import static android.ranging.RangingCapabilities.DISABLED_USER;
+import static android.ranging.RangingCapabilities.ENABLED;
+import static android.ranging.RangingCapabilities.NOT_SUPPORTED;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -24,7 +27,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.ranging.RangingCapabilities;
-import android.ranging.RangingManager.RangingTechnologyAvailability;
+import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
 
 import androidx.annotation.Nullable;
 
@@ -56,11 +59,11 @@ public class RttCapabilitiesAdapter extends CapabilitiesAdapter {
     @Override
     public @RangingTechnologyAvailability int getAvailability() {
         if (mRttService == null) {
-            return RangingTechnologyAvailability.NOT_SUPPORTED;
+            return NOT_SUPPORTED;
         } else if (mRttService.isAvailable()) {
-            return RangingTechnologyAvailability.ENABLED;
+            return ENABLED;
         } else {
-            return RangingTechnologyAvailability.DISABLED_USER;
+            return DISABLED_USER;
         }
     }
 

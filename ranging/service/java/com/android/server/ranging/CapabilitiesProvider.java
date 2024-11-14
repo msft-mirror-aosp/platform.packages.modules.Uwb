@@ -22,9 +22,9 @@ import android.os.RemoteCallbackList;
 import android.os.RemoteException;
 import android.ranging.IRangingCapabilitiesCallback;
 import android.ranging.RangingCapabilities;
+import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
 import android.ranging.RangingCapabilities.TechnologyCapabilities;
 import android.ranging.RangingManager;
-import android.ranging.RangingManager.RangingTechnologyAvailability;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -107,7 +107,7 @@ public class CapabilitiesProvider {
                 RangingManager.UWB,
                 new UwbCapabilitiesAdapter(mRangingInjector.getContext()));
         mCapabilityAdapters.put(
-                RangingManager.BT_CS,
+                RangingManager.BLE_CS,
                 new CsCapabilitiesAdapter());
         mCapabilityAdapters.put(
                 RangingManager.WIFI_NAN_RTT,
@@ -168,14 +168,18 @@ public class CapabilitiesProvider {
             RangingCapabilities capabilities = getCapabilities()
                     .addAvailability(mTechnology, availability)
                     .build();
-            for (int i = mCallbacks.beginBroadcast() - 1; i >= 0; i--) {
-                try {
-                    mCallbacks.getBroadcastItem(i).onRangingCapabilities(capabilities);
-                } catch (RemoteException e) {
-                    Log.w(TAG, "Failed to notify callback " + i + " of availability change");
+            synchronized (mCallbacks) {
+                int i = mCallbacks.beginBroadcast();
+                while (i > 0) {
+                    i--;
+                    try {
+                        mCallbacks.getBroadcastItem(i).onRangingCapabilities(capabilities);
+                    } catch (RemoteException e) {
+                        Log.w(TAG, "Failed to notify callback " + i + " of availability change");
+                    }
                 }
+                mCallbacks.finishBroadcast();
             }
-            mCallbacks.finishBroadcast();
         }
     }
 }
