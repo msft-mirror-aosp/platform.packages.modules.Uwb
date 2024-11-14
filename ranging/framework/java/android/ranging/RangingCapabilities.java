@@ -23,6 +23,7 @@ import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.ranging.RangingManager.RangingTechnology;
+import android.ranging.rtt.RttRangingCapabilities;
 import android.ranging.uwb.UwbRangingCapabilities;
 
 import com.android.ranging.flags.Flags;
@@ -57,6 +58,9 @@ public final class RangingCapabilities implements Parcelable {
 
     @Nullable
     private final UwbRangingCapabilities mUwbCapabilities;
+
+    @Nullable
+    private final RttRangingCapabilities mRttRangingCapabilities;
 
     /**
      * @hide
@@ -102,6 +106,8 @@ public final class RangingCapabilities implements Parcelable {
     private RangingCapabilities(Builder builder) {
         mUwbCapabilities =
                 (UwbRangingCapabilities) builder.mCapabilities.get(RangingManager.UWB);
+        mRttRangingCapabilities = (RttRangingCapabilities) builder.mCapabilities.get(
+                RangingManager.WIFI_NAN_RTT);
         mAvailabilities = builder.mAvailabilities;
     }
 
@@ -109,6 +115,8 @@ public final class RangingCapabilities implements Parcelable {
         mUwbCapabilities = in.readParcelable(
                 UwbRangingCapabilities.class.getClassLoader(),
                 UwbRangingCapabilities.class);
+        mRttRangingCapabilities = in.readParcelable(RttRangingCapabilities.class.getClassLoader(),
+                RttRangingCapabilities.class);
         int size = in.readInt();
         mAvailabilities = new HashMap<>(size);
         for (int i = 0; i < size; i++) {
@@ -158,6 +166,17 @@ public final class RangingCapabilities implements Parcelable {
     }
 
     /**
+     * Gets the WiFi NAN-RTT ranging capabilities.
+     *
+     * @return a {@link RttRangingCapabilities} object or {@code null} if not available.
+     * @hide
+     */
+    @Nullable
+    public RttRangingCapabilities getRttRangingCapabilities() {
+        return mRttRangingCapabilities;
+    }
+
+    /**
      * @hide
      */
     @Override
@@ -168,6 +187,7 @@ public final class RangingCapabilities implements Parcelable {
     @Override
     public void writeToParcel(@androidx.annotation.NonNull Parcel dest, int flags) {
         dest.writeParcelable(mUwbCapabilities, flags);
+        dest.writeParcelable(mRttRangingCapabilities, flags);
         dest.writeInt(mAvailabilities.size()); // Write map size
         for (Map.Entry<Integer, Integer> entry : mAvailabilities.entrySet()) {
             dest.writeInt(entry.getKey()); // Write the key
