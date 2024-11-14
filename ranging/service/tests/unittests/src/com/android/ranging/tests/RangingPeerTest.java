@@ -123,7 +123,7 @@ public class RangingPeerTest {
         return new RangingData.Builder()
                 .setRangingTechnology(technology.getValue())
                 .setDistance(new RangingMeasurement.Builder().setMeasurement(123).build())
-                .setTimestamp(1)
+                .setTimestampMillis(1)
                 .build();
     }
 
@@ -134,14 +134,13 @@ public class RangingPeerTest {
 
         if (technologies.contains(RangingTechnology.UWB)) {
             UwbConfig config = new UwbConfig.Builder(
-                    new UwbRangingParams.Builder()
-                            .setDeviceAddress(UwbAddress.fromBytes(new byte[]{1, 2}))
+                    new UwbRangingParams.Builder(
+                            10, CONFIG_UNICAST_DS_TWR, UwbAddress.fromBytes(new byte[]{1, 2}),
+                            UwbAddress.fromBytes(new byte[]{3, 4}))
                             .setComplexChannel(new UwbComplexChannel.Builder()
                                     .setChannel(9)
                                     .setPreambleIndex(11)
                                     .build())
-                            .setConfigId(CONFIG_UNICAST_DS_TWR)
-                            .setPeerAddress(UwbAddress.fromBytes(new byte[]{3, 4}))
                             .setRangingUpdateRate(UPDATE_RATE_NORMAL)
                             .build())
                     .setPeerDevice(mMockDevice)
@@ -158,8 +157,7 @@ public class RangingPeerTest {
         if (technologies.contains(RTT)) {
             RttConfig config = new RttConfig(
                     DEVICE_ROLE_INITIATOR,
-                    new RttRangingParams.Builder()
-                            .setServiceName("servicename")
+                    new RttRangingParams.Builder("servicename")
                             .build(),
                     new DataNotificationConfig.Builder().build(),
                     mMockDevice
