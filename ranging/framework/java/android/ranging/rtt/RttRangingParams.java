@@ -21,7 +21,6 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.cs.CsRangingParams;
 import android.ranging.params.RawRangingDevice;
 import android.ranging.params.RawRangingDevice.RangingUpdateRate;
 
@@ -42,6 +41,7 @@ public class RttRangingParams implements Parcelable {
         mServiceName = in.readString();
         mMatchFilter = in.createByteArray();
         mRangingUpdateRate = in.readInt();
+        mPeriodicRangingHwFeatureEnabled = in.readBoolean();
     }
 
     @NonNull
@@ -67,6 +67,7 @@ public class RttRangingParams implements Parcelable {
         dest.writeString(mServiceName);
         dest.writeByteArray(mMatchFilter);
         dest.writeInt(mRangingUpdateRate);
+        dest.writeBoolean(mPeriodicRangingHwFeatureEnabled);
     }
 
     private final String mServiceName;
@@ -76,14 +77,14 @@ public class RttRangingParams implements Parcelable {
     @RangingUpdateRate
     private final int mRangingUpdateRate;
 
+    private final boolean mPeriodicRangingHwFeatureEnabled;
 
     /**
      * Returns the service name associated with this RTT ranging session.
      *
+     * @return the service name as a {@link String}.
      * @see android.net.wifi.aware.PublishConfig.Builder#setServiceName(String)
      * @see android.net.wifi.aware.SubscribeConfig.Builder#setServiceName(String)
-     *
-     * @return the service name as a {@link String}.
      */
     @NonNull
     public String getServiceName() {
@@ -93,10 +94,9 @@ public class RttRangingParams implements Parcelable {
     /**
      * Returns the match filter for this ranging session.
      *
+     * @return a byte array representing the match filter.
      * @see android.net.wifi.aware.PublishConfig.Builder#setMatchFilter(List)
      * @see android.net.wifi.aware.SubscribeConfig.Builder#setMatchFilter(List)
-     *
-     * @return a byte array representing the match filter.
      */
     @Nullable
     public byte[] getMatchFilter() {
@@ -110,17 +110,28 @@ public class RttRangingParams implements Parcelable {
      * <p>Possible values:
      * {@link RangingUpdateRate#UPDATE_RATE_NORMAL}
      * {@link RangingUpdateRate#UPDATE_RATE_INFREQUENT}
-     * {@link RangingUpdateRate#UPDATE_RATE_FAST}
+     * {@link RangingUpdateRate#UPDATE_RATE_FREQUENT}
      */
     @RangingUpdateRate
     public int getRangingUpdateRate() {
         return mRangingUpdateRate;
     }
 
+    /**
+     * Returns whether the periodic ranging hardware feature was enabled.
+     *
+     * @return returns {@code true} if periodic ranging hardware feature was enabled, {@code false}
+     * otherwise
+     */
+    public boolean isPeriodicRangingHwFeatureEnabled() {
+        return mPeriodicRangingHwFeatureEnabled;
+    }
+
     private RttRangingParams(Builder builder) {
         mServiceName = builder.mServiceName;
         mMatchFilter = builder.mMatchFilter;
         mRangingUpdateRate = builder.mRangingUpdateRate;
+        mPeriodicRangingHwFeatureEnabled = builder.mPeriodicRangingHwFeatureEnabled;
     }
 
     /**
@@ -130,6 +141,8 @@ public class RttRangingParams implements Parcelable {
         private String mServiceName = "";
 
         private byte[] mMatchFilter = null;
+
+        private boolean mPeriodicRangingHwFeatureEnabled = false;
         @RawRangingDevice.RangingUpdateRate
         private int mRangingUpdateRate = RawRangingDevice.UPDATE_RATE_NORMAL;
 
@@ -167,12 +180,25 @@ public class RttRangingParams implements Parcelable {
          *                   <p>Possible values:
          *                   {@link RangingUpdateRate#UPDATE_RATE_NORMAL}
          *                   {@link RangingUpdateRate#UPDATE_RATE_INFREQUENT}
-         *                   {@link RangingUpdateRate#UPDATE_RATE_FAST}
-         * @return this {@link CsRangingParams.Builder} instance.
+         *                   {@link RangingUpdateRate#UPDATE_RATE_FREQUENT}
+         * @return this {@link Builder} instance.
          */
         @NonNull
         public Builder setRangingUpdateRate(@RawRangingDevice.RangingUpdateRate int updateRate) {
             mRangingUpdateRate = updateRate;
+            return this;
+        }
+
+        /**
+         * Sets whether to use hardware supported periodic ranging feature in WiFi Nan-RTT.
+         *
+         * @param periodicRangingHwFeatureEnabled {@code true} to enable periodic ranging;
+         *                                        {@code false} otherwise.
+         * @return this {@link Builder} instance.
+         */
+        @NonNull
+        public Builder setPeriodicRangingHwFeatureEnabled(boolean periodicRangingHwFeatureEnabled) {
+            mPeriodicRangingHwFeatureEnabled = periodicRangingHwFeatureEnabled;
             return this;
         }
 
@@ -186,5 +212,4 @@ public class RttRangingParams implements Parcelable {
             return new RttRangingParams(this);
         }
     }
-
 }
