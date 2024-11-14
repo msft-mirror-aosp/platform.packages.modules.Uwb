@@ -82,7 +82,7 @@ public final class CsRangingCapabilities implements TechnologyCapabilities {
      */
     @Override
     public int getTechnology() {
-        return RangingManager.BT_CS;
+        return RangingManager.BLE_CS;
     }
 
     /**
