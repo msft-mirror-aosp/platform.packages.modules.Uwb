@@ -39,8 +39,6 @@ import com.google.android.mobly.snippet.rpc.Rpc;
 
 import java.lang.reflect.Method;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
@@ -81,63 +79,81 @@ public class RangingSnippet implements Snippet {
     }
 
     private enum Event {
+        OPENED,
+        OPEN_FAILED,
         STARTED,
-        START_FAILED,
-        CLOSED,
+        DATA,
         STOPPED,
-        RESULTS_RECEIVED;
+        CLOSED
     }
 
     private class RangingSessionCallback implements RangingSession.Callback {
 
         private final String mCallbackId;
-        private final ConcurrentMap<RangingDevice, ConcurrentMap<Integer, RangingData>>
-                mReceivedData;
 
         RangingSessionCallback(String callbackId) {
             mCallbackId = callbackId;
-            mReceivedData = new ConcurrentHashMap<>();
         }
 
         @Override
-        public void onStarted(int technology) {
-            Log.d(TAG, "RangingCallback#onStarted() called technology: " + technology);
-            mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.STARTED.toString()));
+        public void onOpened() {
+            Log.d(TAG, "onOpened");
+            mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.OPENED.toString()));
         }
 
         @Override
-        public void onStartFailed(int reason, RangingDevice device) {
+        public void onOpenFailed(@Reason int reason) {
+            Log.d(TAG, "onOpenFailed");
+            mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.OPEN_FAILED.toString()));
         }
 
         @Override
-        public void onClosed(int reasonCode) {
-            Log.d(TAG, "RangingCallback#onClosed() called");
-            mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.CLOSED.toString()));
-        }
-
-        @Override
-        public void onStopped(@NonNull RangingDevice device) {
+        public void onStarted(@NonNull RangingDevice peer, @RangingTechnology int technology) {
+            Log.d(TAG, "onStarted");
+            SnippetEvent event = new SnippetEvent(mCallbackId, Event.STARTED.toString());
+            event.getData().putString("peer", peer.getUuid().toString());
+            event.getData().putInt("technology", technology);
+            mEventCache.postEvent(event);
         }
 
         @Override
         public void onResults(@NonNull RangingDevice peer, @NonNull RangingData data) {
-            Log.d(TAG, "RangingCallback#onResults() called");
-            SnippetEvent event = new SnippetEvent(mCallbackId, Event.RESULTS_RECEIVED.toString());
+            Log.d(TAG, "onData");
+            SnippetEvent event = new SnippetEvent(mCallbackId, Event.DATA.toString());
             event.getData().putString("peer", peer.getUuid().toString());
             event.getData().putInt("technology", data.getRangingTechnology());
             mEventCache.postEvent(event);
         }
 
-        Optional<RangingData> getLastDataReceived(
-                RangingDevice peer, @RangingTechnology int technology
-        ) {
-            if (mReceivedData.containsKey(peer)) {
-                return Optional.ofNullable(mReceivedData.get(peer).remove(technology));
-            } else {
-                return Optional.empty();
-            }
+        @Override
+        public void onStopped(@NonNull RangingDevice peer, @RangingTechnology int technology) {
+            Log.d(TAG, "onStopped");
+            SnippetEvent event = new SnippetEvent(mCallbackId, Event.STOPPED.toString());
+            event.getData().putString("peer", peer.getUuid().toString());
+            event.getData().putInt("technology", technology);
+            mEventCache.postEvent(event);
         }
 
+        @Override
+        public void onClosed(@Reason int reason) {
+            Log.d(TAG, "onClosed");
+            mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.CLOSED.toString()));
+        }
+
+        /* TODO(shreshtabm): Remove once new callbacks are approved. */
+        @Override
+        public void onStartFailed(int reason, @NonNull RangingDevice peer) {
+        }
+
+        /* TODO(shreshtabm): Remove once new callbacks are approved. */
+        @Override
+        public void onStarted(int technology) {
+        }
+
+        /* TODO(shreshtabm): Remove once new callbacks are approved. */
+        @Override
+        public void onStopped(@NonNull RangingDevice peer) {
+        }
     }
 
     private static class RangingSessionInfo {
@@ -184,25 +200,6 @@ public class RangingSnippet implements Snippet {
             sessionInfo.getSession().stop();
             mSessions.remove(sessionHandle);
         }
-    }
-
-    @Rpc(description = "Check whether the cached ranging results include data from the specified "
-            + "peer with the specified technology")
-    public boolean verifyPeerFoundWithTechnology(
-            String sessionHandle, String peerId, int technology
-    ) {
-        RangingSessionInfo sessionInfo = mSessions.get(sessionHandle);
-        if (sessionInfo == null) {
-            throw new IllegalArgumentException("Could not find session with id " + sessionHandle);
-        }
-
-        return sessionInfo
-                .getCallback()
-                .getLastDataReceived(
-                        new RangingDevice.Builder().setUuid(UUID.fromString(peerId)).build(),
-                        technology
-                )
-                .isPresent();
     }
 
     @Rpc(description = "Check whether the provided ranging technology is enabled")
