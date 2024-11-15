@@ -18,6 +18,7 @@ package com.android.server.ranging;
 
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
+import android.os.Binder;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -112,10 +113,14 @@ public final class RangingPeer {
             TechnologyConfig config = entry.getValue();
 
             synchronized (mAdapters) {
+                // Any calls to the corresponding technology stacks must be
+                // done with a clear calling identity.
+                long token = Binder.clearCallingIdentity();
                 RangingAdapter adapter = mInjector.createAdapter(
                         technology, mConfig.getDeviceRole(), mAdapterExecutor);
                 mAdapters.put(technology, adapter);
                 adapter.start(config, new AdapterListener(technology));
+                Binder.restoreCallingIdentity(token);
             }
         }
     }
@@ -134,7 +139,11 @@ public final class RangingPeer {
             // Stop all ranging technologies.
             synchronized (mAdapters) {
                 for (RangingTechnology technology : mAdapters.keySet()) {
+                    // Any calls to the corresponding technology stacks must be
+                    // done with a clear calling identity.
+                    long token = Binder.clearCallingIdentity();
                     mAdapters.get(technology).stop();
+                    Binder.restoreCallingIdentity(token);
                 }
             }
         }
