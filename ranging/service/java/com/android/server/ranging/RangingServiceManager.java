@@ -106,7 +106,12 @@ public class RangingServiceManager {
     }
 
     public void stopRanging(SessionHandle handle) {
-        mSessions.get(handle).stop();
+        RangingSession session = mSessions.get(handle);
+        if (session == null) {
+            Log.e(TAG, "stopRanging for nonexistent session");
+            return;
+        }
+        session.stop();
     }
 
     /**
@@ -218,7 +223,7 @@ public class RangingServiceManager {
                 @NonNull RangingDevice peer, @RangingAdapter.Callback.StoppedReason int reason
         ) {
             RangingSession session = mSessions.get(mSessionHandle);
-            if (!mSessions.containsKey(mSessionHandle)) {
+            if (session == null) {
                 Log.e(TAG, "onPeerStopped for nonexistent session");
                 return;
             }
