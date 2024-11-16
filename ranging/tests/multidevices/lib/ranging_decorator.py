@@ -12,7 +12,7 @@ CALLBACK_WAIT_TIME_SEC = 5
 
 class RangingTechnology(IntEnum):
   UWB = 0
-  BT_CS = 1
+  BLE_CS = 1
   WIFI_RTT = 2
   BLE_RSSI = 3
 

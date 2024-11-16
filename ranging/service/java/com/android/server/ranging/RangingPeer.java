@@ -18,6 +18,7 @@ package com.android.server.ranging;
 
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
+import android.os.Binder;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -74,6 +75,9 @@ public final class RangingPeer {
     /** Executor for ranging technology adapters. */
     private final ListeningExecutorService mAdapterExecutor;
 
+    /** Lock for the ranging peer. */
+    private final Object mLock = new Object();
+
     public RangingPeer(
             @NonNull RangingInjector injector,
             @NonNull RangingPeerConfig config,
@@ -98,31 +102,33 @@ public final class RangingPeer {
 
     /** Start a ranging session with this peer */
     public void start() {
-        if (!mStateMachine.transition(State.STOPPED, State.STARTING)) {
-            Log.w(TAG, "Failed transition STOPPED -> STARTING");
-            return;
-        }
+        synchronized (mLock) {
+            if (!mStateMachine.transition(State.STOPPED, State.STARTING)) {
+                Log.w(TAG, "Failed transition STOPPED -> STARTING");
+                return;
+            }
+            ImmutableMap<RangingTechnology, TechnologyConfig> configs =
+                    mConfig.getTechnologyConfigs();
 
-        ImmutableMap<RangingTechnology, TechnologyConfig> configs =
-                mConfig.getTechnologyConfigs();
-
-        mFusionEngine.start(new FusionEngineListener());
-        for (Map.Entry<RangingTechnology, TechnologyConfig> entry : configs.entrySet()) {
-            RangingTechnology technology = entry.getKey();
-            TechnologyConfig config = entry.getValue();
-
-            synchronized (mAdapters) {
+            mFusionEngine.start(new FusionEngineListener());
+            for (Map.Entry<RangingTechnology, TechnologyConfig> entry : configs.entrySet()) {
+                RangingTechnology technology = entry.getKey();
+                TechnologyConfig config = entry.getValue();
+                // Any calls to the corresponding technology stacks must be
+                // done with a clear calling identity.
+                long token = Binder.clearCallingIdentity();
                 RangingAdapter adapter = mInjector.createAdapter(
                         technology, mConfig.getDeviceRole(), mAdapterExecutor);
                 mAdapters.put(technology, adapter);
                 adapter.start(config, new AdapterListener(technology));
+                Binder.restoreCallingIdentity(token);
             }
         }
     }
 
     /** Stop the active session. */
     public void stop() {
-        synchronized (mStateMachine) {
+        synchronized (mLock) {
             if (mStateMachine.getState() == State.STOPPING
                     || mStateMachine.getState() == State.STOPPED
             ) {
@@ -132,10 +138,12 @@ public final class RangingPeer {
             mStateMachine.setState(State.STOPPING);
 
             // Stop all ranging technologies.
-            synchronized (mAdapters) {
-                for (RangingTechnology technology : mAdapters.keySet()) {
-                    mAdapters.get(technology).stop();
-                }
+            for (RangingTechnology technology : mAdapters.keySet()) {
+                // Any calls to the corresponding technology stacks must be
+                // done with a clear calling identity.
+                long token = Binder.clearCallingIdentity();
+                mAdapters.get(technology).stop();
+                Binder.restoreCallingIdentity(token);
             }
         }
     }
@@ -150,7 +158,7 @@ public final class RangingPeer {
 
         @Override
         public void onStarted() {
-            synchronized (mStateMachine) {
+            synchronized (mLock) {
                 if (mStateMachine.getState() == State.STOPPED) {
                     Log.w(TAG, "Received adapter onStarted but ranging session is stopped");
                     return;
@@ -167,13 +175,14 @@ public final class RangingPeer {
 
         @Override
         public void onStopped(@StoppedReason int reason) {
-            synchronized (mStateMachine) {
+            synchronized (mLock) {
                 if (mStateMachine.getState() != State.STOPPING) {
                     mAdapters.get(mTechnology).stop();
                 }
                 mAdapters.remove(mTechnology);
                 mFusionEngine.removeDataSource(mTechnology);
-                mSessionListener.onTechnologyStopped(mConfig.getDevice(), mTechnology.getValue());
+                mSessionListener.onTechnologyStopped(mConfig.getDevice(),
+                    mTechnology.getValue());
                 if (mAdapters.isEmpty()) {
                     // The last technology has stopped, so signal that ranging has completely
                     // stopped with this peer.
@@ -181,12 +190,13 @@ public final class RangingPeer {
                     mSessionListener.onPeerStopped(mConfig.getDevice(), reason);
                     mFusionEngine.stop();
                 }
+
             }
         }
 
         @Override
         public void onRangingData(RangingDevice peer, RangingData data) {
-            synchronized (mStateMachine) {
+            synchronized (mLock) {
                 if (mStateMachine.getState() != State.STOPPED) {
                     mFusionEngine.feed(data);
                 }
@@ -199,7 +209,7 @@ public final class RangingPeer {
 
         @Override
         public void onData(@NonNull RangingData data) {
-            synchronized (mStateMachine) {
+            synchronized (mLock) {
                 if (mStateMachine.getState() == State.STOPPED) {
                     return;
                 }
