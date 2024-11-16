@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package multidevices.snippet.ranging;
+package com.google.snippet.ranging;
 
 import android.app.UiAutomation;
 import android.content.Context;
@@ -56,7 +56,6 @@ public class RangingSnippet implements Snippet {
     private final ConcurrentMap<Integer, Integer> mTechnologyAvailability;
 
     public RangingSnippet() {
-        adoptShellPermission();
         mContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
         mConnectivityManager = mContext.getSystemService(ConnectivityManager.class);
         mRangingManager = mContext.getSystemService(RangingManager.class);
@@ -69,6 +68,18 @@ public class RangingSnippet implements Snippet {
     private void adoptShellPermission() {
         UiAutomation uia = InstrumentationRegistry.getInstrumentation().getUiAutomation();
         uia.adoptShellPermissionIdentity();
+        try {
+            Class<?> cls = Class.forName("android.app.UiAutomation");
+            Method destroyMethod = cls.getDeclaredMethod("destroy");
+            destroyMethod.invoke(uia);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Failed to cleanup ui automation", e);
+        }
+    }
+
+    private void dropShellPermission() throws Throwable {
+        UiAutomation uia = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        uia.dropShellPermissionIdentity();
         try {
             Class<?> cls = Class.forName("android.app.UiAutomation");
             Method destroyMethod = cls.getDeclaredMethod("destroy");
@@ -217,8 +228,10 @@ public class RangingSnippet implements Snippet {
     }
 
     @Rpc(description = "Set airplane mode")
-    public void setAirplaneMode(boolean enabled) {
+    public void setAirplaneMode(boolean enabled) throws Throwable {
+        adoptShellPermission();
         mConnectivityManager.setAirplaneMode(enabled);
+        dropShellPermission();
     }
 
     @Rpc(description = "Log info level message to device logcat")
