@@ -25,6 +25,7 @@ import android.ranging.RangingCapabilities;
 import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
 import android.ranging.RangingCapabilities.TechnologyCapabilities;
 import android.ranging.RangingManager;
+import android.os.Binder;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -142,12 +143,15 @@ public class CapabilitiesProvider {
         RangingCapabilities.Builder builder = new RangingCapabilities.Builder();
         for (@RangingManager.RangingTechnology int technology : mCapabilityAdapters.keySet()) {
             CapabilitiesAdapter adapter = mCapabilityAdapters.get(technology);
+            // Any calls to the corresponding technology stacks must be
+            // done with a clear calling identity.
+            long token = Binder.clearCallingIdentity();
             TechnologyCapabilities capabilities = adapter.getCapabilities();
-
             builder.addAvailability(technology, adapter.getAvailability());
             if (capabilities != null) {
                 builder.addCapabilities(capabilities);
             }
+            Binder.restoreCallingIdentity(token);
         }
         return builder;
     }

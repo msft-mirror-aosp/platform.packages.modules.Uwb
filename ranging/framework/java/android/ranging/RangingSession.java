@@ -347,7 +347,7 @@ public final class RangingSession implements AutoCloseable {
          * Called when the ranging session opens successfully.
          * @hide
          */
-        void onOpened();
+        default void onOpened() {}
 
         /**
          * Called when the ranging session failed to open.
@@ -356,7 +356,7 @@ public final class RangingSession implements AutoCloseable {
          *               {@link Reason}.
          * @hide
          */
-        void onOpenFailed(@Reason int reason);
+        default void onOpenFailed(@Reason int reason) {}
 
         /**
          * Called when ranging has started with a particular peer using a particular technology
@@ -367,8 +367,8 @@ public final class RangingSession implements AutoCloseable {
          *                   the ranging technology that started.
          * @hide
          */
-        void onStarted(
-                @NonNull RangingDevice peer, @RangingManager.RangingTechnology int technology);
+        default void onStarted(
+                @NonNull RangingDevice peer, @RangingManager.RangingTechnology int technology) {}
 
         /**
          * Called when ranging data has been received from a peer.
@@ -387,9 +387,9 @@ public final class RangingSession implements AutoCloseable {
          *                   the ranging technology that stopped.
          * @hide
          */
-        void onStopped(
+        default void onStopped(
                 @NonNull RangingDevice peer, @RangingManager.RangingTechnology int technology
-        );
+        ) {}
 
         /**
          * Called when the ranging session has closed.
