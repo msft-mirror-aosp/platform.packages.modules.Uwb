@@ -32,6 +32,7 @@ _TEST_CASES = (
     "test_one_to_one_rtt_ranging",
 )
 
+SERVICE_UUID = "0000fffb-0000-1000-8000-00805f9b34fc"
 
 class RangingManagerTest(ranging_base_test.RangingBaseTest):
   """Tests for UWB Ranging APIs.
@@ -62,7 +63,12 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
   def setup_test(self):
     super().setup_test()
     for device in self.devices:
-      utils.set_airplane_mode(device.ad, isEnabled=False)
+      utils.set_airplane_mode(device.ad, state=False)
+      if device.is_ranging_technology_supported(RangingTechnology.UWB):
+        utils.set_uwb_state_and_verify(device.ad, state=True)
+      if device.is_ranging_technology_supported(RangingTechnology.BLE_RSSI) or \
+         device.is_ranging_technology_supported(RangingTechnology.BLE_CS):
+        utils.set_bt_state_and_verify(device.ad, state=True)
       utils.set_snippet_foreground_state(device.ad, isForeground=True)
 
   def teardown_test(self):
@@ -107,6 +113,20 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
         ),
         f"Responder did not find initiator",
     )
+
+  # TODO: Use this in BLE CS and OOB tests.
+  def _create_ble_gatt_connection(
+      self,
+  ):
+    """Create BT GATT connection between initiator and responder.
+
+    """
+    # Start and advertise regular server
+    self.responder.bluetooth.createAndAdvertiseServer(SERVICE_UUID)
+    # Connect to the advertisement
+    asserts.assert_true(self.initiator.bluetooth.connectGatt(SERVICE_UUID), "Server not discovered")
+    # Check the target UUID is present
+    asserts.assert_true(self.initiator.bluetooth.containsService(SERVICE_UUID), "Service not found")
 
   ### Test Cases ###
 

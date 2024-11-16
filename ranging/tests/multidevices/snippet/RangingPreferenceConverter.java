@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package multidevices.snippet.ranging;
+package com.google.snippet.ranging;
 
 import static android.ranging.RangingPreference.DEVICE_ROLE_INITIATOR;
 import static android.ranging.uwb.UwbComplexChannel.UWB_CHANNEL_9;
