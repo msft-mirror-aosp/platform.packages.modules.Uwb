@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-package com.android.server.ranging.cs;
+package android.ranging.params;
 
-import com.android.server.ranging.RangingPeerConfig.TechnologyConfig;
-
-public class CsConfig implements TechnologyConfig {
-    public CsConfig() {
-        throw new UnsupportedOperationException("Not implemented!");
-    }
-}
+parcelable RawResponderRangingParams;

@@ -16,10 +16,16 @@
 
 package com.android.server.ranging.uwb;
 
+import static android.ranging.RangingCapabilities.DISABLED_REGULATORY;
+import static android.ranging.RangingCapabilities.DISABLED_USER;
+import static android.ranging.RangingCapabilities.ENABLED;
+import static android.ranging.RangingCapabilities.NOT_SUPPORTED;
+
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.ranging.RangingManager.RangingTechnologyAvailability;
+import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
 import android.ranging.uwb.UwbRangingCapabilities;
+import android.util.Log;
 
 import androidx.annotation.Nullable;
 
@@ -28,7 +34,11 @@ import com.android.ranging.uwb.backend.internal.UwbServiceImpl;
 import com.android.server.ranging.CapabilitiesProvider.AvailabilityCallback;
 import com.android.server.ranging.CapabilitiesProvider.CapabilitiesAdapter;
 
+import java.time.Duration;
+
 public class UwbCapabilitiesAdapter extends CapabilitiesAdapter {
+    private static final String TAG = UwbCapabilitiesAdapter.class.getSimpleName();
+
     private final Context mContext;
     /** Null if UWB is not available on this device */
     private final UwbServiceImpl mUwbService;
@@ -53,11 +63,11 @@ public class UwbCapabilitiesAdapter extends CapabilitiesAdapter {
     @Override
     public @RangingTechnologyAvailability int getAvailability() {
         if (mUwbService == null) {
-            return RangingTechnologyAvailability.NOT_SUPPORTED;
+            return NOT_SUPPORTED;
         } else if (mUwbService.isAvailable()) {
-            return RangingTechnologyAvailability.ENABLED;
+            return ENABLED;
         } else {
-            return RangingTechnologyAvailability.DISABLED_USER;
+            return DISABLED_USER;
         }
     }
 
@@ -72,8 +82,8 @@ public class UwbCapabilitiesAdapter extends CapabilitiesAdapter {
                         capabilities.supportsElevationAngle())
                 .setSupportsRangingIntervalReconfigure(
                         capabilities.supportsRangingIntervalReconfigure())
-                .setMinRangingInterval(
-                        capabilities.getMinRangingInterval())
+                .setMinRangingInterval(Duration.ofMillis(
+                        capabilities.getMinRangingInterval()))
                 .setSupportedChannels(
                         capabilities.getSupportedChannels())
                 .setSupportedNtfConfigs(
@@ -91,11 +101,14 @@ public class UwbCapabilitiesAdapter extends CapabilitiesAdapter {
 
     @Override
     public @Nullable UwbRangingCapabilities getCapabilities() {
-        if (getAvailability() == RangingTechnologyAvailability.ENABLED) {
-            return convertCapabilities(mUwbService.getRangingCapabilities());
-        } else {
-            return null;
+        if (getAvailability() == ENABLED) {
+            try {
+                return convertCapabilities(mUwbService.getRangingCapabilities());
+            } catch (IllegalStateException e) {
+                Log.w(TAG, "Failed to get capabilities from UWB backend " + e);
+            }
         }
+        return null;
     }
 
     private class AvailabilityListener implements UwbAvailabilityCallback {
@@ -122,13 +135,13 @@ public class UwbCapabilitiesAdapter extends CapabilitiesAdapter {
 
             if (reason == REASON_COUNTRY_CODE_ERROR && !isUwbAvailable) {
                 callback.onAvailabilityChange(
-                        RangingTechnologyAvailability.DISABLED_REGULATORY,
+                        DISABLED_REGULATORY,
                         convertReason(reason));
             } else {
                 callback.onAvailabilityChange(
                         isUwbAvailable
-                                ? RangingTechnologyAvailability.ENABLED
-                                : RangingTechnologyAvailability.DISABLED_USER,
+                                ? ENABLED
+                                : DISABLED_USER,
                         convertReason(reason));
             }
         }

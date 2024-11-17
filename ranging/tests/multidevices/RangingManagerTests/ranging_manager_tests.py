@@ -84,15 +84,15 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     Args:
         session_id: id to use for the ranging session.
     """
-    self.initiator.start_ranging_and_assert_started(
+    self.initiator.start_ranging_and_assert_opened(
         session_handle, initiator_preference
     )
-    self.responder.start_ranging_and_assert_started(
+    self.responder.start_ranging_and_assert_opened(
         session_handle, responder_preference
     )
 
     asserts.assert_true(
-        self.initiator.verify_peer_found_with_technologies(
+        self.initiator.verify_received_data_from_peer_using_technologies(
             session_handle,
             self.responder.id,
             technologies,
@@ -100,7 +100,7 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
         f"Initiator did not find responder",
     )
     asserts.assert_true(
-        self.responder.verify_peer_found_with_technologies(
+        self.responder.verify_received_data_from_peer_using_technologies(
             session_handle,
             self.initiator.id,
             technologies,
@@ -115,6 +115,15 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     SESSION_HANDLE = str(uuid4())
     UWB_SESSION_ID = 5
     TECHNOLOGIES = {RangingTechnology.UWB}
+
+    asserts.skip_if(
+        not self.responder.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by responder",
+    )
+    asserts.skip_if(
+        not self.initiator.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by initiator",
+    )
 
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
@@ -158,13 +167,13 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     time.sleep(10)
 
     asserts.assert_true(
-        self.initiator.verify_peer_found_with_technologies(
+        self.initiator.verify_received_data_from_peer_using_technologies(
             SESSION_HANDLE, self.responder.id, TECHNOLOGIES
         ),
         "Initiator did not find responder",
     )
     asserts.assert_true(
-        self.responder.verify_peer_found_with_technologies(
+        self.responder.verify_received_data_from_peer_using_technologies(
             SESSION_HANDLE,
             self.initiator.id,
             TECHNOLOGIES,
@@ -172,14 +181,23 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
         "Responder did not find initiator",
     )
 
-    self.initiator.stop_ranging_and_assert_stopped(SESSION_HANDLE)
-    self.responder.stop_ranging_and_assert_stopped(SESSION_HANDLE)
+    self.initiator.stop_ranging_and_assert_closed(SESSION_HANDLE)
+    self.responder.stop_ranging_and_assert_closed(SESSION_HANDLE)
 
   def test_one_to_one_uwb_ranging_provisioned_sts(self):
     """Verifies uwb ranging with peer device using provisioned sts"""
     SESSION_HANDLE = str(uuid4())
     UWB_SESSION_ID = 5
     TECHNOLOGIES = {RangingTechnology.UWB}
+
+    asserts.skip_if(
+        not self.responder.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by responder",
+    )
+    asserts.skip_if(
+      not self.initiator.is_ranging_technology_supported(RangingTechnology.UWB),
+      f"UWB not supported by initiator",
+  )
 
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
@@ -217,14 +235,21 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
         SESSION_HANDLE, initiator_preference, responder_preference, TECHNOLOGIES
     )
 
-    self.initiator.stop_ranging_and_assert_stopped(SESSION_HANDLE)
-    self.responder.stop_ranging_and_assert_stopped(SESSION_HANDLE)
+    self.initiator.stop_ranging_and_assert_closed(SESSION_HANDLE)
+    self.responder.stop_ranging_and_assert_closed(SESSION_HANDLE)
 
   def test_one_to_one_uwb_ranging_disable_range_data_ntf(self):
     """Verifies device does not receive range data after disabling range data notifications"""
     SESSION_HANDLE = str(uuid4())
     UWB_SESSION_ID = 5
-
+    asserts.skip_if(
+        not self.responder.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by responder",
+    )
+    asserts.skip_if(
+        not self.initiator.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by initiator",
+    )
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
         ranging_params=RawInitiatorRangingParams(
@@ -259,36 +284,44 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
         enable_range_data_notifications=True,
     )
 
-    self.initiator.start_ranging_and_assert_started(
+    self.initiator.start_ranging_and_assert_opened(
         SESSION_HANDLE, initiator_preference
     )
-    self.responder.start_ranging_and_assert_started(
+    self.responder.start_ranging_and_assert_opened(
         SESSION_HANDLE, responder_preference
     )
 
     asserts.assert_false(
-        self.initiator.verify_peer_found_with_any_technology(
+        self.initiator.verify_received_data_from_peer(
             SESSION_HANDLE, self.responder.id
         ),
         "Initiator found responder but initiator has range data"
         " notifications disabled",
     )
     asserts.assert_true(
-        self.responder.verify_peer_found_with_any_technology(
+        self.responder.verify_received_data_from_peer(
             SESSION_HANDLE, self.initiator.id
         ),
         "Responder did not find initiator but responder has range data"
         " notifications enabled",
     )
 
-    self.initiator.stop_ranging_and_assert_stopped(SESSION_HANDLE)
-    self.responder.stop_ranging_and_assert_stopped(SESSION_HANDLE)
-
+    self.initiator.stop_ranging_and_assert_closed(SESSION_HANDLE)
+    self.responder.stop_ranging_and_assert_closed(SESSION_HANDLE)
 
   def test_one_to_one_rtt_ranging(self):
     """Verifies uwb ranging with peer device, devices range for 10 seconds."""
     SESSION_HANDLE = str(uuid4())
     TECHNOLOGIES = {RangingTechnology.WIFI_RTT}
+
+    asserts.skip_if(
+        not self.responder.is_ranging_technology_supported(RangingTechnology.WIFI_RTT),
+        f"Wifi nan rtt not supported by responder",
+    )
+    asserts.skip_if(
+        not self.initiator.is_ranging_technology_supported(RangingTechnology.WIFI_RTT),
+        f"Wifi nan rtt not supported by initiator",
+    )
 
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
@@ -317,16 +350,16 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     )
 
     # Should be able to call _start_mutual_ranging_and_assert_started once we get consistent data.
-    self.initiator.start_ranging_and_assert_started(
+    self.initiator.start_ranging_and_assert_opened(
         SESSION_HANDLE, initiator_preference
     )
-    self.responder.start_ranging_and_assert_started(
+    self.responder.start_ranging_and_assert_opened(
         SESSION_HANDLE, responder_preference
-  )
+    )
 
     time.sleep(10)
     asserts.assert_true(
-        self.initiator.verify_peer_found_with_technologies(
+        self.initiator.verify_received_data_from_peer_using_technologies(
             SESSION_HANDLE, self.responder.id, TECHNOLOGIES
         ),
         "Initiator did not find responder",
@@ -342,8 +375,10 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     #     "Responder did not find initiator",
     # )
 
-    self.initiator.stop_ranging_and_assert_stopped(SESSION_HANDLE)
-    self.responder.stop_ranging_and_assert_stopped(SESSION_HANDLE)
+    self.initiator.stop_ranging_and_assert_closed(SESSION_HANDLE)
+    self.responder.stop_ranging_and_assert_closed(SESSION_HANDLE)
+
+
 if __name__ == "__main__":
   if "--" in sys.argv:
     index = sys.argv.index("--")
