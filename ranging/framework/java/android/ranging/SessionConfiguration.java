@@ -21,8 +21,6 @@ import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.params.DataNotificationConfig;
-import android.ranging.params.SensorFusionParams;
 
 import com.android.ranging.flags.Flags;
 
@@ -31,7 +29,6 @@ import com.android.ranging.flags.Flags;
  *
  * <p>This class allows apps to set various parameters related to a ranging session.
  *
- * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class SessionConfiguration implements Parcelable {
@@ -58,7 +55,7 @@ public final class SessionConfiguration implements Parcelable {
     }
 
     @Override
-    public void writeToParcel(Parcel dest, int flags) {
+    public void writeToParcel(@NonNull Parcel dest, int flags) {
         dest.writeParcelable(mFusionParameters, flags);
         dest.writeParcelable(mDataNotificationConfig, flags);
         dest.writeBoolean(mIsAngleOfArrivalNeeded);
@@ -90,7 +87,7 @@ public final class SessionConfiguration implements Parcelable {
      * @return a non-null {@link SensorFusionParams} instance.
      */
     @NonNull
-    public SensorFusionParams getFusionParameters() {
+    public SensorFusionParams getSensorFusionParameters() {
         return mFusionParameters;
     }
 

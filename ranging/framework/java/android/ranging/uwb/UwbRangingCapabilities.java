@@ -20,10 +20,10 @@ import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.ranging.DataNotificationConfig.NotificationConfigType;
 import android.ranging.RangingCapabilities.TechnologyCapabilities;
 import android.ranging.RangingManager;
-import android.ranging.params.DataNotificationConfig.NotificationConfigType;
-import android.ranging.params.RawRangingDevice.RangingUpdateRate;
+import android.ranging.raw.RawRangingDevice.RangingUpdateRate;
 import android.ranging.uwb.UwbComplexChannel.UwbChannel;
 import android.ranging.uwb.UwbComplexChannel.UwbPreambleCodeIndex;
 import android.ranging.uwb.UwbRangingParams.ConfigId;
@@ -179,7 +179,6 @@ public final class UwbRangingCapabilities implements Parcelable, TechnologyCapab
      *
      * @return a list of supported preamble indexes.
      *
-     * @hide
      */
     @NonNull
     @UwbPreambleCodeIndex

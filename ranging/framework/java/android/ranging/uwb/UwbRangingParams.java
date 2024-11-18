@@ -16,7 +16,7 @@
 
 package android.ranging.uwb;
 
-import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_NORMAL;
 
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
@@ -24,7 +24,7 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.params.RawRangingDevice.RangingUpdateRate;
+import android.ranging.raw.RawRangingDevice.RangingUpdateRate;
 
 import com.android.ranging.flags.Flags;
 
@@ -97,12 +97,10 @@ public final class UwbRangingParams implements Parcelable {
     @IntDef({
             CONFIG_UNICAST_DS_TWR,
             CONFIG_MULTICAST_DS_TWR,
-            CONFIG_UNICAST_DS_TWR_NO_AOA,
             CONFIG_PROVISIONED_UNICAST_DS_TWR,
             CONFIG_PROVISIONED_MULTICAST_DS_TWR,
-            CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA,
             CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
-            CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE,
+            CONFIG_PROVISIONED_UNICAST_DS_TWR_VERY_FAST,
     })
     public @interface ConfigId {
     }
@@ -118,31 +116,21 @@ public final class UwbRangingParams implements Parcelable {
      * Fast (120ms), Normal (200ms), Infrequent (600ms)
      */
     public static final int CONFIG_MULTICAST_DS_TWR = 2;
-    /**
-     * Same as {@code CONFIG_UNICAST_DS_TWR}, except Angle-of-arrival (AoA) data is not reported
-     * .
-     */
-    public static final int CONFIG_UNICAST_DS_TWR_NO_AOA = 3;
     /** Same as {@code CONFIG_UNICAST_DS_TWR}, except P-STS security mode is enabled. */
-    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR = 4;
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR = 3;
     /** Same as {@code CONFIG_MULTICAST_DS_TWR}, except P-STS security mode is enabled. */
-    public static final int CONFIG_PROVISIONED_MULTICAST_DS_TWR = 5;
-    /** Same as {@code CONFIG_UNICAST_DS_TWR_NO_AOA}, except P-STS security mode is enabled. */
-    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA = 6;
+    public static final int CONFIG_PROVISIONED_MULTICAST_DS_TWR = 4;
     /**
      * Same as {@code CONFIG_UNICAST_DS_TWR}, except P-STS individual controlee key mode is
      * enabled.
      */
-    public static final int CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 7;
+    public static final int CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 5;
 
     /**
-     * Same as {@code CONFIG_ID_3}, except result report phase is disabled, fast ranging interval 96
+     * Same as {@code CONFIG_ID_3}, fast ranging interval 96
      * ms.
-     *
-     * @hide
      */
-    //TODO: Update above config ids for API review
-    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE = 8;
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_VERY_FAST = 6;
 
     /** Sub session id not applicable. */
     public static final int SUB_SESSION_UNDEFINED = -1;
@@ -220,7 +208,6 @@ public final class UwbRangingParams implements Parcelable {
      * Gets the configuration ID associated with this session.
      *
      * @return The configuration ID as an integer.
-     *
      */
     @ConfigId
     public int getConfigId() {
@@ -291,7 +278,6 @@ public final class UwbRangingParams implements Parcelable {
      * Returns slot duration of the session.
      *
      * @return the slot duration.
-     *
      */
     @SlotDuration
     public int getSlotDuration() {

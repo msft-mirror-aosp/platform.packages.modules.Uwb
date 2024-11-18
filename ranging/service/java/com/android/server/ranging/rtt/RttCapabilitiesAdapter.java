@@ -27,7 +27,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
-import android.ranging.rtt.RttRangingCapabilities;
+import android.ranging.wifi.rtt.RttRangingCapabilities;
 
 import androidx.annotation.Nullable;
 

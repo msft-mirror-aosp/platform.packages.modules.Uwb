@@ -28,7 +28,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
-import android.ranging.cs.CsRangingCapabilities;
+import android.ranging.ble.cs.CsRangingCapabilities;
 
 import androidx.annotation.Nullable;
 
