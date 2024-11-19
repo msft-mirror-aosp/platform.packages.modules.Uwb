@@ -164,7 +164,7 @@ public final class UwbComplexChannel implements Parcelable {
      *
      * @return The preamble index, which is one of the predefined UWB preamble indices:
      *
-     * @See <a href="https://groups.firaconsortium.org/wg/members/document/1949> FiRa UCI Spec.</a>
+     * See <a href="https://groups.firaconsortium.org/wg/members/document/1949> FiRa UCI Spec.</a>
      */
 
     @UwbPreambleCodeIndex
