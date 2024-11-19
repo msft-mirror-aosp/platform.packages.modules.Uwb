@@ -4,6 +4,7 @@ from enum import IntEnum
 from typing import List, Optional
 from lib.rtt import RttRangingParams
 from lib.uwb import UwbRangingParams
+from lib.rssi import BleRssiRangingParams
 
 
 class DeviceRole(IntEnum):
@@ -22,6 +23,7 @@ class DeviceParams:
   uwb_params: Optional[UwbRangingParams] = None
   cs_params = None
   rtt_params: Optional[RttRangingParams] = None
+  rssi_params: Optional[BleRssiRangingParams] = None
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
