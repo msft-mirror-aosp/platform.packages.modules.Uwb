@@ -69,6 +69,7 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
       if device.is_ranging_technology_supported(RangingTechnology.BLE_RSSI) or \
          device.is_ranging_technology_supported(RangingTechnology.BLE_CS):
         utils.set_bt_state_and_verify(device.ad, state=True)
+        device.ad.bluetooth.reset()
       utils.set_snippet_foreground_state(device.ad, isForeground=True)
 
   def teardown_test(self):
@@ -115,18 +116,45 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     )
 
   # TODO: Use this in BLE CS and OOB tests.
-  def _create_ble_gatt_connection(
-      self,
-  ):
-    """Create BT GATT connection between initiator and responder.
+  def _ble_connect(self):
+    """Create BLE GATT connection between initiator and responder.
 
     """
     # Start and advertise regular server
-    self.responder.bluetooth.createAndAdvertiseServer(SERVICE_UUID)
+    self.responder.ad.bluetooth.createAndAdvertiseServer(SERVICE_UUID)
     # Connect to the advertisement
-    asserts.assert_true(self.initiator.bluetooth.connectGatt(SERVICE_UUID), "Server not discovered")
+    self.responder.bt_addr = self.initiator.ad.bluetooth.connectGatt(SERVICE_UUID)
+    asserts.assert_true(self.responder.bt_addr, "Server not connected")
     # Check the target UUID is present
-    asserts.assert_true(self.initiator.bluetooth.containsService(SERVICE_UUID), "Service not found")
+    asserts.assert_true(self.initiator.ad.bluetooth.containsService(SERVICE_UUID), "Service not found")
+    connected_devices = self.responder.ad.bluetooth.getConnectedDevices()
+    asserts.assert_true(connected_devices, "No clients found connected to server")
+    self.initiator.bt_addr = connected_devices[0]
+
+  def _ble_disconnect(self):
+    asserts.assert_true(
+        self.initiator.ad.bluetooth.connectGatt(SERVICE_UUID), "Server not disconnected")
+
+  def _le_bond(self):
+    """Create BLE GATT connection and bonding between initiator and responder.
+
+    """
+    # Start and advertise regular server
+    self.responder.ad.bluetooth.createAndAdvertiseServer(SERVICE_UUID)
+    oob_data = self.responder.ad.bluetooth.generateServerLocalOobData()
+    asserts.assert_true(oob_data, "OOB data not generated")
+    # Connect to the advertisement using OOB data generated on responder.
+    self.responder.bt_addr = self.initiator.ad.bluetooth.createBondOob(SERVICE_UUID, oob_data)
+    # Check the target UUID is present
+    asserts.assert_true(self.initiator.ad.bluetooth.containsService(SERVICE_UUID), "Service not found")
+    asserts.assert_true(self.responder.bt_addr, "Server not bonded")
+    connected_devices = self.responder.ad.bluetooth.getConnectedDevices()
+    asserts.assert_true(connected_devices, "No clients found connected to server")
+    self.initiator.bt_addr = connected_devices[0]
+
+  def _le_unbond(self):
+    asserts.assert_true(
+        self.initiator.ad.bluetooth.removeBond(SERVICE_UUID), "Server not unbonded")
 
   ### Test Cases ###
 
