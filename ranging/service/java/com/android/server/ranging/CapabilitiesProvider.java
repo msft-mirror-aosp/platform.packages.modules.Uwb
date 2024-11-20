@@ -18,6 +18,7 @@ package com.android.server.ranging;
 
 import android.annotation.IntDef;
 import android.annotation.Nullable;
+import android.os.Binder;
 import android.os.RemoteCallbackList;
 import android.os.RemoteException;
 import android.ranging.IRangingCapabilitiesCallback;
@@ -29,6 +30,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.android.server.ranging.blerssi.BleRssiCapabilitiesAdapter;
 import com.android.server.ranging.cs.CsCapabilitiesAdapter;
 import com.android.server.ranging.rtt.RttCapabilitiesAdapter;
 import com.android.server.ranging.uwb.UwbCapabilitiesAdapter;
@@ -111,8 +113,9 @@ public class CapabilitiesProvider {
                 new CsCapabilitiesAdapter());
         mCapabilityAdapters.put(
                 RangingManager.WIFI_NAN_RTT,
-                new RttCapabilitiesAdapter(mRangingInjector.getContext())
-        );
+                new RttCapabilitiesAdapter(mRangingInjector.getContext()));
+        mCapabilityAdapters.put(RangingManager.BLE_RSSI,
+                new BleRssiCapabilitiesAdapter(mRangingInjector.getContext()));
 
         for (@RangingManager.RangingTechnology int technology : mCapabilityAdapters.keySet()) {
             mCapabilityAdapters
@@ -142,12 +145,15 @@ public class CapabilitiesProvider {
         RangingCapabilities.Builder builder = new RangingCapabilities.Builder();
         for (@RangingManager.RangingTechnology int technology : mCapabilityAdapters.keySet()) {
             CapabilitiesAdapter adapter = mCapabilityAdapters.get(technology);
+            // Any calls to the corresponding technology stacks must be
+            // done with a clear calling identity.
+            long token = Binder.clearCallingIdentity();
             TechnologyCapabilities capabilities = adapter.getCapabilities();
-
             builder.addAvailability(technology, adapter.getAvailability());
             if (capabilities != null) {
                 builder.addCapabilities(capabilities);
             }
+            Binder.restoreCallingIdentity(token);
         }
         return builder;
     }

@@ -20,6 +20,7 @@ import android.annotation.NonNull;
 import android.content.Context;
 import android.ranging.RangingPreference;
 
+import com.android.server.ranging.blerssi.BleRssiAdapter;
 import com.android.server.ranging.cs.CsAdapter;
 import com.android.server.ranging.rtt.RttAdapter;
 import com.android.server.ranging.uwb.UwbAdapter;
@@ -67,6 +68,8 @@ public class RangingInjector {
                 return new CsAdapter();
             case RTT:
                 return new RttAdapter(mContext, executor, role);
+            case RSSI:
+                return new BleRssiAdapter(mContext);
             default:
                 throw new IllegalArgumentException("Adapter does not exist for technology " + this);
         }

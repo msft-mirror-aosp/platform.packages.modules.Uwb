@@ -12,7 +12,7 @@ CALLBACK_WAIT_TIME_SEC = 5
 
 class RangingTechnology(IntEnum):
   UWB = 0
-  BT_CS = 1
+  BLE_CS = 1
   WIFI_RTT = 2
   BLE_RSSI = 3
 
@@ -39,6 +39,7 @@ class RangingDecorator:
     self._event_handlers = {}
     self.log = self.ad.log
     self.uwb_address = None
+    self.bt_addr = None
 
   def start_ranging_and_assert_opened(
       self, session_handle: str, preference: RangingPreference
