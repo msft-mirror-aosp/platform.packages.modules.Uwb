@@ -1081,7 +1081,6 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                     break;
 
                 case TASK_DISABLE:
-                    mSessionManager.deinitAllSession();
                     handleDisable();
                     break;
 
@@ -1094,7 +1093,6 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                     break;
 
                 case TASK_RESTART:
-                    mSessionManager.deinitAllSession();
                     handleDisable();
                     handleEnable();
                     break;
@@ -1224,7 +1222,7 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                 synchronized (mUwbWakeLock) {
                     mUwbWakeLock.acquire();
                 }
-
+                mSessionManager.deInitAllSession();
                 if (!mNativeUwbManager.doDeinitialize()) {
                     Log.w(TAG, "Error disabling UWB");
                     mUwbMetrics.logUwbStateChangeEvent(false, false, false);
