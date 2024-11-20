@@ -39,9 +39,11 @@ import android.ranging.RangingManager;
 import android.ranging.RangingManager.RangingCapabilitiesCallback;
 import android.ranging.RangingPreference;
 import android.ranging.RangingSession;
+import android.ranging.SessionConfiguration;
 import android.ranging.params.RawInitiatorRangingParams;
 import android.ranging.params.RawRangingDevice;
 import android.ranging.params.RawResponderRangingParams;
+import android.ranging.params.SensorFusionParams;
 import android.ranging.rtt.RttRangingParams;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
@@ -99,6 +101,14 @@ public class RangingManagerTest {
         assertThat(rangingSession).isNotNull();
 
         RangingPreference preference = new RangingPreference.Builder(DEVICE_ROLE_INITIATOR)
+                .setSessionConfiguration(new SessionConfiguration.Builder()
+                        .setRangingMeasurementsLimit(1000)
+                        .setAngleOfArrivalNeeded(true)
+                        .setSensorFusionParameters(
+                                new SensorFusionParams.Builder()
+                                        .setSensorFusionEnabled(false)
+                                        .build())
+                        .build())
                 .setRangingParameters(new RawInitiatorRangingParams.Builder()
                         .addRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
