@@ -1015,7 +1015,7 @@ public class UwbSessionManager implements INativeUwbManager.SessionNotification,
         }
     }
 
-    public synchronized void deinitAllSession() {
+    public synchronized void deInitAllSession() {
         Log.d(TAG, "deinitAllSession()");
         for (UwbSession uwbSession : mSessionTable.values()) {
             handleOnDeInit(uwbSession);

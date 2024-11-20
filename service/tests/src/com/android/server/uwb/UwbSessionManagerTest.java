@@ -5411,7 +5411,7 @@ public class UwbSessionManagerTest {
     }
 
     @Test
-    public void deinitAllSession() {
+    public void deInitAllSession() {
         UwbSession mockUwbSession1 = mock(UwbSession.class);
         SessionHandle mockSessionHandle1 = mock(SessionHandle.class);
         when(mockUwbSession1.getSessionId()).thenReturn(TEST_SESSION_ID);
@@ -5429,7 +5429,7 @@ public class UwbSessionManagerTest {
         when(mockUwbSession2.getSessionHandle()).thenReturn(mockSessionHandle2);
         mUwbSessionManager.mSessionTable.put(mockSessionHandle2, mockUwbSession2);
 
-        mUwbSessionManager.deinitAllSession();
+        mUwbSessionManager.deInitAllSession();
 
         verify(mUwbSessionNotificationManager, times(2))
                 .onRangingClosedWithApiReasonCode(any(), eq(RangingChangeReason.SYSTEM_POLICY));
@@ -5470,7 +5470,7 @@ public class UwbSessionManagerTest {
         when(mNativeUwbManager.deInitSession(eq(TEST_SESSION_ID), anyString()))
                 .thenReturn((byte) UwbUciConstants.STATUS_CODE_OK);
 
-        mUwbSessionManager.deinitAllSession();
+        mUwbSessionManager.deInitAllSession();
         verify(mUwbSessionNotificationManager).onRangingClosedWithApiReasonCode(
                 eq(uwbSession), eq(RangingChangeReason.SYSTEM_POLICY));
         verify(mUwbMetrics).logRangingCloseEvent(
