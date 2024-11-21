@@ -23,6 +23,7 @@ import android.ranging.params.SensorFusionParams;
 
 import androidx.annotation.NonNull;
 
+import com.android.server.ranging.blerssi.BleRssiConfig;
 import com.android.server.ranging.rtt.RttConfig;
 import com.android.server.ranging.uwb.UwbConfig;
 
@@ -57,6 +58,7 @@ public class RangingPeerConfig {
         insertUwbConfigIfSet(technologyConfigs);
         insertRttConfigIfSet(technologyConfigs);
         insertCsConfigIfSet(technologyConfigs);
+        insertBleRssiConfigIfSet(technologyConfigs);
         mTechnologyConfigs = technologyConfigs.build();
     }
 
@@ -104,6 +106,21 @@ public class RangingPeerConfig {
                 new RttConfig(
                         mDeviceRole,
                         mPeerDevice.getRttRangingParams(),
+                        mDataNotificationConfig,
+                        mPeerDevice.getRangingDevice())
+        );
+    }
+
+    private void insertBleRssiConfigIfSet(
+            @NonNull ImmutableMap.Builder<RangingTechnology, TechnologyConfig> configs
+    ) {
+        if (mPeerDevice.getBleRssiRangingParams() == null) return;
+
+        configs.put(
+                RangingTechnology.RSSI,
+                new BleRssiConfig(
+                        mDeviceRole,
+                        mPeerDevice.getBleRssiRangingParams(),
                         mDataNotificationConfig,
                         mPeerDevice.getRangingDevice())
         );
