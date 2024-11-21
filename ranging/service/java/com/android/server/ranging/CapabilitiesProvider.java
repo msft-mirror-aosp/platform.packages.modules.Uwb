@@ -110,7 +110,7 @@ public class CapabilitiesProvider {
                 new UwbCapabilitiesAdapter(mRangingInjector.getContext()));
         mCapabilityAdapters.put(
                 RangingManager.BLE_CS,
-                new CsCapabilitiesAdapter(mRangingInjector.getContext()));
+                new CsCapabilitiesAdapter());
         mCapabilityAdapters.put(
                 RangingManager.WIFI_NAN_RTT,
                 new RttCapabilitiesAdapter(mRangingInjector.getContext()));
