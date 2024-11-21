@@ -42,8 +42,6 @@ public class CsCapabilitiesAdapter extends CapabilitiesAdapter {
 
     private final Context mContext;
 
-    private Set<Integer> mSupportedSecurityLevels;
-
     /** @return true if CS is supported in the provided context, false otherwise */
     public static boolean isSupported(Context context) {
         return context.getPackageManager()
@@ -67,7 +65,11 @@ public class CsCapabilitiesAdapter extends CapabilitiesAdapter {
     @Override
     public @Nullable CsRangingCapabilities getCapabilities() {
         if (getAvailability() == ENABLED) {
-            List<Integer> securityLevels = new ArrayList<Integer>(mSupportedSecurityLevels);
+            List<Integer> securityLevels = new ArrayList<>(
+                mContext.getSystemService(BluetoothManager.class)
+                    .getAdapter()
+                    .getDistanceMeasurementManager()
+                    .getChannelSoundingSupportedSecurityLevels());
             return new CsRangingCapabilities.Builder()
                 .setSupportedSecurityLevels(securityLevels)
                 .build();
@@ -78,18 +80,11 @@ public class CsCapabilitiesAdapter extends CapabilitiesAdapter {
 
     public CsCapabilitiesAdapter(Context context) {
         mContext = context;
-
-        if (context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-
+        if (isSupported(context)) {
             BluetoothStateChangeReceiver receiver = new BluetoothStateChangeReceiver();
             IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
             mContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
-
-            mSupportedSecurityLevels = mContext.getSystemService(BluetoothManager.class)
-                    .getAdapter().getDistanceMeasurementManager()
-                    .getChannelSoundingSupportedSecurityLevels();
         }
-
     }
 
     private class BluetoothStateChangeReceiver extends BroadcastReceiver {
