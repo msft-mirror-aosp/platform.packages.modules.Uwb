@@ -206,6 +206,11 @@ public final class CsRangingParams implements Parcelable {
         /**
          * Constructs a new {@link Builder} for creating a channel sounding ranging session.
          *
+         * <p>Valid Bluetooth hardware addresses must be upper case, in big endian byte order, and
+         * in a format such as "00:11:22:33:AA:BB". The helper
+         * {@link android.bluetooth.BluetoothAdapter#checkBluetoothAddress} is available to validate
+         * a Bluetooth address.
+         *
          * @param peerBluetoothAddress The address of the peer device must be non-null.
          * @throws IllegalArgumentException if {@code peerBluetoothAddress} is null.
          */
@@ -219,10 +224,6 @@ public final class CsRangingParams implements Parcelable {
          * <p>Defaults to {@link RangingUpdateRate#UPDATE_RATE_NORMAL}
          *
          * @param updateRate the reporting frequency.
-         *                   <p>Possible values:
-         *                   {@link RangingUpdateRate#UPDATE_RATE_NORMAL}
-         *                   {@link RangingUpdateRate#UPDATE_RATE_INFREQUENT}
-         *                   {@link RangingUpdateRate#UPDATE_RATE_FAST}
          * @return this {@link Builder} instance.
          */
         @NonNull
@@ -236,10 +237,6 @@ public final class CsRangingParams implements Parcelable {
          * <p>Defaults to {@link #SIGHT_TYPE_UNKNOWN}
          *
          * @param sightType the sight type.
-         *                  <p>Possible values:
-         *                  {@link #SIGHT_TYPE_UNKNOWN}
-         *                  {@link #SIGHT_TYPE_LINE_OF_SIGHT}
-         *                  {@link #SIGHT_TYPE_NON_LINE_OF_SIGHT}
          * @return this {@link Builder} instance.
          */
         @NonNull
@@ -253,10 +250,6 @@ public final class CsRangingParams implements Parcelable {
          * <p>Defaults to {@link #LOCATION_TYPE_UNKNOWN}
          *
          * @param locationType the location type.
-         *                     <p>Possible values:
-         *                     {@link #LOCATION_TYPE_UNKNOWN}
-         *                     {@link #LOCATION_TYPE_INDOOR}
-         *                     {@link #LOCATION_TYPE_OUTDOOR}
          * @return this {@link Builder} instance.
          */
         @NonNull
@@ -270,9 +263,6 @@ public final class CsRangingParams implements Parcelable {
          * <p>Defaults to {@link CsRangingCapabilities#CS_SECURITY_LEVEL_ONE}
          *
          * @param securityLevel the security level.
-         *                      <p>Possible values:
-         *                      {@link CsRangingCapabilities#CS_SECURITY_LEVEL_ONE}
-         *                      {@link CsRangingCapabilities#CS_SECURITY_LEVEL_FOUR}
          * @return this {@link Builder} instance.
          */
         @NonNull

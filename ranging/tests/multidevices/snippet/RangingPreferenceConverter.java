@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package multidevices.snippet.ranging;
+package com.google.snippet.ranging;
 
 import static android.ranging.RangingPreference.DEVICE_ROLE_INITIATOR;
 import static android.ranging.uwb.UwbComplexChannel.UWB_CHANNEL_9;
@@ -22,6 +22,7 @@ import static android.ranging.uwb.UwbComplexChannel.UWB_PREAMBLE_CODE_INDEX_11;
 
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
+import android.ranging.blerssi.BleRssiRangingParams;
 import android.ranging.params.DataNotificationConfig;
 import android.ranging.params.RangingParams;
 import android.ranging.params.RawInitiatorRangingParams;
@@ -119,6 +120,10 @@ public class RangingPreferenceConverter implements SnippetObjectConverter {
         if (!j.isNull("rtt_params")) {
             builder.setRttRangingParams(getRttParams(j.getJSONObject("rtt_params")));
         }
+        if (!j.isNull("rssi_params")) {
+            builder.setBleRssiRangingParams(getBleRssiRangingParams(
+                    j.getJSONObject("rssi_params")));
+        }
         return builder.build();
     }
 
@@ -152,6 +157,12 @@ public class RangingPreferenceConverter implements SnippetObjectConverter {
                 .build();
     }
 
+    private BleRssiRangingParams getBleRssiRangingParams(JSONObject j) throws JSONException {
+        return new BleRssiRangingParams.Builder(
+                toBytes(j.getJSONArray("peer_address")))
+                .setRangingUpdateRate(j.getInt("ranging_update_rate"))
+                .build();
+    }
 
     private SensorFusionParams getSensorFusionParams(JSONObject j) throws JSONException {
         return new SensorFusionParams.Builder()
