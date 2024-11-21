@@ -16,48 +16,10 @@
 
 package com.android.server.ranging.cs;
 
-import android.ranging.RangingDevice;
-import android.ranging.RangingPreference;
-import android.ranging.cs.CsRangingParams;
-import android.ranging.params.DataNotificationConfig;
-
 import com.android.server.ranging.RangingPeerConfig.TechnologyConfig;
 
 public class CsConfig implements TechnologyConfig {
-    private static final String TAG = CsConfig.class.getSimpleName();
-
-    private final DataNotificationConfig mDataNotificationConfig;
-    private final CsRangingParams mRangingParams;
-
-    private final RangingDevice mPeerDevice;
-
-    @RangingPreference.DeviceRole
-    private final int mDeviceRole;
-
-    public CsConfig(int deviceRole,
-            CsRangingParams csRangingParams,
-            DataNotificationConfig dataNotificationConfig,
-            RangingDevice peerDevice) {
-        mDeviceRole = deviceRole;
-        mRangingParams = csRangingParams;
-        mDataNotificationConfig = dataNotificationConfig;
-        mPeerDevice = peerDevice;
+    public CsConfig() {
+        throw new UnsupportedOperationException("Not implemented!");
     }
-
-    public DataNotificationConfig getDataNotificationConfig() {
-        return mDataNotificationConfig;
-    }
-
-    public CsRangingParams getRangingParams() {
-        return mRangingParams;
-    }
-
-    public int getDeviceRole() {
-        return mDeviceRole;
-    }
-
-    public RangingDevice getPeerDevice() {
-        return mPeerDevice;
-    }
-
 }

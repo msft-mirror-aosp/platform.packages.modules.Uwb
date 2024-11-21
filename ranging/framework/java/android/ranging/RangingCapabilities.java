@@ -23,7 +23,6 @@ import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.ranging.RangingManager.RangingTechnology;
-import android.ranging.cs.CsRangingCapabilities;
 import android.ranging.rtt.RttRangingCapabilities;
 import android.ranging.uwb.UwbRangingCapabilities;
 
@@ -62,9 +61,6 @@ public final class RangingCapabilities implements Parcelable {
 
     @Nullable
     private final RttRangingCapabilities mRttRangingCapabilities;
-
-    @Nullable
-    private final CsRangingCapabilities mCsCapabilities;
 
     /**
      * @hide
@@ -112,8 +108,6 @@ public final class RangingCapabilities implements Parcelable {
                 (UwbRangingCapabilities) builder.mCapabilities.get(RangingManager.UWB);
         mRttRangingCapabilities = (RttRangingCapabilities) builder.mCapabilities.get(
                 RangingManager.WIFI_NAN_RTT);
-        mCsCapabilities =
-                (CsRangingCapabilities) builder.mCapabilities.get(RangingManager.BLE_CS);
         mAvailabilities = builder.mAvailabilities;
     }
 
@@ -123,9 +117,6 @@ public final class RangingCapabilities implements Parcelable {
                 UwbRangingCapabilities.class);
         mRttRangingCapabilities = in.readParcelable(RttRangingCapabilities.class.getClassLoader(),
                 RttRangingCapabilities.class);
-        mCsCapabilities = in.readParcelable(
-                CsRangingCapabilities.class.getClassLoader(),
-                CsRangingCapabilities.class);
         int size = in.readInt();
         mAvailabilities = new HashMap<>(size);
         for (int i = 0; i < size; i++) {
@@ -186,17 +177,6 @@ public final class RangingCapabilities implements Parcelable {
     }
 
     /**
-     * Gets the CS ranging capabilities.
-     *
-     * @return a {@link CsRangingCapabilities} object or {@code null} if not available.
-     * @hide
-     */
-    @Nullable
-    public CsRangingCapabilities getCsCapabilities() {
-        return mCsCapabilities;
-    }
-
-    /**
      * @hide
      */
     @Override
@@ -208,7 +188,6 @@ public final class RangingCapabilities implements Parcelable {
     public void writeToParcel(@androidx.annotation.NonNull Parcel dest, int flags) {
         dest.writeParcelable(mUwbCapabilities, flags);
         dest.writeParcelable(mRttRangingCapabilities, flags);
-        dest.writeParcelable(mCsCapabilities, flags);
         dest.writeInt(mAvailabilities.size()); // Write map size
         for (Map.Entry<Integer, Integer> entry : mAvailabilities.entrySet()) {
             dest.writeInt(entry.getKey()); // Write the key
