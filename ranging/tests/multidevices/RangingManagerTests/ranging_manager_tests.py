@@ -15,6 +15,7 @@ import sys
 import time
 from typing import Set
 from lib import ranging_base_test
+from lib import rssi
 from lib import rtt
 from lib import utils
 from lib import uwb
@@ -30,6 +31,7 @@ _TEST_CASES = (
     "test_one_to_one_uwb_ranging_provisioned_sts",
     "test_one_to_one_uwb_ranging_disable_range_data_ntf",
     "test_one_to_one_rtt_ranging",
+    "test_one_to_one_ble_rssi_ranging",
 )
 
 SERVICE_UUID = "0000fffb-0000-1000-8000-00805f9b34fc"
@@ -425,6 +427,82 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
 
     self.initiator.stop_ranging_and_assert_closed(SESSION_HANDLE)
     self.responder.stop_ranging_and_assert_closed(SESSION_HANDLE)
+
+  def test_one_to_one_ble_rssi_ranging(self):
+    """Verifies cs ranging with peer device, devices range for 10 seconds."""
+    SESSION_HANDLE = str(uuid4())
+    TECHNOLOGIES = {RangingTechnology.BLE_RSSI}
+
+    asserts.skip_if(
+        not self.responder.is_ranging_technology_supported(RangingTechnology.BLE_RSSI),
+        f"BLE RSSI not supported by responder",
+    )
+    asserts.skip_if(
+        not self.initiator.is_ranging_technology_supported(RangingTechnology.BLE_RSSI),
+        f"BLE RSSI not supported by initiator",
+    )
+
+    self._ble_connect()
+    responder_addr = [int(part, 16) for part in self.responder.bt_addr.split(":")]
+    initiator_addr = [int(part, 16) for part in self.initiator.bt_addr.split(":")]
+
+    initiator_preference = RangingPreference(
+        device_role=DeviceRole.INITIATOR,
+        ranging_params=RawInitiatorRangingParams(
+            peer_params=[
+                DeviceParams(
+                    peer_id=self.responder.id,
+                    rssi_params=rssi.BleRssiRangingParams(
+                      peer_address=responder_addr,
+                    ),
+                )
+            ],
+        ),
+    )
+
+    responder_preference = RangingPreference(
+        device_role=DeviceRole.RESPONDER,
+        ranging_params=RawResponderRangingParams(
+            peer_params=DeviceParams(
+                peer_id=self.initiator.id,
+                rssi_params=rssi.BleRssiRangingParams(
+                    peer_address=initiator_addr,
+                ),
+            ),
+        ),
+    )
+
+    try:
+      self._start_mutual_ranging_and_assert_started(
+          SESSION_HANDLE,
+          initiator_preference,
+          responder_preference,
+          TECHNOLOGIES,
+      )
+
+      time.sleep(10)
+
+      asserts.assert_true(
+          self.initiator.verify_received_data_from_peer_using_technologies(
+              SESSION_HANDLE,
+              self.responder.id,
+              TECHNOLOGIES
+          ),
+          "Initiator did not find responder",
+      )
+      asserts.assert_true(
+          self.responder.verify_received_data_from_peer_using_technologies(
+              SESSION_HANDLE,
+              self.initiator.id,
+              TECHNOLOGIES,
+          ),
+          "Responder did not find initiator",
+      )
+    finally:
+      self.initiator.stop_ranging_and_assert_closed(SESSION_HANDLE)
+      self.responder.stop_ranging_and_assert_closed(SESSION_HANDLE)
+
+      self._ble_disconnect()
 
 
 if __name__ == "__main__":

@@ -18,6 +18,7 @@ package com.android.server.ranging;
 
 import android.annotation.IntDef;
 import android.annotation.Nullable;
+import android.os.Binder;
 import android.os.RemoteCallbackList;
 import android.os.RemoteException;
 import android.ranging.IRangingCapabilitiesCallback;
@@ -25,11 +26,11 @@ import android.ranging.RangingCapabilities;
 import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
 import android.ranging.RangingCapabilities.TechnologyCapabilities;
 import android.ranging.RangingManager;
-import android.os.Binder;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.android.server.ranging.blerssi.BleRssiCapabilitiesAdapter;
 import com.android.server.ranging.cs.CsCapabilitiesAdapter;
 import com.android.server.ranging.rtt.RttCapabilitiesAdapter;
 import com.android.server.ranging.uwb.UwbCapabilitiesAdapter;
@@ -112,8 +113,9 @@ public class CapabilitiesProvider {
                 new CsCapabilitiesAdapter());
         mCapabilityAdapters.put(
                 RangingManager.WIFI_NAN_RTT,
-                new RttCapabilitiesAdapter(mRangingInjector.getContext())
-        );
+                new RttCapabilitiesAdapter(mRangingInjector.getContext()));
+        mCapabilityAdapters.put(RangingManager.BLE_RSSI,
+                new BleRssiCapabilitiesAdapter(mRangingInjector.getContext()));
 
         for (@RangingManager.RangingTechnology int technology : mCapabilityAdapters.keySet()) {
             mCapabilityAdapters
