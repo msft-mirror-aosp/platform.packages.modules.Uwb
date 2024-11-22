@@ -20,6 +20,7 @@ import static android.ranging.RangingCapabilities.DISABLED_USER;
 import static android.ranging.RangingCapabilities.ENABLED;
 import static android.ranging.RangingCapabilities.NOT_SUPPORTED;
 
+import android.annotation.NonNull;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
@@ -32,8 +33,9 @@ import android.ranging.cs.CsRangingCapabilities;
 
 import androidx.annotation.Nullable;
 
-import com.android.server.ranging.CapabilitiesProvider.AvailabilityCallback;
+import com.android.server.ranging.CapabilitiesProvider;
 import com.android.server.ranging.CapabilitiesProvider.CapabilitiesAdapter;
+import com.android.server.ranging.CapabilitiesProvider.TechnologyAvailabilityListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -77,7 +79,10 @@ public class CsCapabilitiesAdapter extends CapabilitiesAdapter {
         }
     }
 
-    public CsCapabilitiesAdapter(Context context) {
+    public CsCapabilitiesAdapter(
+            @NonNull Context context, @NonNull TechnologyAvailabilityListener listener
+    ) {
+        super(listener);
         mContext = context;
 
         if (isSupported(mContext)) {
@@ -94,11 +99,11 @@ public class CsCapabilitiesAdapter extends CapabilitiesAdapter {
     private class BluetoothStateChangeReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            AvailabilityCallback callback = getAvailabilityCallback();
-            if (callback != null) {
-                callback.onAvailabilityChange(
+            TechnologyAvailabilityListener listener = getAvailabilityListener();
+            if (listener != null) {
+                listener.onAvailabilityChange(
                         getAvailability(),
-                        AvailabilityCallback.AvailabilityChangedReason.SYSTEM_POLICY);
+                        CapabilitiesProvider.AvailabilityChangedReason.SYSTEM_POLICY);
             }
         }
     }
