@@ -65,7 +65,7 @@ public class RangingInjector {
             case UWB:
                 return new UwbAdapter(mContext, executor, role);
             case CS:
-                return new CsAdapter();
+                return new CsAdapter(mContext);
             case RTT:
                 return new RttAdapter(mContext, executor, role);
             case RSSI:
