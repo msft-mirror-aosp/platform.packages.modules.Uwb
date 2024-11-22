@@ -241,4 +241,18 @@ public final class RangingCapabilities implements Parcelable {
             return new RangingCapabilities(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "RangingCapabilities{ "
+                + "mUwbCapabilities="
+                + mUwbCapabilities
+                + ", mRttRangingCapabilities="
+                + mRttRangingCapabilities
+                + ", mCsCapabilities="
+                + mCsCapabilities
+                + ", mAvailabilities="
+                + mAvailabilities
+                + " }";
+    }
 }

@@ -52,6 +52,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -318,5 +320,14 @@ public class RangingServiceManager {
                         preference.getSessionConfiguration().getDataNotificationConfig())
                 .setAoaNeeded(preference.getSessionConfiguration().isAngleOfArrivalNeeded())
                 .build();
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("---- Dump of RangingServiceManager ----");
+        for (RangingSession session : mSessions.values()) {
+            session.dump(fd, pw, args);
+        }
+        pw.println("---- Dump of RangingServiceManager ----");
+        mRangingInjector.getCapabilitiesProvider().dump(fd, pw, args);
     }
 }

@@ -153,4 +153,12 @@ public final class CsRangingCapabilities implements Parcelable, TechnologyCapabi
             return new CsRangingCapabilities(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "CsRangingCapabilities{ "
+                + "mSupportedSecurityLevels="
+                + mSupportedSecurityLevels
+                + " }";
+    }
 }

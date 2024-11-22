@@ -102,4 +102,12 @@ public abstract class CsCapabilities {
         /** Returns a builder for {@link CsCapabilities}. */
         public abstract CsCapabilities build();
     }
+
+    @Override
+    public String toString() {
+        return "CsCapabilities{ "
+                + "supportedSecurityLevels="
+                + getSupportedSecurityLevels()
+                + " }";
+    }
 }

@@ -176,4 +176,20 @@ public class RangingPeerConfig {
             return this;
         }
     }
+
+    @Override
+    public String toString() {
+        return "RangingPeerConfig{ "
+                + "mPeerDevice="
+                + mPeerDevice
+                + ", mDeviceRole="
+                + mDeviceRole
+                + ", mFusionConfig="
+                + mFusionConfig
+                + ", mIsAoaNeeded="
+                + mIsAoaNeeded
+                + ", mTechnologyConfigs="
+                + mTechnologyConfigs
+                + " }";
+    }
 }

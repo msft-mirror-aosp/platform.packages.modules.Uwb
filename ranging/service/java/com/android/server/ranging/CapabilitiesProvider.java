@@ -35,8 +35,11 @@ import com.android.server.ranging.cs.CsCapabilitiesAdapter;
 import com.android.server.ranging.rtt.RttCapabilitiesAdapter;
 import com.android.server.ranging.uwb.UwbCapabilitiesAdapter;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 
 public class CapabilitiesProvider {
 
@@ -187,5 +190,16 @@ public class CapabilitiesProvider {
                 mCallbacks.finishBroadcast();
             }
         }
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("---- Dump of CapabilitiesProvider ----");
+        for (Entry<Integer, CapabilitiesAdapter> adapter : mCapabilityAdapters.entrySet()) {
+            pw.println("-- Dump of CapabilitiesAdapter for technology " + adapter.getKey() + " --");
+            pw.println("Availability: " + adapter.getValue().getAvailability());
+            pw.println("Capabilities: " + adapter.getValue().getCapabilities());
+            pw.println("-- Dump of CapabilitiesAdapter for technology " + adapter.getKey() + " --");
+        }
+        pw.println("---- Dump of CapabilitiesProvider ----");
     }
 }
