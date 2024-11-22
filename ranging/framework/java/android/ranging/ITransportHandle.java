@@ -67,5 +67,4 @@ public interface ITransportHandle {
          */
         void onClose();
     }
-
 }

@@ -59,4 +59,18 @@ public class BleRssiConfig implements RangingPeerConfig.TechnologyConfig {
     public RangingDevice getPeerDevice() {
         return mPeerDevice;
     }
+
+    @Override
+    public String toString() {
+        return "BleRssiConfig{ "
+                + "mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mRangingParams="
+                + mRangingParams
+                + ", mDeviceRole="
+                + mDeviceRole
+                + ", mPeerDevice="
+                + mPeerDevice
+                + " }";
+    }
 }

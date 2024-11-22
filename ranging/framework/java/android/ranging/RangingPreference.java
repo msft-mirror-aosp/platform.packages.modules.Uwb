@@ -294,6 +294,23 @@ public final class RangingPreference implements Parcelable {
             }
             return new RangingPreference(this);
         }
+    }
 
+    @Override
+    public String toString() {
+        return "RangingPreference{ "
+                + "mDeviceRole="
+                + mDeviceRole
+                + ", mRangingParameters="
+                + mRangingParameters
+                + ", mFusionParameters="
+                + mFusionParameters
+                + ", mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mIsAngleOfArrivalNeeded="
+                + mIsAngleOfArrivalNeeded
+                + ", mSessionConfig="
+                + mSessionConfig
+                + " }";
     }
 }

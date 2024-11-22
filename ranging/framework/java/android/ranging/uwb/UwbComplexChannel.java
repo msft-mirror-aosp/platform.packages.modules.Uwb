@@ -231,4 +231,13 @@ public final class UwbComplexChannel implements Parcelable {
             return new UwbComplexChannel(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "UwbComplexChannel{ mChannel="
+                + mChannel
+                + ", mPreambleIndex="
+                + mPreambleIndex
+                + " }";
+    }
 }
