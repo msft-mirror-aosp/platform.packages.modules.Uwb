@@ -129,4 +129,13 @@ public class DeviceHandle implements Parcelable {
             return new DeviceHandle(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "DeviceHandle{ "
+                + "mRangingDevice="
+                + mRangingDevice
+                + ", mTransportHandle="
+                + mTransportHandle + " }";
+    }
 }

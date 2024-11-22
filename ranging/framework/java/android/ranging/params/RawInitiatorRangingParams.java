@@ -110,4 +110,15 @@ public final class RawInitiatorRangingParams extends RangingParams implements Pa
             return new RawInitiatorRangingParams(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "RawInitiatorRangingParams{ "
+                + "mRawRangingDevices="
+                + mRawRangingDevices
+                + ", "
+                + super.toString()
+                + ", "
+                + " }";
+    }
 }

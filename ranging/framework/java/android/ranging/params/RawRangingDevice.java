@@ -261,4 +261,20 @@ public final class RawRangingDevice implements Parcelable {
             return new RawRangingDevice(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "RawRangingDevice{ "
+                + "mRangingDevice="
+                + mRangingDevice
+                + ", mUwbRangingParams="
+                + mUwbRangingParams
+                + ", mCsRangingParams="
+                + mCsRangingParams
+                + ", mRttRangingParams="
+                + mRttRangingParams
+                + ", mBleRssiRangingParams="
+                + mBleRssiRangingParams
+                + " }";
+    }
 }

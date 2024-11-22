@@ -448,19 +448,31 @@ public final class UwbRangingCapabilities implements Parcelable, TechnologyCapab
 
     @Override
     public String toString() {
-        return "UwbRangingCapabilities{" +
-                "mSupportsDistance=" + mSupportsDistance +
-                ", mSupportsAzimuthalAngle=" + mSupportsAzimuthalAngle +
-                ", mSupportsElevationAngle=" + mSupportsElevationAngle +
-                ", mSupportsRangingIntervalReconfigure=" + mSupportsRangingIntervalReconfigure +
-                ", mMinRangingInterval=" + mMinRangingInterval +
-                ", mSupportedChannels=" + mSupportedChannels +
-                ", mSupportedNtfConfigs=" + mSupportedNtfConfigs +
-                ", mSupportedConfigIds=" + mSupportedConfigIds +
-                ", mSupportedSlotDurations=" + mSupportedSlotDurations +
-                ", mSupportedRangingUpdateRates=" + mSupportedRangingUpdateRates +
-                ", mSupportedPreambleIndexes=" + mSupportedPreambleIndexes +
-                ", mHasBackgroundRangingSupport=" + mHasBackgroundRangingSupport +
-                '}';
+        return "UwbRangingCapabilities{ "
+                + "mSupportsDistance="
+                + mSupportsDistance
+                + ", mSupportsAzimuthalAngle="
+                + mSupportsAzimuthalAngle
+                + ", mSupportsElevationAngle="
+                + mSupportsElevationAngle
+                + ", mSupportsRangingIntervalReconfigure="
+                + mSupportsRangingIntervalReconfigure
+                + ", mMinRangingInterval="
+                + mMinRangingInterval
+                + ", mSupportedChannels="
+                + mSupportedChannels
+                + ", mSupportedNtfConfigs="
+                + mSupportedNtfConfigs
+                + ", mSupportedConfigIds="
+                + mSupportedConfigIds
+                + ", mSupportedSlotDurations="
+                + mSupportedSlotDurations
+                + ", mSupportedRangingUpdateRates="
+                + mSupportedRangingUpdateRates
+                + ", mSupportedPreambleIndexes="
+                + mSupportedPreambleIndexes
+                + ", mHasBackgroundRangingSupport="
+                + mHasBackgroundRangingSupport
+                + " }";
     }
 }

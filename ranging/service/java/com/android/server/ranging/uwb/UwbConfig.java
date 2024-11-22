@@ -414,4 +414,22 @@ public class UwbConfig implements TechnologyConfig {
             return this;
         }
     }
+
+    @Override
+    public String toString() {
+        return "UwbConfig{"
+                + "mParameters="
+                + mParameters
+                + ", mCountryCode='"
+                + mCountryCode
+                + ", mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mDeviceRole="
+                + mDeviceRole
+                + ", mIsAoaNeeded="
+                + mIsAoaNeeded
+                + ", mPeer="
+                + mPeer
+                + " }";
+    }
 }
