@@ -23,13 +23,14 @@ import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.ranging.params.DataNotificationConfig;
-import  android.ranging.params.RangingParams;
+import android.ranging.params.RangingParams;
 import android.ranging.params.SensorFusionParams;
 
 import com.android.ranging.flags.Flags;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Objects;
 
 /**
  * Represents the configuration preferences for a ranging session.
@@ -67,12 +68,15 @@ public final class RangingPreference implements Parcelable {
     private final DataNotificationConfig mDataNotificationConfig;
     private final boolean mIsAngleOfArrivalNeeded;
 
+    private final SessionConfiguration mSessionConfig;
+
     private RangingPreference(Builder builder) {
         mDeviceRole = builder.mDeviceRole;
         mRangingParameters = builder.mRangingParameters;
         mDataNotificationConfig = builder.mDataNotificationConfig;
         mFusionParameters = builder.mFusionParameters;
         mIsAngleOfArrivalNeeded = builder.mIsAngleOfArrivalNeeded;
+        mSessionConfig = builder.mSessionConfig;
     }
 
     private RangingPreference(Parcel in) {
@@ -87,6 +91,8 @@ public final class RangingPreference implements Parcelable {
                 DataNotificationConfig.class.getClassLoader(),
                 DataNotificationConfig.class);
         mIsAngleOfArrivalNeeded = in.readBoolean();
+        mSessionConfig = in.readParcelable(
+                SessionConfiguration.class.getClassLoader(), SessionConfiguration.class);
     }
 
     @NonNull
@@ -105,6 +111,7 @@ public final class RangingPreference implements Parcelable {
     /**
      * Returns the device role.
      */
+    @DeviceRole
     public int getDeviceRole() {
         return mDeviceRole;
     }
@@ -146,6 +153,18 @@ public final class RangingPreference implements Parcelable {
         return mDataNotificationConfig;
     }
 
+    /**
+     * Returns the ranging session configuration params.
+     *
+     * @return a non-null {@link SessionConfiguration} instance.
+     *
+     * @hide
+     */
+    @NonNull
+    public SessionConfiguration getSessionConfiguration() {
+        return mSessionConfig;
+    }
+
     @Override
     public int describeContents() {
         return 0;
@@ -158,6 +177,7 @@ public final class RangingPreference implements Parcelable {
         dest.writeParcelable(mFusionParameters, flags);
         dest.writeParcelable(mDataNotificationConfig, flags);
         dest.writeBoolean(mIsAngleOfArrivalNeeded);
+        dest.writeParcelable(mSessionConfig, flags);
     }
 
     /**
@@ -170,6 +190,7 @@ public final class RangingPreference implements Parcelable {
         private DataNotificationConfig mDataNotificationConfig;
         private SensorFusionParams mFusionParameters;
         private boolean mIsAngleOfArrivalNeeded = false;
+        private SessionConfiguration mSessionConfig = new SessionConfiguration.Builder().build();
 
         /**
          * Creates a Builder instance with the required device role.
@@ -232,6 +253,25 @@ public final class RangingPreference implements Parcelable {
         @NonNull
         public Builder setAngleOfArrivalNeeded(boolean isAngleOfArrivalNeeded) {
             mIsAngleOfArrivalNeeded = isAngleOfArrivalNeeded;
+            return this;
+        }
+
+        /**
+         * Sets the configuration parameters for the ranging session policy.
+         *
+         * <p>This method allows specifying additional configuration parameters encapsulated in
+         * {@link SessionConfiguration} for fine-tuning the behavior of the ranging session.
+         *
+         * @param config the {@link SessionConfiguration}.
+         * @return this {@link Builder} instance.
+         * @throws NullPointerException if {@code params} is null.
+         *
+         * @hide
+         */
+        @NonNull
+        public Builder setSessionConfiguration(@NonNull SessionConfiguration config) {
+            Objects.requireNonNull(config);
+            mSessionConfig = config;
             return this;
         }
 
