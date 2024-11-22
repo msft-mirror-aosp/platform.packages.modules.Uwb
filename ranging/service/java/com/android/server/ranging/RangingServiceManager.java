@@ -313,9 +313,10 @@ public class RangingServiceManager {
     ) {
         return new RangingPeerConfig.Builder(peer)
                 .setDeviceRole(preference.getDeviceRole())
-                .setSensorFusionConfig(preference.getSensorFusionParameters())
-                .setDataNotificationConfig(preference.getDataNotificationConfig())
-                .setAoaNeeded(preference.isAngleOfArrivalNeeded())
+                .setSensorFusionConfig(preference.getSessionConfiguration().getFusionParameters())
+                .setDataNotificationConfig(
+                        preference.getSessionConfiguration().getDataNotificationConfig())
+                .setAoaNeeded(preference.getSessionConfiguration().isAngleOfArrivalNeeded())
                 .build();
     }
 }
