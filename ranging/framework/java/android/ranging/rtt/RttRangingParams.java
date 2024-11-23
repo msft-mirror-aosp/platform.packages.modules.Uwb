@@ -26,6 +26,7 @@ import android.ranging.params.RawRangingDevice.RangingUpdateRate;
 
 import com.android.ranging.flags.Flags;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -211,5 +212,19 @@ public class RttRangingParams implements Parcelable {
         public RttRangingParams build() {
             return new RttRangingParams(this);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "RttRangingParams{ "
+                + "mServiceName='"
+                + mServiceName
+                + ", mMatchFilter="
+                + Arrays.toString(mMatchFilter)
+                + ", mRangingUpdateRate="
+                + mRangingUpdateRate
+                + ", mPeriodicRangingHwFeatureEnabled="
+                + mPeriodicRangingHwFeatureEnabled
+                + " }";
     }
 }

@@ -69,4 +69,18 @@ public class RttConfig implements RangingPeerConfig.TechnologyConfig {
                 .setEnablePublisherRanging(true)
                 .build();
     }
+
+    @Override
+    public String toString() {
+        return "RttConfig{ "
+                + "mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mRangingParams="
+                + mRangingParams
+                + ", mPeerDevice="
+                + mPeerDevice
+                + ", mDeviceRole="
+                + mDeviceRole
+                + " }";
+    }
 }

@@ -237,4 +237,8 @@
     This is a array of MCC/MNC values, where each value is a 3-digit string (only MCC)
     or a 5/6-digit string (MCC + MNC). -->
     <string-array name="mcc_mcc_oem_override_list"/>
+
+    <!-- Whether two-byte ccc config id is supported. If true, the config id should be parsed as
+    a two byte little endian value. -->
+    <bool name = "ccc_two_byte_config_id_little_endian_supported">false</bool>
 </resources>

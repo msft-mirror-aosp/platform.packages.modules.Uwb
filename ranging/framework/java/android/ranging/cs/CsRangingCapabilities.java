@@ -136,6 +136,7 @@ public final class CsRangingCapabilities implements Parcelable, TechnologyCapabi
          *
          * @param supportedSecurityLevels the supported security levels {@link SecurityLevel}.
          * @return this {@link Builder} instance for chaining calls.
+         * TODO(b/361634062): Make this a set in the API to match CS API.
          */
         @NonNull
         public Builder setSupportedSecurityLevels(List<Integer> supportedSecurityLevels) {
@@ -152,5 +153,13 @@ public final class CsRangingCapabilities implements Parcelable, TechnologyCapabi
         public CsRangingCapabilities build() {
             return new CsRangingCapabilities(this);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "CsRangingCapabilities{ "
+                + "mSupportedSecurityLevels="
+                + mSupportedSecurityLevels
+                + " }";
     }
 }

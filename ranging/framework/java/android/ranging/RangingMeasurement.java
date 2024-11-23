@@ -166,4 +166,14 @@ public final class RangingMeasurement implements Parcelable {
             return new RangingMeasurement(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "RangingMeasurement{ "
+                + "mMeasurement="
+                + mMeasurement
+                + ", mConfidence="
+                + mConfidence
+                + " }";
+    }
 }

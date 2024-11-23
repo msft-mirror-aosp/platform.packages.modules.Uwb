@@ -66,4 +66,12 @@ public abstract class RangingParams implements Parcelable {
     public int getRangingSessionType() {
         return mRangingSessionType;
     }
+
+    @Override
+    public String toString() {
+        return "RangingParams{ "
+                + "mRangingSessionType="
+                + mRangingSessionType
+                + " }";
+    }
 }

@@ -57,7 +57,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -230,10 +229,25 @@ public class UwbCountryCode {
         }
     }
 
-    private boolean shouldOverrideCountryCodeForMnccMnc(String mccMncString) {
+    private boolean shouldOverrideCountryCodeForMccMncs() {
+        List<SubscriptionInfo> subscriptionInfoList =
+                mSubscriptionManager.getCompleteActiveSubscriptionInfoList();
+        if (subscriptionInfoList != null && !subscriptionInfoList.isEmpty()) {
+            for (SubscriptionInfo subscriptionInfo : subscriptionInfoList) {
+                if (shouldOverrideCountryCodeForMccMnc(
+                        subscriptionInfo.getMccString(), subscriptionInfo.getMncString())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean shouldOverrideCountryCodeForMccMnc(String mccString, String mncString) {
+        if (TextUtils.isEmpty(mccString) || TextUtils.isEmpty(mncString)) return false;
         try {
-            int mcc = Integer.valueOf(mccMncString.substring(0, 3));
-            int mnc = Integer.valueOf(mccMncString.substring(3));
+            int mcc = Integer.valueOf(mccString);
+            int mnc = Integer.valueOf(mncString);
             for (MccMnc mccMnc: mMccMncOemOverrideList) {
                 if (mccMnc.getMcc() == mcc) {
                     if (mccMnc.getMnc() == -1) {
@@ -247,7 +261,7 @@ public class UwbCountryCode {
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "failed in shouldOverrideCountryCodeForMnccMnc", e);
+            Log.e(TAG, "failed in shouldOverrideCountryCodeForMccMnc", e);
         }
         return false;
     }
@@ -307,16 +321,13 @@ public class UwbCountryCode {
                         } else if (intent.getAction()
                                 .equals(TelephonyManager.ACTION_SIM_CARD_STATE_CHANGED)) {
                             if (!mMccMncOemOverrideList.isEmpty()) {
-                                String mccMnc = mTelephonyManager.getSimOperator();
-                                if (!TextUtils.isEmpty(mccMnc)) {
-                                    Log.i(TAG, "New MCC MNC: "  + mccMnc);
+                                boolean shouldOverrideCountryCodeForMccMnc =
+                                        shouldOverrideCountryCodeForMccMncs();
+                                if (mIsMccMncOemOverrideEnabled
+                                        != shouldOverrideCountryCodeForMccMnc) {
+                                    Log.i(TAG, "OEM override for mcc mnc changed");
                                     mIsMccMncOemOverrideEnabled =
-                                            shouldOverrideCountryCodeForMnccMnc(mccMnc);
-                                    if (mIsMccMncOemOverrideEnabled) {
-                                        setCountryCode(true);
-                                    }
-                                } else {
-                                    mIsMccMncOemOverrideEnabled = false;
+                                            shouldOverrideCountryCodeForMccMnc;
                                     setCountryCode(true);
                                 }
                             }
