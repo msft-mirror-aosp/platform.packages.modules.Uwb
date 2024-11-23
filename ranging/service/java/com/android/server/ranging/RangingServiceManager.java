@@ -34,9 +34,9 @@ import android.ranging.RangingManager;
 import android.ranging.RangingPreference;
 import android.ranging.RangingSession.Callback;
 import android.ranging.SessionHandle;
-import android.ranging.params.RawInitiatorRangingParams;
-import android.ranging.params.RawRangingDevice;
-import android.ranging.params.RawResponderRangingParams;
+import android.ranging.raw.RawInitiatorRangingParams;
+import android.ranging.raw.RawRangingDevice;
+import android.ranging.raw.RawResponderRangingParams;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -315,7 +315,8 @@ public class RangingServiceManager {
     ) {
         return new RangingPeerConfig.Builder(peer)
                 .setDeviceRole(preference.getDeviceRole())
-                .setSensorFusionConfig(preference.getSessionConfiguration().getFusionParameters())
+                .setSensorFusionConfig(
+                        preference.getSessionConfiguration().getSensorFusionParameters())
                 .setDataNotificationConfig(
                         preference.getSessionConfiguration().getDataNotificationConfig())
                 .setAoaNeeded(preference.getSessionConfiguration().isAngleOfArrivalNeeded())

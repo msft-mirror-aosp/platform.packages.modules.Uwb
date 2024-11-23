@@ -31,8 +31,8 @@ import android.ranging.OobHandle;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
-import android.ranging.params.OobResponderRangingParams;
-import android.ranging.params.RawResponderRangingParams;
+import android.ranging.oob.OobResponderRangingParams;
+import android.ranging.raw.RawResponderRangingParams;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
