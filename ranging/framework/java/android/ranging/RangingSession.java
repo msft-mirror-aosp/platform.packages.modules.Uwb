@@ -438,4 +438,22 @@ public final class RangingSession implements AutoCloseable {
             mRangingSessionManager.deviceOobClosed(mOobHandle);
         }
     }
+
+    @Override
+    public String toString() {
+        return "RangingSession{ "
+                + "mSessionHandle="
+                + mSessionHandle
+                + ", mRangingAdapter="
+                + mRangingAdapter
+                + ", mRangingSessionManager="
+                + mRangingSessionManager
+                + ", mCallback="
+                + mCallback
+                + ", mExecutor="
+                + mExecutor
+                + ", mTransportHandles="
+                + mTransportHandles
+                + " }";
+    }
 }

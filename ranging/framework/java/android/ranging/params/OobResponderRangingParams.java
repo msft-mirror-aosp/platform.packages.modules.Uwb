@@ -106,4 +106,15 @@ public class OobResponderRangingParams extends RangingParams implements Parcelab
             return new OobResponderRangingParams(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "OobResponderRangingParams{ "
+                + "mDeviceHandle="
+                + mDeviceHandle
+                + ", "
+                + super.toString()
+                + ", "
+                + " }";
+    }
 }

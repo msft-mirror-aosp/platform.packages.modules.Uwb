@@ -206,4 +206,18 @@ public final class SessionConfiguration implements Parcelable {
             return new SessionConfiguration(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "SessionConfiguration{"
+                + "mFusionParameters="
+                + mFusionParameters
+                + ", mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mIsAngleOfArrivalNeeded="
+                + mIsAngleOfArrivalNeeded
+                + ", mRangingMeasurementsLimit="
+                + mRangingMeasurementsLimit
+                + "}";
+    }
 }
