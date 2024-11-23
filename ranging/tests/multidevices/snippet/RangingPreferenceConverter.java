@@ -23,6 +23,7 @@ import static android.ranging.uwb.UwbComplexChannel.UWB_PREAMBLE_CODE_INDEX_11;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
 import android.ranging.blerssi.BleRssiRangingParams;
+import android.ranging.cs.CsRangingParams;
 import android.ranging.params.DataNotificationConfig;
 import android.ranging.params.RangingParams;
 import android.ranging.params.RawInitiatorRangingParams;
@@ -115,7 +116,7 @@ public class RangingPreferenceConverter implements SnippetObjectConverter {
             builder.setUwbRangingParams(getUwbParams(j.getJSONObject("uwb_params")));
         }
         if (!j.isNull("cs_params")) {
-            throw new UnsupportedOperationException("cs params not implemented");
+            builder.setCsRangingParams(getCsParams(j.getJSONObject("cs_params")));
         }
         if (!j.isNull("rtt_params")) {
             builder.setRttRangingParams(getRttParams(j.getJSONObject("rtt_params")));
@@ -161,6 +162,13 @@ public class RangingPreferenceConverter implements SnippetObjectConverter {
         return new BleRssiRangingParams.Builder(
                 toBytes(j.getJSONArray("peer_address")))
                 .setRangingUpdateRate(j.getInt("ranging_update_rate"))
+                .build();
+    }
+
+    private CsRangingParams getCsParams(JSONObject j) throws JSONException {
+        return new CsRangingParams.Builder(toBytes(j.getJSONArray("peer_address")))
+                .setRangingUpdateRate(j.getInt("ranging_update_rate"))
+                .setSecurityLevel(j.getInt("security_level"))
                 .build();
     }
 

@@ -118,4 +118,11 @@ public class RttRangingCapabilities implements Parcelable, TechnologyCapabilitie
         }
     }
 
+    @Override
+    public String toString() {
+        return "RttRangingCapabilities{ "
+                + "mHasPeriodicRangingHwFeature="
+                + mHasPeriodicRangingHwFeature
+                + " }";
+    }
 }

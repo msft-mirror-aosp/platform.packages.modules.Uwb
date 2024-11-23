@@ -269,5 +269,20 @@ public class OobInitiatorRangingParams extends RangingParams implements Parcelab
         }
     }
 
-
+    @Override
+    public String toString() {
+        return "OobInitiatorRangingParams{ "
+                + "mDeviceHandles="
+                + mDeviceHandles
+                + ", mRangingIntervalRange="
+                + mRangingIntervalRange
+                + ", mSecurityLevel="
+                + mSecurityLevel
+                + ", mRangingMode="
+                + mRangingMode
+                + ", "
+                + super.toString()
+                + ", "
+                + " }";
+    }
 }
