@@ -18,7 +18,9 @@ package com.android.server.ranging.cs;
 
 import static android.ranging.RangingCapabilities.DISABLED_USER;
 import static android.ranging.RangingCapabilities.ENABLED;
+import static android.ranging.RangingCapabilities.NOT_SUPPORTED;
 
+import android.annotation.NonNull;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
@@ -27,39 +29,38 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
-import android.ranging.cs.CsRangingCapabilities;
+import android.ranging.ble.cs.CsRangingCapabilities;
 
 import androidx.annotation.Nullable;
 
-import com.android.server.ranging.CapabilitiesProvider.AvailabilityCallback;
+import com.android.server.ranging.CapabilitiesProvider;
 import com.android.server.ranging.CapabilitiesProvider.CapabilitiesAdapter;
+import com.android.server.ranging.CapabilitiesProvider.TechnologyAvailabilityListener;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 public class CsCapabilitiesAdapter extends CapabilitiesAdapter {
 
     private final Context mContext;
 
+    private final BluetoothManager mBluetoothManager;
+
     /** @return true if CS is supported in the provided context, false otherwise */
     public static boolean isSupported(Context context) {
         return context.getPackageManager()
                 .hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE_CHANNEL_SOUNDING);
-
     }
 
     @Override
     public @RangingTechnologyAvailability int getAvailability() {
-        BluetoothAdapter bluetoothAdapter =
-                mContext.getSystemService(BluetoothManager.class).getAdapter();
-        if (bluetoothAdapter == null) {
+        if (mBluetoothManager == null) {
+            return NOT_SUPPORTED;
+        } else if (mBluetoothManager.getAdapter().getState() == BluetoothAdapter.STATE_ON) {
+            return ENABLED;
+        } else {
             return DISABLED_USER;
         }
-        if (bluetoothAdapter.getState() == BluetoothAdapter.STATE_ON) {
-            return ENABLED;
-        }
-        return DISABLED_USER;
     }
 
     @Override
@@ -71,30 +72,38 @@ public class CsCapabilitiesAdapter extends CapabilitiesAdapter {
                     .getDistanceMeasurementManager()
                     .getChannelSoundingSupportedSecurityLevels());
             return new CsRangingCapabilities.Builder()
-                .setSupportedSecurityLevels(securityLevels)
-                .build();
+                    .setSupportedSecurityLevels(securityLevels)
+                    .build();
         } else {
             return null;
         }
     }
 
-    public CsCapabilitiesAdapter(Context context) {
+    public CsCapabilitiesAdapter(
+            @NonNull Context context, @NonNull TechnologyAvailabilityListener listener
+    ) {
+        super(listener);
         mContext = context;
-        if (isSupported(context)) {
+
+        if (isSupported(mContext)) {
+            mBluetoothManager = mContext.getSystemService(BluetoothManager.class);
+
             BluetoothStateChangeReceiver receiver = new BluetoothStateChangeReceiver();
             IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
             mContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            mBluetoothManager = null;
         }
     }
 
     private class BluetoothStateChangeReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            AvailabilityCallback callback = getAvailabilityCallback();
-            if (callback != null) {
-                callback.onAvailabilityChange(
+            TechnologyAvailabilityListener listener = getAvailabilityListener();
+            if (listener != null) {
+                listener.onAvailabilityChange(
                         getAvailability(),
-                        AvailabilityCallback.AvailabilityChangedReason.SYSTEM_POLICY);
+                        CapabilitiesProvider.AvailabilityChangedReason.SYSTEM_POLICY);
             }
         }
     }

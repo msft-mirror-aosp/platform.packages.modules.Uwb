@@ -23,9 +23,9 @@ import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.ranging.RangingManager.RangingTechnology;
-import android.ranging.cs.CsRangingCapabilities;
-import android.ranging.rtt.RttRangingCapabilities;
+import android.ranging.ble.cs.CsRangingCapabilities;
 import android.ranging.uwb.UwbRangingCapabilities;
+import android.ranging.wifi.rtt.RttRangingCapabilities;
 
 import com.android.ranging.flags.Flags;
 
@@ -112,8 +112,7 @@ public final class RangingCapabilities implements Parcelable {
                 (UwbRangingCapabilities) builder.mCapabilities.get(RangingManager.UWB);
         mRttRangingCapabilities = (RttRangingCapabilities) builder.mCapabilities.get(
                 RangingManager.WIFI_NAN_RTT);
-        mCsCapabilities =
-                (CsRangingCapabilities) builder.mCapabilities.get(RangingManager.BLE_CS);
+        mCsCapabilities = (CsRangingCapabilities) builder.mCapabilities.get(RangingManager.BLE_CS);
         mAvailabilities = builder.mAvailabilities;
     }
 
@@ -124,8 +123,7 @@ public final class RangingCapabilities implements Parcelable {
         mRttRangingCapabilities = in.readParcelable(RttRangingCapabilities.class.getClassLoader(),
                 RttRangingCapabilities.class);
         mCsCapabilities = in.readParcelable(
-                CsRangingCapabilities.class.getClassLoader(),
-                CsRangingCapabilities.class);
+                CsRangingCapabilities.class.getClassLoader(), CsRangingCapabilities.class);
         int size = in.readInt();
         mAvailabilities = new HashMap<>(size);
         for (int i = 0; i < size; i++) {
@@ -178,7 +176,6 @@ public final class RangingCapabilities implements Parcelable {
      * Gets the WiFi NAN-RTT ranging capabilities.
      *
      * @return a {@link RttRangingCapabilities} object or {@code null} if not available.
-     * @hide
      */
     @Nullable
     public RttRangingCapabilities getRttRangingCapabilities() {
@@ -186,7 +183,7 @@ public final class RangingCapabilities implements Parcelable {
     }
 
     /**
-     * Gets the CS ranging capabilities.
+     * Gets the BLE channel sounding ranging capabilities.
      *
      * @return a {@link CsRangingCapabilities} object or {@code null} if not available.
      * @hide
@@ -196,9 +193,6 @@ public final class RangingCapabilities implements Parcelable {
         return mCsCapabilities;
     }
 
-    /**
-     * @hide
-     */
     @Override
     public int describeContents() {
         return 0;
@@ -240,5 +234,19 @@ public final class RangingCapabilities implements Parcelable {
         public RangingCapabilities build() {
             return new RangingCapabilities(this);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "RangingCapabilities{ "
+                + "mUwbCapabilities="
+                + mUwbCapabilities
+                + ", mRttRangingCapabilities="
+                + mRttRangingCapabilities
+                + ", mCsCapabilities="
+                + mCsCapabilities
+                + ", mAvailabilities="
+                + mAvailabilities
+                + " }";
     }
 }

@@ -16,10 +16,10 @@
 
 package com.android.server.ranging.blerssi;
 
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.blerssi.BleRssiRangingParams;
-import android.ranging.params.DataNotificationConfig;
+import android.ranging.ble.rssi.BleRssiRangingParams;
 
 import com.android.server.ranging.RangingPeerConfig;
 
@@ -58,5 +58,19 @@ public class BleRssiConfig implements RangingPeerConfig.TechnologyConfig {
 
     public RangingDevice getPeerDevice() {
         return mPeerDevice;
+    }
+
+    @Override
+    public String toString() {
+        return "BleRssiConfig{ "
+                + "mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mRangingParams="
+                + mRangingParams
+                + ", mDeviceRole="
+                + mDeviceRole
+                + ", mPeerDevice="
+                + mPeerDevice
+                + " }";
     }
 }

@@ -20,6 +20,7 @@ import static android.ranging.RangingCapabilities.DISABLED_USER;
 import static android.ranging.RangingCapabilities.ENABLED;
 import static android.ranging.RangingCapabilities.NOT_SUPPORTED;
 
+import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
@@ -28,13 +29,18 @@ import android.content.pm.PackageManager;
 import android.ranging.RangingCapabilities;
 
 import com.android.server.ranging.CapabilitiesProvider;
+import com.android.server.ranging.CapabilitiesProvider.TechnologyAvailabilityListener;
 
 public class BleRssiCapabilitiesAdapter extends CapabilitiesProvider.CapabilitiesAdapter {
 
     private final Context mContext;
     private final BluetoothManager mBluetoothManager;
 
-    public BleRssiCapabilitiesAdapter(Context context) {
+    public BleRssiCapabilitiesAdapter(
+            @NonNull Context context,
+            @NonNull TechnologyAvailabilityListener listener
+    ) {
+        super(listener);
         mContext = context;
         if (isSupported(mContext)) {
             mBluetoothManager = mContext.getSystemService(BluetoothManager.class);
