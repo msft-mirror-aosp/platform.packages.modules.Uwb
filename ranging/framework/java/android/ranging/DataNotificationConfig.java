@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.ranging.params;
+package android.ranging;
 
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;

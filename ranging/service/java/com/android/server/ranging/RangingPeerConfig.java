@@ -15,11 +15,11 @@
  */
 package com.android.server.ranging;
 
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.params.DataNotificationConfig;
-import android.ranging.params.RawRangingDevice;
-import android.ranging.params.SensorFusionParams;
+import android.ranging.SensorFusionParams;
+import android.ranging.raw.RawRangingDevice;
 
 import androidx.annotation.NonNull;
 

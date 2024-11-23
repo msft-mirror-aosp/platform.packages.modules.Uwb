@@ -445,8 +445,6 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     )
 
     self._ble_connect()
-    responder_addr = [int(part, 16) for part in self.responder.bt_addr.split(":")]
-    initiator_addr = [int(part, 16) for part in self.initiator.bt_addr.split(":")]
 
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
@@ -455,7 +453,7 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
                 DeviceParams(
                     peer_id=self.responder.id,
                     rssi_params=rssi.BleRssiRangingParams(
-                      peer_address=responder_addr,
+                      peer_address=self.responder_addr.bt_addr,
                     ),
                 )
             ],
@@ -468,7 +466,7 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
             peer_params=DeviceParams(
                 peer_id=self.initiator.id,
                 rssi_params=rssi.BleRssiRangingParams(
-                    peer_address=initiator_addr,
+                  peer_address=self.initiator.bt_addr,
                 ),
             ),
         ),
@@ -531,7 +529,7 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
                 DeviceParams(
                     peer_id=self.responder.id,
                     cs_params=cs.CsRangingParams(
-                      peer_address=responder_addr,
+                      peer_address=self.responder_addr.bt_addr,
                     ),
                 )
             ],
@@ -544,7 +542,7 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
             peer_params=DeviceParams(
                 peer_id=self.initiator.id,
                 cs_params=cs.CsRangingParams(
-                    peer_address=initiator_addr,
+                  peer_address=self.initiator.bt_addr,
                 ),
             ),
         ),
