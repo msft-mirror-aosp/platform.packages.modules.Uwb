@@ -106,6 +106,17 @@ public final class RawResponderRangingParams extends RangingParams implements Pa
             return new RawResponderRangingParams(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "RawResponderRangingParams{ "
+                + "mRawRangingDevice="
+                + mRawRangingDevice
+                + ", "
+                + super.toString()
+                + ", "
+                + " }";
+    }
 }
 
 

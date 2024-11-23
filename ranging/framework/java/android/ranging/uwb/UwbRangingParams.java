@@ -30,6 +30,7 @@ import com.android.ranging.flags.Flags;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -427,6 +428,31 @@ public final class UwbRangingParams implements Parcelable {
         public UwbRangingParams build() {
             return new UwbRangingParams(this);
         }
+    }
 
+    @Override
+    public String toString() {
+        return "UwbRangingParams{ "
+                + "mSessionId="
+                + mSessionId
+                + ", mSubSessionId="
+                + mSubSessionId
+                + ", mConfigId="
+                + mConfigId
+                + ", mDeviceAddress="
+                + mDeviceAddress
+                + ", mSessionKeyInfo="
+                + Arrays.toString(mSessionKeyInfo)
+                + ", mSubSessionKeyInfo="
+                + Arrays.toString(mSubSessionKeyInfo)
+                + ", mComplexChannel="
+                + mComplexChannel
+                + ", mPeerAddress="
+                + mPeerAddress
+                + ", mRangingUpdateRate="
+                + mRangingUpdateRate
+                + ", mSlotDurationMillis="
+                + mSlotDurationMillis
+                + " }";
     }
 }

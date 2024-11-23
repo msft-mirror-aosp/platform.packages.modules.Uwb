@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import dataclasses
 from enum import IntEnum
 from typing import List, Optional
+from lib.cs import CsRangingParams
 from lib.rtt import RttRangingParams
 from lib.uwb import UwbRangingParams
 from lib.rssi import BleRssiRangingParams
@@ -21,7 +22,7 @@ class RangingSessionType(IntEnum):
 class DeviceParams:
   peer_id: str
   uwb_params: Optional[UwbRangingParams] = None
-  cs_params = None
+  cs_params: Optional[CsRangingParams] = None
   rtt_params: Optional[RttRangingParams] = None
   rssi_params: Optional[BleRssiRangingParams] = None
 

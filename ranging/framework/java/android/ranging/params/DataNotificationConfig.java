@@ -191,4 +191,16 @@ public final class DataNotificationConfig implements Parcelable {
             return new DataNotificationConfig(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "DataNotificationConfig{ "
+                + "mNotificationConfigType="
+                + mNotificationConfigType
+                + ", mProximityNearCm="
+                + mProximityNearCm
+                + ", mProximityFarCm="
+                + mProximityFarCm
+                + " }";
+    }
 }

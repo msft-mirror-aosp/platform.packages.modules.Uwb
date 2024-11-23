@@ -60,4 +60,17 @@ public class CsConfig implements TechnologyConfig {
         return mPeerDevice;
     }
 
+    @Override
+    public String toString() {
+        return "CsConfig{ "
+                + "mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mRangingParams="
+                + mRangingParams
+                + ", mDeviceRole="
+                + mDeviceRole
+                + ", mPeerDevice="
+                + mPeerDevice
+                + " }";
+    }
 }

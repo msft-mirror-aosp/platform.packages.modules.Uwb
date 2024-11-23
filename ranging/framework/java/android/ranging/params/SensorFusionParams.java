@@ -102,4 +102,13 @@ public final class SensorFusionParams implements Parcelable {
             return this;
         }
     }
+
+    /** @hide */
+    @Override
+    public String toString() {
+        return "SensorFusionParams{ "
+                + "mSensorFusionEnabled="
+                + mSensorFusionEnabled
+                + " }";
+    }
 }
