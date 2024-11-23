@@ -16,10 +16,10 @@
 
 package com.android.server.ranging.rtt;
 
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.params.DataNotificationConfig;
-import android.ranging.rtt.RttRangingParams;
+import android.ranging.wifi.rtt.RttRangingParams;
 
 import com.android.ranging.rtt.backend.internal.RttRangingParameters;
 import com.android.server.ranging.RangingPeerConfig;
