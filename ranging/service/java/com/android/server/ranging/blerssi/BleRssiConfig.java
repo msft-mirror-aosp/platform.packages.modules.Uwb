@@ -16,10 +16,10 @@
 
 package com.android.server.ranging.blerssi;
 
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.blerssi.BleRssiRangingParams;
-import android.ranging.params.DataNotificationConfig;
+import android.ranging.ble.rssi.BleRssiRangingParams;
 
 import com.android.server.ranging.RangingPeerConfig;
 

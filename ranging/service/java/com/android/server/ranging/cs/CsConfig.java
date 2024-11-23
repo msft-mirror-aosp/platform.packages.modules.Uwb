@@ -16,10 +16,10 @@
 
 package com.android.server.ranging.cs;
 
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.cs.CsRangingParams;
-import android.ranging.params.DataNotificationConfig;
+import android.ranging.ble.cs.CsRangingParams;
 
 import com.android.server.ranging.RangingPeerConfig.TechnologyConfig;
 
