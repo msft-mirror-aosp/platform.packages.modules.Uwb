@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 The Android Open Source Project
+ * Copyright (C) 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,32 +14,32 @@
  * limitations under the License.
  */
 
-package com.android.server.ranging.cs;
+package com.android.server.ranging.blerssi;
 
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.cs.CsRangingParams;
+import android.ranging.blerssi.BleRssiRangingParams;
 import android.ranging.params.DataNotificationConfig;
 
-import com.android.server.ranging.RangingPeerConfig.TechnologyConfig;
+import com.android.server.ranging.RangingPeerConfig;
 
-public class CsConfig implements TechnologyConfig {
-    private static final String TAG = CsConfig.class.getSimpleName();
+public class BleRssiConfig implements RangingPeerConfig.TechnologyConfig {
+    private static final String TAG = BleRssiConfig.class.getSimpleName();
 
     private final DataNotificationConfig mDataNotificationConfig;
-    private final CsRangingParams mRangingParams;
+    private final BleRssiRangingParams mRangingParams;
 
     private final RangingDevice mPeerDevice;
 
     @RangingPreference.DeviceRole
     private final int mDeviceRole;
 
-    public CsConfig(int deviceRole,
-            CsRangingParams csRangingParams,
+    public BleRssiConfig(int deviceRole,
+            BleRssiRangingParams bleRssiRangingParams,
             DataNotificationConfig dataNotificationConfig,
             RangingDevice peerDevice) {
         mDeviceRole = deviceRole;
-        mRangingParams = csRangingParams;
+        mRangingParams = bleRssiRangingParams;
         mDataNotificationConfig = dataNotificationConfig;
         mPeerDevice = peerDevice;
     }
@@ -48,7 +48,7 @@ public class CsConfig implements TechnologyConfig {
         return mDataNotificationConfig;
     }
 
-    public CsRangingParams getRangingParams() {
+    public BleRssiRangingParams getRangingParams() {
         return mRangingParams;
     }
 
@@ -59,5 +59,4 @@ public class CsConfig implements TechnologyConfig {
     public RangingDevice getPeerDevice() {
         return mPeerDevice;
     }
-
 }

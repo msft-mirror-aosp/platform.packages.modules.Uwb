@@ -101,6 +101,7 @@ public final class UwbRangingParams implements Parcelable {
             CONFIG_PROVISIONED_MULTICAST_DS_TWR,
             CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA,
             CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
+            CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE,
     })
     public @interface ConfigId {
     }
@@ -132,6 +133,15 @@ public final class UwbRangingParams implements Parcelable {
      * enabled.
      */
     public static final int CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 7;
+
+    /**
+     * Same as {@code CONFIG_ID_3}, except result report phase is disabled, fast ranging interval 96
+     * ms.
+     *
+     * @hide
+     */
+    //TODO: Update above config ids for API review
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE = 8;
 
     /** Sub session id not applicable. */
     public static final int SUB_SESSION_UNDEFINED = -1;

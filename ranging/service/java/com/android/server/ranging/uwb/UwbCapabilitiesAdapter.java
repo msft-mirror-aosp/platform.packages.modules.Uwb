@@ -94,6 +94,7 @@ public class UwbCapabilitiesAdapter extends CapabilitiesAdapter {
                         capabilities.getSupportedSlotDurations())
                 .setSupportedRangingUpdateRates(
                         capabilities.getSupportedRangingUpdateRates())
+                .setSupportedPreambleIndexes(capabilities.getSupportedPreambleIndexes())
                 .setHasBackgroundRangingSupport(
                         capabilities.hasBackgroundRangingSupport())
                 .build();
