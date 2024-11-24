@@ -14,31 +14,32 @@
  * limitations under the License.
  */
 
-package com.android.server.ranging.rtt;
+package com.android.server.ranging.blerssi;
 
 import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.wifi.rtt.RttRangingParams;
+import android.ranging.ble.rssi.BleRssiRangingParams;
 
-import com.android.ranging.rtt.backend.internal.RttRangingParameters;
 import com.android.server.ranging.RangingPeerConfig;
 
-public class RttConfig implements RangingPeerConfig.TechnologyConfig {
+public class BleRssiConfig implements RangingPeerConfig.TechnologyConfig {
+    private static final String TAG = BleRssiConfig.class.getSimpleName();
 
     private final DataNotificationConfig mDataNotificationConfig;
-    private final RttRangingParams mRangingParams;
+    private final BleRssiRangingParams mRangingParams;
+
     private final RangingDevice mPeerDevice;
 
     @RangingPreference.DeviceRole
     private final int mDeviceRole;
 
-    public RttConfig(int deviceRole,
-            RttRangingParams rttRangingParams,
+    public BleRssiConfig(int deviceRole,
+            BleRssiRangingParams bleRssiRangingParams,
             DataNotificationConfig dataNotificationConfig,
             RangingDevice peerDevice) {
         mDeviceRole = deviceRole;
-        mRangingParams = rttRangingParams;
+        mRangingParams = bleRssiRangingParams;
         mDataNotificationConfig = dataNotificationConfig;
         mPeerDevice = peerDevice;
     }
@@ -47,7 +48,7 @@ public class RttConfig implements RangingPeerConfig.TechnologyConfig {
         return mDataNotificationConfig;
     }
 
-    public RttRangingParams getRangingParams() {
+    public BleRssiRangingParams getRangingParams() {
         return mRangingParams;
     }
 
@@ -59,28 +60,17 @@ public class RttConfig implements RangingPeerConfig.TechnologyConfig {
         return mPeerDevice;
     }
 
-    public RttRangingParameters asBackendParameters() {
-        return new RttRangingParameters.Builder()
-                .setDeviceRole(mDeviceRole)
-                .setServiceName(mRangingParams.getServiceName())
-                .setMatchFilter(mRangingParams.getMatchFilter())
-                .setMaxDistanceMm(mDataNotificationConfig.getProximityFarCm() * 100)
-                .setMinDistanceMm(mDataNotificationConfig.getProximityNearCm() * 100)
-                .setEnablePublisherRanging(true)
-                .build();
-    }
-
     @Override
     public String toString() {
-        return "RttConfig{ "
+        return "BleRssiConfig{ "
                 + "mDataNotificationConfig="
                 + mDataNotificationConfig
                 + ", mRangingParams="
                 + mRangingParams
-                + ", mPeerDevice="
-                + mPeerDevice
                 + ", mDeviceRole="
                 + mDeviceRole
+                + ", mPeerDevice="
+                + mPeerDevice
                 + " }";
     }
 }
