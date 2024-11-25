@@ -126,10 +126,7 @@ public final class UwbRangingParams implements Parcelable {
      */
     public static final int CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 5;
 
-    /**
-     * Same as {@code CONFIG_ID_3}, fast ranging interval 96
-     * ms.
-     */
+    /** Same as {@code CONFIG_ID_3}, except fast ranging interval is 96 milliseconds. */
     public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_VERY_FAST = 6;
 
     /** Sub session id not applicable. */
