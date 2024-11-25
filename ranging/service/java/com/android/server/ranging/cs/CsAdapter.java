@@ -16,9 +16,9 @@
 
 package com.android.server.ranging.cs;
 
-import static android.ranging.params.RawRangingDevice.UPDATE_RATE_FREQUENT;
-import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
-import static android.ranging.params.RawRangingDevice.UPDATE_RATE_INFREQUENT;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_FREQUENT;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_NORMAL;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_INFREQUENT;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -32,7 +32,7 @@ import android.content.Context;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.RangingMeasurement;
-import android.ranging.cs.CsRangingParams;
+import android.ranging.ble.cs.CsRangingParams;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
