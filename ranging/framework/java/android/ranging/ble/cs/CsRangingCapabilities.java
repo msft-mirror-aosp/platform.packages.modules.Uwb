@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.ranging.cs;
+package android.ranging.ble.cs;
 
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
@@ -36,7 +36,6 @@ import java.util.Set;
 /**
  * Represents the capabilities of the Bluetooth-based Channel Sounding (CS) ranging.
  *
- * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_CS_ENABLED)
 public final class CsRangingCapabilities implements Parcelable, TechnologyCapabilities {
@@ -69,7 +68,7 @@ public final class CsRangingCapabilities implements Parcelable, TechnologyCapabi
     /**
      * Returns a list of the supported security levels.
      *
-     * @return a {@link List} of integers representing the security levels,
+     * @return a {@link Set} of integers representing the security levels,
      *         where each level is one of {@link SecurityLevel}.
      */
     @NonNull

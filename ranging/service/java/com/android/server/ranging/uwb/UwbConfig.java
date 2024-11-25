@@ -18,15 +18,15 @@ package com.android.server.ranging.uwb;
 
 import static android.ranging.RangingPreference.DEVICE_ROLE_INITIATOR;
 import static android.ranging.RangingPreference.DEVICE_ROLE_RESPONDER;
-import static android.ranging.params.RawRangingDevice.UPDATE_RATE_FREQUENT;
-import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_FREQUENT;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_NORMAL;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.params.DataNotificationConfig;
-import android.ranging.params.RawRangingDevice;
+import android.ranging.raw.RawRangingDevice;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
 import android.ranging.uwb.UwbRangingParams;
