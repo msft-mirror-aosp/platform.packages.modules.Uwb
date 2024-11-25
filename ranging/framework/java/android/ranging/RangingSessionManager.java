@@ -34,13 +34,23 @@ public final class RangingSessionManager extends IRangingCallbacks.Stub {
     private static long sSessionIdCounter = 1;
     private final IRangingAdapter mRangingAdapter;
     private final Map<SessionHandle, RangingSession> mSessions = new ConcurrentHashMap<>();
+    private boolean mOobListenerRegistered = false;
 
     public RangingSessionManager(IRangingAdapter rangingAdapter) {
         mRangingAdapter = rangingAdapter;
-        try {
-            mRangingAdapter.registerOobSendDataListener(new OobSendDataListener());
-        } catch (RemoteException e) {
-            Log.e(TAG, "Failed to register OobSendDataListener", e);
+    }
+
+    /**
+     * Lazy registration of Oob data listener.
+     */
+    public void registerOobSendDataListener() {
+        if (!mOobListenerRegistered) {
+            try {
+                mRangingAdapter.registerOobSendDataListener(new OobSendDataListener());
+                mOobListenerRegistered = true;
+            } catch (RemoteException e) {
+                Log.e(TAG, "Failed to register OobSendDataListener", e);
+            }
         }
     }
 
@@ -55,30 +65,57 @@ public final class RangingSessionManager extends IRangingCallbacks.Stub {
     }
 
     @Override
-    public void onStarted(SessionHandle sessionHandle, int technology) {
-        if (!mSessions.containsKey(sessionHandle)) {
+    public void onOpened(SessionHandle session) {
+        if (!mSessions.containsKey(session)) {
             Log.e(TAG, "SessionHandle not found");
             return;
         }
-        mSessions.get(sessionHandle).onRangingStarted(technology);
+        mSessions.get(session).onOpened();
     }
 
     @Override
-    public void onClosed(SessionHandle sessionHandle, int reason) {
-        if (!mSessions.containsKey(sessionHandle)) {
+    public void onOpenFailed(SessionHandle session, int reason) {
+        if (!mSessions.containsKey(session)) {
             Log.e(TAG, "SessionHandle not found");
             return;
         }
-        mSessions.get(sessionHandle).onRangingClosed(reason);
+        mSessions.get(session).onOpenFailed(reason);
     }
 
     @Override
-    public void onData(SessionHandle sessionHandle, RangingDevice device, RangingData data) {
-        if (!mSessions.containsKey(sessionHandle)) {
+    public void onStarted(SessionHandle session, RangingDevice peer, int technology) {
+        if (!mSessions.containsKey(session)) {
             Log.e(TAG, "SessionHandle not found");
             return;
         }
-        mSessions.get(sessionHandle).onData(device, data);
+        mSessions.get(session).onStarted(peer, technology);
+    }
+
+    @Override
+    public void onResults(SessionHandle session, RangingDevice peer, RangingData data) {
+        if (!mSessions.containsKey(session)) {
+            Log.e(TAG, "SessionHandle not found");
+            return;
+        }
+        mSessions.get(session).onResults(peer, data);
+    }
+
+    @Override
+    public void onStopped(SessionHandle session, RangingDevice peer, int technology) {
+        if (!mSessions.containsKey(session)) {
+            Log.e(TAG, "SessionHandle not found");
+            return;
+        }
+        mSessions.get(session).onStopped(peer, technology);
+    }
+
+    @Override
+    public void onClosed(SessionHandle session, int reason) {
+        if (!mSessions.containsKey(session)) {
+            Log.e(TAG, "SessionHandle not found");
+            return;
+        }
+        mSessions.get(session).onClosed(reason);
     }
 
     /**

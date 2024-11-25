@@ -19,12 +19,12 @@ package com.android.server.ranging.rtt;
 import androidx.annotation.NonNull;
 
 import com.android.ranging.rtt.backend.internal.RttRangingParameters;
-import com.android.server.ranging.RangingConfig;
+import com.android.server.ranging.RangingPeerConfig;
 
 import java.time.Duration;
 
 public class RttParameters extends com.android.ranging.rtt.backend.internal.RttRangingParameters
-        implements RangingConfig.TechnologyConfig {
+        implements RangingPeerConfig.TechnologyConfig {
     public RttParameters(Builder builder) {
         super(builder);
     }
@@ -69,5 +69,10 @@ public class RttParameters extends com.android.ranging.rtt.backend.internal.RttR
         public RttParameters build() {
             return new RttParameters(this);
         }
+    }
+
+    @Override
+    public String toString() {
+        return super.toString();
     }
 }

@@ -14,36 +14,38 @@
  * limitations under the License.
  */
 
-package android.ranging.params;
+package android.ranging.raw;
 
 import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.ranging.RangingParams;
 
 import com.android.ranging.flags.Flags;
 
 /**
  * Represents the parameters for a raw ranging session initiated by a responder device.
- * This class holds a {@link RawRangingDevice} object that participates in the session.
- *
- * @hide
+ * This class holds a {@link android.ranging.raw.RawRangingDevice} object that participates in the
+ * session.
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public class RawResponderRangingParams extends RangingParams implements Parcelable {
+public final class RawResponderRangingParams extends RangingParams implements Parcelable {
 
-    private final RawRangingDevice mRawRangingDevice;
+    private final android.ranging.raw.RawRangingDevice mRawRangingDevice;
 
     private RawResponderRangingParams(Builder builder) {
-        mRangingSessionType = RangingParams.RANGING_SESSION_RAW;
+        setRangingSessionType(RangingParams.RANGING_SESSION_RAW);
         mRawRangingDevice = builder.mRawRangingDevice;
     }
 
-    protected RawResponderRangingParams(Parcel in) {
-        mRangingSessionType = in.readInt();
-        mRawRangingDevice = in.readParcelable(RawRangingDevice.class.getClassLoader());
+    private RawResponderRangingParams(Parcel in) {
+        setRangingSessionType(in.readInt());
+        mRawRangingDevice = in.readParcelable(
+                android.ranging.raw.RawRangingDevice.class.getClassLoader());
     }
 
+    @NonNull
     public static final Creator<RawResponderRangingParams> CREATOR =
             new Creator<RawResponderRangingParams>() {
                 @Override
@@ -58,12 +60,13 @@ public class RawResponderRangingParams extends RangingParams implements Parcelab
             };
 
     /**
-     * Returns the {@link RawRangingDevice} participating in this session as the responder.
+     * Returns the {@link android.ranging.raw.RawRangingDevice} participating in this session as the
+     * responder.
      *
      * @return the raw ranging device.
      */
     @NonNull
-    public RawRangingDevice getRawRangingDevice() {
+    public android.ranging.raw.RawRangingDevice getRawRangingDevice() {
         return mRawRangingDevice;
     }
 
@@ -74,7 +77,7 @@ public class RawResponderRangingParams extends RangingParams implements Parcelab
 
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        dest.writeInt(mRangingSessionType);
+        dest.writeInt(getRangingSessionType());
         dest.writeParcelable(mRawRangingDevice, flags);
     }
 
@@ -85,13 +88,14 @@ public class RawResponderRangingParams extends RangingParams implements Parcelab
         private RawRangingDevice mRawRangingDevice;
 
         /**
-         * Sets the {@link RawRangingDevice} for this responder session.
+         * Sets the {@link android.ranging.raw.RawRangingDevice} for this responder session.
          *
          * @param rangingDevice the raw ranging device.
          * @return this {@link Builder} instance.
          */
         @NonNull
-        public Builder setRawRangingDevice(@NonNull RawRangingDevice rangingDevice) {
+        public Builder setRawRangingDevice(
+                @NonNull android.ranging.raw.RawRangingDevice rangingDevice) {
             mRawRangingDevice = rangingDevice;
             return this;
         }
@@ -105,6 +109,17 @@ public class RawResponderRangingParams extends RangingParams implements Parcelab
         public RawResponderRangingParams build() {
             return new RawResponderRangingParams(this);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "RawResponderRangingParams{ "
+                + "mRawRangingDevice="
+                + mRawRangingDevice
+                + ", "
+                + super.toString()
+                + ", "
+                + " }";
     }
 }
 

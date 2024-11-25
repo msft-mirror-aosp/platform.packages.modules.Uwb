@@ -14,27 +14,31 @@
  * limitations under the License.
  */
 
-package android.ranging.cs;
+package android.ranging.ble.cs;
 
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.os.Parcel;
+import android.os.Parcelable;
+import android.ranging.RangingCapabilities.TechnologyCapabilities;
+import android.ranging.RangingManager;
 
 import com.android.ranging.flags.Flags;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Represents the capabilities of the Bluetooth-based Channel Sounding (CS) ranging.
  *
- * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_CS_ENABLED)
-public final class CsRangingCapabilities {
-
+public final class CsRangingCapabilities implements Parcelable, TechnologyCapabilities {
     /**
      * @hide
      */
@@ -48,9 +52,10 @@ public final class CsRangingCapabilities {
 
     /**
      * Security Level 1:
-     * 150 ns CS RTT accuracy and CS tones.
+     * Either CS tone or CS RTT..
      */
     public static final int CS_SECURITY_LEVEL_ONE = 1;
+
     /**
      * Security Level 4:
      * 10 ns CS RTT accuracy and CS tones with the addition of CS RTT sounding sequence or random
@@ -63,33 +68,78 @@ public final class CsRangingCapabilities {
     /**
      * Returns a list of the supported security levels.
      *
-     * @return a {@link List} of integers representing the security levels,
+     * @return a {@link Set} of integers representing the security levels,
      *         where each level is one of {@link SecurityLevel}.
      */
-    public List<Integer> getSupportedSecurityLevels() {
-        return mSupportedSecurityLevels;
+    @NonNull
+    @SecurityLevel
+    public Set<Integer> getSupportedSecurityLevels() {
+        return new HashSet<>(mSupportedSecurityLevels);
     }
 
     private CsRangingCapabilities(Builder builder) {
         mSupportedSecurityLevels = builder.mSupportedSecurityLevels;
     }
 
+    private CsRangingCapabilities(Parcel in) {
+        mSupportedSecurityLevels = new ArrayList<>();
+        in.readList(mSupportedSecurityLevels, Integer.class.getClassLoader(), Integer.class);
+    }
+
+    @NonNull
+    public static final Creator<CsRangingCapabilities> CREATOR =
+            new Creator<CsRangingCapabilities>() {
+                @Override
+                public CsRangingCapabilities createFromParcel(Parcel in) {
+                    return new CsRangingCapabilities(in);
+                }
+
+                @Override
+                public CsRangingCapabilities[] newArray(int size) {
+                    return new CsRangingCapabilities[size];
+                }
+            };
+
+    /**
+     * @hide
+     */
+    @Override
+    public int getTechnology() {
+        return RangingManager.BLE_CS;
+    }
+
+    /**
+     * @hide
+     */
+    @Override
+    public int describeContents() {
+        return 0;
+    }
+
+    @Override
+    public void writeToParcel(@NonNull Parcel dest, int flags) {
+        dest.writeList(mSupportedSecurityLevels);
+    }
+
     /**
      * Builder class for {@link CsRangingCapabilities}.
      * This class provides a fluent API for constructing instances of {@link CsRangingCapabilities}.
+     *
+     * @hide
      */
     public static final class Builder {
-        private final List<Integer> mSupportedSecurityLevels = new ArrayList<>();
+        private List<Integer> mSupportedSecurityLevels;
 
         /**
-         * Adds a supported security level to the capabilities.
+         * Set supported security levels to the capabilities.
          *
-         * @param securityLevel the security level to add, one of {@link SecurityLevel}.
+         * @param supportedSecurityLevels the supported security levels {@link SecurityLevel}.
          * @return this {@link Builder} instance for chaining calls.
+         * TODO(b/361634062): Make this a set in the API to match CS API.
          */
         @NonNull
-        public Builder addSupportedSecurityLevel(@SecurityLevel int securityLevel) {
-            mSupportedSecurityLevels.add(securityLevel);
+        public Builder setSupportedSecurityLevels(List<Integer> supportedSecurityLevels) {
+            this.mSupportedSecurityLevels = supportedSecurityLevels;
             return this;
         }
 
@@ -104,5 +154,11 @@ public final class CsRangingCapabilities {
         }
     }
 
-
+    @Override
+    public String toString() {
+        return "CsRangingCapabilities{ "
+                + "mSupportedSecurityLevels="
+                + mSupportedSecurityLevels
+                + " }";
+    }
 }

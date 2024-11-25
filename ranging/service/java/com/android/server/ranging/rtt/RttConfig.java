@@ -16,15 +16,15 @@
 
 package com.android.server.ranging.rtt;
 
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.params.DataNotificationConfig;
-import android.ranging.rtt.RttRangingParams;
+import android.ranging.wifi.rtt.RttRangingParams;
 
 import com.android.ranging.rtt.backend.internal.RttRangingParameters;
-import com.android.server.ranging.RangingConfig;
+import com.android.server.ranging.RangingPeerConfig;
 
-public class RttConfig implements RangingConfig.TechnologyConfig {
+public class RttConfig implements RangingPeerConfig.TechnologyConfig {
 
     private final DataNotificationConfig mDataNotificationConfig;
     private final RttRangingParams mRangingParams;
@@ -68,5 +68,19 @@ public class RttConfig implements RangingConfig.TechnologyConfig {
                 .setMinDistanceMm(mDataNotificationConfig.getProximityNearCm() * 100)
                 .setEnablePublisherRanging(true)
                 .build();
+    }
+
+    @Override
+    public String toString() {
+        return "RttConfig{ "
+                + "mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mRangingParams="
+                + mRangingParams
+                + ", mPeerDevice="
+                + mPeerDevice
+                + ", mDeviceRole="
+                + mDeviceRole
+                + " }";
     }
 }

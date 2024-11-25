@@ -18,15 +18,15 @@ package com.android.server.ranging.uwb;
 
 import static android.ranging.RangingPreference.DEVICE_ROLE_INITIATOR;
 import static android.ranging.RangingPreference.DEVICE_ROLE_RESPONDER;
-import static android.ranging.params.RawRangingDevice.UPDATE_RATE_FAST;
-import static android.ranging.params.RawRangingDevice.UPDATE_RATE_NORMAL;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_FREQUENT;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_NORMAL;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.params.DataNotificationConfig;
-import android.ranging.params.RawRangingDevice;
+import android.ranging.raw.RawRangingDevice;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
 import android.ranging.uwb.UwbRangingParams;
@@ -37,7 +37,7 @@ import androidx.annotation.NonNull;
 
 import com.android.ranging.uwb.backend.internal.Utils;
 import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
-import com.android.server.ranging.RangingConfig.TechnologyConfig;
+import com.android.server.ranging.RangingPeerConfig.TechnologyConfig;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.Conversions;
 
@@ -187,17 +187,18 @@ public class UwbConfig implements TechnologyConfig {
                     + deviceType + ". Ignoring type and using role.");
         }
 
-        UwbRangingParams.Builder paramsBuilder = new UwbRangingParams.Builder()
+        //TODO: check this when implementing smart ranging.
+        UwbRangingParams.Builder paramsBuilder = new UwbRangingParams.Builder(
+                sessionId, configId, UwbAddress.fromBytes(uwbAddress.toBytes()),
+                UwbAddress.fromBytes(new byte[]{0, 0}))
                 .setComplexChannel(new UwbComplexChannel.Builder().setChannel(
                         channel).setPreambleIndex(preambleIndex).build())
-                .setSessionId(sessionId)
-                .setConfigId(configId)
-                .setSlotDurationMillis(slotDurationMs)
+                .setSlotDuration(slotDurationMs)
                 .setSessionKeyInfo(sessionKey);
 
         for (@RawRangingDevice.RangingUpdateRate int rate =
                 UPDATE_RATE_NORMAL;
-                rate <= UPDATE_RATE_FAST;
+                rate <= UPDATE_RATE_FREQUENT;
                 rate++
         ) {
             if (Utils.getRangingTimingParams(configId).getRangingInterval((int) rate)
@@ -217,7 +218,7 @@ public class UwbConfig implements TechnologyConfig {
         int size = MIN_SIZE_BYTES + getSessionKeyInfoLength();
         return ByteBuffer.allocate(size)
                 .put(RangingTechnology.UWB.toByte())
-                .put(mParameters.getDeviceAddress().toBytes())
+                .put(mParameters.getDeviceAddress().getAddressBytes())
                 .put(Conversions.intToByteArray(mParameters.getSessionId(), SESSION_ID_SIZE))
                 .put(Conversions.intToByteArray(mParameters.getConfigId(), CONFIG_ID_SIZE))
                 .put(Conversions.intToByteArray(mParameters.getComplexChannel().getChannel(),
@@ -229,7 +230,7 @@ public class UwbConfig implements TechnologyConfig {
                                 .getRangingInterval((int) mParameters.getRangingUpdateRate()),
                         RANGING_INTERVAL_SIZE))
                 .put(Conversions.intToByteArray(
-                        mParameters.getSlotDurationMillis(), SLOT_DURATION_SIZE))
+                        mParameters.getSlotDuration(), SLOT_DURATION_SIZE))
                 .put(Conversions.intToByteArray(getSessionKeyInfoLength(), SESSION_KEY_LENGTH_SIZE))
                 .put(mParameters.getSessionKeyInfo())
                 .put(getCountryCode().getBytes(US_ASCII))
@@ -282,7 +283,7 @@ public class UwbConfig implements TechnologyConfig {
         List<com.android.ranging.uwb.backend.internal.UwbAddress> peerAddressList =
                 new ArrayList<>();
         peerAddressList.add(com.android.ranging.uwb.backend.internal.UwbAddress.fromBytes(
-                mParameters.getPeerAddress().toBytes()));
+                mParameters.getPeerAddress().getAddressBytes()));
         return new com.android.ranging.uwb.backend.internal.RangingParameters(
                 (int) mParameters.getConfigId(),
                 mParameters.getSessionId(),
@@ -293,7 +294,7 @@ public class UwbConfig implements TechnologyConfig {
                 peerAddressList,
                 (int) mParameters.getRangingUpdateRate(),
                 toBackend(getDataNotificationConfig()),
-                (int) mParameters.getSlotDurationMillis(),
+                (int) mParameters.getSlotDuration(),
                 mIsAoaNeeded
         );
     }
@@ -364,7 +365,8 @@ public class UwbConfig implements TechnologyConfig {
     public static @NonNull com.android.ranging.uwb.backend.internal.UwbAddress toBackend(
             @NonNull UwbAddress address
     ) {
-        return com.android.ranging.uwb.backend.internal.UwbAddress.fromBytes(address.toBytes());
+        return com.android.ranging.uwb.backend.internal.UwbAddress.fromBytes(
+                address.getAddressBytes());
     }
 
 
@@ -411,5 +413,23 @@ public class UwbConfig implements TechnologyConfig {
             mDataNotificationConfig = config;
             return this;
         }
+    }
+
+    @Override
+    public String toString() {
+        return "UwbConfig{"
+                + "mParameters="
+                + mParameters
+                + ", mCountryCode='"
+                + mCountryCode
+                + ", mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mDeviceRole="
+                + mDeviceRole
+                + ", mIsAoaNeeded="
+                + mIsAoaNeeded
+                + ", mPeer="
+                + mPeer
+                + " }";
     }
 }

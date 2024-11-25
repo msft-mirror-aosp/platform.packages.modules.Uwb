@@ -17,10 +17,12 @@
 package com.android.server.ranging;
 
 import android.content.Context;
+import android.ranging.RangingManager;
 
-import com.android.server.ranging.cs.CsAdapter;
-import com.android.server.ranging.rtt.RttAdapter;
-import com.android.server.ranging.uwb.UwbAdapter;
+import com.android.server.ranging.blerssi.BleRssiCapabilitiesAdapter;
+import com.android.server.ranging.cs.CsCapabilitiesAdapter;
+import com.android.server.ranging.rtt.RttCapabilitiesAdapter;
+import com.android.server.ranging.uwb.UwbCapabilitiesAdapter;
 
 import com.google.common.collect.ImmutableList;
 
@@ -32,7 +34,8 @@ public enum RangingTechnology {
     UWB(0), // Ultra-Wide Band
     CS(1), // Channel Sounding, formerly known as HADM
 
-    RTT(2); // Wifi RTT.
+    RTT(2), // Wifi RTT.
+    RSSI(3); // BLE RSSI.
 
     public static final ImmutableList<RangingTechnology> TECHNOLOGIES =
             ImmutableList.copyOf(RangingTechnology.values());
@@ -42,7 +45,7 @@ public enum RangingTechnology {
         this.value = value;
     }
 
-    public int getValue() {
+    public @RangingManager.RangingTechnology int getValue() {
         return value;
     }
 
@@ -57,11 +60,13 @@ public enum RangingTechnology {
     public boolean isSupported(Context context) {
         switch (this) {
             case UWB:
-                return UwbAdapter.isSupported(context);
+                return UwbCapabilitiesAdapter.isSupported(context);
             case CS:
-                return CsAdapter.isSupported(context);
+                return CsCapabilitiesAdapter.isSupported(context);
             case RTT:
-                return RttAdapter.isSupported(context);
+                return RttCapabilitiesAdapter.isSupported(context);
+            case RSSI:
+                return BleRssiCapabilitiesAdapter.isSupported(context);
             default:
                 return false;
         }
