@@ -16,10 +16,69 @@
 
 package com.android.server.ranging.cs;
 
-import com.android.server.ranging.RangingConfig.TechnologyConfig;
+import android.annotation.NonNull;
+import android.ranging.DataNotificationConfig;
+import android.ranging.RangingDevice;
+import android.ranging.RangingPreference;
+import android.ranging.ble.cs.CsRangingParams;
 
-public class CsConfig implements TechnologyConfig {
-    public CsConfig() {
-        throw new UnsupportedOperationException("Not implemented!");
+import com.android.server.ranging.RangingSessionConfig.UnicastTechnologyConfig;
+import com.android.server.ranging.RangingTechnology;
+
+public class CsConfig implements UnicastTechnologyConfig {
+    private static final String TAG = CsConfig.class.getSimpleName();
+
+    private final DataNotificationConfig mDataNotificationConfig;
+    private final CsRangingParams mRangingParams;
+
+    private final RangingDevice mPeerDevice;
+
+    @RangingPreference.DeviceRole
+    private final int mDeviceRole;
+
+    public CsConfig(int deviceRole,
+            CsRangingParams csRangingParams,
+            DataNotificationConfig dataNotificationConfig,
+            @NonNull RangingDevice peerDevice) {
+        mDeviceRole = deviceRole;
+        mRangingParams = csRangingParams;
+        mDataNotificationConfig = dataNotificationConfig;
+        mPeerDevice = peerDevice;
+    }
+
+    @Override
+    public @NonNull RangingTechnology getTechnology() {
+        return RangingTechnology.CS;
+    }
+
+    public DataNotificationConfig getDataNotificationConfig() {
+        return mDataNotificationConfig;
+    }
+
+    public CsRangingParams getRangingParams() {
+        return mRangingParams;
+    }
+
+    public int getDeviceRole() {
+        return mDeviceRole;
+    }
+
+    @Override
+    public @NonNull RangingDevice getPeerDevice() {
+        return mPeerDevice;
+    }
+
+    @Override
+    public String toString() {
+        return "CsConfig{ "
+                + "mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mRangingParams="
+                + mRangingParams
+                + ", mDeviceRole="
+                + mDeviceRole
+                + ", mPeerDevice="
+                + mPeerDevice
+                + " }";
     }
 }

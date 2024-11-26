@@ -18,6 +18,19 @@ package com.android.server.ranging;
 
 import android.annotation.NonNull;
 import android.content.Context;
+import android.ranging.RangingPreference;
+
+import com.android.server.ranging.CapabilitiesProvider.CapabilitiesAdapter;
+import com.android.server.ranging.blerssi.BleRssiAdapter;
+import com.android.server.ranging.blerssi.BleRssiCapabilitiesAdapter;
+import com.android.server.ranging.cs.CsAdapter;
+import com.android.server.ranging.cs.CsCapabilitiesAdapter;
+import com.android.server.ranging.rtt.RttAdapter;
+import com.android.server.ranging.rtt.RttCapabilitiesAdapter;
+import com.android.server.ranging.uwb.UwbAdapter;
+import com.android.server.ranging.uwb.UwbCapabilitiesAdapter;
+
+import com.google.common.util.concurrent.ListeningExecutorService;
 
 public class RangingInjector {
 
@@ -45,4 +58,47 @@ public class RangingInjector {
     public RangingServiceManager getRangingServiceManager() {
         return mRangingServiceManager;
     }
+
+    /**
+     * Create a new adapter for a technology.
+     */
+    public @NonNull RangingAdapter createAdapter(
+            @NonNull RangingSessionConfig.TechnologyConfig config,
+            @RangingPreference.DeviceRole int role,
+            @NonNull ListeningExecutorService executor
+    ) {
+        switch (config.getTechnology()) {
+            case UWB:
+                return new UwbAdapter(mContext, executor, role);
+            case CS:
+                return new CsAdapter(mContext);
+            case RTT:
+                return new RttAdapter(mContext, executor, role);
+            case RSSI:
+                return new BleRssiAdapter(mContext);
+            default:
+                throw new IllegalArgumentException(
+                        "Adapter does not exist for technology " + config.getTechnology());
+        }
+    }
+
+    public @NonNull CapabilitiesAdapter createCapabilitiesAdapter(
+            @NonNull RangingTechnology technology,
+            @NonNull CapabilitiesProvider.TechnologyAvailabilityListener listener
+    ) {
+        switch (technology) {
+            case UWB:
+                return new UwbCapabilitiesAdapter(mContext, listener);
+            case CS:
+                return new CsCapabilitiesAdapter(mContext, listener);
+            case RTT:
+                return new RttCapabilitiesAdapter(mContext, listener);
+            case RSSI:
+                return new BleRssiCapabilitiesAdapter(mContext, listener);
+            default:
+                throw new IllegalArgumentException(
+                        "CapabilitiesAdapter does not exist for technology " + technology);
+        }
+    }
+
 }

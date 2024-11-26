@@ -21,6 +21,7 @@ import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.RequiresNoPermission;
 import android.annotation.SystemService;
 import android.content.AttributionSource;
 import android.content.Context;
@@ -43,7 +44,6 @@ import java.util.concurrent.Executor;
  * <p>To get a {@link RangingManager}, call the
  * <code>Context.getSystemService(RangingManager.class)</code>.
  *
- * @hide
  */
 
 @SystemService(Context.RANGING_SERVICE)
@@ -66,7 +66,7 @@ public final class RangingManager {
     @Target({ElementType.TYPE_USE})
     @IntDef({
             UWB,
-            BT_CS,
+            BLE_CS,
             WIFI_NAN_RTT,
             BLE_RSSI,
     })
@@ -79,7 +79,7 @@ public final class RangingManager {
     /**
      * Bluetooth Channel Sounding (BT-CS) technology.
      */
-    public static final int BT_CS = 1;
+    public static final int BLE_CS = 1;
 
     /**
      * WiFi Round Trip Time (WiFi-RTT) technology.
@@ -90,42 +90,6 @@ public final class RangingManager {
      * Bluetooth Low Energy (BLE) RSSI-based ranging technology.
      */
     public static final int BLE_RSSI = 3;
-    /**
-     * @hide
-     */
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
-            /* Ranging technology is not supported on this device. */
-            RangingTechnologyAvailability.NOT_SUPPORTED,
-            /* Ranging technology is disabled. */
-            RangingTechnologyAvailability.DISABLED_USER,
-            /* Ranging technology disabled due to regulation. */
-            RangingTechnologyAvailability.DISABLED_REGULATORY,
-            /* Ranging technology is enabled. */
-            RangingTechnologyAvailability.ENABLED,
-    })
-    public @interface RangingTechnologyAvailability {
-        /**
-         * Indicates that the ranging technology is not supported on the current device.
-         */
-        int NOT_SUPPORTED = 0;
-
-        /**
-         * Indicates that the ranging technology is disabled by the user.
-         */
-        int DISABLED_USER = 1;
-
-        /**
-         * Indicates that the ranging technology is disabled due to regulatory restrictions.
-         */
-        int DISABLED_REGULATORY = 2;
-
-        /**
-         * Indicates that the ranging technology is enabled and available for use.
-         */
-        int ENABLED = 3;
-    }
-
 
     /**
      * @hide
@@ -146,6 +110,7 @@ public final class RangingManager {
      *                 capabilities updates. Must not be null.
      * @throws NullPointerException if the {@code executor} or {@code callback} is null.
      */
+    @RequiresNoPermission
     @NonNull
     public void registerCapabilitiesCallback(
             @NonNull @CallbackExecutor Executor executor,
@@ -162,6 +127,7 @@ public final class RangingManager {
      *                 Must not be null.
      * @throws NullPointerException if the {@code callback} is null.
      */
+    @RequiresNoPermission
     @NonNull
     public void unregisterCapabilitiesCallback(@NonNull RangingCapabilitiesCallback callback) {
         Objects.requireNonNull(callback, "Capabilities callback cannot be null");
@@ -191,6 +157,7 @@ public final class RangingManager {
      * @throws SecurityException    if the calling app does not have the necessary permissions
      *                              to create a ranging session.
      */
+    @RequiresNoPermission
     @Nullable
     public RangingSession createRangingSession(@NonNull Executor executor,
             @NonNull RangingSession.Callback callback) {

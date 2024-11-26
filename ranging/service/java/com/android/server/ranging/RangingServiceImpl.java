@@ -16,17 +16,26 @@
 
 package com.android.server.ranging;
 
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+
 import android.annotation.NonNull;
 import android.content.AttributionSource;
 import android.content.Context;
+import android.os.Binder;
 import android.os.RemoteException;
 import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingAdapter;
 import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
 import android.ranging.OobHandle;
+import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
+import android.ranging.oob.OobResponderRangingParams;
+import android.ranging.raw.RawResponderRangingParams;
+
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 
 public class RangingServiceImpl extends IRangingAdapter.Stub {
 
@@ -60,6 +69,26 @@ public class RangingServiceImpl extends IRangingAdapter.Stub {
     }
 
     @Override
+    public void reconfigureRangingInterval(SessionHandle sessionHandle, int intervalSkipCount) {
+        throw new IllegalArgumentException("Reconfiguring ranging interval not supported yet");
+    }
+
+    @Override
+    public void addRawDevice(SessionHandle sessionHandle, RawResponderRangingParams rangingParams) {
+        throw new IllegalArgumentException("Dynamic addition of raw peer not supported yet");
+    }
+
+    @Override
+    public void addOobDevice(SessionHandle sessionHandle, OobResponderRangingParams rangingParams) {
+        throw new IllegalArgumentException("Dynamic addition of oob peer not supported yet");
+    }
+
+    @Override
+    public void removeDevice(SessionHandle sessionHandle, RangingDevice rangingDevice) {
+        throw new IllegalArgumentException("Dynamic removal of peer not supported yet");
+    }
+
+    @Override
     public void stopRanging(SessionHandle sessionHandle) {
         mRangingInjector.getRangingServiceManager().stopRanging(sessionHandle);
     }
@@ -88,5 +117,16 @@ public class RangingServiceImpl extends IRangingAdapter.Stub {
     public void registerOobSendDataListener(IOobSendDataListener oobSendDataListener) {
         mRangingInjector.getRangingServiceManager().registerOobSendDataListener(
                 oobSendDataListener);
+    }
+
+    @Override
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        if (mContext.checkCallingOrSelfPermission(android.Manifest.permission.DUMP)
+                != PERMISSION_GRANTED) {
+            pw.println("Permission Denial: can't dump RangingService from pid="
+                    + Binder.getCallingPid() + ", uid=" + Binder.getCallingUid());
+            return;
+        }
+        mRangingInjector.getRangingServiceManager().dump(fd, pw, args);
     }
 }
