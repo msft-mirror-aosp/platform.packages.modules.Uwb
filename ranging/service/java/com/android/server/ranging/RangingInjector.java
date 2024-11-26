@@ -63,10 +63,11 @@ public class RangingInjector {
      * Create a new adapter for a technology.
      */
     public @NonNull RangingAdapter createAdapter(
-            @NonNull RangingTechnology technology, @RangingPreference.DeviceRole int role,
+            @NonNull RangingSessionConfig.TechnologyConfig config,
+            @RangingPreference.DeviceRole int role,
             @NonNull ListeningExecutorService executor
     ) {
-        switch (technology) {
+        switch (config.getTechnology()) {
             case UWB:
                 return new UwbAdapter(mContext, executor, role);
             case CS:
@@ -77,7 +78,7 @@ public class RangingInjector {
                 return new BleRssiAdapter(mContext);
             default:
                 throw new IllegalArgumentException(
-                        "Adapter does not exist for technology " + technology);
+                        "Adapter does not exist for technology " + config.getTechnology());
         }
     }
 
