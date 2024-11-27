@@ -267,6 +267,6 @@ public class RangingSessionConfig {
                 ", mFusionConfig=" + mFusionConfig +
                 ", mTechnologyConfigs=" + mTechnologyConfigs +
                 ", mPeerDevices=" + mPeerDevices +
-                '}';
+                " }";
     }
 }

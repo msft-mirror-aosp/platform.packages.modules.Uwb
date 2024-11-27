@@ -29,9 +29,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.content.AttributionSource;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.RangingMeasurement;
+import android.ranging.SessionHandle;
 import android.ranging.SensorFusionParams;
 
 import androidx.test.filters.SmallTest;
@@ -74,6 +76,8 @@ public class RangingSessionTest {
     @Rule
     public final MockitoRule mMockito = MockitoJUnit.rule();
 
+    private @Mock AttributionSource mMockAttributionSource;
+    private @Mock SessionHandle mMockSessionHandle;
     private @Mock(answer = Answers.RETURNS_DEEP_STUBS) RangingInjector mMockInjector;
     private @Mock(answer = Answers.RETURNS_DEEP_STUBS) RangingSessionConfig mMockConfig;
     private @Mock RangingServiceManager.SessionListener mMockSessionListener;
@@ -171,8 +175,8 @@ public class RangingSessionTest {
         );
 
         mSession = new RangingSession(
-                mMockInjector, mMockConfig, mMockSessionListener,
-                MoreExecutors.newDirectExecutorService());
+                mMockAttributionSource, mMockSessionHandle, mMockInjector, mMockConfig,
+                mMockSessionListener, MoreExecutors.newDirectExecutorService());
 
         mMockAdapters = Maps.newHashMap();
     }
