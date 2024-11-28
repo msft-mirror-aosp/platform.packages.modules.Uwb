@@ -16,9 +16,11 @@
 
 package com.android.server.ranging;
 
+import android.content.AttributionSource;
 import android.os.Binder;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
+import android.ranging.SessionHandle;
 import android.util.Log;
 
 import androidx.annotation.GuardedBy;
@@ -47,6 +49,8 @@ public class RangingSession {
     private static final String TAG = RangingSession.class.getSimpleName();
 
     private final RangingInjector mInjector;
+    private final AttributionSource mAttributionSource;
+    private final SessionHandle mSessionHandle;
     private final RangingSessionConfig mConfig;
     private final RangingServiceManager.SessionListener mSessionListener;
     private final ListeningExecutorService mAdapterExecutor;
@@ -108,12 +112,16 @@ public class RangingSession {
     }
 
     public RangingSession(
+            @NonNull AttributionSource attributionSource,
+            @NonNull SessionHandle sessionHandle,
             @NonNull RangingInjector injector,
             @NonNull RangingSessionConfig config,
             @NonNull RangingServiceManager.SessionListener listener,
             @NonNull ListeningExecutorService adapterExecutor
     ) {
         mInjector = injector;
+        mAttributionSource = attributionSource;
+        mSessionHandle = sessionHandle;
         mConfig = config;
         mSessionListener = listener;
         mAdapterExecutor = adapterExecutor;
@@ -285,6 +293,8 @@ public class RangingSession {
 
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         pw.println("---- Dump of RangingSession ----");
+        pw.println("Session handle: " + mSessionHandle);
+        pw.println("Attribution source: " + mAttributionSource);
         pw.println("Adapters:");
         for (RangingAdapter adapter : mAdapters.values()) {
             pw.println(adapter);
