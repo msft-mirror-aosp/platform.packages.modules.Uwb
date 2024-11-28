@@ -17,167 +17,71 @@
 package android.ranging;
 
 import android.annotation.FlaggedApi;
-import android.annotation.NonNull;
-import android.annotation.Nullable;
-import android.os.Parcel;
+import android.annotation.IntDef;
+import android.annotation.SuppressLint;
 import android.os.Parcelable;
-import android.ranging.cs.CsRangingParameters;
-import android.ranging.rtt.RttRangingParams;
-import android.ranging.uwb.UwbRangingParams;
 
 import com.android.ranging.flags.Flags;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 
 /**
- * RangingParameters is a container for parameters used in ranging sessions.
- * It supports configuration for multiple ranging technologies, such as UWB (Ultra-Wideband)
- * BLE CS (Channel Sounding), etc.
+ * Abstract class to represent type of ranging parameters.
  *
- * @hide
+ * <p>Subclasses include:</p>
+ * <ul>
+ *     <li>{@link android.ranging.ble.rssi.BleRssiRangingParams}</li>
+ *     <li>{@link android.ranging.ble.cs.CsRangingParams}</li>
+ *     <li>{@link android.ranging.wifi.rtt.RttRangingParams}</li>
+ *     <li>{@link android.ranging.uwb.UwbRangingParams}</li>
+ * </ul>
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
-public final class RangingParams implements Parcelable {
-
-    private final UwbRangingParams mUwbParameters;
-
-    private final CsRangingParameters mCsParameters;
-
-    private final List<RttRangingParams> mRttRangingParams;
-
-    private RangingParams(Builder builder) {
-        mUwbParameters = builder.mUwbParameters;
-        mCsParameters = builder.mCsParameters;
-        mRttRangingParams = builder.mRttRangingParams;
+@SuppressLint({"ParcelCreator", "ParcelNotFinal"})
+public abstract class RangingParams implements Parcelable {
+    /**
+     * @hide
+     */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            RANGING_SESSION_RAW,
+            RANGING_SESSION_OOB,
+    })
+    public @interface RangingSessionType {
     }
 
+    protected RangingParams() { }
 
-    private RangingParams(Parcel in) {
-        mUwbParameters = in.readParcelable(UwbRangingParams.class.getClassLoader(),
-                UwbRangingParams.class);
-        mCsParameters = in.readParcelable(CsRangingParameters.class.getClassLoader(),
-                CsRangingParameters.class);
-        mRttRangingParams = in.createTypedArrayList(RttRangingParams.CREATOR);
-    }
+    /** Ranging session with the out-of-band negotiations performed by the app. */
+    public static final int RANGING_SESSION_RAW = 0;
+    /** Ranging session with the out-of-band negotiations performed by the ranging API. */
+    public static final int RANGING_SESSION_OOB = 1;
 
-    public static final Creator<RangingParams> CREATOR = new Creator<RangingParams>() {
-        @Override
-        public RangingParams createFromParcel(Parcel in) {
-            return new RangingParams(in);
-        }
-
-        @Override
-        public RangingParams[] newArray(int size) {
-            return new RangingParams[size];
-        }
-    };
+    @RangingSessionType
+    private int mRangingSessionType;
 
     /**
-     * Gets the UWB ranging parameters.
+     * @hide
+     */
+    protected void setRangingSessionType(@RangingSessionType int rangingSessionType) {
+        mRangingSessionType = rangingSessionType;
+    }
+
+    /**
+     * Gets the ranging session type {@link RangingSessionType}
      *
-     * @return the {@link UwbRangingParams} if present, otherwise {@code null}.
+     * @return the type of ranging session.
      */
-    @Nullable
-    public UwbRangingParams getUwbParameters() {
-        return mUwbParameters;
+    public int getRangingSessionType() {
+        return mRangingSessionType;
     }
 
-    /**
-     * Gets the Channel Sounding ranging parameters.
-     *
-     * @return the {@link CsRangingParameters} if present, otherwise {@code null}.
-     * @hide
-     */
-    @Nullable
-    public CsRangingParameters getCsParameters() {
-        return mCsParameters;
-    }
-
-    /**
-     * @hide
-     */
-    @FlaggedApi(Flags.FLAG_RANGING_RTT_ENABLED)
-    public List<RttRangingParams> getRttRangingParams() {
-        return mRttRangingParams;
-    }
-
-    /**
-     * @hide
-     */
     @Override
-    public int describeContents() {
-        return 0;
-    }
-
-    /**
-     * @hide
-     */
-    @Override
-    public void writeToParcel(Parcel dest, int flags) {
-        dest.writeParcelable(mUwbParameters, flags);
-        dest.writeParcelable(mCsParameters, flags);
-        dest.writeTypedList(mRttRangingParams);
-    }
-
-    /**
-     * Builder for creating instances of {@link RangingParameters}.
-     */
-    public static final class Builder {
-        private UwbRangingParams mUwbParameters = null;
-        private CsRangingParameters mCsParameters = null;
-        private List<RttRangingParams> mRttRangingParams = new ArrayList<>();
-
-        /**
-         * Sets the UWB ranging parameters.
-         *
-         * @param uwbParameters The UWB-specific configuration.
-         * @return This builder instance.
-         * @throws IllegalArgumentException if the uwbParameters is null.
-         */
-        @NonNull
-        public Builder setUwbParameters(@NonNull UwbRangingParams uwbParameters) {
-            mUwbParameters = uwbParameters;
-            return this;
-        }
-
-        /**
-         * Sets the Channel Sounding ranging parameters.
-         *
-         * @param csParameters The CS-specific configuration.
-         * @return This builder instance.
-         * @throws IllegalArgumentException if the csParameters is null.
-         * @hide
-         */
-        @NonNull
-        public Builder setCsParameters(@NonNull CsRangingParameters csParameters) {
-            mCsParameters = csParameters;
-            return this;
-        }
-
-        /**
-         * Sets the Wi-Fi RTT ranging parameters.
-         *
-         * @param rttRangingParams The RTT-specific configuration.
-         * @return This builder instance.
-         * @throws IllegalArgumentException if the rttRangingParams is null.
-         * @hide
-         */
-        @NonNull
-        @FlaggedApi(Flags.FLAG_RANGING_RTT_ENABLED)
-        public Builder setRttParameters(@NonNull List<RttRangingParams> rttRangingParams) {
-            mRttRangingParams = rttRangingParams;
-            return this;
-        }
-
-        /**
-         * Builds a {@link RangingParams} object with the provided parameters.
-         *
-         * @return a new {@link RangingParams} instance.
-         */
-        @NonNull
-        public RangingParams build() {
-            return new RangingParams(this);
-        }
+    public String toString() {
+        return "RangingParams{ "
+                + "mRangingSessionType="
+                + mRangingSessionType
+                + " }";
     }
 }

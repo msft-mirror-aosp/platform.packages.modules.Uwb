@@ -16,9 +16,10 @@
 
 package com.android.server.ranging.fusion;
 
+import android.ranging.RangingData;
+
 import androidx.annotation.NonNull;
 
-import com.android.server.ranging.RangingData;
 import com.android.server.ranging.RangingTechnology;
 
 import java.util.Optional;

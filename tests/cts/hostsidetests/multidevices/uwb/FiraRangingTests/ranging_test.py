@@ -386,7 +386,7 @@ class RangingTest(uwb_base_test.UwbBaseTest):
     reconfigure_params = uwb_ranging_params.UwbRangingReconfigureParams(
         block_stride_length=block_stride_length)
     initiator.reconfigure_fira_ranging(reconfigure_params)
-    uwb_test_utils.verify_peer_found(initiator, peer_addr)
+    uwb_test_utils.verify_peer_found(initiator, peer_addr, 0, 10)
 
   def _verify_add_controlee_when_opened_ranging_with_no_controlee(
         self, initiator: uwb_ranging_decorator.UwbRangingDecorator,
@@ -811,8 +811,8 @@ class RangingTest(uwb_base_test.UwbBaseTest):
                                     self.responder_addr)
     self._verify_one_to_one_ranging_reconfigure_ranging_interval(
         self.initiator, self.block_stride_length, self.responder_addr)
-    self.responder.stop_ranging()
-    self.initiator.stop_ranging()
+    self.responder.stop_ranging(0, 10)
+    self.initiator.stop_ranging(0, 10)
 
   def test_ranging_nearby_share_profile_reconfigure_ranging_interval(self):
     """Verifies ranging for device nearby share with default profile."""
@@ -839,8 +839,8 @@ class RangingTest(uwb_base_test.UwbBaseTest):
                                     self.responder_addr)
     self._verify_one_to_one_ranging_reconfigure_ranging_interval(
         self.initiator, self.block_stride_length, self.responder_addr)
-    self.responder.stop_ranging()
-    self.initiator.stop_ranging()
+    self.responder.stop_ranging(0, 10)
+    self.initiator.stop_ranging(0, 10)
 
   def test_ranging_device_tracker_profile_ch9_pr12(self):
     """Verifies ranging with device tracker for channel 9 and preamble 12."""

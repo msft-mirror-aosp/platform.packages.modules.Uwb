@@ -39,15 +39,10 @@ public final class Utils {
     @IntDef({
         CONFIG_UNICAST_DS_TWR,
         CONFIG_MULTICAST_DS_TWR,
-        CONFIG_UNICAST_DS_TWR_NO_AOA,
         CONFIG_PROVISIONED_UNICAST_DS_TWR,
         CONFIG_PROVISIONED_MULTICAST_DS_TWR,
-        CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA,
         CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
-        CONFIG_MULTICAST_DS_TWR_NO_AOA,
-        CONFIG_DL_TDOA_DT_TAG,
-        CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE,
-        CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE_HPRF
+            CONFIG_PROVISIONED_UNICAST_DS_TWR_VERY_FAST,
     })
     public @interface UwbConfigId {}
 
@@ -61,35 +56,18 @@ public final class Utils {
 
     public static final int CONFIG_MULTICAST_DS_TWR = 2;
 
-    /** Same as {@code CONFIG_ID_1}, except Angle-of-arrival (AoA) data is not reported. */
-    public static final int CONFIG_UNICAST_DS_TWR_NO_AOA = 3;
-
     /** Same as {@code CONFIG_ID_1}, except P-STS security mode is enabled. */
-    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR = 4;
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR = 3;
 
     /** Same as {@code CONFIG_ID_2}, except P-STS security mode is enabled. */
-    public static final int CONFIG_PROVISIONED_MULTICAST_DS_TWR = 5;
-
-    /** Same as {@code CONFIG_ID_3}, except P-STS security mode is enabled. */
-    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA = 6;
+    public static final int CONFIG_PROVISIONED_MULTICAST_DS_TWR = 4;
 
     /** Same as {@code CONFIG_ID_2}, except P-STS individual controlee key mode is enabled. */
-    public static final int CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 7;
+    public static final int CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 5;
 
-    /** Same as {@code CONFIG_ID_3}, except not unicast @Hide */
-    public static final int CONFIG_MULTICAST_DS_TWR_NO_AOA = 1000;
+    /** Same as {@code CONFIG_ID_3}, except fast ranging interval is 96 milliseconds. */
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_VERY_FAST = 6;
 
-    /** FiRa- defined Downlink-TDoA for DT-Tag ranging */
-    public static final int CONFIG_DL_TDOA_DT_TAG = 1001;
-
-    /**
-     * Same as {@code CONFIG_ID_4}, except result report phase is disabled, fast ranging interval 96
-     * ms, filtering disabled, @Hide
-     */
-    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE = 1002;
-
-    /** Same as {@code CONFIG_ID_1002}, except PRF mode is HPRF, @Hide */
-    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE_HPRF = 1003;
 
     @IntDef({
         INFREQUENT,
@@ -262,17 +240,6 @@ public final class Utils {
                         /* hoppingEnabled= */ true));
 
         setRangingTimingParams(
-                CONFIG_UNICAST_DS_TWR_NO_AOA,
-                new RangingTimingParams(
-                        /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 120,
-                        /* rangingIntervalInfrequent= */600,
-                        /* slotPerRangingRound= */ 20,
-                        /* slotDurationRstu= */ 2400,
-                        /* initiationTimeMs= */ 0,
-                        /* hoppingEnabled= */ true));
-
-        setRangingTimingParams(
                 CONFIG_PROVISIONED_UNICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 240,
@@ -295,17 +262,6 @@ public final class Utils {
                         /* hoppingEnabled= */ true));
 
         setRangingTimingParams(
-                CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_AOA,
-                new RangingTimingParams(
-                        /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 120,
-                        /* rangingIntervalInfrequent= */ 600,
-                        /* slotPerRangingRound= */ 20,
-                        /* slotDurationRstu= */ 2400,
-                        /* initiationTimeMs= */ 0,
-                        /* hoppingEnabled= */ true));
-
-        setRangingTimingParams(
                 CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 200,
@@ -317,40 +273,7 @@ public final class Utils {
                         /* hoppingEnabled= */ true));
 
         setRangingTimingParams(
-                CONFIG_DL_TDOA_DT_TAG,
-                new RangingTimingParams(
-                        /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 120,
-                        /* rangingIntervalInfrequent= */ 600,
-                        /* slotPerRangingRound= */ 20,
-                        /* slotDurationRstu= */ 2400,
-                        /* initiationTimeMs= */ 0,
-                        /* hoppingEnabled= */ true));
-
-        setRangingTimingParams(
-                CONFIG_MULTICAST_DS_TWR_NO_AOA,
-                new RangingTimingParams(
-                        /* rangingIntervalNormal= */ 200,
-                        /* rangingIntervalFast= */ 120,
-                        /* rangingIntervalInfrequent= */ 600,
-                        /* slotPerRangingRound= */ 20,
-                        /* slotDurationRstu= */ 2400,
-                        /* initiationTimeMs= */ 0,
-                        /* hoppingEnabled= */ true));
-
-        setRangingTimingParams(
-                CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE,
-                new RangingTimingParams(
-                        /* rangingIntervalNormal= */ 240,
-                        /* rangingIntervalFast= */ 96,
-                        /* rangingIntervalInfrequent= */ 600,
-                        /* slotPerRangingRound= */ 6,
-                        /* slotDurationRstu= */ 2400,
-                        /* initiationTimeMs= */ 0,
-                        /* hoppingEnabled= */ true));
-
-        setRangingTimingParams(
-                CONFIG_PROVISIONED_UNICAST_DS_TWR_NO_RESULT_REPORT_PHASE_HPRF,
+                CONFIG_PROVISIONED_UNICAST_DS_TWR_VERY_FAST,
                 new RangingTimingParams(
                         /* rangingIntervalNormal= */ 240,
                         /* rangingIntervalFast= */ 96,
