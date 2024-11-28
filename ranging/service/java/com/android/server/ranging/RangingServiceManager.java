@@ -23,6 +23,7 @@ import static android.ranging.RangingSession.Callback.REASON_UNKNOWN;
 import static android.ranging.RangingSession.Callback.REASON_UNSUPPORTED;
 
 import android.content.AttributionSource;
+import android.os.IBinder;
 import android.os.RemoteException;
 import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingCallbacks;
@@ -96,6 +97,8 @@ public class RangingServiceManager {
 //                        .build());
 
         RangingSession session = new RangingSession(
+                attributionSource,
+                handle,
                 mRangingInjector,
                 getSessionConfigFromPreference(preference),
                 new SessionListener(handle, callbacks),
@@ -194,7 +197,7 @@ public class RangingServiceManager {
      * Listens for peer-specific events within a session and translates them to
      * {@link IRangingCallbacks} calls.
      */
-    public class SessionListener {
+    public class SessionListener implements IBinder.DeathRecipient {
         private final SessionHandle mSessionHandle;
         private final IRangingCallbacks mRangingCallbacks;
         private final AtomicBoolean mIsSessionStarted;
@@ -203,6 +206,18 @@ public class RangingServiceManager {
             mSessionHandle = sessionHandle;
             mRangingCallbacks = callbacks;
             mIsSessionStarted = new AtomicBoolean(false);
+            try {
+                mRangingCallbacks.asBinder().linkToDeath(this, 0);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Failed to link to death: " + sessionHandle, e);
+                stopRanging(mSessionHandle);
+            }
+        }
+
+        @Override
+        public void binderDied() {
+            Log.i(TAG, "binderDied : Stopping session: " + mSessionHandle);
+            stopRanging(mSessionHandle);
         }
 
         public void onTechnologyStarted(
