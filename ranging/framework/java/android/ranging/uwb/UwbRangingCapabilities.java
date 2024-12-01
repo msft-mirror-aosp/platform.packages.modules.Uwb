@@ -20,10 +20,10 @@ import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.ranging.DataNotificationConfig.NotificationConfigType;
 import android.ranging.RangingCapabilities.TechnologyCapabilities;
 import android.ranging.RangingManager;
-import android.ranging.params.DataNotificationConfig.NotificationConfigType;
-import android.ranging.params.RawRangingDevice.RangingUpdateRate;
+import android.ranging.raw.RawRangingDevice.RangingUpdateRate;
 import android.ranging.uwb.UwbComplexChannel.UwbChannel;
 import android.ranging.uwb.UwbComplexChannel.UwbPreambleCodeIndex;
 import android.ranging.uwb.UwbRangingParams.ConfigId;
@@ -153,7 +153,7 @@ public final class UwbRangingCapabilities implements Parcelable, TechnologyCapab
     }
 
     /**
-     * Gets the minimum supported ranging interval in milliseconds.
+     * Gets the minimum supported ranging interval.
      *
      * @return the minimum ranging interval.
      */
@@ -179,7 +179,6 @@ public final class UwbRangingCapabilities implements Parcelable, TechnologyCapab
      *
      * @return a list of supported preamble indexes.
      *
-     * @hide
      */
     @NonNull
     @UwbPreambleCodeIndex
@@ -448,19 +447,31 @@ public final class UwbRangingCapabilities implements Parcelable, TechnologyCapab
 
     @Override
     public String toString() {
-        return "UwbRangingCapabilities{" +
-                "mSupportsDistance=" + mSupportsDistance +
-                ", mSupportsAzimuthalAngle=" + mSupportsAzimuthalAngle +
-                ", mSupportsElevationAngle=" + mSupportsElevationAngle +
-                ", mSupportsRangingIntervalReconfigure=" + mSupportsRangingIntervalReconfigure +
-                ", mMinRangingInterval=" + mMinRangingInterval +
-                ", mSupportedChannels=" + mSupportedChannels +
-                ", mSupportedNtfConfigs=" + mSupportedNtfConfigs +
-                ", mSupportedConfigIds=" + mSupportedConfigIds +
-                ", mSupportedSlotDurations=" + mSupportedSlotDurations +
-                ", mSupportedRangingUpdateRates=" + mSupportedRangingUpdateRates +
-                ", mSupportedPreambleIndexes=" + mSupportedPreambleIndexes +
-                ", mHasBackgroundRangingSupport=" + mHasBackgroundRangingSupport +
-                '}';
+        return "UwbRangingCapabilities{ "
+                + "mSupportsDistance="
+                + mSupportsDistance
+                + ", mSupportsAzimuthalAngle="
+                + mSupportsAzimuthalAngle
+                + ", mSupportsElevationAngle="
+                + mSupportsElevationAngle
+                + ", mSupportsRangingIntervalReconfigure="
+                + mSupportsRangingIntervalReconfigure
+                + ", mMinRangingInterval="
+                + mMinRangingInterval
+                + ", mSupportedChannels="
+                + mSupportedChannels
+                + ", mSupportedNtfConfigs="
+                + mSupportedNtfConfigs
+                + ", mSupportedConfigIds="
+                + mSupportedConfigIds
+                + ", mSupportedSlotDurations="
+                + mSupportedSlotDurations
+                + ", mSupportedRangingUpdateRates="
+                + mSupportedRangingUpdateRates
+                + ", mSupportedPreambleIndexes="
+                + mSupportedPreambleIndexes
+                + ", mHasBackgroundRangingSupport="
+                + mHasBackgroundRangingSupport
+                + " }";
     }
 }

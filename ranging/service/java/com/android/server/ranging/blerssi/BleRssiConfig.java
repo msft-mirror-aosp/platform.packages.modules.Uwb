@@ -16,14 +16,17 @@
 
 package com.android.server.ranging.blerssi;
 
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.blerssi.BleRssiRangingParams;
-import android.ranging.params.DataNotificationConfig;
+import android.ranging.ble.rssi.BleRssiRangingParams;
 
-import com.android.server.ranging.RangingPeerConfig;
+import androidx.annotation.NonNull;
 
-public class BleRssiConfig implements RangingPeerConfig.TechnologyConfig {
+import com.android.server.ranging.RangingSessionConfig;
+import com.android.server.ranging.RangingTechnology;
+
+public class BleRssiConfig implements RangingSessionConfig.UnicastTechnologyConfig {
     private static final String TAG = BleRssiConfig.class.getSimpleName();
 
     private final DataNotificationConfig mDataNotificationConfig;
@@ -44,6 +47,11 @@ public class BleRssiConfig implements RangingPeerConfig.TechnologyConfig {
         mPeerDevice = peerDevice;
     }
 
+    @Override
+    public @NonNull RangingTechnology getTechnology() {
+        return RangingTechnology.RSSI;
+    }
+
     public DataNotificationConfig getDataNotificationConfig() {
         return mDataNotificationConfig;
     }
@@ -56,7 +64,22 @@ public class BleRssiConfig implements RangingPeerConfig.TechnologyConfig {
         return mDeviceRole;
     }
 
-    public RangingDevice getPeerDevice() {
+    @Override
+    public @NonNull RangingDevice getPeerDevice() {
         return mPeerDevice;
+    }
+
+    @Override
+    public String toString() {
+        return "BleRssiConfig{ "
+                + "mDataNotificationConfig="
+                + mDataNotificationConfig
+                + ", mRangingParams="
+                + mRangingParams
+                + ", mDeviceRole="
+                + mDeviceRole
+                + ", mPeerDevice="
+                + mPeerDevice
+                + " }";
     }
 }

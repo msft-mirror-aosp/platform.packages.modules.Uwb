@@ -26,6 +26,7 @@ import com.android.ranging.flags.Flags;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Objects;
 
 /**
  * A Class representing the complex channel for UWB which comprises channel and preamble index
@@ -183,6 +184,18 @@ public final class UwbComplexChannel implements Parcelable {
         dest.writeInt(mPreambleIndex);
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof UwbComplexChannel other)) return false;
+        return mChannel == other.mChannel && mPreambleIndex == other.mPreambleIndex;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(mChannel, mPreambleIndex);
+    }
+
     /**
      * Builder for creating instances of {@link UwbComplexChannel}.
      */
@@ -230,5 +243,14 @@ public final class UwbComplexChannel implements Parcelable {
         public UwbComplexChannel build() {
             return new UwbComplexChannel(this);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "UwbComplexChannel{ mChannel="
+                + mChannel
+                + ", mPreambleIndex="
+                + mPreambleIndex
+                + " }";
     }
 }
