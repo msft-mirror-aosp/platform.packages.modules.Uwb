@@ -202,7 +202,7 @@ public class RangingManagerTest {
         assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
 
         rangingSession.stop();
-        assertThat(callback.mOnClosedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnClosedCalled.await(2, TimeUnit.SECONDS)).isTrue();
 
         uiAutomation.dropShellPermissionIdentity();
     }
@@ -211,7 +211,8 @@ public class RangingManagerTest {
     @CddTest(requirements = {"7.3.13/C-1-1,C-1-2"})
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testStartStopMultipleRangingSessions() throws Exception {
-        int sessionId = 10;
+        int sessionId1 = 10;
+        int sessionId2 = 15;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
 
@@ -229,7 +230,7 @@ public class RangingManagerTest {
                 new RawInitiatorRangingParams.Builder()
                         .addRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
-                                .setUwbRangingParams(new UwbRangingParams.Builder(sessionId,
+                                .setUwbRangingParams(new UwbRangingParams.Builder(sessionId1,
                                         CONFIG_UNICAST_DS_TWR,
                                         UwbAddress.fromBytes(new byte[]{1, 2}),
                                         UwbAddress.fromBytes(new byte[]{3, 4}))
@@ -249,7 +250,7 @@ public class RangingManagerTest {
                 new RawInitiatorRangingParams.Builder()
                         .addRawRangingDevice(new RawRangingDevice.Builder()
                                 .setRangingDevice(new RangingDevice.Builder().build())
-                                .setUwbRangingParams(new UwbRangingParams.Builder(sessionId,
+                                .setUwbRangingParams(new UwbRangingParams.Builder(sessionId2,
                                         CONFIG_UNICAST_DS_TWR,
                                         UwbAddress.fromBytes(new byte[]{3, 5}),
                                         UwbAddress.fromBytes(new byte[]{1, 2}))
@@ -274,8 +275,8 @@ public class RangingManagerTest {
         rangingSession1.stop();
         rangingSession2.stop();
 
-        assertThat(callback1.mOnClosedCalled.await(1, TimeUnit.SECONDS)).isTrue();
-        assertThat(callback2.mOnClosedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback1.mOnClosedCalled.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback2.mOnClosedCalled.await(2, TimeUnit.SECONDS)).isTrue();
 
         uiAutomation.dropShellPermissionIdentity();
     }
@@ -431,9 +432,9 @@ public class RangingManagerTest {
         assertThat(rangingSession).isNotNull();
 
         rangingSession.start(preference);
-        assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnOpenedCalled.await(2, TimeUnit.SECONDS)).isTrue();
         rangingSession.stop();
-        assertThat(callback.mOnClosedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnClosedCalled.await(2, TimeUnit.SECONDS)).isTrue();
 
         mRangingManager.unregisterCapabilitiesCallback(capabilitiesCallback);
         uiAutomation.dropShellPermissionIdentity();
@@ -468,7 +469,7 @@ public class RangingManagerTest {
                                 .setRttRangingParams(new RttRangingParams.Builder("test_rtt_multi")
                                         .build())
                                 .setUwbRangingParams(new UwbRangingParams.Builder(
-                                        sessionId, DEVICE_ROLE_RESPONDER,
+                                        sessionId, CONFIG_UNICAST_DS_TWR,
                                         UwbAddress.fromBytes(new byte[]{3, 5}),
                                         UwbAddress.fromBytes(new byte[]{1, 2}))
                                         .setComplexChannel(
@@ -492,7 +493,7 @@ public class RangingManagerTest {
         assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
 
         rangingSession.stop();
-        assertThat(callback.mOnClosedCalled.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnClosedCalled.await(4, TimeUnit.SECONDS)).isTrue();
 
         mRangingManager.unregisterCapabilitiesCallback(capabilitiesCallback);
         uiAutomation.dropShellPermissionIdentity();

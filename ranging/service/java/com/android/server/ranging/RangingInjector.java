@@ -23,6 +23,8 @@ import android.annotation.NonNull;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.os.Binder;
+import android.os.HandlerThread;
+import android.os.Looper;
 import android.permission.PermissionManager;
 import android.ranging.RangingPreference;
 
@@ -48,10 +50,15 @@ public class RangingInjector {
     private final CapabilitiesProvider mCapabilitiesProvider;
     private final PermissionManager mPermissionManager;
 
+    private final Looper mLooper;
+
     public RangingInjector(@NonNull Context context) {
+        HandlerThread rangingHandlerThread = new HandlerThread("RangingServiceHandler");
+        rangingHandlerThread.start();
+        mLooper = rangingHandlerThread.getLooper();
         mContext = context;
         mCapabilitiesProvider = new CapabilitiesProvider(this);
-        mRangingServiceManager = new RangingServiceManager(this);
+        mRangingServiceManager = new RangingServiceManager(this, mLooper);
         mPermissionManager = context.getSystemService(PermissionManager.class);
     }
 
