@@ -72,13 +72,14 @@ public class RangingServiceImpl extends IRangingAdapter.Stub {
     @Override
     public void reconfigureRangingInterval(SessionHandle sessionHandle, int intervalSkipCount) {
         enforceRangingPermission();
-        throw new IllegalArgumentException("Reconfiguring ranging interval not supported yet");
+        mRangingInjector.getRangingServiceManager().reconfigureInterval(sessionHandle,
+                intervalSkipCount);
     }
 
     @Override
     public void addRawDevice(SessionHandle sessionHandle, RawResponderRangingParams rangingParams) {
         enforceRangingPermission();
-        throw new IllegalArgumentException("Dynamic addition of raw peer not supported yet");
+        mRangingInjector.getRangingServiceManager().addRawPeer(sessionHandle, rangingParams);
     }
 
     @Override
@@ -90,7 +91,7 @@ public class RangingServiceImpl extends IRangingAdapter.Stub {
     @Override
     public void removeDevice(SessionHandle sessionHandle, RangingDevice rangingDevice) {
         enforceRangingPermission();
-        throw new IllegalArgumentException("Dynamic removal of peer not supported yet");
+        mRangingInjector.getRangingServiceManager().removePeer(sessionHandle, rangingDevice);
     }
 
     @Override
