@@ -101,6 +101,7 @@ public class RangingManagerTest {
         mRangingManager = mContext.getSystemService(RangingManager.class);
         assertThat(mRangingManager).isNotNull();
         PackageManager packageManager = mContext.getPackageManager();
+        assertThat(packageManager).isNotNull();
         if (packageManager.hasSystemFeature(PackageManager.FEATURE_UWB)) {
             mSupportedTechnologies.add(RangingManager.UWB);
         }
