@@ -162,7 +162,10 @@ public class BleRssiAdapter implements RangingAdapter {
                 public void onStarted(DistanceMeasurementSession session) {
                     Log.i(TAG, "DistanceMeasurement onStarted !");
                     mSession = session;
-                    mCallbacks.onStarted(mConfig.getPeerDevice());
+                    // onStarted is called right after start measurement is called, other ranging
+                    // technologies do not wait for this callback till they find the peer, if peer
+                    // is not found here, we get onStartFail.
+                    //mCallbacks.onStarted(mConfig.getPeerDevice());
                 }
 
                 public void onStartFail(int reason) {
