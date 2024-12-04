@@ -80,7 +80,7 @@ public class OobController {
             return false;
 
         }
-        mOobSendDataListener.sendOobData(oobHandle, new byte[]{message.toByte()});
+        mOobSendDataListener.sendOobData(oobHandle, message.toBytes());
         return true;
     }
 
@@ -98,7 +98,7 @@ public class OobController {
             return false;
 
         }
-        mOobSendDataListener.sendOobData(oobHandle, new byte[]{message.toByte()});
+        mOobSendDataListener.sendOobData(oobHandle, message.toBytes());
         return true;
     }
 
@@ -109,15 +109,16 @@ public class OobController {
      * @param data      payload.
      */
     public void receiveData(OobHandle oobHandle, byte[] data) {
-        MessageType type = MessageType.fromOobData(data);
+        MessageType type = MessageType.parseByte(data[0]);
         byte[] message = Arrays.copyOfRange(data, 1, data.length);
         // TODO: parse vendor data
+        // TODO: handle all message types
         switch (type) {
-            case RANGING_CAPABILITY_REQUEST -> mDataReceiveCallback.onCapabilityRequestMessage(
+            case CAPABILITY_REQUEST -> mDataReceiveCallback.onCapabilityRequestMessage(
                     oobHandle, CapabilityRequestMessage.parseBytes(message));
-            case RANGING_CAPABILITY_RESPONSE -> mDataReceiveCallback.onCapabilityResponseMessage(
+            case CAPABILITY_RESPONSE -> mDataReceiveCallback.onCapabilityResponseMessage(
                     oobHandle, CapabilityResponseMessage.parseBytes(message));
-            case RANGING_CONFIGURATION -> mDataReceiveCallback.onConfigurationMessage(oobHandle,
+            case SET_CONFIGURATION -> mDataReceiveCallback.onConfigurationMessage(oobHandle,
                     SetConfigurationMessage.parseBytes(message));
             case START_RANGING -> mDataReceiveCallback.onStartRangingMessage(oobHandle,
                     StartRangingMessage.parseBytes(message));

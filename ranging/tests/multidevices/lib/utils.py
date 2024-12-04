@@ -146,7 +146,7 @@ def set_bt_state_and_verify(
   else:
     ad.bluetooth.disableBluetooth()
   # Check for BLE RSSI or BLE CS availability
-  asserts.assert_true(_is_technology_state(ad, RangingTechnology.BLE_CS, state, timeout_s=60),
+  asserts.assert_true(_is_technology_state(ad, RangingTechnology.BLE_RSSI, state, timeout_s=60),
                       "BT is not %s" % failure_msg)
 
 
