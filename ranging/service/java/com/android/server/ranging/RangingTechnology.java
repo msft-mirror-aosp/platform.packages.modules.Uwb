@@ -16,8 +16,12 @@
 
 package com.android.server.ranging;
 
-import android.content.Context;
+import static java.lang.Math.min;
 
+import android.content.Context;
+import android.ranging.RangingManager;
+
+import com.android.server.ranging.blerssi.BleRssiCapabilitiesAdapter;
 import com.android.server.ranging.cs.CsCapabilitiesAdapter;
 import com.android.server.ranging.rtt.RttCapabilitiesAdapter;
 import com.android.server.ranging.uwb.UwbCapabilitiesAdapter;
@@ -32,22 +36,26 @@ public enum RangingTechnology {
     UWB(0), // Ultra-Wide Band
     CS(1), // Channel Sounding, formerly known as HADM
 
-    RTT(2); // Wifi RTT.
+    RTT(2), // Wifi RTT.
+    RSSI(3); // BLE RSSI.
 
     public static final ImmutableList<RangingTechnology> TECHNOLOGIES =
             ImmutableList.copyOf(RangingTechnology.values());
+
+    private static final int BITMAP_SIZE_BYTES = 2;
+
     private final int value;
 
     RangingTechnology(int value) {
         this.value = value;
     }
 
-    public int getValue() {
+    public @RangingManager.RangingTechnology int getValue() {
         return value;
     }
 
     public byte toByte() {
-        return (byte) (1 << value);
+        return (byte) value;
     }
 
     /**
@@ -62,6 +70,8 @@ public enum RangingTechnology {
                 return CsCapabilitiesAdapter.isSupported(context);
             case RTT:
                 return RttCapabilitiesAdapter.isSupported(context);
+            case RSSI:
+                return BleRssiCapabilitiesAdapter.isSupported(context);
             default:
                 return false;
         }
@@ -78,14 +88,31 @@ public enum RangingTechnology {
         return technologies.build();
     }
 
-    public static byte toBitmap(List<RangingTechnology> technologies) {
+    public static byte[] toBitmap(List<RangingTechnology> technologies) {
         if (technologies.isEmpty()) {
-            return 0x0;
+            return new byte[BITMAP_SIZE_BYTES];
         }
-        BitSet bitset = new BitSet();
+        BitSet bitset = new BitSet(BITMAP_SIZE_BYTES * 8);
         for (RangingTechnology technology : technologies) {
             bitset.set(technology.value);
         }
-        return bitset.toByteArray()[0];
+        byte[] bitmap = new byte[BITMAP_SIZE_BYTES];
+        System.arraycopy(
+                bitset.toByteArray(), 0, bitmap, 0,
+                min(BITMAP_SIZE_BYTES, bitset.toByteArray().length));
+        return bitmap;
+    }
+
+    public static ImmutableList<RangingTechnology> fromBitmap(byte[] technologiesBitmap) {
+        ImmutableList.Builder<RangingTechnology> techs = ImmutableList.builder();
+        BitSet bitSet = BitSet.valueOf(technologiesBitmap);
+        for (int i = 0; i < BITMAP_SIZE_BYTES * 8; i++) {
+            if (bitSet.get(i)) {
+                if (i < RangingTechnology.values().length) {
+                    techs.add(RangingTechnology.values()[i]);
+                }
+            }
+        }
+        return techs.build();
     }
 }

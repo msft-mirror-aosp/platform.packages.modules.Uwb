@@ -17,22 +17,28 @@
 package com.android.server.ranging.rtt;
 
 import static android.net.wifi.aware.WifiAwareManager.ACTION_WIFI_AWARE_STATE_CHANGED;
+import static android.ranging.RangingCapabilities.DISABLED_USER;
+import static android.ranging.RangingCapabilities.ENABLED;
+import static android.ranging.RangingCapabilities.NOT_SUPPORTED;
 
+import android.annotation.NonNull;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.ranging.RangingCapabilities;
-import android.ranging.RangingManager.RangingTechnologyAvailability;
+import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
+import android.ranging.wifi.rtt.RttRangingCapabilities;
 
 import androidx.annotation.Nullable;
 
 import com.android.ranging.rtt.backend.internal.RttServiceImpl;
-import com.android.server.ranging.CapabilitiesProvider.AvailabilityCallback;
+import com.android.server.ranging.CapabilitiesProvider;
 import com.android.server.ranging.CapabilitiesProvider.CapabilitiesAdapter;
+import com.android.server.ranging.CapabilitiesProvider.TechnologyAvailabilityListener;
 
 public class RttCapabilitiesAdapter extends CapabilitiesAdapter {
+
     private final Context mContext;
     private final RttServiceImpl mRttService;
 
@@ -41,7 +47,11 @@ public class RttCapabilitiesAdapter extends CapabilitiesAdapter {
         return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_AWARE);
     }
 
-    public RttCapabilitiesAdapter(Context context) {
+    public RttCapabilitiesAdapter(
+            @NonNull Context context,
+            @NonNull TechnologyAvailabilityListener listener
+    ) {
+        super(listener);
         mContext = context;
         if (isSupported(mContext)) {
             mRttService = new RttServiceImpl(context);
@@ -56,17 +66,22 @@ public class RttCapabilitiesAdapter extends CapabilitiesAdapter {
     @Override
     public @RangingTechnologyAvailability int getAvailability() {
         if (mRttService == null) {
-            return RangingTechnologyAvailability.NOT_SUPPORTED;
+            return NOT_SUPPORTED;
         } else if (mRttService.isAvailable()) {
-            return RangingTechnologyAvailability.ENABLED;
+            return ENABLED;
         } else {
-            return RangingTechnologyAvailability.DISABLED_USER;
+            return DISABLED_USER;
         }
     }
 
     @Override
-    public @Nullable RangingCapabilities.TechnologyCapabilities getCapabilities() {
-        // TODO
+    @Nullable
+    public RttRangingCapabilities getCapabilities() {
+        if (getAvailability() == ENABLED) {
+            return new RttRangingCapabilities.Builder()
+                    .setPeriodicRangingHwFeature(mRttService.hasPeriodicRangingSupport())
+                    .build();
+        }
         return null;
     }
 
@@ -74,11 +89,11 @@ public class RttCapabilitiesAdapter extends CapabilitiesAdapter {
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            AvailabilityCallback callback = getAvailabilityCallback();
-            if (callback != null) {
-                callback.onAvailabilityChange(
+            TechnologyAvailabilityListener listener = getAvailabilityListener();
+            if (listener != null) {
+                listener.onAvailabilityChange(
                         getAvailability(),
-                        AvailabilityCallback.AvailabilityChangedReason.SYSTEM_POLICY);
+                        CapabilitiesProvider.AvailabilityChangedReason.SYSTEM_POLICY);
             }
         }
     }

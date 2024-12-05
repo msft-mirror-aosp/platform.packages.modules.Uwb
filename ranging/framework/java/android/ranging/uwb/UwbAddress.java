@@ -24,11 +24,11 @@ import android.os.Parcelable;
 
 import com.android.ranging.flags.Flags;
 
+import java.security.SecureRandom;
 import java.util.Arrays;
 
 /**
  * A class representing a UWB address
- * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class UwbAddress implements Parcelable {
@@ -63,22 +63,44 @@ public final class UwbAddress implements Parcelable {
     }
 
     /**
+     * Generates a random 2 bytes {@link UwbAddress}.
+     *
+     * @return a randomly generated {@link UwbAddress}.
+     */
+    @NonNull
+    public static UwbAddress getRandomShortAddress() {
+        SecureRandom secureRandom = new SecureRandom();
+        return fromBytes(generateRandomByteArray(SHORT_ADDRESS_BYTE_LENGTH, secureRandom));
+    }
+
+    /**
+     * Generates a random 8 bytes {@link UwbAddress}.
+     *
+     * @return a randomly generated {@link UwbAddress}.
+     *
+     * @hide Intentionally hidden.
+     */
+    @NonNull
+    public static UwbAddress getRandomExtendedAddress() {
+        SecureRandom secureRandom = new SecureRandom();
+        return fromBytes(generateRandomByteArray(EXTENDED_ADDRESS_BYTE_LENGTH, secureRandom));
+    }
+
+    private static byte[] generateRandomByteArray(int len, SecureRandom secureRandom) {
+        byte[] bytes = new byte[len];
+        secureRandom.nextBytes(bytes);
+        return bytes;
+    }
+
+
+    /**
      * Get the address as a byte array
      *
      * @return the byte representation of this {@link android.uwb.UwbAddress}
      */
     @NonNull
-    public byte[] toBytes() {
+    public byte[] getAddressBytes() {
         return mAddressBytes;
-    }
-
-    /**
-     * The length of the address in bytes
-     * <p>Possible values are {@link #SHORT_ADDRESS_BYTE_LENGTH} and
-     * {@link #EXTENDED_ADDRESS_BYTE_LENGTH}.
-     */
-    public int size() {
-        return mAddressBytes.length;
     }
 
     @NonNull
@@ -94,7 +116,7 @@ public final class UwbAddress implements Parcelable {
     @Override
     public boolean equals(@Nullable Object obj) {
         if (obj instanceof UwbAddress) {
-            return Arrays.equals(mAddressBytes, ((UwbAddress) obj).toBytes());
+            return Arrays.equals(mAddressBytes, ((UwbAddress) obj).getAddressBytes());
         }
         return false;
     }
