@@ -39,9 +39,9 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import com.android.server.ranging.RangingAdapter;
-import com.android.server.ranging.RangingSessionConfig;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
+import com.android.server.ranging.session.RangingSessionConfig;
 
 import java.util.concurrent.Executors;
 
