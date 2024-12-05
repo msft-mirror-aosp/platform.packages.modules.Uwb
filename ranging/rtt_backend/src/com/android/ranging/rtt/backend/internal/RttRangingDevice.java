@@ -16,6 +16,8 @@
 
 package com.android.ranging.rtt.backend.internal;
 
+import static com.android.ranging.rtt.backend.internal.RttRangingSessionCallback.REASON_STOP_RANGING_CALLED;
+
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import android.content.Context;
@@ -183,7 +185,7 @@ public class RttRangingDevice {
 
         synchronized (mLock) {
             if (!mIsRunning) {
-                Log.w(TAG, "This client is already stop.");
+                Log.w(TAG, "This client has stopped ranging already");
                 return;
             }
             mIsRunning = false;
@@ -196,7 +198,6 @@ public class RttRangingDevice {
             }
             mCurrentPublishDiscoverySession = null;
             mCurrentSubscribeDiscoverySession = null;
-            mRttListener = null;
         }
 
     }
@@ -249,6 +250,9 @@ public class RttRangingDevice {
             @Override
             public void onSessionTerminated() {
                 Log.i(TAG, "onSession Terminated. ");
+                // TODO: Check whether we can get the reason code.
+                mRttListener.onRangingSuspended(mRttDevice, REASON_STOP_RANGING_CALLED);
+                mRttListener = null;
             }
         };
     }
@@ -260,6 +264,9 @@ public class RttRangingDevice {
             public void onSubscribeStarted(SubscribeDiscoverySession session) {
                 Log.i(TAG, "onSubscribeStarted, SubscribeDiscoverySession= " + session);
                 mCurrentSubscribeDiscoverySession = session;
+                if (mRttListener != null) {
+                    mRttListener.onRangingInitialized(mRttDevice);
+                }
             }
 
             @Override
@@ -292,6 +299,9 @@ public class RttRangingDevice {
             @Override
             public void onSessionTerminated() {
                 Log.i(TAG, "onSession Terminated. ");
+                // TODO: Check whether we can get the reason code.
+                mRttListener.onRangingSuspended(mRttDevice, REASON_STOP_RANGING_CALLED);
+                mRttListener = null;
             }
         };
     }
