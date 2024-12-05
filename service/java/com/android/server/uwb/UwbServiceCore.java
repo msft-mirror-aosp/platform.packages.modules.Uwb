@@ -92,6 +92,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -678,6 +679,15 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
                     firaOpenSessionParams, rangingCallbacks, chipId);
         } else if (CccParams.isCorrectProtocol(params)) {
             CccOpenRangingParams cccOpenRangingParams = CccOpenRangingParams.fromBundle(params);
+            CccOpenRangingParams.Builder builder =
+                    new CccOpenRangingParams.Builder(CccOpenRangingParams.fromBundle(params));
+            if (mUwbInjector.getDeviceConfigFacade().isRandomHopmodekeySupported()
+                    && cccOpenRangingParams.getHoppingConfigMode()
+                            != CccParams.HOPPING_CONFIG_MODE_NONE
+                    && cccOpenRangingParams.getHopModeKey() == CccParams.HOP_MODE_KEY_UNSET) {
+                builder.setHopModeKey(new Random().nextInt());
+            }
+            cccOpenRangingParams = builder.build();
             sessionId = cccOpenRangingParams.getSessionId();
             sessionType = cccOpenRangingParams.getSessionType();
             mSessionManager.initSession(attributionSource, sessionHandle, sessionId,
