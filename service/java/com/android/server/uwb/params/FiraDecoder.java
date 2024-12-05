@@ -49,6 +49,7 @@ import static com.android.server.uwb.config.CapabilityParam.DYNAMIC_STS_RESPONDE
 import static com.android.server.uwb.config.CapabilityParam.ESS_TWR_NON_DEFERRED;
 import static com.android.server.uwb.config.CapabilityParam.EXTENDED_MAC_ADDRESS;
 import static com.android.server.uwb.config.CapabilityParam.HOPPING_MODE;
+import static com.android.server.uwb.config.CapabilityParam.HYBRID_SCHEDULED_RANGING;
 import static com.android.server.uwb.config.CapabilityParam.INITIATOR;
 import static com.android.server.uwb.config.CapabilityParam.INTERVAL_BASED_SCHEDULING;
 import static com.android.server.uwb.config.CapabilityParam.MANY_TO_MANY;
@@ -558,9 +559,6 @@ public class FiraDecoder extends TlvDecoder {
             if (isBitSet(multiNodeUci, ONE_TO_MANY)) {
                 multiNodeFlag.add(MultiNodeCapabilityFlag.HAS_ONE_TO_MANY_SUPPORT);
             }
-            if (isBitSet(multiNodeUci, MANY_TO_MANY)) {
-                multiNodeFlag.add(MultiNodeCapabilityFlag.HAS_MANY_TO_MANY_SUPPORT);
-            }
             builder.setMultiNodeCapabilities(multiNodeFlag);
 
             byte rangingTimeStructUci = tlvs.getByte(SUPPORTED_RANGING_TIME_STRUCT_VER_2_0);
@@ -582,6 +580,10 @@ public class FiraDecoder extends TlvDecoder {
             if (isBitSet(schedulingModeUci, TIME_SCHEDULED_RANGING)) {
                 schedulingModeFlag.add(
                         SchedulingModeCapabilitiesFlag.HAS_TIME_SCHEDULED_RANGING_SUPPORT);
+            }
+            if (isBitSet(schedulingModeUci, HYBRID_SCHEDULED_RANGING)) {
+                schedulingModeFlag.add(
+                        SchedulingModeCapabilitiesFlag.HAS_HYBRID_SCHEDULED_RANGING_SUPPORT);
             }
             builder.setSchedulingModeCapabilities(schedulingModeFlag);
 
