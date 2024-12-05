@@ -72,6 +72,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
 import com.android.compatibility.common.util.CddTest;
+import com.android.ranging.flags.Flags;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -98,9 +99,11 @@ public class RangingManagerTest {
 
     @Before
     public void setup() throws Exception {
+        assumeTrue(Flags.rangingStackEnabled());
         mRangingManager = mContext.getSystemService(RangingManager.class);
         assertThat(mRangingManager).isNotNull();
         PackageManager packageManager = mContext.getPackageManager();
+        assertThat(packageManager).isNotNull();
         if (packageManager.hasSystemFeature(PackageManager.FEATURE_UWB)) {
             mSupportedTechnologies.add(RangingManager.UWB);
         }
