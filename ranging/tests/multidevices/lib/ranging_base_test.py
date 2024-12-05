@@ -34,8 +34,10 @@ class RangingBaseTest(base_test.BaseTestClass):
         android_device, min_number=2
     )
     for ad in self.android_devices:
-      ad.load_snippet("ranging", "multidevices.snippet.ranging")
+      ad.load_snippet("ranging", "com.google.snippet.ranging")
       utils.initialize_uwb_country_code_if_necessary(ad)
+      ad.load_snippet("uwb", "com.google.snippet.uwb")
+      ad.load_snippet("bluetooth", "com.google.snippet.bluetooth")
 
   def setup_test(self):
     super().setup_test()
@@ -53,6 +55,17 @@ class RangingBaseTest(base_test.BaseTestClass):
 
   def teardown_class(self):
     super().teardown_class()
+
+  def on_fail(self, record):
+    test_name = record.test_name
+    # Single device test
+    for count, ad in enumerate(self.android_devices):
+      device_name = "initiator" if not count else "responder"
+      test_device_name = test_name + "_" + device_name
+      ad.take_bug_report(
+          test_name=test_device_name,
+          destination=self.current_test_info.output_path,
+      )
 
 
 if __name__ == "__main__":

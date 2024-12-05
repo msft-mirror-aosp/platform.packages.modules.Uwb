@@ -16,23 +16,32 @@
 
 package com.android.server.ranging;
 
-import static android.ranging.params.RangingParams.RANGING_SESSION_RAW;
+import static android.ranging.RangingSession.Callback.REASON_LOCAL_REQUEST;
+import static android.ranging.RangingSession.Callback.REASON_NO_PEERS_FOUND;
+import static android.ranging.RangingSession.Callback.REASON_SYSTEM_POLICY;
+import static android.ranging.RangingSession.Callback.REASON_UNKNOWN;
+import static android.ranging.RangingSession.Callback.REASON_UNSUPPORTED;
 
 import android.content.AttributionSource;
-import android.os.RemoteCallbackList;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
+import android.os.Message;
 import android.os.RemoteException;
 import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
 import android.ranging.OobHandle;
-import android.ranging.RangingCapabilities;
+import android.ranging.RangingData;
+import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
+import android.ranging.RangingSession.Callback;
 import android.ranging.SessionHandle;
-import android.ranging.params.RangingParams;
-import android.ranging.params.RawInitiatorRangingParams;
-import android.ranging.params.RawRangingDevice;
-import android.ranging.params.RawResponderRangingParams;
+import android.ranging.raw.RawInitiatorRangingParams;
+import android.ranging.raw.RawResponderRangingParams;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
 
 import com.android.server.ranging.oob.CapabilityRequestMessage;
 import com.android.server.ranging.oob.CapabilityResponseMessage;
@@ -44,59 +53,74 @@ import com.android.server.ranging.oob.StopRangingMessage;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RangingServiceManager {
-
     private static final String TAG = RangingServiceManager.class.getSimpleName();
+
+    public enum RangingTask {
+        TASK_START_RANGING(1),
+        TASK_STOP_RANGING(2),
+        TASK_ADD_DEVICE(3),
+        TASK_REMOVE_DEVICE(4),
+        TASK_RECONFIGURE_INTERVAL(5);
+
+        private final int mVal;
+
+        RangingTask(int val) {
+            this.mVal = val;
+        }
+
+        public int getValue() {
+            return mVal;
+        }
+
+        public static RangingTask fromValue(int code) {
+            for (RangingTask task : RangingTask.values()) {
+                if (task.getValue() == code) {
+                    return task;
+                }
+            }
+            throw new IllegalArgumentException("Unknown task code: " + code);
+        }
+    }
+
     private final RangingInjector mRangingInjector;
     private final OobController mOobController;
-
     private final ListeningExecutorService mAdapterExecutor;
-    private final ScheduledExecutorService mTimeoutExecutor;
-    private final RemoteCallbackList<IRangingCapabilitiesCallback> mCapabilitiesCallbackList =
-            new RemoteCallbackList<>();
+    private final RangingTaskManager mRangingTaskManager;
 
-    private final Map<SessionHandle, RangingSessionInfo> mRangingSessionInfoMap =
-            new ConcurrentHashMap<>();
+    private final Map<SessionHandle, RangingSession> mSessions = new ConcurrentHashMap<>();
 
-    public RangingServiceManager(RangingInjector rangingInjector) {
+    public RangingServiceManager(RangingInjector rangingInjector, Looper looper) {
         mRangingInjector = rangingInjector;
         mAdapterExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor());
-        mTimeoutExecutor = Executors.newSingleThreadScheduledExecutor();
         mOobController = new OobController(new OobDataReceiveCallback());
+        mRangingTaskManager = new RangingTaskManager(looper);
     }
 
-    public void registerCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback)
-            throws RemoteException {
-        synchronized (mCapabilitiesCallbackList) {
-            mCapabilitiesCallbackList.register(capabilitiesCallback);
-        }
+    public void registerCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback) {
         Log.w(TAG, "Registering ranging capabilities callback");
-        getRangingCapabilities(capabilitiesCallback);
+        mRangingInjector
+                .getCapabilitiesProvider()
+                .registerCapabilitiesCallback(capabilitiesCallback);
     }
 
-    public void unregisterCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback)
-            throws RemoteException {
-        synchronized (mCapabilitiesCallbackList) {
-            mCapabilitiesCallbackList.unregister(capabilitiesCallback);
-        }
+    public void unregisterCapabilitiesCallback(IRangingCapabilitiesCallback capabilitiesCallback) {
+        mRangingInjector
+                .getCapabilitiesProvider()
+                .unregisterCapabilitiesCallback(capabilitiesCallback);
     }
 
-    private void getRangingCapabilities(IRangingCapabilitiesCallback callback)
-            throws RemoteException {
-        RangingCapabilities rangingCapabilities =
-                mRangingInjector.getCapabilitiesProvider().getCapabilities();
-        callback.onRangingCapabilities(rangingCapabilities);
-    }
-
-    public void startRanging(AttributionSource attributionSource, SessionHandle sessionHandle,
-            RangingPreference rangingPreference, IRangingCallbacks callbacks) {
+    public void startRanging(
+            AttributionSource attributionSource, SessionHandle handle, RangingPreference preference,
+            IRangingCallbacks callbacks
+    ) {
         // TODO android.permission.RANGING permission check here
 //        Context context = mRangingInjector.getContext()
 //                .createContext(new ContextParams
@@ -104,93 +128,50 @@ public class RangingServiceManager {
 //                        .setNextAttributionSource(attributionSource)
 //                        .build());
 
-        RangingSessionInfo sessionInfo = new RangingSessionInfo(sessionHandle, rangingPreference,
-                callbacks);
-        mRangingSessionInfoMap.put(sessionHandle, sessionInfo);
-        RangingParams rangingParams = rangingPreference.getRangingParameters();
-        if (rangingPreference.getRangingParameters().getRangingSessionType()
-                == RANGING_SESSION_RAW) {
-            sessionInfo.mRangingSessionType = RANGING_SESSION_RAW;
-            sessionInfo.mRangingPeers = getRawRangingSessions(rangingParams, sessionInfo);
-            startRawRanging(sessionInfo);
-        } else {
-            throw new UnsupportedOperationException("Smart ranging is not yet supported");
-        }
+        RangingSession session = new RangingSession(
+                attributionSource,
+                handle,
+                mRangingInjector,
+                getSessionConfigFromPreference(preference),
+                new SessionListener(handle, callbacks),
+                mAdapterExecutor
+        );
+        mSessions.put(handle, session);
+        mRangingTaskManager.enqueueTask(RangingTask.TASK_START_RANGING, session);
     }
 
-    public void startRawRanging(RangingSessionInfo rangingSessionInfo) {
-        // TODO: call this through an executor.
-        for (RangingPeer rangingPeer : rangingSessionInfo.mRangingPeers) {
-            rangingPeer.start();
-            rangingSessionInfo.mRangingStartedPeers.add(rangingPeer);
+    public void addRawPeer(SessionHandle handle, RawResponderRangingParams params) {
+        if (!mSessions.containsKey(handle)) {
+            Log.e(TAG, "Failed to add peer. Ranging session not found");
         }
-        rangingSessionInfo.mRangingPeers.clear();
+        DynamicPeer peer = new DynamicPeer(params.getRawRangingDevice().getRangingDevice(),
+                mSessions.get(handle));
+        mRangingTaskManager.enqueueTask(RangingTask.TASK_ADD_DEVICE, peer);
     }
 
-    public void stopRawRanging(RangingSessionInfo rangingSessionInfo) {
-        for (RangingPeer rangingPeer : rangingSessionInfo.mRangingStartedPeers) {
-            rangingPeer.stop();
+    public void removePeer(SessionHandle handle, RangingDevice device) {
+        if (!mSessions.containsKey(handle)) {
+            Log.e(TAG, "Failed to remove peer. Ranging session not found");
         }
-        rangingSessionInfo.mRangingStartedPeers.clear();
+        DynamicPeer peer = new DynamicPeer(device, mSessions.get(handle));
+        mRangingTaskManager.enqueueTask(RangingTask.TASK_REMOVE_DEVICE, peer);
     }
 
-    public List<RangingPeer> getRawRangingSessions(RangingParams rangingParams,
-            RangingSessionInfo rangingSessionInfo) {
-        List<RangingPeer> rangingPeerList = new ArrayList<>();
-        if (rangingParams instanceof RawResponderRangingParams) {
-            rangingPeerList.add(getRangingPeer(
-                    ((RawResponderRangingParams) rangingParams).getRawRangingDevice(),
-                    rangingSessionInfo));
-        } else if (rangingParams instanceof RawInitiatorRangingParams) {
-            for (RawRangingDevice rangingDevice :
-                    ((RawInitiatorRangingParams) rangingParams).getRawRangingDevices()) {
-                rangingPeerList.add(getRangingPeer(rangingDevice, rangingSessionInfo));
-            }
+    public void reconfigureInterval(SessionHandle handle, int intervalSkipCount) {
+        if (!mSessions.containsKey(handle)) {
+            Log.e(TAG, "Failed to reconfigure ranging interval. Ranging session not found");
         }
-        return rangingPeerList;
-    }
-
-    public RangingPeer getRangingPeer(RawRangingDevice rangingDevice,
-            RangingSessionInfo rangingSessionInfo) {
-
-        RangingConfig rangingConfig = new RangingConfig.Builder(
-                rangingSessionInfo.mRangingPreference)
-                .setPeerDevice(rangingDevice.getRangingDevice())
-                .setUwbRangingParams(rangingDevice.getUwbRangingParams())
-                .setCsRangingParams(rangingDevice.getCsRangingParams())
-                .setRttRangingParams(rangingDevice.getRttRangingParams())
-                .build();
-
-        RangingPeer rangingPeer = new RangingPeer(mRangingInjector.getContext(), mAdapterExecutor,
-                mTimeoutExecutor, rangingSessionInfo.mSessionHandle, rangingConfig,
-                rangingSessionInfo.mRangingCallbacks);
-        return rangingPeer;
+        mRangingTaskManager.enqueueTask(RangingTask.TASK_RECONFIGURE_INTERVAL,
+                mSessions.get(handle), intervalSkipCount);
     }
 
     public void stopRanging(SessionHandle handle) {
-        RangingSessionInfo rangingSessionInfo = mRangingSessionInfoMap.get(handle);
-        if (rangingSessionInfo.mRangingSessionType == RANGING_SESSION_RAW) {
-            stopRawRanging(rangingSessionInfo);
-        } else {
-            //TODO stop Oob ranging
+        RangingSession session = mSessions.get(handle);
+        if (session == null) {
+            Log.e(TAG, "stopRanging for nonexistent session");
+            return;
         }
-        mRangingSessionInfoMap.remove(handle);
-    }
-
-    public static final class RangingSessionInfo {
-        public final SessionHandle mSessionHandle;
-        public final RangingPreference mRangingPreference;
-        public final IRangingCallbacks mRangingCallbacks;
-        public List<RangingPeer> mRangingPeers = new ArrayList<>();
-        public final List<RangingPeer> mRangingStartedPeers = new ArrayList<>();
-        public int mRangingSessionType;
-
-        public RangingSessionInfo(SessionHandle sessionHandle, RangingPreference rangingPreference,
-                IRangingCallbacks rangingCallbacks) {
-            mSessionHandle = sessionHandle;
-            mRangingPreference = rangingPreference;
-            mRangingCallbacks = rangingCallbacks;
-        }
+        mRangingTaskManager.enqueueTask(RangingTask.TASK_STOP_RANGING, session);
     }
 
     /**
@@ -200,7 +181,8 @@ public class RangingServiceManager {
      * @param data      payload
      */
     public void oobDataReceived(OobHandle oobHandle, byte[] data) {
-        mOobController.receiveData(oobHandle, data);
+        mRangingTaskManager.post(() ->
+                mOobController.receiveData(oobHandle, data));
     }
 
     /**
@@ -267,5 +249,196 @@ public class RangingServiceManager {
         public void onStopRangingMessage(OobHandle oobHandle, StopRangingMessage message) {
             // Do stuff
         }
+    }
+
+    /**
+     * Listens for peer-specific events within a session and translates them to
+     * {@link IRangingCallbacks} calls.
+     */
+    public class SessionListener implements IBinder.DeathRecipient {
+        private final SessionHandle mSessionHandle;
+        private final IRangingCallbacks mRangingCallbacks;
+        private final AtomicBoolean mIsSessionStarted;
+
+        SessionListener(SessionHandle sessionHandle, IRangingCallbacks callbacks) {
+            mSessionHandle = sessionHandle;
+            mRangingCallbacks = callbacks;
+            mIsSessionStarted = new AtomicBoolean(false);
+            try {
+                mRangingCallbacks.asBinder().linkToDeath(this, 0);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Failed to link to death: " + sessionHandle, e);
+                stopRanging(mSessionHandle);
+            }
+        }
+
+        @Override
+        public void binderDied() {
+            Log.i(TAG, "binderDied : Stopping session: " + mSessionHandle);
+            stopRanging(mSessionHandle);
+        }
+
+        public void onTechnologyStarted(
+                @NonNull RangingDevice peer, @NonNull RangingTechnology technology
+        ) {
+            if (!mIsSessionStarted.getAndSet(true)) {
+                try {
+                    mRangingCallbacks.onOpened(mSessionHandle);
+                } catch (RemoteException e) {
+                    Log.e(TAG, "onOpened callback failed: " + e);
+                }
+            }
+            try {
+                mRangingCallbacks.onStarted(mSessionHandle, peer, technology.getValue());
+            } catch (RemoteException e) {
+                Log.e(TAG, "onTechnologyStarted callback failed: " + e);
+            }
+        }
+
+        public void onTechnologyStopped(
+                @NonNull RangingDevice peer, @NonNull RangingTechnology technology
+        ) {
+            try {
+                mRangingCallbacks.onStopped(mSessionHandle, peer, technology.getValue());
+            } catch (RemoteException e) {
+                Log.e(TAG, "onTechnologyStopped callback failed: " + e);
+            }
+        }
+
+        public void onResults(
+                @NonNull RangingDevice peer, @NonNull RangingData data
+        ) {
+            try {
+                mRangingCallbacks.onResults(mSessionHandle, peer, data);
+            } catch (RemoteException e) {
+                Log.e(TAG, "onData callback failed: " + e);
+            }
+        }
+
+        /**
+         * Signals that ranging in the session has stopped. Called by a {@link RangingSession} once
+         * all of its constituent technology-specific sessions have stopped.
+         */
+        public void onSessionStopped(@RangingAdapter.Callback.ClosedReason int reason) {
+            mSessions.remove(mSessionHandle);
+            if (mIsSessionStarted.get()) {
+                try {
+                    mRangingCallbacks.onClosed(mSessionHandle, convertReason(reason));
+                } catch (RemoteException e) {
+                    Log.e(TAG, "onClosed callback failed: " + e);
+                }
+            } else {
+                try {
+                    mRangingCallbacks.onOpenFailed(mSessionHandle, convertReason(reason));
+                } catch (RemoteException e) {
+                    Log.e(TAG, "onOpenFailed callback failed: " + e);
+                }
+            }
+        }
+
+        private @Callback.Reason int convertReason(
+                @RangingAdapter.Callback.ClosedReason int reason
+        ) {
+            switch (reason) {
+                case RangingAdapter.Callback.ClosedReason.REQUESTED:
+                    return REASON_LOCAL_REQUEST;
+                case RangingAdapter.Callback.ClosedReason.FAILED_TO_START:
+                    return REASON_UNSUPPORTED;
+                case RangingAdapter.Callback.ClosedReason.LOST_CONNECTION:
+                    return REASON_NO_PEERS_FOUND;
+                case RangingAdapter.Callback.ClosedReason.SYSTEM_POLICY:
+                    return REASON_SYSTEM_POLICY;
+                default:
+                    return REASON_UNKNOWN;
+            }
+        }
+    }
+
+    private @NonNull RangingSessionConfig getSessionConfigFromPreference(
+            @NonNull RangingPreference preference) {
+        RangingSessionConfig.Builder sessionConfigBuilder = new RangingSessionConfig.Builder()
+                .setDeviceRole(preference.getDeviceRole())
+                .setSensorFusionConfig(
+                        preference.getSessionConfiguration().getSensorFusionParameters())
+                .setDataNotificationConfig(
+                        preference.getSessionConfiguration().getDataNotificationConfig())
+                .setAoaNeeded(preference.getSessionConfiguration().isAngleOfArrivalNeeded());
+
+        if (preference.getRangingParameters() instanceof RawInitiatorRangingParams params) {
+            params.getRawRangingDevices().forEach(sessionConfigBuilder::addPeerDeviceParams);
+        } else if (preference.getRangingParameters() instanceof RawResponderRangingParams params) {
+            sessionConfigBuilder.addPeerDeviceParams(params.getRawRangingDevice());
+        } else {
+            // TODO(b/372106978): Negotiate configuration over OOB based on capabilities.
+            throw new UnsupportedOperationException("OOB ranging not yet implemented");
+        }
+        return sessionConfigBuilder.build();
+    }
+
+    private class RangingTaskManager extends Handler {
+        RangingTaskManager(Looper looper) {
+            super(looper);
+        }
+
+        public void enqueueTask(RangingTask task, Object obj) {
+            Message msg = mRangingTaskManager.obtainMessage();
+            msg.what = task.getValue();
+            msg.obj = obj;
+            this.sendMessage(msg);
+        }
+
+        public void enqueueTask(RangingTask task, Object obj, int arg1) {
+            Message msg = mRangingTaskManager.obtainMessage();
+            msg.what = task.getValue();
+            msg.obj = obj;
+            msg.arg1 = arg1;
+            this.sendMessage(msg);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            RangingTask task = RangingTask.fromValue(msg.what);
+            switch (task) {
+                case TASK_START_RANGING -> {
+                    RangingSession rangingSession = (RangingSession) msg.obj;
+                    rangingSession.start();
+                }
+                case TASK_STOP_RANGING -> {
+                    RangingSession rangingSession = (RangingSession) msg.obj;
+                    rangingSession.stop();
+                }
+                case TASK_ADD_DEVICE -> {
+                    DynamicPeer peer = (DynamicPeer) msg.obj;
+                    peer.mSession.addPeer(peer.mDevice);
+                }
+                case TASK_REMOVE_DEVICE -> {
+                    DynamicPeer peer = (DynamicPeer) msg.obj;
+                    peer.mSession.removePeer(peer.mDevice);
+                }
+                case TASK_RECONFIGURE_INTERVAL -> {
+                    RangingSession session = (RangingSession) msg.obj;
+                    session.reconfigureInterval(msg.arg1);
+                }
+            }
+        }
+    }
+
+    public static final class DynamicPeer {
+        public final RangingDevice mDevice;
+        public final RangingSession mSession;
+
+        public DynamicPeer(RangingDevice device, RangingSession session) {
+            mDevice = device;
+            mSession = session;
+        }
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("---- Dump of RangingServiceManager ----");
+        for (RangingSession session : mSessions.values()) {
+            session.dump(fd, pw, args);
+        }
+        pw.println("---- Dump of RangingServiceManager ----");
+        mRangingInjector.getCapabilitiesProvider().dump(fd, pw, args);
     }
 }
