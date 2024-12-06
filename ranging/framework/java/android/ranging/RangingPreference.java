@@ -167,12 +167,12 @@ public final class RangingPreference implements Parcelable {
          * @param role the role of the device in {@link DeviceRole}
          * @param rangingParams the {@link RangingParams} to use.
          *                      Needs to be an instance of one of the following:
-         *                      <ul>
-         *                          <li>{@link android.ranging.ble.rssi.BleRssiRangingParams}</li>
-         *                          <li>{@link android.ranging.ble.cs.CsRangingParams}</li>
-         *                          <li>{@link android.ranging.wifi.rtt.RttRangingParams}</li>
-         *                          <li>{@link android.ranging.uwb.UwbRangingParams}</li>
-         *                      </ul>
+         *  <ul>
+         *     <li>{@link android.ranging.raw.RawResponderRangingParams}</li>
+         *     <li>{@link android.ranging.raw.RawInitiatorRangingParams}</li>
+         *     <li>{@link android.ranging.oob.OobResponderRangingParams}</li>
+         *     <li>{@link android.ranging.oob.OobInitiatorRangingParams}</li>
+         *  </ul>
          * @throws NullPointerException if {@code rangingParams} is null.
          */
         public Builder(@DeviceRole int role, @NonNull RangingParams rangingParams) {
