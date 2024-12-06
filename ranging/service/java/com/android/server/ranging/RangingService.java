@@ -24,6 +24,7 @@ import com.android.server.SystemService;
 public class RangingService extends SystemService {
     private static final String TAG = "RangingService";
     private final RangingServiceImpl mRangingImpl;
+
     public RangingService(Context context) {
         super(context);
         mRangingImpl = new RangingServiceImpl(context, new RangingInjector(context));

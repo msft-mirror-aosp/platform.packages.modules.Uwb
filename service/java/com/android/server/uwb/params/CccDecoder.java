@@ -140,9 +140,21 @@ public class CccDecoder extends TlvDecoder {
             builder.addProtocolVersion(CccProtocolVersion.fromBytes(versions, i));
         }
         byte[] configs = tlvs.getByteArray(CCC_SUPPORTED_UWB_CONFIGS);
-        for (int i = 0; i < configs.length; i++) {
-            builder.addUwbConfig(configs[i]);
+        if (mUwbInjector.isCccSupportedTwoByteConfigIdLittleEndian()) {
+            if (configs.length % 2 != 0) {
+                throw new IllegalArgumentException("Invalid supported configs len "
+                        + versions.length);
+            }
+            for (int i = 0; i < configs.length; i += 2) {
+                int config = ((configs[i + 1] & 0xff) << 8) + (configs[i] & 0xff);
+                builder.addUwbConfig(config);
+            }
+        } else {
+            for (int i = 0; i < configs.length; i++) {
+                builder.addUwbConfig(configs[i]);
+            }
         }
+
         byte[] pulse_shape_combos = tlvs.getByteArray(CCC_SUPPORTED_PULSE_SHAPE_COMBOS);
         for (int i = 0; i < pulse_shape_combos.length; i++) {
             builder.addPulseShapeCombo(CccPulseShapeCombo.fromBytes(pulse_shape_combos, i));
@@ -201,8 +213,14 @@ public class CccDecoder extends TlvDecoder {
 
         try {
             byte[] prioritizedChannels = tlvs.getByteArray(CCC_PRIORITIZED_CHANNEL_LIST);
+            byte channels = tlvs.getByte(CCC_SUPPORTED_CHANNELS);
             for (byte prioritizedChannel : prioritizedChannels) {
-                builder.addChannel(prioritizedChannel);
+                if (isBitSet(channels, CCC_CHANNEL_5) && prioritizedChannel == UWB_CHANNEL_5) {
+                    builder.addChannel(prioritizedChannel);
+                }
+                if (isBitSet(channels, CCC_CHANNEL_9) && prioritizedChannel == UWB_CHANNEL_9) {
+                    builder.addChannel(prioritizedChannel);
+                }
             }
         } catch (IllegalArgumentException e) {
             Log.w(TAG, "CCC_PRIORITIZED_CHANNEL_LIST not found");

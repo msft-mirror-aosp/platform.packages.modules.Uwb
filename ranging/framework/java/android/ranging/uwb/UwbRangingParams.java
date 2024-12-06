@@ -16,26 +16,25 @@
 
 package android.ranging.uwb;
 
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_NORMAL;
+
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.RangingDevice;
-import android.ranging.params.RawRangingDevice;
-
-import androidx.annotation.IntRange;
+import android.ranging.raw.RawRangingDevice.RangingUpdateRate;
 
 import com.android.ranging.flags.Flags;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Arrays;
+import java.util.Objects;
 
 /**
- * UwbRangingParameters encapsulates the parameters required for a UWB ranging session.
- *
- * @hide
+ * UwbRangingParams encapsulates the parameters required for a UWB ranging session.
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class UwbRangingParams implements Parcelable {
@@ -57,6 +56,7 @@ public final class UwbRangingParams implements Parcelable {
         mSlotDurationMillis = in.readInt();
     }
 
+    @NonNull
     public static final Creator<UwbRangingParams> CREATOR = new Creator<UwbRangingParams>() {
         @Override
         public UwbRangingParams createFromParcel(Parcel in) {
@@ -95,32 +95,42 @@ public final class UwbRangingParams implements Parcelable {
      */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
-            ConfigId.UNICAST_DS_TWR,
-            ConfigId.MULTICAST_DS_TWR,
-            ConfigId.UNICAST_DS_TWR_NO_AOA,
-            ConfigId.PROVISIONED_UNICAST_DS_TWR,
-            ConfigId.PROVISIONED_MULTICAST_DS_TWR,
-            ConfigId.PROVISIONED_UNICAST_DS_TWR_NO_AOA,
-            ConfigId.PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
+            CONFIG_UNICAST_DS_TWR,
+            CONFIG_MULTICAST_DS_TWR,
+            CONFIG_PROVISIONED_UNICAST_DS_TWR,
+            CONFIG_PROVISIONED_MULTICAST_DS_TWR,
+            CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR,
+            CONFIG_PROVISIONED_UNICAST_DS_TWR_VERY_FAST,
     })
     public @interface ConfigId {
-        /**
-         * FiRa-defined unicast {@code STATIC STS DS-TWR} ranging, deferred mode, ranging interval
-         * 240 ms.
-         */
-        int UNICAST_DS_TWR = 1;
-        int MULTICAST_DS_TWR = 2;
-        /** Same as {@code CONFIG_ID_1}, except Angle-of-arrival (AoA) data is not reported. */
-        int UNICAST_DS_TWR_NO_AOA = 3;
-        /** Same as {@code CONFIG_ID_1}, except P-STS security mode is enabled. */
-        int PROVISIONED_UNICAST_DS_TWR = 4;
-        /** Same as {@code CONFIG_ID_2}, except P-STS security mode is enabled. */
-        int PROVISIONED_MULTICAST_DS_TWR = 5;
-        /** Same as {@code CONFIG_ID_3}, except P-STS security mode is enabled. */
-        int PROVISIONED_UNICAST_DS_TWR_NO_AOA = 6;
-        /** Same as {@code CONFIG_ID_2}, except P-STS individual controlee key mode is enabled. */
-        int PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 7;
     }
+
+    /**
+     * FiRa-defined unicast {@code STATIC STS DS-TWR} ranging, deferred mode, ranging interval
+     * Fast (120ms), Normal (240ms), Infrequent (600ms)
+     */
+    public static final int CONFIG_UNICAST_DS_TWR = 1;
+
+    /**
+     * FiRa-defined multicast {@code STATIC STS DS-TWR} ranging, deferred mode, ranging interval
+     * Fast (120ms), Normal (200ms), Infrequent (600ms)
+     */
+    public static final int CONFIG_MULTICAST_DS_TWR = 2;
+    /** Same as {@code CONFIG_UNICAST_DS_TWR}, except P-STS security mode is enabled. */
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR = 3;
+    /** Same as {@code CONFIG_MULTICAST_DS_TWR}, except P-STS security mode is enabled. */
+    public static final int CONFIG_PROVISIONED_MULTICAST_DS_TWR = 4;
+    /**
+     * Same as {@code CONFIG_UNICAST_DS_TWR}, except P-STS individual controlee key mode is
+     * enabled.
+     */
+    public static final int CONFIG_PROVISIONED_INDIVIDUAL_MULTICAST_DS_TWR = 5;
+
+    /** Same as {@code CONFIG_ID_3}, except fast ranging interval is 96 milliseconds. */
+    public static final int CONFIG_PROVISIONED_UNICAST_DS_TWR_VERY_FAST = 6;
+
+    /** Sub session id not applicable. */
+    public static final int SUB_SESSION_UNDEFINED = -1;
 
     @ConfigId
     private final int mConfigId;
@@ -135,25 +145,32 @@ public final class UwbRangingParams implements Parcelable {
 
     private final UwbAddress mPeerAddress;
 
-    @RawRangingDevice.RangingUpdateRate
+    /**
+     * Defines slot supported slot durations.
+     *
+     * @hide
+     */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            DURATION_1_MS,
+            DURATION_2_MS,
+    })
+    public @interface SlotDuration {
+    }
+
+    /** 1 millisecond slot duration */
+    public static final int DURATION_1_MS = 1;
+
+    /** 2 millisecond slot duration */
+    public static final int DURATION_2_MS = 2;
+
+    @RangingUpdateRate
     private final int mRangingUpdateRate;
 
-    @IntRange(from = 1, to = 2)
+    @SlotDuration
     private final int mSlotDurationMillis;
 
     private UwbRangingParams(Builder builder) {
-        if (builder.mConfigId == null) {
-            throw new IllegalArgumentException("Missing required parameter: configId");
-        }
-        if (builder.mPeerAddress == null) {
-            throw new IllegalArgumentException("Missing required parameter: peerAddresses");
-        }
-        if (builder.mDeviceAddress == null) {
-            throw new IllegalArgumentException("Missing required parameter: deviceAddress");
-        }
-        if (builder.mComplexChannel == null) {
-            throw new IllegalArgumentException("Missing required parameter: complexChannel");
-        }
         mSessionId = builder.mSessionId;
         mSubSessionId = builder.mSubSessionId;
         mConfigId = builder.mConfigId;
@@ -163,7 +180,7 @@ public final class UwbRangingParams implements Parcelable {
         mComplexChannel = builder.mComplexChannel;
         mPeerAddress = builder.mPeerAddress;
         mRangingUpdateRate = builder.mRangingUpdateRate;
-        mSlotDurationMillis = builder.mSlotDurationMillis;
+        mSlotDurationMillis = builder.mSlotDuration;
     }
 
     /**
@@ -178,7 +195,7 @@ public final class UwbRangingParams implements Parcelable {
     /**
      * Gets the sub-session ID if applicable for the session.
      *
-     * @return The sub-session ID as an integer.
+     * @return The sub-session ID as an integer or {@link #SUB_SESSION_UNDEFINED} if not applicable.
      */
     public int getSubSessionId() {
         return mSubSessionId;
@@ -211,7 +228,8 @@ public final class UwbRangingParams implements Parcelable {
      */
     @Nullable
     public byte[] getSessionKeyInfo() {
-        return mSessionKeyInfo;
+        return mSessionKeyInfo == null ? null : Arrays.copyOf(mSessionKeyInfo,
+                mSessionKeyInfo.length);
     }
 
     /**
@@ -221,7 +239,8 @@ public final class UwbRangingParams implements Parcelable {
      */
     @Nullable
     public byte[] getSubSessionKeyInfo() {
-        return mSubSessionKeyInfo;
+        return mSubSessionKeyInfo == null ? null : Arrays.copyOf(mSubSessionKeyInfo,
+                mSubSessionKeyInfo.length);
     }
 
     /**
@@ -247,20 +266,20 @@ public final class UwbRangingParams implements Parcelable {
     /**
      * Returns the update rate for ranging operations.
      *
-     * @return The ranging update rate as an integer.
+     * @return The ranging update rate.
      */
-    @RawRangingDevice.RangingUpdateRate
+    @RangingUpdateRate
     public int getRangingUpdateRate() {
         return mRangingUpdateRate;
     }
 
     /**
-     * Returns the slot duration in milliseconds.
+     * Returns slot duration of the session.
      *
-     * @return The slot duration in milliseconds, within the range [1, 2].
+     * @return the slot duration.
      */
-    @IntRange(from = 1, to = 2)
-    public int getSlotDurationMillis() {
+    @SlotDuration
+    public int getSlotDuration() {
         return mSlotDurationMillis;
     }
 
@@ -270,68 +289,38 @@ public final class UwbRangingParams implements Parcelable {
      */
     public static final class Builder {
         private int mSessionId;
-        private int mSubSessionId;
-        private Integer mConfigId = null;
+        private int mSubSessionId = SUB_SESSION_UNDEFINED;
+        private int mConfigId;
         private UwbAddress mDeviceAddress = null;
         private byte[] mSessionKeyInfo = null;
         private byte[] mSubSessionKeyInfo = null;
-        private UwbComplexChannel mComplexChannel;
+        private UwbComplexChannel mComplexChannel = new UwbComplexChannel.Builder().build();
         private UwbAddress mPeerAddress = null;
-        @RawRangingDevice.RangingUpdateRate
-        private int mRangingUpdateRate;
-        private int mSlotDurationMillis = 1;
-        private boolean mIsAoaDisabled = false;
-
-
-        /**
-         * Sets the peer addresses for the ranging session.
-         *
-         * @param address a non-null map of {@link RangingDevice} to {@link UwbAddress} for the
-         *                peers in the session.
-         * @return this Builder instance.
-         * @throws IllegalArgumentException if the provided map is null.
-         */
-        @NonNull
-        public Builder setPeerAddress(@NonNull UwbAddress address) {
-            mPeerAddress = address;
-            return this;
-        }
+        @RangingUpdateRate
+        private int mRangingUpdateRate = UPDATE_RATE_NORMAL;
+        @SlotDuration
+        private int mSlotDuration = DURATION_2_MS;
 
         /**
-         * Sets the configuration ID for the ranging parameters.
+         * Constructs a new {@link Builder} for creating a ranging session.
          *
-         * @param config the configuration ID, defined as one of the constants in {@link ConfigId}.
-         * @return this Builder instance.
+         * @param sessionId     A unique identifier for the session.
+         * @param configId      The configuration ID for the ranging parameters.
+         * @param deviceAddress The {@link UwbAddress} representing the device's address.
+         *                      Must be non-null.
+         * @param peerAddress   The {@link UwbAddress} of the peer device.
+         *                      Must be non-null.
+         * @throws IllegalArgumentException if either {@code deviceAddress} or {@code peerAddress}
+         *                                  is null.
          */
-        @NonNull
-        public Builder setConfigId(@ConfigId int config) {
-            mConfigId = config;
-            return this;
-        }
-
-        /**
-         * Sets the device address for the ranging session.
-         *
-         * @param address a non-null {@link UwbAddress} representing the device's address.
-         * @return this Builder instance.
-         * @throws IllegalArgumentException if the provided address is null.
-         */
-        @NonNull
-        public Builder setDeviceAddress(@NonNull UwbAddress address) {
-            mDeviceAddress = address;
-            return this;
-        }
-
-        /**
-         * Sets the session ID for the ranging session.
-         *
-         * @param sessionId the session ID, which should be a unique identifier for the session.
-         * @return this Builder instance.
-         */
-        @NonNull
-        public Builder setSessionId(int sessionId) {
+        public Builder(int sessionId, @ConfigId int configId, @NonNull UwbAddress deviceAddress,
+                @NonNull UwbAddress peerAddress) {
+            Objects.requireNonNull(deviceAddress);
+            Objects.requireNonNull(peerAddress);
             mSessionId = sessionId;
-            return this;
+            mConfigId = configId;
+            mDeviceAddress = deviceAddress;
+            mPeerAddress = peerAddress;
         }
 
         /**
@@ -356,7 +345,8 @@ public final class UwbRangingParams implements Parcelable {
          */
         @NonNull
         public Builder setSessionKeyInfo(@NonNull byte[] sessionKeyInfo) {
-            mSessionKeyInfo = sessionKeyInfo;
+            Objects.requireNonNull(sessionKeyInfo);
+            mSessionKeyInfo = Arrays.copyOf(sessionKeyInfo, sessionKeyInfo.length);
             return this;
         }
 
@@ -369,7 +359,8 @@ public final class UwbRangingParams implements Parcelable {
          */
         @NonNull
         public Builder setSubSessionKeyInfo(@NonNull byte[] subSessionKeyInfo) {
-            mSubSessionKeyInfo = subSessionKeyInfo;
+            Objects.requireNonNull(subSessionKeyInfo);
+            mSubSessionKeyInfo = Arrays.copyOf(subSessionKeyInfo, subSessionKeyInfo.length);
             return this;
         }
 
@@ -377,7 +368,8 @@ public final class UwbRangingParams implements Parcelable {
          * Sets the complex channel configuration for the ranging session.
          *
          * @param complexChannel a non-null {@link UwbComplexChannel} instance representing the
-         *                       channel configuration.
+         *                       channel and preamble configuration. For better performance always
+         *                       use a random preamble index for each ranging session.
          * @return this Builder instance.
          * @throws IllegalArgumentException if the provided complex channel is null.
          */
@@ -389,39 +381,29 @@ public final class UwbRangingParams implements Parcelable {
 
         /**
          * Sets the ranging update rate for the session.
+         * <p> Defaults to {@link RangingUpdateRate#UPDATE_RATE_NORMAL}.
          *
          * @param rate the ranging update rate, defined as one of the constants in
-         *             {@link RawRangingDevice.RangingUpdateRate}.
+         *             {@link RangingUpdateRate}.
          * @return this Builder instance.
          */
         @NonNull
-        public Builder setRangingUpdateRate(@RawRangingDevice.RangingUpdateRate int rate) {
+        public Builder setRangingUpdateRate(@RangingUpdateRate int rate) {
             mRangingUpdateRate = rate;
             return this;
         }
 
         /**
          * Sets the slot duration in milliseconds for the ranging session.
+         * <p> Defaults to {@link #DURATION_2_MS}.
          *
-         * @param durationMs the duration of each slot, must be between 1 and 2 milliseconds.
+         * @param durationMs the slot duration {@link SlotDuration}
          * @return this Builder instance.
          * @throws IllegalArgumentException if the provided duration is out of range.
          */
         @NonNull
-        public Builder setSlotDurationMillis(@IntRange(from = 1, to = 2) int durationMs) {
-            mSlotDurationMillis = durationMs;
-            return this;
-        }
-
-        /**
-         * Sets whether angle-of-arrival (AoA) measurements are disabled for the session.
-         *
-         * @param isAoaDisabled true if AoA measurements should be disabled, false otherwise.
-         * @return this Builder instance.
-         */
-        @NonNull
-        public Builder setAoaDisabled(boolean isAoaDisabled) {
-            mIsAoaDisabled = isAoaDisabled;
+        public Builder setSlotDuration(@SlotDuration int durationMs) {
+            mSlotDuration = durationMs;
             return this;
         }
 
@@ -435,6 +417,31 @@ public final class UwbRangingParams implements Parcelable {
         public UwbRangingParams build() {
             return new UwbRangingParams(this);
         }
+    }
 
+    @Override
+    public String toString() {
+        return "UwbRangingParams{ "
+                + "mSessionId="
+                + mSessionId
+                + ", mSubSessionId="
+                + mSubSessionId
+                + ", mConfigId="
+                + mConfigId
+                + ", mDeviceAddress="
+                + mDeviceAddress
+                + ", mSessionKeyInfo="
+                + Arrays.toString(mSessionKeyInfo)
+                + ", mSubSessionKeyInfo="
+                + Arrays.toString(mSubSessionKeyInfo)
+                + ", mComplexChannel="
+                + mComplexChannel
+                + ", mPeerAddress="
+                + mPeerAddress
+                + ", mRangingUpdateRate="
+                + mRangingUpdateRate
+                + ", mSlotDurationMillis="
+                + mSlotDurationMillis
+                + " }";
     }
 }
