@@ -16,8 +16,16 @@
 
 package com.android.server.ranging;
 
+import static android.Manifest.permission.RANGING;
+import static android.permission.PermissionManager.PERMISSION_GRANTED;
+
 import android.annotation.NonNull;
+import android.content.AttributionSource;
 import android.content.Context;
+import android.os.Binder;
+import android.os.HandlerThread;
+import android.os.Looper;
+import android.permission.PermissionManager;
 import android.ranging.RangingPreference;
 
 import com.android.server.ranging.CapabilitiesProvider.CapabilitiesAdapter;
@@ -40,11 +48,18 @@ public class RangingInjector {
     private final RangingServiceManager mRangingServiceManager;
 
     private final CapabilitiesProvider mCapabilitiesProvider;
+    private final PermissionManager mPermissionManager;
+
+    private final Looper mLooper;
 
     public RangingInjector(@NonNull Context context) {
+        HandlerThread rangingHandlerThread = new HandlerThread("RangingServiceHandler");
+        rangingHandlerThread.start();
+        mLooper = rangingHandlerThread.getLooper();
         mContext = context;
         mCapabilitiesProvider = new CapabilitiesProvider(this);
-        mRangingServiceManager = new RangingServiceManager(this);
+        mRangingServiceManager = new RangingServiceManager(this, mLooper);
+        mPermissionManager = context.getSystemService(PermissionManager.class);
     }
 
     public Context getContext() {
@@ -63,10 +78,11 @@ public class RangingInjector {
      * Create a new adapter for a technology.
      */
     public @NonNull RangingAdapter createAdapter(
-            @NonNull RangingTechnology technology, @RangingPreference.DeviceRole int role,
+            @NonNull RangingSessionConfig.TechnologyConfig config,
+            @RangingPreference.DeviceRole int role,
             @NonNull ListeningExecutorService executor
     ) {
-        switch (technology) {
+        switch (config.getTechnology()) {
             case UWB:
                 return new UwbAdapter(mContext, executor, role);
             case CS:
@@ -77,7 +93,7 @@ public class RangingInjector {
                 return new BleRssiAdapter(mContext);
             default:
                 throw new IllegalArgumentException(
-                        "Adapter does not exist for technology " + technology);
+                        "Adapter does not exist for technology " + config.getTechnology());
         }
     }
 
@@ -98,6 +114,27 @@ public class RangingInjector {
                 throw new IllegalArgumentException(
                         "CapabilitiesAdapter does not exist for technology " + technology);
         }
+    }
+
+
+    public void enforceRangingPermissionForPreflight(
+            @NonNull AttributionSource attributionSource) {
+        if (!attributionSource.checkCallingUid()) {
+            throw new SecurityException("Invalid attribution source " + attributionSource
+                    + ", callingUid: " + Binder.getCallingUid());
+        }
+        int permissionCheckResult = mPermissionManager.checkPermissionForPreflight(
+                RANGING, attributionSource);
+        if (permissionCheckResult != PERMISSION_GRANTED) {
+            throw new SecurityException("Caller does not hold RANGING permission");
+        }
+    }
+
+    public boolean checkUwbRangingPermissionForStartDataDelivery(
+            @NonNull AttributionSource attributionSource, @NonNull String message) {
+        int permissionCheckResult = mPermissionManager.checkPermissionForStartDataDelivery(
+                RANGING, attributionSource, message);
+        return permissionCheckResult == PERMISSION_GRANTED;
     }
 
 }
