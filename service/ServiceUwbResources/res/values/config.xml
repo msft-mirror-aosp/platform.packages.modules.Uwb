@@ -244,5 +244,5 @@
 
     <!-- Whether when hopmode doesn't set, the hopmodekey shall be set randomly.
     If false, never sets hopmodekey randomly-->
-    <bool name = "enable_random_hopmodekey">true</bool>
+    <bool name = "enable_random_hopmodekey">false</bool>
 </resources>
