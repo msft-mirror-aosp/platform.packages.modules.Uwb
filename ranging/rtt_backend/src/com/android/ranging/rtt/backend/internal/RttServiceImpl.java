@@ -67,8 +67,8 @@ public class RttServiceImpl implements RttService {
             return false;
         }
         try {
-            //TODO: Uncomment when the support is added.
-                //return mWifiAwareManager.getCharacteristics().isPeriodicRangingSupported();
+            // Uncommented in goog/main.
+            // return mWifiAwareManager.getCharacteristics().isPeriodicRangingSupported();
         } catch (RuntimeException e) {
             Log.e(TAG, "Failed to get WifiAwareManager#characteristics");
         }
