@@ -113,7 +113,8 @@ public class AliroEncoder extends TlvEncoder {
         if (params.getStsIndex() != AliroParams.STS_INDEX_UNSET) {
             tlvBufferBuilder.putInt(ConfigParam.STS_INDEX, params.getStsIndex());
         }
-        if (params.getHoppingConfigMode() != AliroParams.HOPPING_CONFIG_MODE_NONE) {
+        if (params.getHoppingConfigMode() != AliroParams.HOPPING_CONFIG_MODE_NONE
+                && params.getHopModeKey() != AliroParams.HOP_MODE_KEY_UNSET) {
             tlvBufferBuilder.putInt(ConfigParam.HOP_MODE_KEY, params.getHopModeKey());
         }
         if (params.getAbsoluteInitiationTimeUs() > 0) {
