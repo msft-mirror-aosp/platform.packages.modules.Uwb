@@ -696,6 +696,15 @@ public class UwbServiceCore implements INativeUwbManager.DeviceNotification,
         } else if (AliroParams.isCorrectProtocol(params)) {
             AliroOpenRangingParams aliroOpenRangingParams =
                     AliroOpenRangingParams.fromBundle(params);
+            AliroOpenRangingParams.Builder builder =
+                    new AliroOpenRangingParams.Builder(AliroOpenRangingParams.fromBundle(params));
+            if (mUwbInjector.getDeviceConfigFacade().isRandomHopmodekeySupported()
+                    && aliroOpenRangingParams.getHoppingConfigMode()
+                            != CccParams.HOPPING_CONFIG_MODE_NONE
+                    && aliroOpenRangingParams.getHopModeKey() == CccParams.HOP_MODE_KEY_UNSET) {
+                builder.setHopModeKey(new Random().nextInt());
+            }
+            aliroOpenRangingParams = builder.build();
             sessionId = aliroOpenRangingParams.getSessionId();
             sessionType = aliroOpenRangingParams.getSessionType();
             mSessionManager.initSession(attributionSource, sessionHandle, sessionId,
