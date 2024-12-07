@@ -517,9 +517,14 @@ public class RangingManagerTest {
         assertThat(rangingSession).isNotNull();
 
         rangingSession.start(preference);
-        assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnOpenedCalled.await(2, TimeUnit.SECONDS)).isTrue();
+
+        // OnOpened can be successful for test_rtt_1 and not be successful yet for test_rtt_2,
+        // calling stop before it was initialized will result in not getting onClosed. So, sleep for
+        // 1 second here.
+        Thread.sleep(1000);
         rangingSession.stop();
-        assertThat(callback.mOnClosedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnClosedCalled.await(2, TimeUnit.SECONDS)).isTrue();
 
         mRangingManager.unregisterCapabilitiesCallback(capabilitiesCallback);
         uiAutomation.dropShellPermissionIdentity();
@@ -618,8 +623,12 @@ public class RangingManagerTest {
         assertThat(rangingSession).isNotNull();
 
         rangingSession.start(preference);
-        assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnOpenedCalled.await(2, TimeUnit.SECONDS)).isTrue();
 
+        // OnOpened can be successful for uwb and not be successful yet for rtt session,
+        // calling stop before it was initialized will result in not getting onClosed. So, sleep for
+        // 1 second here.
+        Thread.sleep(1000);
         rangingSession.stop();
         assertThat(callback.mOnClosedCalled.await(4, TimeUnit.SECONDS)).isTrue();
 

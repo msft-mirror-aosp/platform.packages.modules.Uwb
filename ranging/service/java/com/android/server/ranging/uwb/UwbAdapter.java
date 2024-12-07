@@ -72,7 +72,7 @@ public class UwbAdapter implements RangingAdapter {
             @NonNull Context context, @NonNull ListeningExecutorService executor,
             @RangingPreference.DeviceRole int role
     ) {
-        this(context, executor, Executors.newSingleThreadExecutor(), role);
+        this(context, executor, Executors.newCachedThreadPool(), role);
     }
 
     /** Intermediary constructor used to make an additional reference to backendExecutor. */

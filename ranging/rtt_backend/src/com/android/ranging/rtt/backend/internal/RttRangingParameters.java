@@ -36,6 +36,28 @@ public class RttRangingParameters {
         int SUBSCRIBER = 1;
     }
 
+    @IntDef({
+            INFREQUENT,
+            NORMAL,
+            FAST,
+    })
+    public @interface RangingUpdateRate {}
+
+    /**
+     * Requests for ranging data in 512 milliseconds
+     */
+    public static final int NORMAL = 1;
+
+    /**
+     * Requests for ranging data in 8192 milliseconds
+     */
+    public static final int INFREQUENT = 2;
+
+    /**
+     * Requests for ranging data in 256 milliseconds
+     */
+    public static final int FAST = 3;
+
     private final @DeviceRole int mDeviceRole;
     /**
      * Returns Service ID for WiFi Aware
@@ -47,6 +69,9 @@ public class RttRangingParameters {
     protected final int mMinDistanceMm;
     protected final boolean mEnablePublisherRanging;
     protected final Duration mPublisherPingDuration;
+
+    @RangingUpdateRate
+    private final int mUpdateRate;
 
     public int getDeviceRole() {
         return mDeviceRole;
@@ -116,6 +141,10 @@ public class RttRangingParameters {
         return mPublisherPingDuration;
     }
 
+    public int getUpdateRate() {
+        return mUpdateRate;
+    }
+
     public RttRangingParameters(Builder builder) {
         mDeviceRole = builder.mDeviceRole;
         mServiceId = builder.mServiceId;
@@ -125,6 +154,7 @@ public class RttRangingParameters {
         mMinDistanceMm = builder.mMinDistanceMm;
         mEnablePublisherRanging = builder.mEnablePublisherRanging;
         mPublisherPingDuration = builder.mPublisherPingDuration;
+        mUpdateRate = builder.mRangingUpdateRate;
     }
 
 
@@ -138,8 +168,9 @@ public class RttRangingParameters {
         protected byte[] mMatchFilter = new byte[]{};
         protected int mMaxDistanceMm = 30 * 100 * 100;
         protected int mMinDistanceMm = 0;
-        protected boolean mEnablePublisherRanging = false;
+        protected boolean mEnablePublisherRanging = true;
         protected Duration mPublisherPingDuration = Duration.ofSeconds(10);
+        private int mRangingUpdateRate = NORMAL;
 
         public Builder setDeviceRole(int deviceRole) {
             mDeviceRole = deviceRole;
@@ -182,8 +213,27 @@ public class RttRangingParameters {
             return this;
         }
 
+        public Builder setUpdateRate(int updateRate) {
+            mRangingUpdateRate = updateRate;
+            return this;
+        }
+
         public RttRangingParameters build() {
             return new RttRangingParameters(this);
+        }
+    }
+
+    public static int getIntervalMs(@RangingUpdateRate int updateRate) {
+        switch (updateRate) {
+            case FAST -> {
+                return 256;
+            }
+            case INFREQUENT -> {
+                return 8192;
+            }
+            default -> {
+                return 512;
+            }
         }
     }
 

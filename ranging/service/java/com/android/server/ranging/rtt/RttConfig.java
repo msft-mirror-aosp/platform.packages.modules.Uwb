@@ -77,6 +77,7 @@ public class RttConfig implements RangingSessionConfig.UnicastTechnologyConfig {
                 .setMaxDistanceMm(mDataNotificationConfig.getProximityFarCm() * 100)
                 .setMinDistanceMm(mDataNotificationConfig.getProximityNearCm() * 100)
                 .setEnablePublisherRanging(true)
+                .setUpdateRate(mRangingParams.getRangingUpdateRate())
                 .build();
     }
 

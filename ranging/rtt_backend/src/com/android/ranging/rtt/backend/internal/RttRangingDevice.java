@@ -79,21 +79,14 @@ public class RttRangingDevice {
 
                 case STATUS_CODE_FAIL_RESULT_EMPTY:
                     Log.i(TAG, "Range results are empty");
-                    synchronized (mLock) {
-//                        if (mRttListener != null) {
-//                            mRttListener.onRangingSuspended(mRttDevice,
-//                                    RttRangingSessionCallback.REASON_RTT_NOT_AVAILABLE);
-//                        }
-                        stopRanging();
-                    }
                     break;
                 case STATUS_CODE_FAIL_RTT_NOT_AVAILABLE:
                     Log.w(TAG, "RTT Not Available");
                     synchronized (mLock) {
-//                        if (mRttListener != null) {
-//                            mRttListener.onRangingSuspended(mRttDevice,
-//                                    RttRangingSessionCallback.REASON_RTT_NOT_AVAILABLE);
-//                        }
+                        if (mRttListener != null) {
+                            mRttListener.onRangingSuspended(mRttDevice,
+                                    RttRangingSessionCallback.REASON_RTT_NOT_AVAILABLE);
+                        }
                         stopRanging();
                     }
                     break;
@@ -146,7 +139,7 @@ public class RttRangingDevice {
         mHandler = new Handler(Looper.getMainLooper());
         mWifiAwareManager = context.getSystemService(WifiAwareManager.class);
         mWifiRttManager = context.getSystemService(WifiRttManager.class);
-        mRttRanger = new RttRanger(mWifiRttManager, mHandler::post);
+        mRttRanger = new RttRanger(mWifiRttManager, mHandler::post, context);
         mRttDevice = new RttDevice(this);
         mIsRunning = false;
     }
@@ -239,9 +232,11 @@ public class RttRangingDevice {
                     mPeerHandle = peerHandle; // Initialize mPeerHandle at publisher side.
                 }
 
+                int updateRateMs = RttRangingParameters.getIntervalMs(
+                        mRttRangingParameters.getUpdateRate());
                 if (mRttRangingParameters.getEnablePublisherRanging()) {
                     mRttListener.onRangingInitialized(mRttDevice);
-                    mRttRanger.startRanging(peerHandle, mRttRangingListener);
+                    mRttRanger.startRanging(peerHandle, mRttRangingListener, updateRateMs);
                 } else {
                     pingPublisher();
                 }
@@ -289,8 +284,10 @@ public class RttRangingDevice {
                 notifyPeer(peerHandle, Build.MODEL.getBytes(UTF_8));
 
                 if (mRttListener != null) {
+                    int updateRateMs = RttRangingParameters.getIntervalMs(
+                            mRttRangingParameters.getUpdateRate());
                     mRttListener.onRangingInitialized(mRttDevice);
-                    mRttRanger.startRanging(peerHandle, mRttRangingListener);
+                    mRttRanger.startRanging(peerHandle, mRttRangingListener, updateRateMs);
                 } else {
                     Log.e(TAG, "Rtt Listener is null");
                 }
