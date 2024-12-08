@@ -173,6 +173,10 @@ public class RttRangingDevice {
         }
     }
 
+    public void reconfigureRangingInterval(int intervalSkipCount) {
+        mRttRanger.reconfigureInterval(intervalSkipCount);
+    }
+
     public void stopRanging() {
         Log.i(TAG, "Closing WiFi aware session");
 
@@ -188,11 +192,13 @@ public class RttRangingDevice {
             if (mWifiAwareSession != null) {
                 mWifiAwareSession.close();
                 mWifiAwareSession = null;
+            } else {
+                Log.e(TAG, "Wifi aware session is null");
+                mRttListener.onRangingSuspended(mRttDevice, REASON_STOP_RANGING_CALLED);
             }
             mCurrentPublishDiscoverySession = null;
             mCurrentSubscribeDiscoverySession = null;
         }
-
     }
 
     private void notifyPeer(PeerHandle peerHandle, byte[] message) {

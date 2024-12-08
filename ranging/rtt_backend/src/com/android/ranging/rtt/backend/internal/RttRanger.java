@@ -44,6 +44,7 @@ public class RttRanger {
     private boolean mIsRunning;
 
     private final AlarmManager mAlarmManager;
+    private int mBaseUpdateRateMs = 512;
     private int mCurrentUpdateRateMs = 512;
     private AlarmManager.OnAlarmListener mAlarmListener;
 
@@ -63,8 +64,13 @@ public class RttRanger {
         mIsRunning = true;
         this.mPeerHandle = peerHandle;
         this.mRttRangerListener = rttRangerListener;
-        mCurrentUpdateRateMs = updateRateMs;
+        mBaseUpdateRateMs = updateRateMs;
+        mCurrentUpdateRateMs = mBaseUpdateRateMs;
         startRangingInternal();
+    }
+
+    public void reconfigureInterval(int intervalSkipCount) {
+        mCurrentUpdateRateMs = (mBaseUpdateRateMs * intervalSkipCount) + mBaseUpdateRateMs;
     }
 
     private void startRangingInternal() {
