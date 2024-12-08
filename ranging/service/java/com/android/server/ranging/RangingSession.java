@@ -173,6 +173,21 @@ public class RangingSession {
         }
     }
 
+    public void addPeer(RangingDevice params) {
+        //TODO: Implement this
+        throw new IllegalArgumentException("Dynamic addition of raw peer not supported yet");
+    }
+
+    public void removePeer(RangingDevice params) {
+        //TODO: Implement this
+        throw new IllegalArgumentException("Dynamic addition of raw peer not supported yet");
+    }
+
+    public void reconfigureInterval(int intervalSkipCount) {
+        //TODO: Implement this
+        throw new IllegalArgumentException("Dynamic addition of raw peer not supported yet");
+    }
+
     /** Stop ranging in this session. */
     public void stop() {
         synchronized (mLock) {
