@@ -28,6 +28,7 @@ import android.ranging.uwb.UwbRangingParams;
 import androidx.annotation.NonNull;
 
 import com.android.server.ranging.blerssi.BleRssiConfig;
+import com.android.server.ranging.cs.CsConfig;
 import com.android.server.ranging.rtt.RttConfig;
 import com.android.server.ranging.uwb.UwbConfig;
 
@@ -122,6 +123,13 @@ public class RangingSessionConfig {
                 configs.add(new BleRssiConfig(
                         builder.mDeviceRole,
                         peer.getBleRssiRangingParams(),
+                        builder.mDataNotificationConfig,
+                        peer.getRangingDevice()));
+            }
+            if (peer.getCsRangingParams() != null) {
+                configs.add(new CsConfig(
+                        builder.mDeviceRole,
+                        peer.getCsRangingParams(),
                         builder.mDataNotificationConfig,
                         peer.getRangingDevice()));
             }
