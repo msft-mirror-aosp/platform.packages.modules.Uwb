@@ -35,6 +35,7 @@ import com.android.server.ranging.cs.CsAdapter;
 import com.android.server.ranging.cs.CsCapabilitiesAdapter;
 import com.android.server.ranging.rtt.RttAdapter;
 import com.android.server.ranging.rtt.RttCapabilitiesAdapter;
+import com.android.server.ranging.session.RangingSessionConfig;
 import com.android.server.ranging.uwb.UwbAdapter;
 import com.android.server.ranging.uwb.UwbCapabilitiesAdapter;
 
