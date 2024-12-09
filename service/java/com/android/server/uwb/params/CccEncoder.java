@@ -113,8 +113,7 @@ public class CccEncoder extends TlvEncoder {
         if (params.getStsIndex() != CccParams.STS_INDEX_UNSET) {
               tlvBufferBuilder.putInt(ConfigParam.STS_INDEX, params.getStsIndex());
         }
-        if (params.getHoppingConfigMode() != CccParams.HOPPING_CONFIG_MODE_NONE
-                && params.getHopModeKey() != CccParams.HOP_MODE_KEY_UNSET) {
+        if (params.getHoppingConfigMode() != CccParams.HOPPING_CONFIG_MODE_NONE) {
             tlvBufferBuilder.putInt(ConfigParam.HOP_MODE_KEY, params.getHopModeKey());
         }
         if (params.getAbsoluteInitiationTimeUs() > 0) {
