@@ -23,14 +23,14 @@ import android.content.AttributionSource;
 import android.content.Context;
 import android.os.Binder;
 import android.os.RemoteException;
-import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingAdapter;
 import android.ranging.IRangingCallbacks;
 import android.ranging.IRangingCapabilitiesCallback;
-import android.ranging.OobHandle;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
 import android.ranging.SessionHandle;
+import android.ranging.oob.IOobSendDataListener;
+import android.ranging.oob.OobHandle;
 import android.ranging.oob.OobResponderRangingParams;
 import android.ranging.raw.RawResponderRangingParams;
 
