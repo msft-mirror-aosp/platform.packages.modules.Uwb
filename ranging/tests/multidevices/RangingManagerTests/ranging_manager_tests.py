@@ -13,7 +13,6 @@
 #  limitations under the License.
 import sys
 import time
-import logging
 from typing import Set
 from lib import cs
 from lib import ranging_base_test
@@ -32,7 +31,7 @@ _TEST_CASES = (
     "test_one_to_one_uwb_ranging",
     "test_one_to_one_uwb_ranging_provisioned_sts",
     "test_one_to_one_uwb_ranging_disable_range_data_ntf",
-    "test_one_to_one_wifi_rtt_ranging",
+    "test_one_to_one_rtt_ranging",
     "test_one_to_one_ble_rssi_ranging",
     "test_one_to_one_ble_cs_ranging",
 )
@@ -123,9 +122,6 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     utils.reset_bt_state(self.initiator.ad)
     utils.reset_bt_state(self.responder.ad)
 
-  def _reset_wifi_state(self):
-    utils.reset_wifi_state(self.initiator.ad)
-    utils.reset_wifi_state(self.responder.ad)
 
   def _ble_connect(self):
     """Create BLE GATT connection between initiator and responder.
@@ -136,13 +132,15 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     # Connect to the advertisement
     self.responder.bt_addr = self.initiator.ad.bluetooth.connectGatt(SERVICE_UUID)
     asserts.assert_true(self.responder.bt_addr, "Server not connected")
+    # Check the target UUID is present
+    asserts.assert_true(self.initiator.ad.bluetooth.containsService(SERVICE_UUID), "Service not found")
     connected_devices = self.responder.ad.bluetooth.getConnectedDevices()
     asserts.assert_true(connected_devices, "No clients found connected to server")
     self.initiator.bt_addr = connected_devices[0]
 
   def _ble_disconnect(self):
-    if self.initiator.ad.bluetooth.disconnectGatt(SERVICE_UUID) is False:
-        logging.error("Server did not disconnect %s", self.initiator.bt_addr)
+    asserts.assert_true(
+        self.initiator.ad.bluetooth.connectGatt(SERVICE_UUID), "Server not disconnected")
 
   def _ble_bond(self):
     """Create BLE GATT connection and bonding between initiator and responder.
@@ -154,16 +152,16 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     asserts.assert_true(oob_data, "OOB data not generated")
     # Connect to the advertisement using OOB data generated on responder.
     self.responder.bt_addr = self.initiator.ad.bluetooth.createBondOob(SERVICE_UUID, oob_data)
+    # Check the target UUID is present
+    asserts.assert_true(self.initiator.ad.bluetooth.containsService(SERVICE_UUID), "Service not found")
     asserts.assert_true(self.responder.bt_addr, "Server not bonded")
     connected_devices = self.responder.ad.bluetooth.getConnectedDevices()
     asserts.assert_true(connected_devices, "No clients found connected to server")
     self.initiator.bt_addr = connected_devices[0]
 
   def _ble_unbond(self):
-    if self.initiator.ad.bluetooth.removeBond(self.responder.bt_addr) is False:
-        logging.error("Server not unbonded %s", self.responder.bt_addr)
-    if self.responder.ad.bluetooth.removeBond(self.initiator.bt_addr) is False:
-        logging.error("Client not unbonded %s", self.initiator.bt_addr)
+    asserts.assert_true(
+        self.initiator.ad.bluetooth.removeBond(SERVICE_UUID), "Server not unbonded")
 
   ### Test Cases ###
 
@@ -366,7 +364,7 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     self.initiator.stop_ranging_and_assert_closed(SESSION_HANDLE)
     self.responder.stop_ranging_and_assert_closed(SESSION_HANDLE)
 
-  def test_one_to_one_wifi_rtt_ranging(self):
+  def test_one_to_one_rtt_ranging(self):
     """Verifies uwb ranging with peer device, devices range for 10 seconds."""
     SESSION_HANDLE = str(uuid4())
     TECHNOLOGIES = {RangingTechnology.WIFI_RTT}
@@ -379,8 +377,6 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
         not self.initiator.is_ranging_technology_supported(RangingTechnology.WIFI_RTT),
         f"Wifi nan rtt not supported by initiator",
     )
-    # TODO(rpius): Remove this once the technology is stable.
-    self._reset_wifi_state()
 
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
@@ -450,37 +446,37 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
         not self.initiator.is_ranging_technology_supported(RangingTechnology.BLE_RSSI),
         f"BLE RSSI not supported by initiator",
     )
-    # TODO(rpius): Remove this once the technology is stable.
     self._reset_bt_state()
 
-    try:
-      self._ble_connect()
-      initiator_preference = RangingPreference(
-          device_role=DeviceRole.INITIATOR,
-          ranging_params=RawInitiatorRangingParams(
-              peer_params=[
-                  DeviceParams(
-                      peer_id=self.responder.id,
-                      rssi_params=rssi.BleRssiRangingParams(
+    self._ble_connect()
+
+    initiator_preference = RangingPreference(
+        device_role=DeviceRole.INITIATOR,
+        ranging_params=RawInitiatorRangingParams(
+            peer_params=[
+                DeviceParams(
+                    peer_id=self.responder.id,
+                    rssi_params=rssi.BleRssiRangingParams(
                       peer_address=self.responder.bt_addr,
-                      ),
-                  )
-              ],
-          ),
-      )
+                    ),
+                )
+            ],
+        ),
+    )
 
-      responder_preference = RangingPreference(
-          device_role=DeviceRole.RESPONDER,
-          ranging_params=RawResponderRangingParams(
-              peer_params=DeviceParams(
-                  peer_id=self.initiator.id,
-                  rssi_params=rssi.BleRssiRangingParams(
+    responder_preference = RangingPreference(
+        device_role=DeviceRole.RESPONDER,
+        ranging_params=RawResponderRangingParams(
+            peer_params=DeviceParams(
+                peer_id=self.initiator.id,
+                rssi_params=rssi.BleRssiRangingParams(
                   peer_address=self.initiator.bt_addr,
-                  ),
-              ),
-          ),
-      )
+                ),
+            ),
+        ),
+    )
 
+    try:
       self._start_mutual_ranging_and_assert_started(
           SESSION_HANDLE,
           initiator_preference,
@@ -528,25 +524,25 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
         not self.initiator.is_ranging_technology_supported(RangingTechnology.BLE_CS),
         f"BLE CS not supported by initiator",
     )
-    # TODO(rpius): Remove this once the technology is stable.
     self._reset_bt_state()
 
-    try:
-      self._ble_bond()
-      initiator_preference = RangingPreference(
-          device_role=DeviceRole.INITIATOR,
-          ranging_params=RawInitiatorRangingParams(
-              peer_params=[
-                  DeviceParams(
-                      peer_id=self.responder.id,
-                      cs_params=cs.CsRangingParams(
-                        peer_address=self.responder.bt_addr,
-                      ),
-                  )
-              ],
-          ),
-      )
+    self._ble_bond()
 
+    initiator_preference = RangingPreference(
+        device_role=DeviceRole.INITIATOR,
+        ranging_params=RawInitiatorRangingParams(
+            peer_params=[
+                DeviceParams(
+                    peer_id=self.responder.id,
+                    cs_params=cs.CsRangingParams(
+                      peer_address=self.responder.bt_addr,
+                    ),
+                )
+            ],
+        ),
+    )
+
+    try:
       self._start_mutual_ranging_and_assert_started(
           SESSION_HANDLE,
           initiator_preference,
