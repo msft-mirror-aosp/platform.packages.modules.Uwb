@@ -196,7 +196,6 @@ public class BaseRangingSession {
         synchronized (mLock) {
             for (Map.Entry<TechnologyConfig, RangingAdapter> entry : mAdapters.entrySet()) {
                 if (entry.getValue().isDynamicUpdatePeersSupported()) {
-                    mPeers.remove(device);
                     entry.getValue().removePeer(device);
                 }
             }
@@ -241,6 +240,10 @@ public class BaseRangingSession {
         @Override
         public void onStarted(@NonNull RangingDevice peerDevice) {
             synchronized (mLock) {
+                if (!mPeers.containsKey(peerDevice)) {
+                    Log.w(TAG, "onStarted peer not found");
+                    return;
+                }
                 mStateMachine.transition(State.STARTING, State.STARTED);
                 mPeers.get(peerDevice).setUsingTechnology(mConfig.getTechnology());
                 mSessionListener.onTechnologyStarted(peerDevice, mConfig.getTechnology());
@@ -251,7 +254,7 @@ public class BaseRangingSession {
         public void onStopped(@NonNull RangingDevice peerDevice) {
             synchronized (mLock) {
                 if (!mPeers.containsKey(peerDevice)) {
-                    Log.w(TAG, "Stopped peer not found");
+                    Log.w(TAG, "onStopped peer not found");
                     return;
                 }
                 Peer peer = mPeers.get(peerDevice);
