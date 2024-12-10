@@ -95,9 +95,10 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     self.initiator.start_ranging_and_assert_opened(
         session_handle, initiator_preference
     )
-    self.responder.start_ranging_and_assert_opened(
-        session_handle, responder_preference
-    )
+    if responder_preference is not None:
+        self.responder.start_ranging_and_assert_opened(
+            session_handle, responder_preference
+        )
 
     asserts.assert_true(
         self.initiator.verify_received_data_from_peer_using_technologies(
@@ -107,14 +108,15 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
         ),
         f"Initiator did not find responder",
     )
-    asserts.assert_true(
-        self.responder.verify_received_data_from_peer_using_technologies(
-            session_handle,
-            self.initiator.id,
-            technologies,
-        ),
-        f"Responder did not find initiator",
-    )
+    if responder_preference is not None:
+        asserts.assert_true(
+            self.responder.verify_received_data_from_peer_using_technologies(
+                session_handle,
+                self.initiator.id,
+                technologies,
+            ),
+            f"Responder did not find initiator",
+        )
 
   def _reset_bt_state(self):
     utils.reset_bt_state(self.initiator.ad)
@@ -507,7 +509,10 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
       self._ble_disconnect()
 
   def test_one_to_one_ble_cs_ranging(self):
-    """Verifies cs ranging with peer device, devices range for 10 seconds."""
+    """
+    Verifies cs ranging with peer device, devices range for 10 seconds.
+    This test is only one way since we don't test if responder also can simultaneously get the data.
+    """
     SESSION_HANDLE = str(uuid4())
     TECHNOLOGIES = {RangingTechnology.BLE_CS}
 
@@ -523,9 +528,6 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
 
     self._ble_bond()
 
-    responder_addr = [int(part, 16) for part in self.responder.bt_addr.split(":")]
-    initiator_addr = [int(part, 16) for part in self.initiator.bt_addr.split(":")]
-
     initiator_preference = RangingPreference(
         device_role=DeviceRole.INITIATOR,
         ranging_params=RawInitiatorRangingParams(
@@ -540,23 +542,11 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
         ),
     )
 
-    responder_preference = RangingPreference(
-        device_role=DeviceRole.RESPONDER,
-        ranging_params=RawResponderRangingParams(
-            peer_params=DeviceParams(
-                peer_id=self.initiator.id,
-                cs_params=cs.CsRangingParams(
-                  peer_address=self.initiator.bt_addr,
-                ),
-            ),
-        ),
-    )
-
     try:
       self._start_mutual_ranging_and_assert_started(
           SESSION_HANDLE,
           initiator_preference,
-          responder_preference,
+          None,
           TECHNOLOGIES,
       )
 
@@ -570,17 +560,8 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
           ),
           "Initiator did not find responder",
       )
-      asserts.assert_true(
-          self.responder.verify_received_data_from_peer_using_technologies(
-              SESSION_HANDLE,
-              self.initiator.id,
-              TECHNOLOGIES,
-          ),
-          "Responder did not find initiator",
-      )
     finally:
       self.initiator.stop_ranging_and_assert_closed(SESSION_HANDLE)
-      self.responder.stop_ranging_and_assert_closed(SESSION_HANDLE)
 
       self._ble_unbond()
 

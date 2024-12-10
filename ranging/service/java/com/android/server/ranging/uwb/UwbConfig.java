@@ -28,8 +28,8 @@ import android.ranging.uwb.UwbRangingParams;
 import androidx.annotation.NonNull;
 
 import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
-import com.android.server.ranging.RangingSessionConfig;
 import com.android.server.ranging.RangingTechnology;
+import com.android.server.ranging.session.RangingSessionConfig;
 
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableSet;
