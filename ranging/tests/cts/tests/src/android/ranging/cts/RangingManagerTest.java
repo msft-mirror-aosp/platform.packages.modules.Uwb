@@ -355,6 +355,7 @@ public class RangingManagerTest {
 
         rangingSession.start(preference);
         assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnPeerAdded.await(2, TimeUnit.SECONDS)).isTrue();
         RangingDevice device = new RangingDevice.Builder().build();
         RawResponderRangingParams peerParams = new RawResponderRangingParams.Builder()
                 .setRawRangingDevice(
@@ -374,8 +375,14 @@ public class RangingManagerTest {
                                         .build())
                                 .build())
                 .build();
+
+        callback.replaceOnPeerAddedLatch(new CountDownLatch(1));
         rangingSession.addDeviceToRangingSession(peerParams);
+        assertThat(callback.mOnPeerAdded.await(2, TimeUnit.SECONDS)).isTrue();
+
+        callback.replaceOnPeerRemovedLatch(new CountDownLatch(1));
         rangingSession.removeDeviceFromRangingSession(device);
+        assertThat(callback.mOnPeerRemoved.await(2, TimeUnit.SECONDS)).isTrue();
 
         rangingSession.stop();
         assertThat(callback.mOnClosedCalled.await(3, TimeUnit.SECONDS)).isTrue();
@@ -488,8 +495,21 @@ public class RangingManagerTest {
     private static class RangingSessionCallback implements RangingSession.Callback {
 
         private final CountDownLatch mOnOpenedCalled = new CountDownLatch(1);
-        private final CountDownLatch mOnClosedCalled = new CountDownLatch(1);
+        private CountDownLatch mOnClosedCalled = new CountDownLatch(1);
+        private CountDownLatch mOnPeerAdded = new CountDownLatch(1);
+        private CountDownLatch mOnPeerRemoved = new CountDownLatch(1);
 
+        public void replaceOnPeerAddedLatch(CountDownLatch countDownLatch) {
+            mOnPeerAdded = countDownLatch;
+        }
+
+        public void replaceOnPeerRemovedLatch(CountDownLatch countDownLatch) {
+            mOnPeerRemoved = countDownLatch;
+        }
+
+        public void replaceOnClosedCalled(CountDownLatch countDownLatch) {
+            mOnClosedCalled = countDownLatch;
+        }
         @Override
         public void onOpened() {
             mOnOpenedCalled.countDown();
@@ -502,6 +522,7 @@ public class RangingManagerTest {
         @Override
         public void onStarted(@NonNull RangingDevice peer,
                 @RangingManager.RangingTechnology int technology) {
+            mOnPeerAdded.countDown();
         }
 
         @Override
@@ -511,6 +532,7 @@ public class RangingManagerTest {
         @Override
         public void onStopped(@NonNull RangingDevice peer,
                 @RangingManager.RangingTechnology int technology) {
+            mOnPeerRemoved.countDown();
         }
 
         @Override

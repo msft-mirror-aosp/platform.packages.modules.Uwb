@@ -170,7 +170,6 @@ public class UwbAdapter implements RangingAdapter {
                 com.android.ranging.uwb.backend.internal.UwbAddress uwbBackendAddress =
                         com.android.ranging.uwb.backend.internal.UwbAddress.fromBytes(
                                 mPeers.get(device).getAddressBytes());
-                mPeers.remove(device);
                 var unused = Futures.submit(() -> {
                     ((RangingController) mUwbClient).removeControlee(uwbBackendAddress);
                 }, mExecutorService);
@@ -265,6 +264,14 @@ public class UwbAdapter implements RangingAdapter {
                     mPeers.remove(device);
                     mCallbacks.onStopped(device);
                 }
+            }
+        }
+
+        @Override
+        public void onPeerConnected(UwbDevice peer) {
+            RangingDevice device = convertPeerDevice(peer);
+            if (device != null) {
+                mCallbacks.onStarted(device);
             }
         }
 
