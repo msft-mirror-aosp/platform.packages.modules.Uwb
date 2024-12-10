@@ -15,16 +15,20 @@
  */
 package com.android.ranging.rtt.backend.internal;
 
+import android.app.AlarmManager;
+import android.content.Context;
 import android.net.wifi.aware.PeerHandle;
 import android.net.wifi.rtt.RangingRequest;
 import android.net.wifi.rtt.RangingResult;
 import android.net.wifi.rtt.RangingResultCallback;
 import android.net.wifi.rtt.WifiRttManager;
+import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.Executor;
 
 /** Ranges to a given WiFi Aware Peer handle. */
@@ -39,13 +43,20 @@ public class RttRanger {
 
     private boolean mIsRunning;
 
-    public RttRanger(WifiRttManager wiFiRttManager, Executor executor) {
+    private final AlarmManager mAlarmManager;
+    private int mBaseUpdateRateMs = 512;
+    private int mCurrentUpdateRateMs = 512;
+    private AlarmManager.OnAlarmListener mAlarmListener;
+
+    public RttRanger(WifiRttManager wiFiRttManager, Executor executor, Context context) {
         this.mExecutor = executor;
         this.mWifiRttManager = wiFiRttManager;
+        mAlarmManager = context.getSystemService(AlarmManager.class);
+        Objects.requireNonNull(mAlarmManager);
     }
 
     public void startRanging(@NonNull PeerHandle peerHandle,
-            @NonNull RttRangerListener rttRangerListener) {
+            @NonNull RttRangerListener rttRangerListener, int updateRateMs) {
         if (mIsRunning) {
             Log.w(TAG, "startRanging - already running");
             return;
@@ -53,7 +64,13 @@ public class RttRanger {
         mIsRunning = true;
         this.mPeerHandle = peerHandle;
         this.mRttRangerListener = rttRangerListener;
+        mBaseUpdateRateMs = updateRateMs;
+        mCurrentUpdateRateMs = mBaseUpdateRateMs;
         startRangingInternal();
+    }
+
+    public void reconfigureInterval(int intervalSkipCount) {
+        mCurrentUpdateRateMs = (mBaseUpdateRateMs * intervalSkipCount) + mBaseUpdateRateMs;
     }
 
     private void startRangingInternal() {
@@ -64,14 +81,35 @@ public class RttRanger {
                     RttRangerListener.STATUS_CODE_FAIL_RTT_NOT_AVAILABLE);
             return;
         }
+        setPeriodicAlarm();
         mWifiRttManager.startRanging(
                 new RangingRequest.Builder().addWifiAwarePeer(mPeerHandle).build(),
                 mExecutor,
                 mRangingResultCallback);
     }
 
+    private void setPeriodicAlarm() {
+        if (mAlarmListener != null) {
+            mAlarmManager.cancel(mAlarmListener);
+        }
+        mAlarmListener = () -> {
+            mExecutor.execute(this::startRangingInternal);
+        };
+        mAlarmManager.setExact(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + mCurrentUpdateRateMs,
+                "RttRangingInterval",
+                mAlarmListener,
+                null
+        );
+    }
+
     public void stopRanging() {
         mIsRunning = false;
+        if (mAlarmListener != null) {
+            mAlarmManager.cancel(mAlarmListener);
+            mAlarmListener = null;
+        }
     }
 
     private final RangingResultCallback mRangingResultCallback = new RangingResultCallback() {
@@ -117,10 +155,6 @@ public class RttRanger {
                         RttRangerListener.STATUS_CODE_FAIL_RESULT_FAIL);
             } else if (status == RangingResult.STATUS_SUCCESS) {
                 mRttRangerListener.onRangingResult(result);
-            }
-
-            if (mIsRunning) {
-                startRangingInternal();
             }
         }
     };
