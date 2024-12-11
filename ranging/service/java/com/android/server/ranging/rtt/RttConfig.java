@@ -75,7 +75,9 @@ public class RttConfig implements RangingSessionConfig.UnicastTechnologyConfig {
                 .setServiceName(mRangingParams.getServiceName())
                 .setMatchFilter(mRangingParams.getMatchFilter())
                 .setEnablePublisherRanging(true)
-                .setUpdateRate(mRangingParams.getRangingUpdateRate());
+                .setUpdateRate(mRangingParams.getRangingUpdateRate())
+                .setPeriodicRangingHwFeatureEnabled(
+                        mRangingParams.isPeriodicRangingHwFeatureEnabled());
 
         switch (mDataNotificationConfig.getNotificationConfigType()) {
             case DataNotificationConfig.ENABLE -> builder
