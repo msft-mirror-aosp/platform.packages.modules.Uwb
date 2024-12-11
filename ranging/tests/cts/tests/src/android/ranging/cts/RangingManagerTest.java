@@ -236,6 +236,9 @@ public class RangingManagerTest {
                                         .build())
                                 .build())
                         .build())
+                .setSessionConfiguration(new SessionConfiguration.Builder()
+                        .setRangingMeasurementsLimit(100)
+                        .build())
                 .build();
     }
 
