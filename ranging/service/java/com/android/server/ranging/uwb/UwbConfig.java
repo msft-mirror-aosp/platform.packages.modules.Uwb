@@ -28,6 +28,7 @@ import android.ranging.uwb.UwbRangingParams;
 import androidx.annotation.NonNull;
 
 import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
+import com.android.ranging.uwb.backend.internal.UwbRangeLimitsConfig;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.session.RangingSessionConfig;
 
@@ -130,7 +131,8 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
                 (int) mParameters.getRangingUpdateRate(),
                 toBackend(getDataNotificationConfig()),
                 (int) mParameters.getSlotDuration(),
-                mIsAoaNeeded
+                mIsAoaNeeded,
+                new UwbRangeLimitsConfig.Builder().build()
         );
     }
 
