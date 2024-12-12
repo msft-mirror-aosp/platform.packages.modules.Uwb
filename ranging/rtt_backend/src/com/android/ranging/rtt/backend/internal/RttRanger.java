@@ -31,7 +31,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 
-/** Ranges to a given WiFi Aware Peer handle. */
+/**
+ * Ranges to a given WiFi Aware Peer handle.
+ * Rtt Ranger is only used for legacy RTT sessions on devices that do not support the new periodic
+ * rtt API.
+ */
 public class RttRanger {
     private static final String TAG = RttRanger.class.getName();
 
@@ -121,41 +125,12 @@ public class RttRanger {
 
         @Override
         public void onRangingResults(List<RangingResult> results) {
-            if (results == null) {
-                Log.w(TAG, "Rtt Ranging result is null");
-                return;
-            }
             Log.i(TAG, "RTT ranging results: " + results);
             if (mRttRangerListener == null) {
                 Log.w(TAG, "Rtt Ranging Listener is null");
                 return;
             }
-
-            if (results.isEmpty()) {
-                mRttRangerListener.onRangingFailure(
-                        RttRangerListener.STATUS_CODE_FAIL_RESULT_EMPTY);
-                return;
-            }
-
-            RangingResult result = results.get(0);
-            int status = result.getStatus();
-
-            if (status == RangingResult.STATUS_RESPONDER_DOES_NOT_SUPPORT_IEEE80211MC) {
-                Log.w(TAG, "Responder does not support 11mc");
-                mRttRangerListener.onRangingFailure(
-                        RttRangerListener.STATUS_CODE_FAIL_RTT_NOT_AVAILABLE);
-                return;
-            } else if (status == RangingResult.UNSPECIFIED) {
-                Log.w(TAG, "Unspecified failed.");
-                mRttRangerListener.onRangingFailure(
-                        RttRangerListener.STATUS_CODE_FAIL_RTT_NOT_AVAILABLE);
-                return;
-            } else if (status == RangingResult.STATUS_FAIL) {
-                mRttRangerListener.onRangingFailure(
-                        RttRangerListener.STATUS_CODE_FAIL_RESULT_FAIL);
-            } else if (status == RangingResult.STATUS_SUCCESS) {
-                mRttRangerListener.onRangingResult(result);
-            }
+            mRttRangerListener.onRangingResults(results);
         }
     };
 
@@ -168,6 +143,6 @@ public class RttRanger {
 
         void onRangingFailure(int code);
 
-        void onRangingResult(RangingResult results);
+        void onRangingResults(List<RangingResult> results);
     }
 }
