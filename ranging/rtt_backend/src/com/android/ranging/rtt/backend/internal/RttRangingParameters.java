@@ -77,6 +77,8 @@ public class RttRangingParameters {
     @RangingUpdateRate
     private final int mUpdateRate;
 
+    private final boolean mEnablePeriodicRangingHwFeature;
+
     public int getDeviceRole() {
         return mDeviceRole;
     }
@@ -161,6 +163,10 @@ public class RttRangingParameters {
         return mUpdateRate;
     }
 
+    public boolean isPeriodicRangingHwFeatureEnabled() {
+        return mEnablePeriodicRangingHwFeature;
+    }
+
     public RttRangingParameters(Builder builder) {
         mDeviceRole = builder.mDeviceRole;
         mServiceId = builder.mServiceId;
@@ -174,6 +180,7 @@ public class RttRangingParameters {
         mProximityEdgeEnabled = builder.mProximityEdgeEnabled;
         mProximityEdgeNearMm = builder.mProximityEdgeNearMm;
         mProximityEdgeFarMm = builder.mProximityEdgeFarMm;
+        mEnablePeriodicRangingHwFeature = builder.mEnablePeriodicRangingHwFeature;
     }
 
 
@@ -193,6 +200,7 @@ public class RttRangingParameters {
         private boolean mProximityEdgeEnabled = false;
         private int mProximityEdgeNearMm = 0;
         private int mProximityEdgeFarMm = 0;
+        private boolean mEnablePeriodicRangingHwFeature = false;
 
         public Builder setDeviceRole(int deviceRole) {
             mDeviceRole = deviceRole;
@@ -247,21 +255,26 @@ public class RttRangingParameters {
             return this;
         }
 
+        public Builder setPeriodicRangingHwFeatureEnabled(boolean enabled) {
+            mEnablePeriodicRangingHwFeature = enabled;
+            return this;
+        }
+
         public RttRangingParameters build() {
             return new RttRangingParameters(this);
         }
     }
 
-    public static int getIntervalMs(@RangingUpdateRate int updateRate) {
-        switch (updateRate) {
+    public static int getIntervalMs(@NonNull RttRangingParameters rttRangingParameters) {
+        switch (rttRangingParameters.getUpdateRate()) {
             case FAST -> {
-                return 256;
+                return rttRangingParameters.isPeriodicRangingHwFeatureEnabled() ? 128 : 256;
             }
             case INFREQUENT -> {
                 return 8192;
             }
             default -> {
-                return 512;
+                return rttRangingParameters.isPeriodicRangingHwFeatureEnabled() ? 256 : 512;
             }
         }
     }
@@ -285,6 +298,8 @@ public class RttRangingParameters {
                 + mEnablePublisherRanging
                 + ", publisherPingDuration: "
                 + mPublisherPingDuration
+                + ", enablePeriodicRangingHwFeature: "
+                + mEnablePeriodicRangingHwFeature
                 + " }";
     }
 }
