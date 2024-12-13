@@ -16,20 +16,20 @@
 
 package com.android.server.ranging.blerssi;
 
-import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
+import android.ranging.SessionConfiguration;
 import android.ranging.ble.rssi.BleRssiRangingParams;
 
 import androidx.annotation.NonNull;
 
-import com.android.server.ranging.RangingSessionConfig;
 import com.android.server.ranging.RangingTechnology;
+import com.android.server.ranging.session.RangingSessionConfig;
 
 public class BleRssiConfig implements RangingSessionConfig.UnicastTechnologyConfig {
     private static final String TAG = BleRssiConfig.class.getSimpleName();
 
-    private final DataNotificationConfig mDataNotificationConfig;
+    private final SessionConfiguration mSessionConfig;
     private final BleRssiRangingParams mRangingParams;
 
     private final RangingDevice mPeerDevice;
@@ -39,11 +39,11 @@ public class BleRssiConfig implements RangingSessionConfig.UnicastTechnologyConf
 
     public BleRssiConfig(int deviceRole,
             BleRssiRangingParams bleRssiRangingParams,
-            DataNotificationConfig dataNotificationConfig,
+            SessionConfiguration sessionConfig,
             RangingDevice peerDevice) {
         mDeviceRole = deviceRole;
         mRangingParams = bleRssiRangingParams;
-        mDataNotificationConfig = dataNotificationConfig;
+        mSessionConfig = sessionConfig;
         mPeerDevice = peerDevice;
     }
 
@@ -52,8 +52,8 @@ public class BleRssiConfig implements RangingSessionConfig.UnicastTechnologyConf
         return RangingTechnology.RSSI;
     }
 
-    public DataNotificationConfig getDataNotificationConfig() {
-        return mDataNotificationConfig;
+    public SessionConfiguration getSessionConfig() {
+        return mSessionConfig;
     }
 
     public BleRssiRangingParams getRangingParams() {
@@ -72,8 +72,8 @@ public class BleRssiConfig implements RangingSessionConfig.UnicastTechnologyConf
     @Override
     public String toString() {
         return "BleRssiConfig{ "
-                + "mDataNotificationConfig="
-                + mDataNotificationConfig
+                + "mSessionConfig="
+                + mSessionConfig
                 + ", mRangingParams="
                 + mRangingParams
                 + ", mDeviceRole="
