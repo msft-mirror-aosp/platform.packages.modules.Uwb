@@ -30,6 +30,7 @@ import android.bluetooth.le.DistanceMeasurementParams;
 import android.bluetooth.le.DistanceMeasurementResult;
 import android.bluetooth.le.DistanceMeasurementSession;
 import android.content.Context;
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.RangingMeasurement;
@@ -42,6 +43,7 @@ import com.android.server.ranging.RangingAdapter;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.session.RangingSessionConfig;
+import com.android.server.ranging.util.DataNotificationManager;
 
 import java.util.concurrent.Executors;
 
@@ -64,6 +66,8 @@ public class CsAdapter implements RangingAdapter {
 
     /** Invariant: non-null while a ranging session is active */
     private DistanceMeasurementSession mSession;
+    private DataNotificationManager mDataNotificationManager;
+    private final boolean mIsNonPrivilegedApp;
 
     /** Injectable constructor for testing. */
     public CsAdapter(@NonNull Context context) {
@@ -74,6 +78,12 @@ public class CsAdapter implements RangingAdapter {
         mStateMachine = new StateMachine<>(State.STOPPED);
         mCallbacks = null;
         mSession = null;
+        // TODO: Update this.
+        mIsNonPrivilegedApp = false;
+        mDataNotificationManager = new DataNotificationManager(
+                new DataNotificationConfig.Builder().build(),
+                new DataNotificationConfig.Builder().build()
+        );
     }
 
     @Override
@@ -125,10 +135,35 @@ public class CsAdapter implements RangingAdapter {
                         .setMethodId(methodId)
                         .build();
 
+        mDataNotificationManager = new DataNotificationManager(
+                csConfig.getSessionConfig().getDataNotificationConfig(),
+                csConfig.getSessionConfig().getDataNotificationConfig());
+
         distanceMeasurementManager.startMeasurementSession(params,
                 Executors.newSingleThreadExecutor(), mDistanceMeasurementCallback);
         // Callback here to be consistent with other ranging technologies.
         mCallbacks.onStarted(csConfig.getPeerDevice());
+    }
+
+    @Override
+    public void appMovedToBackground() {
+        if (mIsNonPrivilegedApp && mDataNotificationManager != null) {
+            mDataNotificationManager.updateConfigAppMovedToBackground();
+        }
+    }
+
+    @Override
+    public void appMovedToForeground() {
+        if (mIsNonPrivilegedApp) {
+            mDataNotificationManager.updateConfigAppMovedToForeground();
+        }
+    }
+
+    @Override
+    public void appInBackgroundTimeout() {
+        if (mIsNonPrivilegedApp) {
+            stop();
+        }
     }
 
     @Override
@@ -195,10 +230,13 @@ public class CsAdapter implements RangingAdapter {
                 }
 
                 public void onResult(BluetoothDevice device, DistanceMeasurementResult result) {
+                    if (!mDataNotificationManager.shouldSendResult(result.getResultMeters())) {
+                        return;
+                    }
                     Log.i(TAG, "DistanceMeasurement onResult ! "
-                                    + result.getResultMeters()
-                                    + ", "
-                                    + result.getErrorMeters());
+                            + result.getResultMeters()
+                            + ", "
+                            + result.getErrorMeters());
                     RangingData.Builder dataBuilder = new RangingData.Builder()
                             .setRangingTechnology((int) RangingTechnology.CS.getValue())
                             .setDistance(new RangingMeasurement.Builder()
