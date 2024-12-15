@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-package com.android.server.ranging;
+package com.android.server.ranging.session;
 
-import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingManager;
 import android.ranging.RangingPreference;
-import android.ranging.SensorFusionParams;
+import android.ranging.SessionConfiguration;
 import android.ranging.raw.RawRangingDevice;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbRangingParams;
 
 import androidx.annotation.NonNull;
 
+import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.blerssi.BleRssiConfig;
 import com.android.server.ranging.cs.CsConfig;
 import com.android.server.ranging.rtt.RttConfig;
@@ -47,18 +47,18 @@ import java.util.Set;
 
 public class RangingSessionConfig {
     private final @RangingPreference.DeviceRole int mDeviceRole;
-    private final SensorFusionParams mFusionConfig;
-    private final ImmutableSet<TechnologyConfig> mTechnologyConfigs;
-    private final ImmutableSet<RangingDevice> mPeerDevices;
+    private final SessionConfiguration mSessionConfig;
 
     /** A complete configuration for a session within a specific ranging technology's stack */
     public interface TechnologyConfig {
-        @NonNull RangingTechnology getTechnology();
+        @NonNull
+        RangingTechnology getTechnology();
     }
 
     /** A config for a technology that only supports 1 peer per session. */
     public interface UnicastTechnologyConfig extends TechnologyConfig {
-        @NonNull RangingDevice getPeerDevice();
+        @NonNull
+        RangingDevice getPeerDevice();
     }
 
     /** A config for a technology that supports multiple peers per session. */
@@ -66,71 +66,71 @@ public class RangingSessionConfig {
         /**
          * @return the set of peers within this technology-specific session.
          */
-        @NonNull ImmutableSet<RangingDevice> getPeerDevices();
+        @NonNull
+        ImmutableSet<RangingDevice> getPeerDevices();
     }
 
     private RangingSessionConfig(Builder builder) {
         mDeviceRole = builder.mDeviceRole;
-        mFusionConfig = builder.mFusionConfig;
-        mPeerDevices = builder.mPeerParams
-                .stream()
-                .map(RawRangingDevice::getRangingDevice)
-                .collect(ImmutableSet.toImmutableSet());
-        mTechnologyConfigs = ImmutableSet.copyOf(Sets.union(
-                getConfigsForUnicastTechnologies(builder),
-                getConfigsForMulticastTechnologies(builder)
-        ));
+        mSessionConfig = builder.mSessionConfig;
     }
 
-    private static @NonNull Set<MulticastTechnologyConfig> getConfigsForMulticastTechnologies(
-            @NonNull Builder builder
+    public @NonNull ImmutableSet<TechnologyConfig> getTechnologyConfigs(
+            @NonNull Set<RawRangingDevice> peerParams
+    ) {
+        return ImmutableSet.copyOf(Sets.union(
+                getConfigsForUnicastTechnologies(peerParams),
+                getConfigsForMulticastTechnologies(peerParams)));
+    }
+
+    private @NonNull Set<MulticastTechnologyConfig> getConfigsForMulticastTechnologies(
+            @NonNull Set<RawRangingDevice> peerParams
     ) {
         Set<MulticastTechnologyConfig> configs = new HashSet<>();
 
         Map<PeerIgnoringParamsHasher<UwbRangingParams>, BiMap<RangingDevice, UwbAddress>>
-                uwbPeersByParams = PeerIgnoringParamsHasher.groupUwbPeersByParams(builder);
+                uwbPeersByParams = PeerIgnoringParamsHasher.groupUwbPeersByParams(peerParams);
 
         // Create a config for each unique params. When multiple peers share the same params, this
         // config will specify a multicast session containing all of them.
         for (PeerIgnoringParamsHasher<UwbRangingParams> key : uwbPeersByParams.keySet()) {
             configs.add(new UwbConfig.Builder(key.mParams)
-                    .setDeviceRole(builder.mDeviceRole)
+                    .setDeviceRole(mDeviceRole)
                     .setPeerAddresses(ImmutableBiMap.copyOf(uwbPeersByParams.get(key)))
-                    .setAoaNeeded(builder.mIsAoaNeeded)
                     // TODO(370077264): Set country code based on geolocation.
                     .setCountryCode("US")
-                    .setDataNotificationConfig(builder.mDataNotificationConfig)
+                    .setSessionConfig(mSessionConfig)
                     .build());
         }
 
         return configs;
     }
 
-    private static @NonNull Set<UnicastTechnologyConfig> getConfigsForUnicastTechnologies(
-            @NonNull Builder builder
+    private @NonNull Set<UnicastTechnologyConfig> getConfigsForUnicastTechnologies(
+            @NonNull Set<RawRangingDevice> peerParams
     ) {
         Set<UnicastTechnologyConfig> configs = new HashSet<>();
 
-        for (RawRangingDevice peer : builder.mPeerParams) {
+        for (RawRangingDevice peer : peerParams) {
             if (peer.getRttRangingParams() != null) {
                 configs.add(new RttConfig(
-                        builder.mDeviceRole,
+                        mDeviceRole,
                         peer.getRttRangingParams(),
-                        builder.mDataNotificationConfig,
+                        mSessionConfig,
                         peer.getRangingDevice()));
             }
             if (peer.getBleRssiRangingParams() != null) {
                 configs.add(new BleRssiConfig(
-                        builder.mDeviceRole,
+                        mDeviceRole,
                         peer.getBleRssiRangingParams(),
-                        builder.mDataNotificationConfig,
+                        mSessionConfig,
                         peer.getRangingDevice()));
             }
             if (peer.getCsRangingParams() != null) {
                 configs.add(new CsConfig(
-                        builder.mDeviceRole,
+                        mDeviceRole,
                         peer.getCsRangingParams(),
-                        builder.mDataNotificationConfig,
+                        mSessionConfig,
                         peer.getRangingDevice()));
             }
         }
@@ -142,32 +142,16 @@ public class RangingSessionConfig {
         return mDeviceRole;
     }
 
-    public @NonNull SensorFusionParams getSensorFusionConfig() {
-        return mFusionConfig;
-    }
-
-    public @NonNull ImmutableSet<RangingDevice> getPeerDevices() {
-        return mPeerDevices;
-    }
-
-    public @NonNull ImmutableSet<TechnologyConfig> getTechnologyConfigs() {
-        return mTechnologyConfigs;
+    public SessionConfiguration getSessionConfig() {
+        return mSessionConfig;
     }
 
     public static class Builder {
-        private final Set<RawRangingDevice> mPeerParams = new HashSet<>();
         private @RangingPreference.DeviceRole int mDeviceRole;
-        private SensorFusionParams mFusionConfig;
-        private boolean mIsAoaNeeded;
-        private DataNotificationConfig mDataNotificationConfig;
+        private SessionConfiguration mSessionConfig;
 
         public RangingSessionConfig build() {
             return new RangingSessionConfig(this);
-        }
-
-        public Builder addPeerDeviceParams(@NonNull RawRangingDevice params) {
-            mPeerParams.add(params);
-            return this;
         }
 
         public Builder setDeviceRole(@RangingPreference.DeviceRole int role) {
@@ -175,20 +159,11 @@ public class RangingSessionConfig {
             return this;
         }
 
-        public Builder setSensorFusionConfig(@NonNull SensorFusionParams config) {
-            mFusionConfig = config;
+        public Builder setSessionConfig(@NonNull SessionConfiguration config) {
+            mSessionConfig = config;
             return this;
         }
 
-        public Builder setDataNotificationConfig(@NonNull DataNotificationConfig config) {
-            mDataNotificationConfig = config;
-            return this;
-        }
-
-        public Builder setAoaNeeded(boolean isAoaNeeded) {
-            mIsAoaNeeded = isAoaNeeded;
-            return this;
-        }
     }
 
     private static class PeerIgnoringParamsHasher<P> {
@@ -200,10 +175,10 @@ public class RangingSessionConfig {
          */
         public static Map<PeerIgnoringParamsHasher<UwbRangingParams>, BiMap<RangingDevice,
                 UwbAddress>>
-        groupUwbPeersByParams(@NonNull Builder builder) {
+        groupUwbPeersByParams(@NonNull Set<RawRangingDevice> peerParams) {
             Map<PeerIgnoringParamsHasher<UwbRangingParams>, BiMap<RangingDevice, UwbAddress>>
                     peersByParams = new HashMap<>();
-            for (RawRangingDevice peer : builder.mPeerParams) {
+            for (RawRangingDevice peer : peerParams) {
                 if (peer.getUwbRangingParams() == null) continue;
 
                 PeerIgnoringParamsHasher<UwbRangingParams> key =
@@ -270,11 +245,11 @@ public class RangingSessionConfig {
 
     @Override
     public String toString() {
-        return "RangingSessionConfig{" +
-                "mDeviceRole=" + mDeviceRole +
-                ", mFusionConfig=" + mFusionConfig +
-                ", mTechnologyConfigs=" + mTechnologyConfigs +
-                ", mPeerDevices=" + mPeerDevices +
-                " }";
+        return "RangingSessionConfig{"
+                + "mDeviceRole="
+                + mDeviceRole
+                + ", mSessionConfig="
+                + mSessionConfig
+                + '}';
     }
 }

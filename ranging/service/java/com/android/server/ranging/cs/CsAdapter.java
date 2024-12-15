@@ -39,9 +39,9 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import com.android.server.ranging.RangingAdapter;
-import com.android.server.ranging.RangingSessionConfig;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
+import com.android.server.ranging.session.RangingSessionConfig;
 
 import java.util.concurrent.Executors;
 
@@ -204,14 +204,17 @@ public class CsAdapter implements RangingAdapter {
                             .setDistance(new RangingMeasurement.Builder()
                                     .setMeasurement(result.getResultMeters())
                                     .build())
-                            .setTimestampMillis(result.getMeasurementTimestampNanos() * 1000)
-                            .setAzimuth(new RangingMeasurement.Builder()
-                                    .setMeasurement(result.getAzimuthAngle())
-                                    .build())
-                            .setElevation(new RangingMeasurement.Builder()
-                                    .setMeasurement(result.getAltitudeAngle())
-                                    .build());
-
+                            .setTimestampMillis(result.getMeasurementTimestampNanos() * 1000);
+                    if (!Double.isNaN(result.getAzimuthAngle())) {
+                        dataBuilder.setAzimuth(new RangingMeasurement.Builder()
+                                .setMeasurement(result.getAzimuthAngle())
+                                .build());
+                    }
+                    if (!Double.isNaN(result.getAltitudeAngle())) {
+                        dataBuilder.setElevation(new RangingMeasurement.Builder()
+                                .setMeasurement(result.getAltitudeAngle())
+                                .build());
+                    }
                     synchronized (mStateMachine) {
                         if (mStateMachine.getState() == State.STARTED) {
                             mCallbacks.onRangingData(mRangingDevice, dataBuilder.build());
