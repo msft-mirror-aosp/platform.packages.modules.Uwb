@@ -20,6 +20,7 @@ import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_FREQUENT;
 import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_INFREQUENT;
 import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_NORMAL;
 
+import android.annotation.Nullable;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
@@ -29,6 +30,7 @@ import android.bluetooth.le.DistanceMeasurementMethod;
 import android.bluetooth.le.DistanceMeasurementParams;
 import android.bluetooth.le.DistanceMeasurementResult;
 import android.bluetooth.le.DistanceMeasurementSession;
+import android.content.AttributionSource;
 import android.content.Context;
 import android.ranging.DataNotificationConfig;
 import android.ranging.RangingData;
@@ -40,6 +42,7 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import com.android.server.ranging.RangingAdapter;
+import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.session.RangingSessionConfig;
@@ -54,6 +57,7 @@ import java.util.concurrent.Executors;
 public class CsAdapter implements RangingAdapter {
     private static final String TAG = CsAdapter.class.getSimpleName();
 
+    private final RangingInjector mRangingInjector;
     private final BluetoothAdapter mBluetoothAdapter;
     private final StateMachine<State> mStateMachine;
     private Callback mCallbacks;
@@ -67,10 +71,10 @@ public class CsAdapter implements RangingAdapter {
     /** Invariant: non-null while a ranging session is active */
     private DistanceMeasurementSession mSession;
     private DataNotificationManager mDataNotificationManager;
-    private final boolean mIsNonPrivilegedApp;
+    private AttributionSource mNonPrivilegedAttributionSource;
 
     /** Injectable constructor for testing. */
-    public CsAdapter(@NonNull Context context) {
+    public CsAdapter(@NonNull Context context, RangingInjector rangingInjector) {
         if (!RangingTechnology.CS.isSupported(context)) {
             throw new IllegalArgumentException("BT_CS system feature not found.");
         }
@@ -78,8 +82,7 @@ public class CsAdapter implements RangingAdapter {
         mStateMachine = new StateMachine<>(State.STOPPED);
         mCallbacks = null;
         mSession = null;
-        // TODO: Update this.
-        mIsNonPrivilegedApp = false;
+        mRangingInjector = rangingInjector;
         mDataNotificationManager = new DataNotificationManager(
                 new DataNotificationConfig.Builder().build(),
                 new DataNotificationConfig.Builder().build()
@@ -93,9 +96,18 @@ public class CsAdapter implements RangingAdapter {
 
     @Override
     public void start(
-            @NonNull RangingSessionConfig.TechnologyConfig config, @NonNull Callback callback
+            @NonNull RangingSessionConfig.TechnologyConfig config,
+            @Nullable AttributionSource nonPrivilegedAttributionSource,
+            @NonNull Callback callback
     ) {
         Log.i(TAG, "Start called.");
+        mNonPrivilegedAttributionSource = nonPrivilegedAttributionSource;
+        if (mNonPrivilegedAttributionSource != null && !mRangingInjector.isForegroundAppOrService(
+                        mNonPrivilegedAttributionSource.getUid(),
+                mNonPrivilegedAttributionSource.getPackageName())) {
+            Log.e(TAG, "Background ranging is not supported");
+            return;
+        }
         if (!mStateMachine.transition(State.STOPPED, State.STARTED)) {
             Log.v(TAG, "Attempted to start adapter when it was already started");
             return;
@@ -147,21 +159,21 @@ public class CsAdapter implements RangingAdapter {
 
     @Override
     public void appMovedToBackground() {
-        if (mIsNonPrivilegedApp && mDataNotificationManager != null) {
+        if (mNonPrivilegedAttributionSource != null && mStateMachine.getState() != State.STOPPED) {
             mDataNotificationManager.updateConfigAppMovedToBackground();
         }
     }
 
     @Override
     public void appMovedToForeground() {
-        if (mIsNonPrivilegedApp) {
+        if (mNonPrivilegedAttributionSource != null && mStateMachine.getState() != State.STOPPED) {
             mDataNotificationManager.updateConfigAppMovedToForeground();
         }
     }
 
     @Override
     public void appInBackgroundTimeout() {
-        if (mIsNonPrivilegedApp) {
+        if (mNonPrivilegedAttributionSource != null && mStateMachine.getState() != State.STOPPED) {
             stop();
         }
     }

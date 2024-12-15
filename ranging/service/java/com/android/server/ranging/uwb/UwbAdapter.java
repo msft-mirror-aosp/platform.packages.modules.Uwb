@@ -20,8 +20,10 @@ import static com.android.ranging.uwb.backend.internal.RangingMeasurement.CONFID
 import static com.android.ranging.uwb.backend.internal.RangingMeasurement.CONFIDENCE_MEDIUM;
 import static com.android.server.ranging.uwb.UwbConfig.toBackend;
 
+import android.content.AttributionSource;
 import android.content.Context;
 import android.ranging.DataNotificationConfig;
+import android.ranging.RangingCapabilities;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.RangingMeasurement;
@@ -29,6 +31,7 @@ import android.ranging.RangingPreference;
 import android.ranging.raw.RawResponderRangingConfig;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
+import android.ranging.uwb.UwbRangingCapabilities;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -40,7 +43,9 @@ import com.android.ranging.uwb.backend.internal.RangingSessionCallback;
 import com.android.ranging.uwb.backend.internal.Utils;
 import com.android.ranging.uwb.backend.internal.UwbDevice;
 import com.android.ranging.uwb.backend.internal.UwbServiceImpl;
+import com.android.server.ranging.CapabilitiesProvider;
 import com.android.server.ranging.RangingAdapter;
+import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.session.RangingSessionConfig;
@@ -53,13 +58,14 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListeningExecutorService;
 
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Ranging adapter for Ultra-wideband (UWB). */
 public class UwbAdapter implements RangingAdapter {
     private static final String TAG = UwbAdapter.class.getSimpleName();
-
+    private final RangingInjector mRangingInjector;
     private final com.android.ranging.uwb.backend.internal.RangingDevice mUwbClient;
     private final ListeningExecutorService mExecutorService;
     private final ExecutorService mBackendExecutor;
@@ -69,24 +75,31 @@ public class UwbAdapter implements RangingAdapter {
     private final BiMap<RangingDevice, UwbAddress> mPeers;
 
     private DataNotificationManager mDataNotificationManager;
-    private final boolean mIsNonPrivilegedApp;
 
     /** Invariant: non-null while a ranging session is active */
     private Callback mCallbacks;
 
+    private AttributionSource mNonPrivilegedAttributionSource;
+    boolean mIsBackgroundRangingSupported;
+
+
     public UwbAdapter(
-            @NonNull Context context, @NonNull ListeningExecutorService executor,
+            @NonNull Context context,
+            RangingInjector injector,
+            @NonNull ListeningExecutorService executor,
             @RangingPreference.DeviceRole int role
     ) {
-        this(context, executor, Executors.newCachedThreadPool(), role);
+        this(context, injector, executor, Executors.newCachedThreadPool(), role);
     }
 
     /** Intermediary constructor used to make an additional reference to backendExecutor. */
     private UwbAdapter(
-            @NonNull Context context, @NonNull ListeningExecutorService executor,
+            @NonNull Context context,
+            RangingInjector injector,
+            @NonNull ListeningExecutorService executor,
             @NonNull ExecutorService backendExecutor, @RangingPreference.DeviceRole int role
     ) {
-        this(context, executor, backendExecutor,
+        this(context, injector, executor, backendExecutor,
                 role == RangingPreference.DEVICE_ROLE_INITIATOR
                         ? UwbServiceImpl.getController(context, backendExecutor)
                         : UwbServiceImpl.getControlee(context, backendExecutor));
@@ -95,26 +108,32 @@ public class UwbAdapter implements RangingAdapter {
     /** Injectable constructor for testing. */
     @VisibleForTesting
     public UwbAdapter(
-            @NonNull Context context, @NonNull ListeningExecutorService executor,
+            @NonNull Context context,
+            RangingInjector injector,
+            @NonNull ListeningExecutorService executor,
             @NonNull ExecutorService backendExecutor,
             @NonNull com.android.ranging.uwb.backend.internal.RangingDevice uwbClient
     ) {
         if (!RangingTechnology.UWB.isSupported(context)) {
             throw new IllegalArgumentException("UWB system feature not found.");
         }
-
+        mRangingInjector = injector;
         mStateMachine = new StateMachine<>(State.STOPPED);
         mUwbClient = uwbClient;
         mExecutorService = executor;
         mBackendExecutor = backendExecutor;
         mCallbacks = null;
         mPeers = HashBiMap.create();
-        // TODO: Update this.
-        mIsNonPrivilegedApp = false;
         mDataNotificationManager = new DataNotificationManager(
                 new DataNotificationConfig.Builder().build(),
                 new DataNotificationConfig.Builder().build()
         );
+        mIsBackgroundRangingSupported = Optional.ofNullable(mRangingInjector)
+                .map(RangingInjector::getCapabilitiesProvider)
+                .map(CapabilitiesProvider::getCachedCapabilities)
+                .map(RangingCapabilities::getUwbCapabilities)
+                .map(UwbRangingCapabilities::isBackgroundRangingSupported)
+                .orElse(true); // Defaults to true;
     }
 
     @Override
@@ -124,9 +143,12 @@ public class UwbAdapter implements RangingAdapter {
 
     @Override
     public void start(
-            @NonNull RangingSessionConfig.TechnologyConfig config, @NonNull Callback callbacks
+            @NonNull RangingSessionConfig.TechnologyConfig config,
+            @android.annotation.Nullable AttributionSource nonPrivilegedAttributionSource,
+            @NonNull Callback callbacks
     ) {
         Log.i(TAG, "Start called.");
+        mNonPrivilegedAttributionSource = nonPrivilegedAttributionSource;
         if (!mStateMachine.transition(State.STOPPED, State.STARTED)) {
             Log.v(TAG, "Attempted to start adapter when it was already started");
             return;
@@ -138,18 +160,30 @@ public class UwbAdapter implements RangingAdapter {
             closeForReason(Callback.ClosedReason.FAILED_TO_START);
             return;
         }
+
+        mDataNotificationManager = new DataNotificationManager(
+                uwbConfig.getSessionConfig().getDataNotificationConfig(),
+                uwbConfig.getSessionConfig().getDataNotificationConfig());
+        if (mNonPrivilegedAttributionSource != null && !mRangingInjector.isForegroundAppOrService(
+                mNonPrivilegedAttributionSource.getUid(),
+                mNonPrivilegedAttributionSource.getPackageName())) {
+            if (!mIsBackgroundRangingSupported) {
+                Log.w(TAG, "Background ranging is not supported");
+                mStateMachine.transition(State.STARTED, State.STOPPED);
+                return;
+            }
+            mDataNotificationManager.updateConfigAppMovedToBackground();
+        }
+
         mPeers.putAll(uwbConfig.getPeerAddresses());
-        mUwbClient.setRangingParameters(uwbConfig.asBackendParameters());
+        mUwbClient.setRangingParameters(
+                uwbConfig.asBackendParameters(mDataNotificationManager.getCurrentConfig()));
         mUwbClient.setLocalAddress(toBackend(uwbConfig.getParameters().getDeviceAddress()));
         if (mUwbClient instanceof RangingController controller) {
             controller.setComplexChannel(
                     toBackend(uwbConfig.getParameters().getComplexChannel()));
         }
 
-        mDataNotificationManager = new DataNotificationManager(
-                uwbConfig.getSessionConfig().getDataNotificationConfig(),
-                // Update this if app in bg when starting ranging.
-                uwbConfig.getSessionConfig().getDataNotificationConfig());
         var future = Futures.submit(() -> {
             mUwbClient.startRanging(mUwbListener, mBackendExecutor);
         }, mExecutorService);
@@ -202,7 +236,7 @@ public class UwbAdapter implements RangingAdapter {
 
     @Override
     public void appMovedToBackground() {
-        if (mIsNonPrivilegedApp && mDataNotificationManager != null) {
+        if (mNonPrivilegedAttributionSource != null && mDataNotificationManager != null) {
             mDataNotificationManager.updateConfigAppMovedToBackground();
             mBackendExecutor.execute(() -> mUwbClient.reconfigureRangeDataNtfConfig(
                     UwbConfig.toBackend(mDataNotificationManager.getCurrentConfig())));
@@ -211,7 +245,7 @@ public class UwbAdapter implements RangingAdapter {
 
     @Override
     public void appMovedToForeground() {
-        if (mIsNonPrivilegedApp) {
+        if (mNonPrivilegedAttributionSource != null && mDataNotificationManager != null) {
             mDataNotificationManager.updateConfigAppMovedToForeground();
             mBackendExecutor.execute(() -> mUwbClient.reconfigureRangeDataNtfConfig(
                     UwbConfig.toBackend(mDataNotificationManager.getCurrentConfig())));
@@ -220,7 +254,7 @@ public class UwbAdapter implements RangingAdapter {
 
     @Override
     public void appInBackgroundTimeout() {
-        if (mIsNonPrivilegedApp) {
+        if (mNonPrivilegedAttributionSource != null && !mIsBackgroundRangingSupported) {
             stop();
         }
     }
