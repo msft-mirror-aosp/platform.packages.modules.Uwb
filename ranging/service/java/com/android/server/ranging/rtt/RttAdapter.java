@@ -18,6 +18,8 @@ package com.android.server.ranging.rtt;
 
 import static android.ranging.RangingPreference.DEVICE_ROLE_INITIATOR;
 
+import android.annotation.Nullable;
+import android.content.AttributionSource;
 import android.content.Context;
 import android.ranging.DataNotificationConfig;
 import android.ranging.RangingData;
@@ -36,6 +38,7 @@ import com.android.ranging.rtt.backend.internal.RttRangingSessionCallback;
 import com.android.ranging.rtt.backend.internal.RttService;
 import com.android.ranging.rtt.backend.internal.RttServiceImpl;
 import com.android.server.ranging.RangingAdapter;
+import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.session.RangingSessionConfig;
@@ -53,6 +56,7 @@ public class RttAdapter implements RangingAdapter {
 
     private static final String TAG = RttAdapter.class.getSimpleName();
 
+    private final RangingInjector mRangingInjector;
     private final RttService mRttService;
     private final RttRangingDevice mRttClient;
     private final ListeningExecutorService mExecutorService;
@@ -66,22 +70,27 @@ public class RttAdapter implements RangingAdapter {
     private RangingDevice mPeerDevice;
 
     private DataNotificationManager mDataNotificationManager;
-    private final boolean mIsNonPrivilegedApp;
+    private AttributionSource mNonPrivilegedAttributionSource;
 
     public RttAdapter(
-            @NonNull Context context, @NonNull ListeningExecutorService executorService,
+            @NonNull Context context,
+            @NonNull RangingInjector rangingInjector,
+            @NonNull ListeningExecutorService executorService,
             @RangingPreference.DeviceRole int role
     ) {
-        this(context, executorService, new RttServiceImpl(context), role);
+        this(context, rangingInjector, executorService, new RttServiceImpl(context), role);
     }
 
     @VisibleForTesting
-    public RttAdapter(@NonNull Context context, @NonNull ListeningExecutorService executorService,
-            @NonNull RttService rttService, @RangingPreference.DeviceRole int role) {
+    public RttAdapter(@NonNull Context context,
+            @NonNull RangingInjector rangingInjector,
+            @NonNull ListeningExecutorService executorService,
+            @NonNull RttService rttService,
+            @RangingPreference.DeviceRole int role) {
         if (!RttCapabilitiesAdapter.isSupported(context)) {
             throw new IllegalArgumentException("WiFi RTT system feature not found.");
         }
-
+        mRangingInjector = rangingInjector;
         mStateMachine = new StateMachine<>(State.STOPPED);
         mRttService = rttService;
         mRttClient = role == DEVICE_ROLE_INITIATOR
@@ -91,8 +100,6 @@ public class RttAdapter implements RangingAdapter {
         mExecutorService = executorService;
         mCallbacks = null;
         mPeerDevice = null;
-        // TODO: Update this.
-        mIsNonPrivilegedApp = false;
         mDataNotificationManager = new DataNotificationManager(
                 new DataNotificationConfig.Builder().build(),
                 new DataNotificationConfig.Builder().build()
@@ -106,9 +113,19 @@ public class RttAdapter implements RangingAdapter {
 
     @Override
     public void start(
-            @NonNull RangingSessionConfig.TechnologyConfig config, @NonNull Callback callbacks
+            @NonNull RangingSessionConfig.TechnologyConfig config,
+            @Nullable AttributionSource nonPrivilegedAttributionSource,
+            @NonNull Callback callbacks
     ) {
         Log.i(TAG, "Start called.");
+        mNonPrivilegedAttributionSource = nonPrivilegedAttributionSource;
+        if (mNonPrivilegedAttributionSource != null && !mRangingInjector.isForegroundAppOrService(
+                mNonPrivilegedAttributionSource.getUid(),
+                mNonPrivilegedAttributionSource.getPackageName())) {
+            Log.w(TAG, "Background ranging is not supported");
+            return;
+        }
+
         if (!mStateMachine.transition(State.STOPPED, State.STARTED)) {
             Log.v(TAG, "Attempted to start adapter when it was already started");
             return;
@@ -140,21 +157,21 @@ public class RttAdapter implements RangingAdapter {
 
     @Override
     public void appMovedToBackground() {
-        if (mIsNonPrivilegedApp) {
+        if (mNonPrivilegedAttributionSource != null && mStateMachine.getState() != State.STOPPED) {
             mDataNotificationManager.updateConfigAppMovedToBackground();
         }
     }
 
     @Override
     public void appMovedToForeground() {
-        if (mIsNonPrivilegedApp) {
+        if (mNonPrivilegedAttributionSource != null && mStateMachine.getState() != State.STOPPED) {
             mDataNotificationManager.updateConfigAppMovedToForeground();
         }
     }
 
     @Override
     public void appInBackgroundTimeout() {
-        if (mIsNonPrivilegedApp) {
+        if (mNonPrivilegedAttributionSource != null && mStateMachine.getState() != State.STOPPED) {
             stop();
         }
     }
