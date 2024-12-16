@@ -72,7 +72,9 @@ public class RangingInjector {
         mLooper = rangingHandlerThread.getLooper();
         mContext = context;
         mCapabilitiesProvider = new CapabilitiesProvider(this);
-        mRangingServiceManager = new RangingServiceManager(this, mLooper);
+        mRangingServiceManager = new RangingServiceManager(this,
+                mContext.getSystemService(ActivityManager.class),
+                mLooper);
         mPermissionManager = context.getSystemService(PermissionManager.class);
     }
 
