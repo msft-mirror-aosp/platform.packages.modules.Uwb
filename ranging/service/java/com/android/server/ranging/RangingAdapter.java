@@ -60,6 +60,13 @@ public interface RangingAdapter {
 
     default void reconfigureRangingInterval(int intervalSkipCount) {}
 
+    default void appForegroundStateUpdated(boolean appInForeground) {
+        if (appInForeground) {
+            appMovedToForeground();
+        } else {
+            appMovedToBackground();
+        }
+    }
     void appMovedToBackground();
 
     void appMovedToForeground();

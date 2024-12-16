@@ -212,6 +212,14 @@ public class BaseRangingSession {
         }
     }
 
+    public void appForegroundStateUpdated(boolean appInForeground) {
+        synchronized (mLock) {
+            for (Map.Entry<TechnologyConfig, RangingAdapter> entry : mAdapters.entrySet()) {
+                entry.getValue().appForegroundStateUpdated(appInForeground);
+            }
+        }
+    }
+
     /** Stop ranging in this session. */
     public void stop() {
         synchronized (mLock) {
