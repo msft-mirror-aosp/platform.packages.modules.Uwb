@@ -14,23 +14,30 @@
  * limitations under the License.
  */
 
-package com.android.server.ranging;
+package com.android.server.ranging.session;
 
+import android.content.AttributionSource;
 import android.os.Binder;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
+import android.ranging.SessionHandle;
+import android.ranging.raw.RawResponderRangingConfig;
 import android.util.Log;
 
 import androidx.annotation.GuardedBy;
 import androidx.annotation.NonNull;
 
-import com.android.server.ranging.RangingSessionConfig.MulticastTechnologyConfig;
-import com.android.server.ranging.RangingSessionConfig.TechnologyConfig;
-import com.android.server.ranging.RangingSessionConfig.UnicastTechnologyConfig;
+import com.android.server.ranging.RangingAdapter;
+import com.android.server.ranging.RangingInjector;
+import com.android.server.ranging.RangingServiceManager;
+import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.fusion.DataFusers;
 import com.android.server.ranging.fusion.FilteringFusionEngine;
 import com.android.server.ranging.fusion.FusionEngine;
+import com.android.server.ranging.session.RangingSessionConfig.MulticastTechnologyConfig;
+import com.android.server.ranging.session.RangingSessionConfig.TechnologyConfig;
+import com.android.server.ranging.session.RangingSessionConfig.UnicastTechnologyConfig;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -38,18 +45,22 @@ import com.google.common.util.concurrent.ListeningExecutorService;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /** A multi-technology ranging session in the Android generic ranging service */
-public class RangingSession {
-    private static final String TAG = RangingSession.class.getSimpleName();
+public class BaseRangingSession {
+    private static final String TAG = BaseRangingSession.class.getSimpleName();
 
     private final RangingInjector mInjector;
-    private final RangingSessionConfig mConfig;
+    private final AttributionSource mAttributionSource;
     private final RangingServiceManager.SessionListener mSessionListener;
     private final ListeningExecutorService mAdapterExecutor;
+
+    protected final SessionHandle mSessionHandle;
+    protected final RangingSessionConfig mConfig;
 
     /* Lock for internal state. */
     private final Object mLock = new Object();
@@ -87,7 +98,7 @@ public class RangingSession {
 
         Peer(@NonNull RangingDevice device, @NonNull RangingTechnology initialTechnology) {
             technologies = Sets.newConcurrentHashSet(Set.of(initialTechnology));
-            if (mConfig.getSensorFusionConfig().isSensorFusionEnabled()) {
+            if (mConfig.getSessionConfig().getSensorFusionParams().isSensorFusionEnabled()) {
                 fusionEngine = new FilteringFusionEngine(
                         new DataFusers.PreferentialDataFuser(RangingTechnology.UWB));
             } else {
@@ -107,13 +118,17 @@ public class RangingSession {
         }
     }
 
-    public RangingSession(
+    public BaseRangingSession(
+            @NonNull AttributionSource attributionSource,
+            @NonNull SessionHandle sessionHandle,
             @NonNull RangingInjector injector,
             @NonNull RangingSessionConfig config,
             @NonNull RangingServiceManager.SessionListener listener,
             @NonNull ListeningExecutorService adapterExecutor
     ) {
         mInjector = injector;
+        mAttributionSource = attributionSource;
+        mSessionHandle = sessionHandle;
         mConfig = config;
         mSessionListener = listener;
         mAdapterExecutor = adapterExecutor;
@@ -123,14 +138,14 @@ public class RangingSession {
     }
 
     /** Start ranging in this session. */
-    public void start() {
+    public void start(ImmutableSet<TechnologyConfig> technologyConfigs) {
         synchronized (mLock) {
             if (!mStateMachine.transition(State.STOPPED, State.STARTING)) {
                 Log.w(TAG, "Failed transition STOPPED -> STARTING");
                 return;
             }
 
-            for (TechnologyConfig config : mConfig.getTechnologyConfigs()) {
+            for (TechnologyConfig config : technologyConfigs) {
                 ImmutableSet<RangingDevice> peerDevices;
 
                 if (config instanceof UnicastTechnologyConfig unicastConfig) {
@@ -165,6 +180,36 @@ public class RangingSession {
         }
     }
 
+    public void addPeer(RawResponderRangingConfig params) {
+        synchronized (mLock) {
+            for (Map.Entry<TechnologyConfig, RangingAdapter> entry : mAdapters.entrySet()) {
+                if (entry.getValue().isDynamicUpdatePeersSupported()) {
+                    RangingDevice peerDevice = params.getRawRangingDevice().getRangingDevice();
+                    mPeers.put(peerDevice, new Peer(peerDevice, entry.getKey().getTechnology()));
+                    entry.getValue().addPeer(params);
+                }
+            }
+        }
+    }
+
+    public void removePeer(RangingDevice device) {
+        synchronized (mLock) {
+            for (Map.Entry<TechnologyConfig, RangingAdapter> entry : mAdapters.entrySet()) {
+                if (entry.getValue().isDynamicUpdatePeersSupported()) {
+                    entry.getValue().removePeer(device);
+                }
+            }
+        }
+    }
+
+    public void reconfigureInterval(int intervalSkipCount) {
+        synchronized (mLock) {
+            for (Map.Entry<TechnologyConfig, RangingAdapter> entry : mAdapters.entrySet()) {
+                entry.getValue().reconfigureRangingInterval(intervalSkipCount);
+            }
+        }
+    }
+
     /** Stop ranging in this session. */
     public void stop() {
         synchronized (mLock) {
@@ -195,6 +240,10 @@ public class RangingSession {
         @Override
         public void onStarted(@NonNull RangingDevice peerDevice) {
             synchronized (mLock) {
+                if (!mPeers.containsKey(peerDevice)) {
+                    Log.w(TAG, "onStarted peer not found");
+                    return;
+                }
                 mStateMachine.transition(State.STARTING, State.STARTED);
                 mPeers.get(peerDevice).setUsingTechnology(mConfig.getTechnology());
                 mSessionListener.onTechnologyStarted(peerDevice, mConfig.getTechnology());
@@ -204,6 +253,10 @@ public class RangingSession {
         @Override
         public void onStopped(@NonNull RangingDevice peerDevice) {
             synchronized (mLock) {
+                if (!mPeers.containsKey(peerDevice)) {
+                    Log.w(TAG, "onStopped peer not found");
+                    return;
+                }
                 Peer peer = mPeers.get(peerDevice);
                 peer.setNotUsingTechnology(mConfig.getTechnology());
                 mSessionListener.onTechnologyStopped(peerDevice, mConfig.getTechnology());
@@ -285,6 +338,8 @@ public class RangingSession {
 
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         pw.println("---- Dump of RangingSession ----");
+        pw.println("Session handle: " + mSessionHandle);
+        pw.println("Attribution source: " + mAttributionSource);
         pw.println("Adapters:");
         for (RangingAdapter adapter : mAdapters.values()) {
             pw.println(adapter);

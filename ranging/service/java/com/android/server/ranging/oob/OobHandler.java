@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-package android.ranging;
+package com.android.server.ranging.oob;
 
-import android.ranging.OobHandle;
+import android.ranging.oob.OobHandle;
 
-/**
-* Interface for sending data over the OOB channel.
-*
-*  @hide
-*/
-oneway interface IOobSendDataListener {
-    void sendOobData(in OobHandle oobHandle, in byte[] data);
+public interface OobHandler {
+    void handleOobMessage(OobHandle oobHandle, byte[] data);
+
+    void handleOobDeviceDisconnected(OobHandle oobHandle);
+
+    void handleOobDeviceReconnected(OobHandle oobHandle);
+
+    void handleOobClosed(OobHandle oobHandle);
 }

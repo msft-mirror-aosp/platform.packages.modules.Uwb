@@ -35,9 +35,9 @@ import com.android.ranging.rtt.backend.internal.RttRangingSessionCallback;
 import com.android.ranging.rtt.backend.internal.RttService;
 import com.android.ranging.rtt.backend.internal.RttServiceImpl;
 import com.android.server.ranging.RangingAdapter;
-import com.android.server.ranging.RangingSessionConfig;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
+import com.android.server.ranging.session.RangingSessionConfig;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.FutureCallback;
@@ -116,6 +116,12 @@ public class RttAdapter implements RangingAdapter {
             mRttClient.startRanging(mRttListener, Executors.newSingleThreadExecutor());
         }, mExecutorService);
         Futures.addCallback(future, mRttClientResultHandlers.startRanging, mExecutorService);
+    }
+
+    @Override
+    public void reconfigureRangingInterval(int intervalSkipCount) {
+        Log.i(TAG, "Reconfigure ranging interval called");
+        mRttClient.reconfigureRangingInterval(intervalSkipCount);
     }
 
     @Override

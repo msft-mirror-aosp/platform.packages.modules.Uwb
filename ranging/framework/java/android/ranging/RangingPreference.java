@@ -22,6 +22,10 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.ranging.oob.OobInitiatorRangingConfig;
+import android.ranging.oob.OobResponderRangingConfig;
+import android.ranging.raw.RawInitiatorRangingConfig;
+import android.ranging.raw.RawResponderRangingConfig;
 
 import com.android.ranging.flags.Flags;
 
@@ -36,7 +40,6 @@ import java.util.Objects;
  * required for a ranging session, including ranging parameters, sensor fusion settings,
  * and data notification configurations. It provides a {@link Builder} to construct
  * an instance with custom configurations.</p>
- *
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class RangingPreference implements Parcelable {
@@ -59,23 +62,23 @@ public final class RangingPreference implements Parcelable {
 
     @DeviceRole
     private final int mDeviceRole;
-    private final RangingParams mRangingParameters;
+    private final RangingConfig mRangingParams;
 
-    private final SessionConfiguration mSessionConfig;
+    private final SessionConfig mSessionConfig;
 
     private RangingPreference(Builder builder) {
         mDeviceRole = builder.mDeviceRole;
-        mRangingParameters = builder.mRangingParameters;
+        mRangingParams = builder.mRangingConfig;
         mSessionConfig = builder.mSessionConfig;
     }
 
     private RangingPreference(Parcel in) {
         mDeviceRole = in.readInt();
-        mRangingParameters = in.readParcelable(
-                RangingParams.class.getClassLoader(),
-                RangingParams.class);
+        mRangingParams = in.readParcelable(
+                RangingConfig.class.getClassLoader(),
+                RangingConfig.class);
         mSessionConfig = in.readParcelable(
-                SessionConfiguration.class.getClassLoader(), SessionConfiguration.class);
+                SessionConfig.class.getClassLoader(), SessionConfig.class);
     }
 
     @NonNull
@@ -102,21 +105,20 @@ public final class RangingPreference implements Parcelable {
     /**
      * Returns the ranging parameters associated with this preference.
      *
-     * @return the {@link android.ranging.RangingParams} or {@code null} if not set.
+     * @return the {@link RangingConfig} or {@code null} if not set.
      */
     @Nullable
-    public RangingParams getRangingParameters() {
-        return mRangingParameters;
+    public RangingConfig getRangingParams() {
+        return mRangingParams;
     }
 
     /**
      * Returns the ranging session configuration params.
      *
-     * @return a non-null {@link SessionConfiguration} instance.
-     *
+     * @return a non-null {@link SessionConfig} instance.
      */
     @NonNull
-    public SessionConfiguration getSessionConfiguration() {
+    public SessionConfig getSessionConfig() {
         return mSessionConfig;
     }
 
@@ -128,46 +130,73 @@ public final class RangingPreference implements Parcelable {
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
         dest.writeInt(mDeviceRole);
-        dest.writeParcelable(mRangingParameters, flags);
+        dest.writeParcelable(mRangingParams, flags);
         dest.writeParcelable(mSessionConfig, flags);
     }
 
     /**
      * Builder for creating instances of {@code RangingPreference}.
+     *
+     * <p>This Builder class provides a flexible way to construct a {@link RangingPreference}
+     * instance by setting required and optional parameters. It ensures that all necessary
+     * parameters are specified and provides default values for optional configurations.</p>
+     *
+     * <p>Example usage:</p>
+     *
+     * <pre>{@code
+     * RangingPreference rangingPreference = new RangingPreference.Builder(DEVICE_ROLE_RESPONDER,
+     *     new RawResponderRangingParams.Builder()
+     *         .setRawRangingDevice(
+     *             new RawRangingDevice.Builder()
+     *                 .setRangingDevice(
+     *                     new RangingDevice.Builder()
+     *                         .build())
+     *                .setBleRssiRangingParams(
+     *                new BleRssiRangingParams.Builder("AA:BB:CC:00:11:22")
+     *                    .build())
+     *            .build())
+     *        build())
+     *    .build();
+     * }</pre>
      */
     public static final class Builder {
         @DeviceRole
         private final int mDeviceRole;
-        private final RangingParams mRangingParameters;
-        private SessionConfiguration mSessionConfig = new SessionConfiguration.Builder().build();
+        private final RangingConfig mRangingConfig;
+        private SessionConfig mSessionConfig = new SessionConfig.Builder().build();
 
         /**
-         * Creates a Builder instance with the required device role and {@link RangingParams}.
+         * Creates a Builder instance with the required device role and {@link RangingConfig}.
          *
-         * @param role the role of the device in {@link DeviceRole}
-         * @param rangingParams the {@link RangingParams} to use.
+         * @param role          the role of the device in {@link DeviceRole}
+         * @param rangingConfig the {@link RangingConfig} to use.
+         *                      Needs to be an instance of one of the following:
+         *                      <ul>
+         *                         <li>{@link RawResponderRangingConfig}</li>
+         *                         <li>{@link RawInitiatorRangingConfig}</li>
+         *                         <li>{@link OobResponderRangingConfig}</li>
+         *                         <li>{@link OobInitiatorRangingConfig}</li>
+         *                      </ul>
          * @throws NullPointerException if {@code rangingParams} is null.
          */
-        public Builder(@DeviceRole int role, @NonNull  RangingParams rangingParams) {
-            Objects.requireNonNull(rangingParams);
+        public Builder(@DeviceRole int role, @NonNull RangingConfig rangingConfig) {
+            Objects.requireNonNull(rangingConfig);
             mDeviceRole = role;
-            mRangingParameters = rangingParams;
+            mRangingConfig = rangingConfig;
         }
 
         /**
          * Sets the configuration parameters for the ranging session policy.
          *
          * <p>This method allows specifying additional configuration parameters encapsulated in
-         * {@link SessionConfiguration} for fine-tuning the behavior of the ranging session.
+         * {@link SessionConfig} for fine-tuning the behavior of the ranging session.
          *
-         * @param config the {@link SessionConfiguration}.
+         * @param config the {@link SessionConfig}.
          * @return this {@link Builder} instance.
          * @throws NullPointerException if {@code params} is null.
-         *
-         * @hide
          */
         @NonNull
-        public Builder setSessionConfiguration(@NonNull SessionConfiguration config) {
+        public Builder setSessionConfig(@NonNull SessionConfig config) {
             Objects.requireNonNull(config);
             mSessionConfig = config;
             return this;
@@ -176,7 +205,7 @@ public final class RangingPreference implements Parcelable {
         /**
          * Builds the {@code RangingPreference} instance.
          *
-         * <p>If the {@link SessionConfiguration} is not set, default instances will be used.
+         * <p>If the {@link SessionConfig} is not set, default instances will be used.
          *
          * @return a new {@code RangingPreference} instance.
          */
@@ -192,7 +221,7 @@ public final class RangingPreference implements Parcelable {
                 + "mDeviceRole="
                 + mDeviceRole
                 + ", mRangingParameters="
-                + mRangingParameters
+                + mRangingParams
                 + ", mSessionConfig="
                 + mSessionConfig
                 + " }";

@@ -14,6 +14,15 @@
  * limitations under the License.
  */
 
-package android.ranging.raw;
+package android.ranging.oob;
 
-parcelable RawResponderRangingParams;
+import android.ranging.oob.OobHandle;
+
+/**
+* Interface for sending data over the OOB channel.
+*
+*  @hide
+*/
+oneway interface IOobSendDataListener {
+    void sendOobData(in OobHandle oobHandle, in byte[] data);
+}
