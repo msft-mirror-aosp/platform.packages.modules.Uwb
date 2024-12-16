@@ -56,6 +56,12 @@ public interface RangingAdapter {
 
     default void reconfigureRangingInterval(int intervalSkipCount) {}
 
+    void appMovedToBackground();
+
+    void appMovedToForeground();
+
+    void appInBackgroundTimeout();
+
     /** Callback for getting notified when ranging starts or stops. */
     interface Callback {
         /**
