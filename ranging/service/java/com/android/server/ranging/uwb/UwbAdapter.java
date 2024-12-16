@@ -21,6 +21,7 @@ import static com.android.ranging.uwb.backend.internal.RangingMeasurement.CONFID
 import static com.android.server.ranging.uwb.UwbConfig.toBackend;
 
 import android.content.Context;
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.RangingMeasurement;
@@ -43,6 +44,7 @@ import com.android.server.ranging.RangingAdapter;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.session.RangingSessionConfig;
+import com.android.server.ranging.util.DataNotificationManager;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.BiMap;
@@ -65,6 +67,9 @@ public class UwbAdapter implements RangingAdapter {
     private final RangingSessionCallback mUwbListener = new UwbListener();
     private final StateMachine<State> mStateMachine;
     private final BiMap<RangingDevice, UwbAddress> mPeers;
+
+    private DataNotificationManager mDataNotificationManager;
+    private final boolean mIsNonPrivilegedApp;
 
     /** Invariant: non-null while a ranging session is active */
     private Callback mCallbacks;
@@ -104,6 +109,12 @@ public class UwbAdapter implements RangingAdapter {
         mBackendExecutor = backendExecutor;
         mCallbacks = null;
         mPeers = HashBiMap.create();
+        // TODO: Update this.
+        mIsNonPrivilegedApp = false;
+        mDataNotificationManager = new DataNotificationManager(
+                new DataNotificationConfig.Builder().build(),
+                new DataNotificationConfig.Builder().build()
+        );
     }
 
     @Override
@@ -135,6 +146,10 @@ public class UwbAdapter implements RangingAdapter {
                     toBackend(uwbConfig.getParameters().getComplexChannel()));
         }
 
+        mDataNotificationManager = new DataNotificationManager(
+                uwbConfig.getSessionConfig().getDataNotificationConfig(),
+                // Update this if app in bg when starting ranging.
+                uwbConfig.getSessionConfig().getDataNotificationConfig());
         var future = Futures.submit(() -> {
             mUwbClient.startRanging(mUwbListener, mBackendExecutor);
         }, mExecutorService);
@@ -182,6 +197,31 @@ public class UwbAdapter implements RangingAdapter {
         Log.i(TAG, "Reconfigure ranging interval called");
         if (mUwbClient instanceof RangingController) {
             ((RangingController) mUwbClient).setBlockStriding(intervalSkipCount);
+        }
+    }
+
+    @Override
+    public void appMovedToBackground() {
+        if (mIsNonPrivilegedApp && mDataNotificationManager != null) {
+            mDataNotificationManager.updateConfigAppMovedToBackground();
+            mBackendExecutor.execute(() -> mUwbClient.reconfigureRangeDataNtfConfig(
+                    UwbConfig.toBackend(mDataNotificationManager.getCurrentConfig())));
+        }
+    }
+
+    @Override
+    public void appMovedToForeground() {
+        if (mIsNonPrivilegedApp) {
+            mDataNotificationManager.updateConfigAppMovedToForeground();
+            mBackendExecutor.execute(() -> mUwbClient.reconfigureRangeDataNtfConfig(
+                    UwbConfig.toBackend(mDataNotificationManager.getCurrentConfig())));
+        }
+    }
+
+    @Override
+    public void appInBackgroundTimeout() {
+        if (mIsNonPrivilegedApp) {
+            stop();
         }
     }
 
