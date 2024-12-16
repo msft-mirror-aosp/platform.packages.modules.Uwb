@@ -144,6 +144,8 @@ public class BaseRangingSession {
                 Log.w(TAG, "Failed transition STOPPED -> STARTING");
                 return;
             }
+            AttributionSource nonPrivilegedAttributionSource =
+                    mInjector.getAnyNonPrivilegedAppInAttributionSource(mAttributionSource);
 
             for (TechnologyConfig config : technologyConfigs) {
                 ImmutableSet<RangingDevice> peerDevices;
@@ -174,7 +176,7 @@ public class BaseRangingSession {
                 RangingAdapter adapter = mInjector.createAdapter(
                         config, mConfig.getDeviceRole(), mAdapterExecutor);
                 mAdapters.put(config, adapter);
-                adapter.start(config, new AdapterListener(config));
+                adapter.start(config, nonPrivilegedAttributionSource, new AdapterListener(config));
                 Binder.restoreCallingIdentity(token);
             }
         }

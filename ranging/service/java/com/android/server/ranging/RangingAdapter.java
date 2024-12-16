@@ -16,6 +16,8 @@
 
 package com.android.server.ranging;
 
+import android.annotation.Nullable;
+import android.content.AttributionSource;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.raw.RawResponderRangingConfig;
@@ -40,7 +42,9 @@ public interface RangingAdapter {
      * @param config   for the ranging session.
      * @param callback to be called on the occurrence of ranging events.
      */
-    void start(@NonNull RangingSessionConfig.TechnologyConfig config, @NonNull Callback callback);
+    void start(@NonNull RangingSessionConfig.TechnologyConfig config,
+            @Nullable AttributionSource nonPrivilegedAttributionSource,
+            @NonNull Callback callback);
 
     /** Stop ranging. */
     void stop();
