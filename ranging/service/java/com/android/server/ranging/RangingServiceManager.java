@@ -382,7 +382,7 @@ public final class RangingServiceManager implements ActivityManager.OnUidImporta
             switch (task) {
                 case TASK_START_RANGING -> handleStartRanging((StartRangingArgs) msg.obj);
                 case TASK_STOP_RANGING -> {
-                    RangingSession rangingSession = (RangingSession) msg.obj;
+                    RangingSession<?> rangingSession = (RangingSession<?>) msg.obj;
                     rangingSession.stop();
                 }
                 case TASK_ADD_DEVICE -> {
@@ -394,7 +394,7 @@ public final class RangingServiceManager implements ActivityManager.OnUidImporta
                     peer.mSession.removePeer(peer.mRangingDevice);
                 }
                 case TASK_RECONFIGURE_INTERVAL -> {
-                    RangingSession session = (RangingSession) msg.obj;
+                    RangingSession<?> session = (RangingSession<?>) msg.obj;
                     session.reconfigureInterval(msg.arg1);
                 }
             }
