@@ -177,6 +177,7 @@ public final class RangingServiceManager implements ActivityManager.OnUidImporta
     public void addRawPeer(SessionHandle handle, RawResponderRangingConfig params) {
         if (!mSessions.containsKey(handle)) {
             Log.e(TAG, "Failed to add peer. Ranging session not found");
+            return;
         }
         DynamicPeer peer = new DynamicPeer(params,
                 mSessions.get(handle), null /* Ranging device is in params*/);
@@ -186,6 +187,7 @@ public final class RangingServiceManager implements ActivityManager.OnUidImporta
     public void removePeer(SessionHandle handle, RangingDevice device) {
         if (!mSessions.containsKey(handle)) {
             Log.e(TAG, "Failed to remove peer. Ranging session not found");
+            return;
         }
         DynamicPeer peer = new DynamicPeer(null /* params not needed*/, mSessions.get(handle),
                 device);

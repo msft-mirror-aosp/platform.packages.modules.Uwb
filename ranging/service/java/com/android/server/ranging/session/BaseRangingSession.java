@@ -19,7 +19,6 @@ package com.android.server.ranging.session;
 import android.app.AlarmManager;
 import android.content.AttributionSource;
 import android.os.Binder;
-import android.os.Handler;
 import android.os.SystemClock;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
@@ -57,7 +56,7 @@ import java.util.concurrent.ConcurrentMap;
 public class BaseRangingSession {
     private static final String TAG = BaseRangingSession.class.getSimpleName();
 
-    private static final int NON_PRIVILEGED_RANGING_BG_APP_TIMEOUT_MS = 1000;
+    private static final int NON_PRIVILEGED_RANGING_BG_APP_TIMEOUT_MS = 60_000;
 
     public static final String NON_PRIVILEGED_RANGING_BG_APP_TIMER_TAG =
             "RangingSessionNonPrivilegedBgAppTimeout";
