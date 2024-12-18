@@ -25,6 +25,8 @@ python_defaults {
     test_suites: [
         "cts",
         "general-tests",
+        "mts-uwb",
+        "mcts-uwb",
     ],
     version: {
         py3: {
@@ -47,7 +49,7 @@ python_test_host {
     test_options: {
         unit_test: false,
     },
-    data: [
+    device_common_data: [
         // Package the snippet with the mobly test
         ":uwb_snippet",
         "README.md",
@@ -69,7 +71,7 @@ python_test_host {
     test_options: {
         unit_test: false,
     },
-    data: [
+    device_common_data: [
         // Package the snippet with the mobly test
         ":uwb_snippet",
         "README.md",

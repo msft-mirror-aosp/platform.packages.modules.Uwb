@@ -857,7 +857,8 @@ public abstract class FiraParams extends Params {
 
     public enum SchedulingModeCapabilitiesFlag implements FlagEnum {
         HAS_CONTENTION_BASED_RANGING_SUPPORT(1),
-        HAS_TIME_SCHEDULED_RANGING_SUPPORT(1 << 1);
+        HAS_TIME_SCHEDULED_RANGING_SUPPORT(1 << 1),
+        HAS_HYBRID_SCHEDULED_RANGING_SUPPORT(1 << 2);
 
         private final long mValue;
 
@@ -1145,6 +1146,8 @@ public abstract class FiraParams extends Params {
     public static final int SESSION_TIME_BASE_PARAM_LEN = 9;
     public static final int SESSION_HANDLE_LEN = 4;
     public static final int SESSION_OFFSET_TIME_LEN = 4;
+    public static final int SEQUENCE_NUMBER_LENGTH = 2;
+    public static final int DATA_MSG_LENGTH = 2;
 
     // Default value (Host as the both secure & non-secure endpoint).
     public static final int APPLICATION_DATA_ENDPOINT_DEFAULT = 0;

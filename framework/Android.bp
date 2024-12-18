@@ -57,6 +57,7 @@ java_defaults {
     static_libs: [
         "modules-utils-preconditions",
         "modules-utils-build",
+        "uwb_aconfig_flags_lib",
     ],
     libs: [
         "androidx.annotation_annotation",
@@ -98,6 +99,10 @@ java_sdk_library {
     impl_library_visibility: [
         "//external/sl4a/Common:__subpackages__",
         "//packages/modules/Uwb:__subpackages__",
+    ],
+
+    aconfig_declarations: [
+        "uwb_aconfig_flags",
     ],
 
     apex_available: [

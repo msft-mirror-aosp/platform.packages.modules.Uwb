@@ -29,8 +29,8 @@ import static com.google.uwb.support.aliro.AliroParams.UWB_CONFIG_0;
 import static org.mockito.Mockito.when;
 
 import android.platform.test.annotations.Presubmit;
-import android.test.suitebuilder.annotation.SmallTest;
 
+import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.server.uwb.DeviceConfigFacade;
@@ -75,19 +75,22 @@ public class AliroDecoderTest {
                     + "a60112"
                     + "a7040a000000"
                     + "a80401000000"
-                    + "a90401000000";
+                    + "a90401000000"
+                    + "ac0400000000";
 
     public static final String TEST_ALIRO_SPECIFICATION_TLV_DATA_STRING_PRIORITIZED_CHANNELS =
             "a00111"
                     + "a10400000082"
                     + "a20168"
+                    + "a30103"
                     + "a4020102"
                     + "a50100"
                     + "a60112"
                     + "a7040a000000"
                     + "a80401000000"
                     + "a90401000000"
-                    + "aa020509";
+                    + "aa020509"
+                    + "ac0400000000";
 
     private static final String TEST_ALIRO_SPECIFICATION_TLV_DATA_STRING_UWBS_MAX_PPM =
             "a00111"
@@ -100,7 +103,8 @@ public class AliroDecoderTest {
                     + "a7040a000000"
                     + "a80401000000"
                     + "a90401000000"
-                    + "ab02012f";
+                    + "ab02012f"
+                    + "ac0400000000";
 
     private static final byte[] TEST_ALIRO_SPECIFICATION_TLV_DATA =
             UwbUtil.getByteArray(TEST_ALIRO_SPECIFICATION_TLV_DATA_STRING);
@@ -110,8 +114,8 @@ public class AliroDecoderTest {
     private static final byte[] TEST_ALIRO_SPECIFICATION_TLV_DATA_UWBS_MAX_PPM =
             UwbUtil.getByteArray(TEST_ALIRO_SPECIFICATION_TLV_DATA_STRING_UWBS_MAX_PPM);
 
-    public static final int TEST_ALIRO_SPECIFICATION_TLV_NUM_PARAMS = 10;
-    public static final int TEST_ALIRO_SPECIFICATION_TLV_DATA_UWBS_MAX_PPM_NUM_PARAMS = 11;
+    public static final int TEST_ALIRO_SPECIFICATION_TLV_NUM_PARAMS = 11;
+    public static final int TEST_ALIRO_SPECIFICATION_TLV_DATA_UWBS_MAX_PPM_NUM_PARAMS = 12;
 
     @Mock
     private UwbInjector mUwbInjector;
@@ -220,7 +224,7 @@ public class AliroDecoderTest {
         TlvDecoderBuffer tlvDecoderBuffer =
                 new TlvDecoderBuffer(
                         TEST_ALIRO_SPECIFICATION_TLV_DATA_PRIORITIZED_CHANNELS,
-                        TEST_ALIRO_SPECIFICATION_TLV_NUM_PARAMS);
+                        TEST_ALIRO_SPECIFICATION_TLV_DATA_UWBS_MAX_PPM_NUM_PARAMS);
         assertThat(tlvDecoderBuffer.parse()).isTrue();
 
         AliroSpecificationParams aliroSpecificationParams = mAliroDecoder.getParams(

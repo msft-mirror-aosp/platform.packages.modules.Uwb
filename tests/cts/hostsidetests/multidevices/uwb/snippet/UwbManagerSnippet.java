@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
 /** Snippet class exposing Android APIs for Uwb. */
 public class UwbManagerSnippet implements Snippet {
@@ -80,11 +81,10 @@ public class UwbManagerSnippet implements Snippet {
     private static HashMap<String, UwbAdapterStateCallback> sUwbAdapterStateCallbackMap =
             new HashMap<String, UwbAdapterStateCallback>();
 
-    public UwbManagerSnippet() throws Throwable {
+    public UwbManagerSnippet() {
         mContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
         mUwbManager = mContext.getSystemService(UwbManager.class);
         mConnectivityManager = mContext.getSystemService(ConnectivityManager.class);
-        adoptShellPermission();
     }
 
     private enum Event {
@@ -202,6 +202,14 @@ public class UwbManagerSnippet implements Snippet {
             mEventCache.postEvent(event);
         }
 
+        private void handleEvent(Event e, int reason) {
+            Log.d(TAG + "RangingSessionCallback#handleEvent() for " + e.toString());
+            SnippetEvent event = new SnippetEvent(mId, "RangingSessionCallback");
+            event.getData().putString("rangingSessionEvent", e.toString());
+            event.getData().putInt("reasonCode", reason);
+            mEventCache.postEvent(event);
+        }
+
         @Override
         public void onOpened(RangingSession session) {
             Log.d(TAG + "RangingSessionCallback#onOpened() called");
@@ -214,7 +222,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "RangingSessionCallback#onOpenedFailed() called");
             Log.d(TAG + "OpenFailed reason " + String.valueOf(reason));
             persistableBundle = params;
-            handleEvent(Event.OpenFailed);
+            handleEvent(Event.OpenFailed, reason);
         }
 
         @Override
@@ -229,7 +237,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "RangingSessionCallback#onStartFailed() called");
             Log.d(TAG + "StartFailed reason " + String.valueOf(reason));
             persistableBundle = params;
-            handleEvent(Event.StartFailed);
+            handleEvent(Event.StartFailed, reason);
         }
 
         @Override
@@ -244,7 +252,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "RangingSessionCallback#onReconfigureFailed() called");
             Log.d(TAG + "ReconfigureFailed reason " + String.valueOf(reason));
             persistableBundle = params;
-            handleEvent(Event.ReconfigureFailed);
+            handleEvent(Event.ReconfigureFailed, reason);
         }
 
         @Override
@@ -252,7 +260,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "RangingSessionCallback#onStopped() called");
             Log.d(TAG + "Stopped reason " + String.valueOf(reason));
             persistableBundle = params;
-            handleEvent(Event.Stopped);
+            handleEvent(Event.Stopped, reason);
         }
 
         @Override
@@ -260,7 +268,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "RangingSessionCallback#onStopFailed() called");
             Log.d(TAG + "StopFailed reason " + String.valueOf(reason));
             persistableBundle = params;
-            handleEvent(Event.StopFailed);
+            handleEvent(Event.StopFailed, reason);
         }
 
         @Override
@@ -268,7 +276,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "RangingSessionCallback#onClosed() called");
             Log.d(TAG + "Closed reason " + String.valueOf(reason));
             persistableBundle = params;
-            handleEvent(Event.Closed);
+            handleEvent(Event.Closed, reason);
         }
 
         @Override
@@ -292,7 +300,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "RangingSessionCallback#onControleeAddFailed() called");
             Log.d(TAG + "ControleeAddFailed reason " + String.valueOf(reason));
             persistableBundle = params;
-            handleEvent(Event.ControleeAddFailed);
+            handleEvent(Event.ControleeAddFailed, reason);
 
         }
 
@@ -309,7 +317,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "RangingSessionCallback#onControleeRemoveFailed() called");
             Log.d(TAG + "ControleeRemoveFailed reason " + String.valueOf(reason));
             persistableBundle = params;
-            handleEvent(Event.ControleeRemoveFailed);
+            handleEvent(Event.ControleeRemoveFailed, reason);
         }
 
         @Override
@@ -324,7 +332,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "RangingSessionCallback#onPauseFailed() called");
             Log.d(TAG + "PauseFailed reason " + String.valueOf(reason));
             persistableBundle = params;
-            handleEvent(Event.PauseFailed);
+            handleEvent(Event.PauseFailed, reason);
         }
 
         @Override
@@ -339,7 +347,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "RangingSessionCallback#onResumeFailed() called");
             Log.d(TAG + "ResumeFailed reason " + String.valueOf(reason));
             persistableBundle = params;
-            handleEvent(Event.ResumeFailed);
+            handleEvent(Event.ResumeFailed, reason);
         }
 
         @Override
@@ -358,7 +366,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "DataSendFailed reason " + String.valueOf(reason));
             uwbAddress = getComputedMacAddress(remoteDeviceAddress);
             persistableBundle = params;
-            handleEvent(Event.DataSendFailed);
+            handleEvent(Event.DataSendFailed, reason);
         }
 
         @Override
@@ -378,7 +386,7 @@ public class UwbManagerSnippet implements Snippet {
             Log.d(TAG + "DataReceiveFailed reason " + String.valueOf(reason));
             uwbAddress = getComputedMacAddress(remoteDeviceAddress);
             persistableBundle = params;
-            handleEvent(Event.DataReceiveFailed);
+            handleEvent(Event.DataReceiveFailed, reason);
         }
 
         @Override
@@ -405,54 +413,56 @@ public class UwbManagerSnippet implements Snippet {
 
     /** Register uwb adapter state callback. */
     @AsyncRpc(description = "Register uwb adapter state callback")
-    public void registerUwbAdapterStateCallback(String callbackId, String key) {
+    public void registerUwbAdapterStateCallback(String callbackId, String key) throws Throwable {
         UwbAdapterStateCallback uwbAdapterStateCallback = new UwbAdapterStateCallback(callbackId);
         sUwbAdapterStateCallbackMap.put(key, uwbAdapterStateCallback);
-        mUwbManager.registerAdapterStateCallback(mExecutor, uwbAdapterStateCallback);
+        runWithShellPermission(() ->
+                mUwbManager.registerAdapterStateCallback(mExecutor, uwbAdapterStateCallback));
     }
 
     /** Unregister uwb adapter state callback. */
     @Rpc(description = "Unregister uwb adapter state callback.")
-    public void unregisterUwbAdapterStateCallback(String key) {
+    public void unregisterUwbAdapterStateCallback(String key) throws Throwable {
         UwbAdapterStateCallback uwbAdapterStateCallback = sUwbAdapterStateCallbackMap.get(key);
-        mUwbManager.unregisterAdapterStateCallback(uwbAdapterStateCallback);
+        runWithShellPermission(() ->
+                mUwbManager.unregisterAdapterStateCallback(uwbAdapterStateCallback));
         sUwbAdapterStateCallbackMap.remove(key);
     }
 
     /** Get UWB adapter state. */
     @Rpc(description = "Get Uwb adapter state")
-    public int getAdapterState() {
-        return mUwbManager.getAdapterState();
+    public int getAdapterState() throws Throwable {
+        return runWithShellPermission(() -> mUwbManager.getAdapterState());
     }
 
     /** Get the UWB state. */
     @Rpc(description = "Get Uwb state")
-    public boolean isUwbEnabled() {
-        return mUwbManager.isUwbEnabled();
+    public boolean isUwbEnabled() throws Throwable {
+        return runWithShellPermission(() -> mUwbManager.isUwbEnabled());
     }
 
     /** Set the UWB state. */
     @Rpc(description = "Set Uwb state")
-    public void setUwbEnabled(boolean enabled) {
-        mUwbManager.setUwbEnabled(enabled);
+    public void setUwbEnabled(boolean enabled) throws Throwable {
+        runWithShellPermission(() -> mUwbManager.setUwbEnabled(enabled));
     }
 
     /** Get the UWB hardware state. */
     @Rpc(description = "Get Uwb hardware state")
-    public boolean isUwbHwEnableRequested() {
-        return mUwbManager.isUwbHwEnableRequested();
+    public boolean isUwbHwEnableRequested() throws Throwable {
+        return runWithShellPermission(() -> mUwbManager.isUwbHwEnableRequested());
     }
 
     /** Set the UWB hardware state. */
     @Rpc(description = "Set Uwb hardware state")
-    public void requestUwbHwEnabled(boolean enabled) {
-        mUwbManager.requestUwbHwEnabled(enabled);
+    public void requestUwbHwEnabled(boolean enabled) throws Throwable {
+        runWithShellPermission(() -> mUwbManager.requestUwbHwEnabled(enabled));
     }
 
     /** Get UWB HW idle feature state. */
     @Rpc(description = "Get Uwb hardware idle feature state")
-    public boolean isUwbHwIdleTurnOffEnabled() {
-        return mUwbManager.isUwbHwIdleTurnOffEnabled();
+    public boolean isUwbHwIdleTurnOffEnabled() throws Throwable {
+        return runWithShellPermission(() -> mUwbManager.isUwbHwIdleTurnOffEnabled());
     }
 
     private byte[] convertJSONArrayToByteArray(JSONArray jArray) throws JSONException {
@@ -662,6 +672,9 @@ public class UwbManagerSnippet implements Snippet {
         if (j.has("maxRangingRoundRetries")) {
             builder.setMaxRangingRoundRetries(j.getInt("maxRangingRoundRetries"));
         }
+        if (j.has("maxNumberOfMeasurements")) {
+            builder.setMaxNumberOfMeasurements(j.getInt("maxNumberOfMeasurements"));
+        }
         if (j.has("sessionPriority")) {
             builder.setSessionPriority(j.getInt("sessionPriority"));
         }
@@ -712,6 +725,21 @@ public class UwbManagerSnippet implements Snippet {
         if (j.has("hasRangingResultReportMessage")) {
             builder.setHasRangingResultReportMessage(j.getBoolean("hasRangingResultReportMessage"));
         }
+        if (j.has("rangingErrorStreakTimeoutMs")) {
+            builder.setRangingErrorStreakTimeoutMs(j.getLong("rangingErrorStreakTimeoutMs"));
+        }
+        if (j.has("isKeyRotationEnabled")) {
+            builder.setIsKeyRotationEnabled(j.getBoolean("isKeyRotationEnabled"));
+        }
+        if (j.has("keyRotationRate")) {
+            builder.setKeyRotationRate(j.getInt("keyRotationRate"));
+        }
+        if (j.has("hasRangingResultReportMessage")) {
+            builder.setHasRangingResultReportMessage(j.getBoolean("hasRangingResultReportMessage"));
+        }
+        if (j.has("prfMode")) {
+            builder.setPrfMode(j.getInt("prfMode"));
+        }
 
         return builder.build();
     }
@@ -737,62 +765,76 @@ public class UwbManagerSnippet implements Snippet {
     /** Open FIRA UWB ranging session. */
     @AsyncRpc(description = "Open FIRA UWB ranging session")
     public void openFiraRangingSession(String callbackId, String key, JSONObject config)
-            throws JSONException {
+            throws Throwable {
         RangingSessionCallback rangingSessionCallback = new RangingSessionCallback(
                 callbackId, Event.EventAll.getType());
         FiraOpenSessionParams params = generateFiraOpenSessionParams(config);
-        mUwbManager.openRangingSession(params.toBundle(), mExecutor, rangingSessionCallback);
+        runWithShellPermission(() ->
+                mUwbManager.openRangingSession(
+                        params.toBundle(), mExecutor, rangingSessionCallback));
         sRangingSessionCallbackMap.put(key, rangingSessionCallback);
     }
 
     /** Open CCC UWB ranging session. */
     @AsyncRpc(description = "Open CCC UWB ranging session")
     public void openCccRangingSession(String callbackId, String key, JSONObject config)
-            throws JSONException {
+            throws Throwable {
         RangingSessionCallback rangingSessionCallback = new RangingSessionCallback(
                 callbackId, Event.EventAll.getType());
         CccOpenRangingParams params = generateCccOpenRangingParams(config);
-        mUwbManager.openRangingSession(params.toBundle(), mExecutor, rangingSessionCallback);
+        runWithShellPermission(() ->
+                mUwbManager.openRangingSession(
+                        params.toBundle(), mExecutor, rangingSessionCallback));
         sRangingSessionCallbackMap.put(key, rangingSessionCallback);
     }
 
     /** Start FIRA UWB ranging. */
     @Rpc(description = "Start FIRA UWB ranging")
-    public void startFiraRangingSession(String key) {
+    public void startFiraRangingSession(String key) throws Throwable {
         RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
+        // Hold on to the shell permission until the session is stopped to get the ranging reports.
+        adoptShellPermission();
         rangingSessionCallback.rangingSession.start(new PersistableBundle());
     }
 
     /** Start CCC UWB ranging. */
     @Rpc(description = "Start CCC UWB ranging")
-    public void startCccRangingSession(String key, JSONObject config) throws JSONException {
+    public void startCccRangingSession(String key, JSONObject config) throws Throwable {
         RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
         CccRangingStartedParams params = generateCccRangingStartedParams(config);
+        // Hold on to the shell permission until the session is stopped to get the ranging reports.
+        adoptShellPermission();
         rangingSessionCallback.rangingSession.start(params.toBundle());
     }
 
     /** Reconfigures FIRA UWB ranging session. */
     @Rpc(description = "Reconfigure FIRA UWB ranging session")
-    public void reconfigureFiraRangingSession(String key, JSONObject config) throws JSONException {
+    public void reconfigureFiraRangingSession(String key, JSONObject config) throws Throwable {
         RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
         FiraRangingReconfigureParams params = generateFiraRangingReconfigureParams(config);
+        // Hold on to the shell permission until the session is stopped to get the ranging reports.
+        adoptShellPermission();
         rangingSessionCallback.rangingSession.reconfigure(params.toBundle());
     }
 
     /** Reconfigures FIRA UWB ranging session to add controlee. */
     @Rpc(description = "Reconfigure FIRA UWB ranging session to add controlee")
-    public void addControleeFiraRangingSession(String key, JSONObject config) throws JSONException {
+    public void addControleeFiraRangingSession(String key, JSONObject config) throws Throwable {
         RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
         FiraControleeParams params = generateFiraControleeParams(config);
+        // Hold on to the shell permission until the session is stopped to get the ranging reports.
+        adoptShellPermission();
         rangingSessionCallback.rangingSession.addControlee(params.toBundle());
     }
 
     /** Reconfigures FIRA UWB ranging session to remove controlee. */
     @Rpc(description = "Reconfigure FIRA UWB ranging session to remove controlee")
     public void removeControleeFiraRangingSession(String key, JSONObject config)
-            throws JSONException {
+            throws Throwable {
         RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
         FiraControleeParams params = generateFiraControleeParams(config);
+        // Hold on to the shell permission until the session is stopped to get the ranging reports.
+        adoptShellPermission();
         rangingSessionCallback.rangingSession.removeControlee(params.toBundle());
     }
 
@@ -850,17 +892,19 @@ public class UwbManagerSnippet implements Snippet {
 
     /** Stop UWB ranging. */
     @Rpc(description = "Stop UWB ranging")
-    public void stopRangingSession(String key) {
+    public void stopRangingSession(String key) throws Throwable {
         RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.get(key);
-        rangingSessionCallback.rangingSession.stop();
+        runWithShellPermission(() ->
+                rangingSessionCallback.rangingSession.stop());
     }
 
     /** Close UWB ranging session. */
     @Rpc(description = "Close UWB ranging session")
-    public void closeRangingSession(String key) {
+    public void closeRangingSession(String key) throws Throwable {
         RangingSessionCallback rangingSessionCallback = sRangingSessionCallbackMap.remove(key);
         if (rangingSessionCallback != null && rangingSessionCallback.rangingSession != null) {
-            rangingSessionCallback.rangingSession.close();
+            runWithShellPermission(() ->
+                    rangingSessionCallback.rangingSession.close());
         }
     }
 
@@ -881,14 +925,15 @@ public class UwbManagerSnippet implements Snippet {
 
     /** Get UWB specification info */
     @Rpc(description = "Get Uwb specification info")
-    public JSONObject getSpecificationInfo() throws JSONException {
-        return convertPersistableBundleToJson(mUwbManager.getSpecificationInfo());
+    public JSONObject getSpecificationInfo() throws Throwable {
+        return runWithShellPermission(() ->
+                       convertPersistableBundleToJson(mUwbManager.getSpecificationInfo()));
     }
 
     /** Set airplane mode to True or False */
     @Rpc(description = "Set airplane mode")
-    public void setAirplaneMode(Boolean enabled) {
-        mConnectivityManager.setAirplaneMode(enabled);
+    public void setAirplaneMode(Boolean enabled) throws Throwable {
+        runWithShellPermission(() -> mConnectivityManager.setAirplaneMode(enabled));
     }
 
     @Rpc(description = "Log info level message to device logcat")
@@ -899,7 +944,7 @@ public class UwbManagerSnippet implements Snippet {
     @Override
     public void shutdown() {}
 
-    private void adoptShellPermission() throws Throwable {
+    private void adoptShellPermission() {
         UiAutomation uia = InstrumentationRegistry.getInstrumentation().getUiAutomation();
         uia.adoptShellPermissionIdentity();
         try {
@@ -907,7 +952,19 @@ public class UwbManagerSnippet implements Snippet {
             Method destroyMethod = cls.getDeclaredMethod("destroy");
             destroyMethod.invoke(uia);
         } catch (ReflectiveOperationException e) {
-            throw new UwbManagerSnippetException("Failed to cleaup Ui Automation", e);
+            throw new IllegalStateException("Failed to cleaup Ui Automation", e);
+        }
+    }
+
+    private void dropShellPermission() {
+        UiAutomation uia = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        uia.dropShellPermissionIdentity();
+        try {
+            Class<?> cls = Class.forName("android.app.UiAutomation");
+            Method destroyMethod = cls.getDeclaredMethod("destroy");
+            destroyMethod.invoke(uia);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Failed to cleaup Ui Automation", e);
         }
     }
 
@@ -930,5 +987,35 @@ public class UwbManagerSnippet implements Snippet {
             return getReverseBytes(data);
         }
         return data;
+    }
+
+    public void runWithShellPermission(Runnable action) throws Throwable {
+        adoptShellPermission();
+        try {
+            action.run();
+        } finally {
+            dropShellPermission();
+        }
+    }
+
+    public <T> T runWithShellPermission(ThrowingSupplier<T> action) throws Throwable {
+        adoptShellPermission();
+        try {
+            return action.get();
+        } finally {
+            dropShellPermission();
+        }
+    }
+
+    /**
+     * Similar to {@link Supplier} but has {@code throws Exception}.
+     *
+     * @param <T> type of the value produced
+     */
+    public interface ThrowingSupplier<T> {
+        /**
+         * Similar to {@link Supplier#get} but has {@code throws Exception}.
+         */
+        T get() throws Exception;
     }
 }

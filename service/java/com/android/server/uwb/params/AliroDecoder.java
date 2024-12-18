@@ -16,6 +16,7 @@
 
 package com.android.server.uwb.params;
 
+import static com.android.server.uwb.config.CapabilityParam.ALIRO_SUPPORTED_MAC_MODES;
 import static com.android.server.uwb.config.CapabilityParam.CCC_CHANNEL_5;
 import static com.android.server.uwb.config.CapabilityParam.CCC_CHANNEL_9;
 import static com.android.server.uwb.config.CapabilityParam.CCC_CHAPS_PER_SLOT_12;
@@ -195,8 +196,14 @@ public class AliroDecoder extends TlvDecoder {
 
         try {
             byte[] prioritizedChannels = tlvs.getByteArray(CCC_PRIORITIZED_CHANNEL_LIST);
+            byte channels = tlvs.getByte(CCC_SUPPORTED_CHANNELS);
             for (byte prioritizedChannel : prioritizedChannels) {
-                builder.addChannel(prioritizedChannel);
+                if (isBitSet(channels, CCC_CHANNEL_5) && prioritizedChannel == UWB_CHANNEL_5) {
+                    builder.addChannel(prioritizedChannel);
+                }
+                if (isBitSet(channels, CCC_CHANNEL_9) && prioritizedChannel == UWB_CHANNEL_9) {
+                    builder.addChannel(prioritizedChannel);
+                }
             }
         } catch (IllegalArgumentException e) {
             Log.w(TAG, "CCC_PRIORITIZED_CHANNEL_LIST not found");
@@ -247,6 +254,14 @@ public class AliroDecoder extends TlvDecoder {
             builder.setUwbsMaxPPM(uwbsMaxPPM);
         } catch (IllegalArgumentException e) {
             Log.w(TAG, "CCC_SUPPORTED_UWBS_MAX_PPM not found");
+        }
+        try {
+            byte[] modes = tlvs.getByteArray(ALIRO_SUPPORTED_MAC_MODES);
+            for (int i = 0; i < modes.length; i++) {
+                builder.addMacMode(modes[i]);
+            }
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "ALIRO_SUPPORTED_MAC_MODES not found");
         }
 
         return builder.build();
