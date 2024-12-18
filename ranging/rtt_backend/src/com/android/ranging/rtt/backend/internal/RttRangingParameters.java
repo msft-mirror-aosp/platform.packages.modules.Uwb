@@ -70,12 +70,10 @@ public class RttRangingParameters {
     protected final boolean mEnablePublisherRanging;
     protected final Duration mPublisherPingDuration;
 
-    private final boolean mProximityEdgeEnabled;
-    private final int mProximityEdgeNearMm;
-    private final int mProximityEdgeFarMm;
-
     @RangingUpdateRate
     private final int mUpdateRate;
+
+    private final boolean mEnablePeriodicRangingHwFeature;
 
     public int getDeviceRole() {
         return mDeviceRole;
@@ -145,20 +143,12 @@ public class RttRangingParameters {
         return mPublisherPingDuration;
     }
 
-    public boolean isProximityEdgeEnabled() {
-        return mProximityEdgeEnabled;
-    }
-
-    public int getProximityEdgeNear() {
-        return mProximityEdgeNearMm;
-    }
-
-    public int getProximityEdgeFar() {
-        return mProximityEdgeFarMm;
-    }
-
     public int getUpdateRate() {
         return mUpdateRate;
+    }
+
+    public boolean isPeriodicRangingHwFeatureEnabled() {
+        return mEnablePeriodicRangingHwFeature;
     }
 
     public RttRangingParameters(Builder builder) {
@@ -171,9 +161,7 @@ public class RttRangingParameters {
         mEnablePublisherRanging = builder.mEnablePublisherRanging;
         mPublisherPingDuration = builder.mPublisherPingDuration;
         mUpdateRate = builder.mRangingUpdateRate;
-        mProximityEdgeEnabled = builder.mProximityEdgeEnabled;
-        mProximityEdgeNearMm = builder.mProximityEdgeNearMm;
-        mProximityEdgeFarMm = builder.mProximityEdgeFarMm;
+        mEnablePeriodicRangingHwFeature = builder.mEnablePeriodicRangingHwFeature;
     }
 
 
@@ -190,9 +178,7 @@ public class RttRangingParameters {
         protected boolean mEnablePublisherRanging = true;
         protected Duration mPublisherPingDuration = Duration.ofSeconds(10);
         private int mRangingUpdateRate = NORMAL;
-        private boolean mProximityEdgeEnabled = false;
-        private int mProximityEdgeNearMm = 0;
-        private int mProximityEdgeFarMm = 0;
+        private boolean mEnablePeriodicRangingHwFeature = false;
 
         public Builder setDeviceRole(int deviceRole) {
             mDeviceRole = deviceRole;
@@ -240,10 +226,8 @@ public class RttRangingParameters {
             return this;
         }
 
-        public Builder setProximityEdge(int near, int far) {
-            mProximityEdgeNearMm = near;
-            mProximityEdgeFarMm = far;
-            mProximityEdgeEnabled = true;
+        public Builder setPeriodicRangingHwFeatureEnabled(boolean enabled) {
+            mEnablePeriodicRangingHwFeature = enabled;
             return this;
         }
 
@@ -252,16 +236,16 @@ public class RttRangingParameters {
         }
     }
 
-    public static int getIntervalMs(@RangingUpdateRate int updateRate) {
-        switch (updateRate) {
+    public static int getIntervalMs(@NonNull RttRangingParameters rttRangingParameters) {
+        switch (rttRangingParameters.getUpdateRate()) {
             case FAST -> {
-                return 256;
+                return rttRangingParameters.isPeriodicRangingHwFeatureEnabled() ? 128 : 256;
             }
             case INFREQUENT -> {
                 return 8192;
             }
             default -> {
-                return 512;
+                return rttRangingParameters.isPeriodicRangingHwFeatureEnabled() ? 256 : 512;
             }
         }
     }
@@ -285,6 +269,8 @@ public class RttRangingParameters {
                 + mEnablePublisherRanging
                 + ", publisherPingDuration: "
                 + mPublisherPingDuration
+                + ", enablePeriodicRangingHwFeature: "
+                + mEnablePeriodicRangingHwFeature
                 + " }";
     }
 }

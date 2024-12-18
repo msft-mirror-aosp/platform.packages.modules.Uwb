@@ -23,9 +23,11 @@ import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.ranging.RangingDevice;
-import android.ranging.ble.cs.CsRangingParams;
+import android.ranging.ble.cs.BleCsRangingParams;
 import android.ranging.ble.rssi.BleRssiRangingParams;
+import android.ranging.uwb.UwbRangingCapabilities;
 import android.ranging.uwb.UwbRangingParams;
+import android.ranging.wifi.rtt.RttRangingCapabilities;
 import android.ranging.wifi.rtt.RttRangingParams;
 
 import com.android.ranging.flags.Flags;
@@ -38,7 +40,6 @@ import java.lang.annotation.RetentionPolicy;
  * This class supports multiple ranging technologies, including UWB, BLE CS, BLE RSSI and Wi-Fi
  * NAN-RTT. The configuration for each technology is provided through corresponding parameter
  * objects.
- *
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class RawRangingDevice implements Parcelable {
@@ -57,15 +58,49 @@ public final class RawRangingDevice implements Parcelable {
     public @interface RangingUpdateRate {
     }
 
-    /** Ranging interval between 200ms - 240ms for UWB, 2 seconds for BT-CS. */
+    /**
+     * Normal ranging interval (Default).
+     * <ul>
+     *     <li> UWB - 200 milliseconds for config ids {@link UwbRangingParams#getConfigId()} with
+     *     multicast ranging, 240 milliseconds for unicast. </li>
+     *     <li> BLE RSSI - 1 second. </li>
+     *     <li> BLE CS - 3 seconds. </li>
+     *     <li> WiFi Rtt - 256 milliseconds if
+     *     {@link RttRangingCapabilities#hasPeriodicRangingHardwareFeature()} is true, 512
+     *     milliseconds otherwise. </li>
+     * </ul>
+     */
     public static final int UPDATE_RATE_NORMAL = 1;
-    /** Ranging interval between 600ms - 800ms for UWB, 5 seconds for BT-CS. */
+
+    /**
+     * Infrequent ranging interval.
+     * <ul>
+     *     <li> UWB - 600 milliseconds. </li>
+     *     <li> BLE RSSI - 3 seconds. </li>
+     *     <li> BLE CS - 5 seconds. </li>
+     *     <li> WiFi Rtt - 8192 milliseconds otherwise. </li>
+     * </ul>
+     */
     public static final int UPDATE_RATE_INFREQUENT = 2;
-    /** Ranging interval between 100ms - 200ms for UWB, 1 second for BT-CS. */
+
+    /**
+     * Frequent ranging interval.
+     * <ul>
+     *     <li> UWB - 96 milliseconds for config id
+     *     {@link UwbRangingParams#CONFIG_PROVISIONED_UNICAST_DS_TWR_VERY_FAST}, 120 milliseconds
+     *     otherwise. See {@link UwbRangingCapabilities#getSupportedRangingUpdateRates()} to verify
+     *     Frequent update rate is supported. </li>
+     *     <li> BLE RSSI - 500 milliseconds. </li>
+     *     <li> BLE CS - 200 milliseconds. </li>
+     *     <li> WiFi Rtt - 128 milliseconds if
+     *     {@link RttRangingCapabilities#hasPeriodicRangingHardwareFeature()} is true, 256
+     *     milliseconds otherwise. </li>
+     * </ul>
+     */
     public static final int UPDATE_RATE_FREQUENT = 3;
     private final RangingDevice mRangingDevice;
     private final UwbRangingParams mUwbRangingParams;
-    private final CsRangingParams mCsRangingParams;
+    private final BleCsRangingParams mBleCsRangingParams;
     private final RttRangingParams mRttRangingParams;
     private final BleRssiRangingParams mBleRssiRangingParams;
 
@@ -73,7 +108,7 @@ public final class RawRangingDevice implements Parcelable {
     private RawRangingDevice(Builder builder) {
         mRangingDevice = builder.mRangingDevice;
         mUwbRangingParams = builder.mUwbRangingParams;
-        mCsRangingParams = builder.mCsRangingParams;
+        mBleCsRangingParams = builder.mBleCsRangingParams;
         mRttRangingParams = builder.mRttRangingParams;
         mBleRssiRangingParams = builder.mBleRssiRangingParams;
     }
@@ -84,8 +119,8 @@ public final class RawRangingDevice implements Parcelable {
         );
         mUwbRangingParams = in.readParcelable(UwbRangingParams.class.getClassLoader(),
                 UwbRangingParams.class);
-        mCsRangingParams = in.readParcelable(CsRangingParams.class.getClassLoader(),
-                CsRangingParams.class
+        mBleCsRangingParams = in.readParcelable(BleCsRangingParams.class.getClassLoader(),
+                BleCsRangingParams.class
         );
         mRttRangingParams = in.readParcelable(RttRangingParams.class.getClassLoader(),
                 RttRangingParams.class);
@@ -97,7 +132,7 @@ public final class RawRangingDevice implements Parcelable {
     public void writeToParcel(@NonNull Parcel dest, int flags) {
         dest.writeParcelable(mRangingDevice, flags);
         dest.writeParcelable(mUwbRangingParams, flags);
-        dest.writeParcelable(mCsRangingParams, flags);
+        dest.writeParcelable(mBleCsRangingParams, flags);
         dest.writeParcelable(mRttRangingParams, flags);
         dest.writeParcelable(mBleRssiRangingParams, flags);
     }
@@ -138,19 +173,17 @@ public final class RawRangingDevice implements Parcelable {
     /**
      * Returns the CS ranging parameters, if applicable.
      *
-     * @return the {@link CsRangingParams}, or {@code null} if not set.
-     *
+     * @return the {@link BleCsRangingParams}, or {@code null} if not set.
      */
     @Nullable
-    public CsRangingParams getCsRangingParams() {
-        return mCsRangingParams;
+    public BleCsRangingParams getCsRangingParams() {
+        return mBleCsRangingParams;
     }
 
     /**
      * Returns the RTT ranging parameters, if applicable.
      *
      * @return the {@link RttRangingParams}, or {@code null} if not set.
-     *
      */
     @Nullable
     public RttRangingParams getRttRangingParams() {
@@ -161,7 +194,6 @@ public final class RawRangingDevice implements Parcelable {
      * Returns the BLE rssi ranging parameters, if applicable.
      *
      * @return the {@link BleRssiRangingParams}, or {@code null} if not set.
-     *
      */
     @Nullable
     public BleRssiRangingParams getBleRssiRangingParams() {
@@ -179,7 +211,7 @@ public final class RawRangingDevice implements Parcelable {
     public static final class Builder {
         private RangingDevice mRangingDevice;
         private UwbRangingParams mUwbRangingParams;
-        private CsRangingParams mCsRangingParams;
+        private BleCsRangingParams mBleCsRangingParams;
         private RttRangingParams mRttRangingParams;
         private BleRssiRangingParams mBleRssiRangingParams;
 
@@ -212,7 +244,6 @@ public final class RawRangingDevice implements Parcelable {
          *
          * @param params the {@link RttRangingParams} to be set.
          * @return this {@link Builder} instance for chaining calls.
-         *
          */
         @NonNull
         public Builder setRttRangingParams(@NonNull RttRangingParams params) {
@@ -223,22 +254,20 @@ public final class RawRangingDevice implements Parcelable {
         /**
          * Sets the BLE channel sounding ranging parameters.
          *
-         * @param params the {@link CsRangingParams} to be set.
+         * @param params the {@link BleCsRangingParams} to be set.
          * @return this {@link Builder} instance for chaining calls.
-         *
          */
         @NonNull
-        public Builder setCsRangingParams(@NonNull CsRangingParams params) {
-            mCsRangingParams = params;
+        public Builder setCsRangingParams(@NonNull BleCsRangingParams params) {
+            mBleCsRangingParams = params;
             return this;
         }
 
         /**
          * Sets the BLE rssi ranging parameters.
          *
-         * @param params the {@link CsRangingParams} to be set.
+         * @param params the {@link BleCsRangingParams} to be set.
          * @return this {@link Builder} instance for chaining calls.
-         *
          */
         @NonNull
         public Builder setBleRssiRangingParams(@NonNull BleRssiRangingParams params) {
@@ -264,8 +293,8 @@ public final class RawRangingDevice implements Parcelable {
                 + mRangingDevice
                 + ", mUwbRangingParams="
                 + mUwbRangingParams
-                + ", mCsRangingParams="
-                + mCsRangingParams
+                + ", mBleCsRangingParams="
+                + mBleCsRangingParams
                 + ", mRttRangingParams="
                 + mRttRangingParams
                 + ", mBleRssiRangingParams="

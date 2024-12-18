@@ -16,12 +16,15 @@
 
 package com.android.server.ranging.session;
 
+import android.app.AlarmManager;
 import android.content.AttributionSource;
 import android.os.Binder;
+import android.os.Handler;
+import android.os.SystemClock;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.SessionHandle;
-import android.ranging.raw.RawResponderRangingParams;
+import android.ranging.raw.RawResponderRangingConfig;
 import android.util.Log;
 
 import androidx.annotation.GuardedBy;
@@ -54,6 +57,10 @@ import java.util.concurrent.ConcurrentMap;
 public class BaseRangingSession {
     private static final String TAG = BaseRangingSession.class.getSimpleName();
 
+    private static final int NON_PRIVILEGED_RANGING_BG_APP_TIMEOUT_MS = 1000;
+
+    public static final String NON_PRIVILEGED_RANGING_BG_APP_TIMER_TAG =
+            "RangingSessionNonPrivilegedBgAppTimeout";
     private final RangingInjector mInjector;
     private final AttributionSource mAttributionSource;
     private final RangingServiceManager.SessionListener mSessionListener;
@@ -61,6 +68,9 @@ public class BaseRangingSession {
 
     protected final SessionHandle mSessionHandle;
     protected final RangingSessionConfig mConfig;
+
+    private final AlarmManager mAlarmManager;
+    private AlarmManager.OnAlarmListener mNonPrivilegedBgAppTimerListener;
 
     /* Lock for internal state. */
     private final Object mLock = new Object();
@@ -98,7 +108,7 @@ public class BaseRangingSession {
 
         Peer(@NonNull RangingDevice device, @NonNull RangingTechnology initialTechnology) {
             technologies = Sets.newConcurrentHashSet(Set.of(initialTechnology));
-            if (mConfig.getSessionConfig().getSensorFusionParameters().isSensorFusionEnabled()) {
+            if (mConfig.getSessionConfig().getSensorFusionParams().isSensorFusionEnabled()) {
                 fusionEngine = new FilteringFusionEngine(
                         new DataFusers.PreferentialDataFuser(RangingTechnology.UWB));
             } else {
@@ -135,6 +145,7 @@ public class BaseRangingSession {
         mStateMachine = new StateMachine<>(State.STOPPED);
         mPeers = new ConcurrentHashMap<>();
         mAdapters = new ConcurrentHashMap<>();
+        mAlarmManager = injector.getContext().getSystemService(AlarmManager.class);
     }
 
     /** Start ranging in this session. */
@@ -144,6 +155,8 @@ public class BaseRangingSession {
                 Log.w(TAG, "Failed transition STOPPED -> STARTING");
                 return;
             }
+            AttributionSource nonPrivilegedAttributionSource =
+                    mInjector.getAnyNonPrivilegedAppInAttributionSource(mAttributionSource);
 
             for (TechnologyConfig config : technologyConfigs) {
                 ImmutableSet<RangingDevice> peerDevices;
@@ -174,13 +187,13 @@ public class BaseRangingSession {
                 RangingAdapter adapter = mInjector.createAdapter(
                         config, mConfig.getDeviceRole(), mAdapterExecutor);
                 mAdapters.put(config, adapter);
-                adapter.start(config, new AdapterListener(config));
+                adapter.start(config, nonPrivilegedAttributionSource, new AdapterListener(config));
                 Binder.restoreCallingIdentity(token);
             }
         }
     }
 
-    public void addPeer(RawResponderRangingParams params) {
+    public void addPeer(RawResponderRangingConfig params) {
         synchronized (mLock) {
             for (Map.Entry<TechnologyConfig, RangingAdapter> entry : mAdapters.entrySet()) {
                 if (entry.getValue().isDynamicUpdatePeersSupported()) {
@@ -210,6 +223,54 @@ public class BaseRangingSession {
         }
     }
 
+    public void appForegroundStateUpdated(boolean appInForeground) {
+        synchronized (mLock) {
+            for (Map.Entry<TechnologyConfig, RangingAdapter> entry : mAdapters.entrySet()) {
+                entry.getValue().appForegroundStateUpdated(appInForeground);
+                if (!appInForeground) {
+                    startNonPrivilegedBgAppTimerIfNotSet();
+                } else {
+                    stopNonPrivilegedBgAppTimerIfSet();
+                }
+            }
+        }
+    }
+
+    public void appInBackgroundTimeout() {
+        synchronized (mLock) {
+            for (Map.Entry<TechnologyConfig, RangingAdapter> entry : mAdapters.entrySet()) {
+                entry.getValue().appInBackgroundTimeout();
+            }
+        }
+    }
+
+    /**
+     * Starts a timer to detect if the app that started the UWB session is in the background
+     * for longer than NON_PRIVILEGED_BG_APP_TIMEOUT_MS.
+     */
+    private void startNonPrivilegedBgAppTimerIfNotSet() {
+        // Start a timer when the non-privileged app goes into the background.
+        if (mNonPrivilegedBgAppTimerListener == null) {
+            mNonPrivilegedBgAppTimerListener = () -> {
+                Log.w(TAG, "Non-privileged app in background for longer than timeout");
+                appInBackgroundTimeout();
+            };
+            mAlarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + NON_PRIVILEGED_RANGING_BG_APP_TIMEOUT_MS,
+                    NON_PRIVILEGED_RANGING_BG_APP_TIMER_TAG,
+                    mNonPrivilegedBgAppTimerListener,
+                    mInjector.getAlarmHandler());
+        }
+    }
+
+    public void stopNonPrivilegedBgAppTimerIfSet() {
+        // Stop the timer when the non-privileged app goes into the foreground.
+        if (mNonPrivilegedBgAppTimerListener != null) {
+            mAlarmManager.cancel(mNonPrivilegedBgAppTimerListener);
+            mNonPrivilegedBgAppTimerListener = null;
+        }
+    }
+
     /** Stop ranging in this session. */
     public void stop() {
         synchronized (mLock) {
@@ -218,6 +279,7 @@ public class BaseRangingSession {
                 Log.v(TAG, "Ranging already stopping or stopped, skipping");
                 return;
             }
+            stopNonPrivilegedBgAppTimerIfSet();
             mStateMachine.setState(State.STOPPING);
 
             // Any calls to the corresponding technology stacks must be
