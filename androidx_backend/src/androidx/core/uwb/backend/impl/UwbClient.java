@@ -24,6 +24,7 @@ import android.os.RemoteException;
 import android.util.Log;
 
 import androidx.core.uwb.backend.IRangingSessionCallback;
+import androidx.core.uwb.backend.IUwbAvailabilityObserver;
 import androidx.core.uwb.backend.IUwbClient;
 import androidx.core.uwb.backend.RangingCapabilities;
 import androidx.core.uwb.backend.RangingMeasurement;
@@ -34,16 +35,21 @@ import androidx.core.uwb.backend.impl.internal.RangingPosition;
 import androidx.core.uwb.backend.impl.internal.RangingSessionCallback;
 import androidx.core.uwb.backend.impl.internal.UwbDevice;
 import androidx.core.uwb.backend.impl.internal.UwbRangeDataNtfConfig;
+import androidx.core.uwb.backend.impl.internal.UwbRangeLimitsConfig;
 import androidx.core.uwb.backend.impl.internal.UwbServiceImpl;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /** Implements operations of IUwbClient. */
 public abstract class UwbClient extends IUwbClient.Stub {
     protected final UwbServiceImpl mUwbService;
     protected final RangingDevice mDevice;
     protected boolean mSupportsAzimuthalAngle = true;
+    protected Consumer<IUwbAvailabilityObserver> mSubscribeConsumer = null;
+    protected Consumer<IUwbAvailabilityObserver> mUnsubscribeConsumer = null;
+    protected IUwbAvailabilityObserver mObserver = null;
 
     protected UwbClient(RangingDevice device, UwbServiceImpl uwbService) {
         mDevice = device;
@@ -113,7 +119,17 @@ public abstract class UwbClient extends IUwbClient.Stub {
                         parameters.sessionKeyInfo, parameters.subSessionKeyInfo,
                         channel, addresses, parameters.rangingUpdateRate,
                         uwbRangeDataNtfConfigBuilder.build(), duration,
-                        !mSupportsAzimuthalAngle || parameters.isAoaDisabled));
+                        !mSupportsAzimuthalAngle || parameters.isAoaDisabled,
+                // Use default in uwb backend.
+                new UwbRangeLimitsConfig.Builder().build()));
+    }
+
+    public void setSubscribeConsumer(Consumer<IUwbAvailabilityObserver> subscribeConsumer) {
+        mSubscribeConsumer = subscribeConsumer;
+    }
+
+    public void setUnsubscribeConsumer(Consumer<IUwbAvailabilityObserver> unsbuscribeConsumer) {
+        mUnsubscribeConsumer = unsbuscribeConsumer;
     }
 
     protected androidx.core.uwb.backend.impl.internal.RangingSessionCallback convertCallback(
@@ -176,6 +192,17 @@ public abstract class UwbClient extends IUwbClient.Stub {
                     e.printStackTrace();
                 }
             }
+
+            @Override
+            public void onPeerDisconnected(UwbDevice peer, int reason) {
+                androidx.core.uwb.backend.UwbDevice backendPeer =
+                        new androidx.core.uwb.backend.UwbDevice();
+                backendPeer.address = new UwbAddress();
+                backendPeer.address.address = peer.getAddress().toBytes();
+                // TODO: implement in jetpack
+                // callback.onPeerDisconnected(backendPeer, reason);
+            }
+
         };
     }
 
@@ -192,5 +219,17 @@ public abstract class UwbClient extends IUwbClient.Stub {
             Log.w(TAG, String.format(
                     "Reconfiguring range data notification config failed with status %d", status));
         }
+    }
+
+    @Override
+    public void subscribeToAvailability(IUwbAvailabilityObserver observer) throws RemoteException {
+        mSubscribeConsumer.accept(observer);
+        mObserver = observer;
+    }
+
+    @Override
+    public void unsubscribeFromAvailability() throws RemoteException {
+        mUnsubscribeConsumer.accept(mObserver);
+        mObserver = null;
     }
 }

@@ -18,11 +18,7 @@ package com.android.server.uwb.jni;
 import com.android.server.uwb.data.UwbMulticastListUpdateStatus;
 import com.android.server.uwb.data.UwbRadarData;
 import com.android.server.uwb.data.UwbRangingData;
-
-/*import com.android.server.uwb.test.UwbTestLoopBackTestResult;
-import com.android.server.uwb.test.UwbTestPeriodicTxResult;
-import com.android.server.uwb.test.UwbTestRxPacketErrorRateResult;
-import com.android.server.uwb.test.UwbTestRxResult;*/
+import com.android.server.uwb.rftest.RfNotificationEvent;
 
 public interface INativeUwbManager {
     /**
@@ -97,6 +93,13 @@ public interface INativeUwbManager {
          */
         void onDataTransferPhaseConfigNotificationReceived(long sessionId,
                 int dataTransferPhaseConfigStatus);
+
+        /**
+         * Interface for receiving RF test notification events
+         *
+         * @param rfNotificationEvent  : Protocol specific notification params
+         */
+        void onRfTestNotificationReceived(RfNotificationEvent rfNotificationEvent);
     }
 
     interface DeviceNotification {
@@ -124,11 +127,4 @@ public interface INativeUwbManager {
          */
         void onVendorUciNotificationReceived(int gid, int oid, byte[] payload);
     }
-    /* Unused now */
-    /*interface RfTestNotification {
-        void onPeriodicTxDataNotificationReceived(UwbTestPeriodicTxResult periodicTxData);
-        void onPerRxDataNotificationReceived(UwbTestRxPacketErrorRateResult perRxData);
-        void onLoopBackTestDataNotificationReceived(UwbTestLoopBackTestResult uwbLoopBackData);
-        void onRxTestDataNotificationReceived(UwbTestRxResult rxData);
-    }*/
 }
