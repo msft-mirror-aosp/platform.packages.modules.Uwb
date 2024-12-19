@@ -27,6 +27,7 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Binder;
+import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Process;
@@ -40,6 +41,7 @@ import com.android.server.ranging.blerssi.BleRssiAdapter;
 import com.android.server.ranging.blerssi.BleRssiCapabilitiesAdapter;
 import com.android.server.ranging.cs.CsAdapter;
 import com.android.server.ranging.cs.CsCapabilitiesAdapter;
+import com.android.server.ranging.oob.OobController;
 import com.android.server.ranging.rtt.RttAdapter;
 import com.android.server.ranging.rtt.RttCapabilitiesAdapter;
 import com.android.server.ranging.session.RangingSessionConfig;
@@ -60,11 +62,14 @@ public class RangingInjector {
 
     private final Context mContext;
     private final RangingServiceManager mRangingServiceManager;
+    private final OobController mOobController;
 
     private final CapabilitiesProvider mCapabilitiesProvider;
     private final PermissionManager mPermissionManager;
 
     private final Looper mLooper;
+
+    private final Handler mAlarmHandler;
 
     public RangingInjector(@NonNull Context context) {
         HandlerThread rangingHandlerThread = new HandlerThread("RangingServiceHandler");
@@ -75,7 +80,9 @@ public class RangingInjector {
         mRangingServiceManager = new RangingServiceManager(this,
                 mContext.getSystemService(ActivityManager.class),
                 mLooper);
+        mOobController = new OobController();
         mPermissionManager = context.getSystemService(PermissionManager.class);
+        mAlarmHandler = new Handler(mLooper);
     }
 
     public Context getContext() {
@@ -88,6 +95,14 @@ public class RangingInjector {
 
     public RangingServiceManager getRangingServiceManager() {
         return mRangingServiceManager;
+    }
+
+    public OobController getOobController() {
+        return mOobController;
+    }
+
+    public Handler getAlarmHandler() {
+        return mAlarmHandler;
     }
 
     /**
@@ -214,6 +229,11 @@ public class RangingInjector {
     /** Helper method to check if the app is from foreground app/service. */
     public static boolean isForegroundAppOrServiceImportance(int importance) {
         return importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE;
+    }
+
+    /** Helper method to check if the app or service is no longer running. */
+    public static boolean isNonExistentAppOrService(int importance) {
+        return importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_GONE;
     }
 
     public boolean isPrivilegedApp(int uid, String packageName) {
