@@ -80,16 +80,21 @@ public class CapabilitiesProvider {
         mCachedCapabilities = null;
     }
 
+    public RangingCapabilities getCachedCapabilities() {
+        if (mCachedCapabilities == null) {
+            initializeAdaptersForAllTechnologies();
+            mCachedCapabilities = queryAdaptersForCapabilities().build();
+        }
+        return mCachedCapabilities;
+    }
+
+
     public synchronized void registerCapabilitiesCallback(
             @NonNull IRangingCapabilitiesCallback callback
     ) {
         mCallbacks.register(callback);
-        if (mCachedCapabilities == null) {
-            initializeAdaptersForAllTechnologies();
-            mCachedCapabilities = getCapabilities().build();
-        }
         try {
-            callback.onRangingCapabilities(mCachedCapabilities);
+            callback.onRangingCapabilities(getCachedCapabilities());
         } catch (RemoteException e) {
             Log.e(TAG, "Failed to call provided capabilities callback", e);
         }
@@ -101,7 +106,15 @@ public class CapabilitiesProvider {
         mCallbacks.unregister(callback);
     }
 
-    private synchronized RangingCapabilities.Builder getCapabilities() {
+    public synchronized @NonNull RangingCapabilities getCapabilities() {
+        if (mCachedCapabilities == null) {
+            initializeAdaptersForAllTechnologies();
+            mCachedCapabilities = queryAdaptersForCapabilities().build();
+        }
+        return mCachedCapabilities;
+    }
+
+    private synchronized RangingCapabilities.Builder queryAdaptersForCapabilities() {
         RangingCapabilities.Builder builder = new RangingCapabilities.Builder();
         for (RangingTechnology technology : mCapabilityAdapters.keySet()) {
             CapabilitiesAdapter adapter = mCapabilityAdapters.get(technology);
@@ -145,7 +158,7 @@ public class CapabilitiesProvider {
                 @AvailabilityChangedReason int unused
         ) {
             synchronized (CapabilitiesProvider.this) {
-                mCachedCapabilities = getCapabilities()
+                mCachedCapabilities = queryAdaptersForCapabilities()
                         .addAvailability(mTechnology.getValue(), availability)
                         .build();
                 synchronized (mCallbacks) {

@@ -21,13 +21,14 @@ import static android.ranging.RangingPreference.DEVICE_ROLE_RESPONDER;
 import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.SessionConfiguration;
+import android.ranging.SessionConfig;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbComplexChannel;
 import android.ranging.uwb.UwbRangingParams;
 
 import androidx.annotation.NonNull;
 
+import com.android.ranging.uwb.backend.internal.RangingParameters;
 import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
 import com.android.ranging.uwb.backend.internal.UwbRangeLimitsConfig;
 import com.android.server.ranging.RangingTechnology;
@@ -49,7 +50,7 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
     private static final String TAG = UwbConfig.class.getSimpleName();
 
     private final String mCountryCode;
-    private final SessionConfiguration mSessionConfig;
+    private final SessionConfig mSessionConfig;
     private final UwbRangingParams mParameters;
     private final int mDeviceRole;
     private final ImmutableBiMap<RangingDevice, UwbAddress> mPeerAddresses;
@@ -89,11 +90,11 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
         return mCountryCode;
     }
 
-    public int getDeviceRole() {
+    public @RangingPreference.DeviceRole int getDeviceRole() {
         return mDeviceRole;
     }
 
-    public SessionConfiguration getSessionConfig() {
+    public SessionConfig getSessionConfig() {
         return mSessionConfig;
     }
 
@@ -107,7 +108,7 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
      * {@link androidx.core.uwb.backend.impl.internal.RangingParameters} accepted by the UWB
      * backend.
      */
-    public com.android.ranging.uwb.backend.internal.RangingParameters asBackendParameters() {
+    public RangingParameters asBackendParameters(DataNotificationConfig dataNotificationConfig) {
         List<com.android.ranging.uwb.backend.internal.UwbAddress> peerAddresses = mPeerAddresses
                 .values()
                 .stream()
@@ -115,7 +116,7 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
                         com.android.ranging.uwb.backend.internal.UwbAddress.fromBytes(
                                 address.getAddressBytes()))
                 .collect(Collectors.toList());
-        return new com.android.ranging.uwb.backend.internal.RangingParameters(
+        return new RangingParameters(
                 (int) mParameters.getConfigId(),
                 mParameters.getSessionId(),
                 mParameters.getSubSessionId(),
@@ -124,7 +125,7 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
                 toBackend(mParameters.getComplexChannel()),
                 peerAddresses,
                 (int) mParameters.getRangingUpdateRate(),
-                toBackend(mSessionConfig.getDataNotificationConfig()),
+                toBackend(dataNotificationConfig),
                 (int) mParameters.getSlotDuration(),
                 mSessionConfig.isAngleOfArrivalNeeded(),
                 new UwbRangeLimitsConfig.Builder().setRangeMaxNumberOfMeasurements(
@@ -164,7 +165,7 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
         private final RequiredParam<ImmutableBiMap<RangingDevice, UwbAddress>> mPeerAddresses =
                 new RequiredParam<>();
         private final RequiredParam<String> mCountryCode = new RequiredParam<>();
-        private SessionConfiguration mSessionConfig = new SessionConfiguration.Builder().build();
+        private SessionConfig mSessionConfig = new SessionConfig.Builder().build();
 
         private int mDeviceRole = DEVICE_ROLE_RESPONDER;
         private boolean mIsAoaNeeded = false;
@@ -194,7 +195,7 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
             return this;
         }
 
-        public Builder setSessionConfig(SessionConfiguration sessionConfig) {
+        public Builder setSessionConfig(SessionConfig sessionConfig) {
             mSessionConfig = sessionConfig;
             return this;
         }

@@ -16,9 +16,11 @@
 
 package com.android.server.ranging;
 
+import android.annotation.Nullable;
+import android.content.AttributionSource;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
-import android.ranging.raw.RawResponderRangingParams;
+import android.ranging.raw.RawResponderRangingConfig;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
@@ -40,7 +42,9 @@ public interface RangingAdapter {
      * @param config   for the ranging session.
      * @param callback to be called on the occurrence of ranging events.
      */
-    void start(@NonNull RangingSessionConfig.TechnologyConfig config, @NonNull Callback callback);
+    void start(@NonNull RangingSessionConfig.TechnologyConfig config,
+            @Nullable AttributionSource nonPrivilegedAttributionSource,
+            @NonNull Callback callback);
 
     /** Stop ranging. */
     void stop();
@@ -50,11 +54,24 @@ public interface RangingAdapter {
         return false;
     }
 
-    default void addPeer(RawResponderRangingParams params) {}
+    default void addPeer(RawResponderRangingConfig params) {}
 
     default void removePeer(RangingDevice device) {}
 
     default void reconfigureRangingInterval(int intervalSkipCount) {}
+
+    default void appForegroundStateUpdated(boolean appInForeground) {
+        if (appInForeground) {
+            appMovedToForeground();
+        } else {
+            appMovedToBackground();
+        }
+    }
+    void appMovedToBackground();
+
+    void appMovedToForeground();
+
+    void appInBackgroundTimeout();
 
     /** Callback for getting notified when ranging starts or stops. */
     interface Callback {

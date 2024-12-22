@@ -20,6 +20,8 @@ import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_FREQUENT;
 import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_INFREQUENT;
 import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_NORMAL;
 
+import android.annotation.Nullable;
+import android.app.AlarmManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
@@ -29,19 +31,24 @@ import android.bluetooth.le.DistanceMeasurementMethod;
 import android.bluetooth.le.DistanceMeasurementParams;
 import android.bluetooth.le.DistanceMeasurementResult;
 import android.bluetooth.le.DistanceMeasurementSession;
+import android.content.AttributionSource;
 import android.content.Context;
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.RangingMeasurement;
-import android.ranging.ble.cs.CsRangingParams;
+import android.ranging.ble.cs.BleCsRangingParams;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 
 import com.android.server.ranging.RangingAdapter;
+import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingTechnology;
+import com.android.server.ranging.RangingUtils;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.session.RangingSessionConfig;
+import com.android.server.ranging.util.DataNotificationManager;
 
 import java.util.concurrent.Executors;
 
@@ -52,6 +59,8 @@ import java.util.concurrent.Executors;
 public class CsAdapter implements RangingAdapter {
     private static final String TAG = CsAdapter.class.getSimpleName();
 
+    private final Context mContext;
+    private final RangingInjector mRangingInjector;
     private final BluetoothAdapter mBluetoothAdapter;
     private final StateMachine<State> mStateMachine;
     private Callback mCallbacks;
@@ -64,16 +73,33 @@ public class CsAdapter implements RangingAdapter {
 
     /** Invariant: non-null while a ranging session is active */
     private DistanceMeasurementSession mSession;
+    private CsConfig mConfig;
+    private DataNotificationManager mDataNotificationManager;
+    private AttributionSource mNonPrivilegedAttributionSource;
+
+    private final AlarmManager mAlarmManager;
+    private final AlarmManager.OnAlarmListener mMeasurementLimitListener;
 
     /** Injectable constructor for testing. */
-    public CsAdapter(@NonNull Context context) {
+    public CsAdapter(@NonNull Context context, RangingInjector rangingInjector) {
         if (!RangingTechnology.CS.isSupported(context)) {
             throw new IllegalArgumentException("BT_CS system feature not found.");
         }
+        mContext = context;
         mBluetoothAdapter = context.getSystemService(BluetoothManager.class).getAdapter();
         mStateMachine = new StateMachine<>(State.STOPPED);
         mCallbacks = null;
         mSession = null;
+        mRangingInjector = rangingInjector;
+        mDataNotificationManager = new DataNotificationManager(
+                new DataNotificationConfig.Builder().build(),
+                new DataNotificationConfig.Builder().build()
+        );
+        mAlarmManager = mContext.getSystemService(AlarmManager.class);
+        mMeasurementLimitListener = () -> {
+            Log.i(TAG, "Measurements limit exceeded. Stopping the session");
+            Executors.newCachedThreadPool().execute(this::stop);
+        };
     }
 
     @Override
@@ -83,9 +109,18 @@ public class CsAdapter implements RangingAdapter {
 
     @Override
     public void start(
-            @NonNull RangingSessionConfig.TechnologyConfig config, @NonNull Callback callback
+            @NonNull RangingSessionConfig.TechnologyConfig config,
+            @Nullable AttributionSource nonPrivilegedAttributionSource,
+            @NonNull Callback callback
     ) {
         Log.i(TAG, "Start called.");
+        mNonPrivilegedAttributionSource = nonPrivilegedAttributionSource;
+        if (mNonPrivilegedAttributionSource != null && !mRangingInjector.isForegroundAppOrService(
+                mNonPrivilegedAttributionSource.getUid(),
+                mNonPrivilegedAttributionSource.getPackageName())) {
+            Log.e(TAG, "Background ranging is not supported");
+            return;
+        }
         if (!mStateMachine.transition(State.STOPPED, State.STARTED)) {
             Log.v(TAG, "Attempted to start adapter when it was already started");
             return;
@@ -95,10 +130,11 @@ public class CsAdapter implements RangingAdapter {
             Log.w(TAG, "Tried to start adapter with invalid ranging parameters");
             return;
         }
+        mConfig = csConfig;
 
-        CsRangingParams csRangingParams = csConfig.getRangingParams();
+        BleCsRangingParams bleCsRangingParams = csConfig.getRangingParams();
         if ((csConfig.getPeerDevice() == null)
-                || (csRangingParams.getPeerBluetoothAddress() == null)) {
+                || (bleCsRangingParams.getPeerBluetoothAddress() == null)) {
             Log.e(TAG, "Peer device is null");
             return;
         }
@@ -106,29 +142,61 @@ public class CsAdapter implements RangingAdapter {
         mCallbacks = callback;
         mRangingDevice = csConfig.getPeerDevice();
         mDeviceFromPeerBluetoothAddress =
-                mBluetoothAdapter.getRemoteDevice(csRangingParams.getPeerBluetoothAddress());
+                mBluetoothAdapter.getRemoteDevice(bleCsRangingParams.getPeerBluetoothAddress());
         DistanceMeasurementManager distanceMeasurementManager =
                 mBluetoothAdapter.getDistanceMeasurementManager();
         int duration = DistanceMeasurementParams.getMaxDurationSeconds();
-        int frequency = getFrequency(csRangingParams.getRangingUpdateRate());
+        int frequency = getFrequency(bleCsRangingParams.getRangingUpdateRate());
         int methodId = DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING;
 
         DistanceMeasurementParams params =
                 new DistanceMeasurementParams.Builder(mDeviceFromPeerBluetoothAddress)
                         .setChannelSoundingParams(new ChannelSoundingParams.Builder()
-                                .setLocationType(csRangingParams.getLocationType())
-                                .setCsSecurityLevel(csRangingParams.getSecurityLevel())
-                                .setSightType(csRangingParams.getSightType())
+                                .setLocationType(bleCsRangingParams.getLocationType())
+                                .setCsSecurityLevel(bleCsRangingParams.getSecurityLevel())
+                                .setSightType(bleCsRangingParams.getSightType())
                                 .build())
                         .setDurationSeconds(duration)
                         .setFrequency(frequency)
                         .setMethodId(methodId)
                         .build();
 
+        mDataNotificationManager = new DataNotificationManager(
+                csConfig.getSessionConfig().getDataNotificationConfig(),
+                csConfig.getSessionConfig().getDataNotificationConfig());
+
         distanceMeasurementManager.startMeasurementSession(params,
                 Executors.newSingleThreadExecutor(), mDistanceMeasurementCallback);
         // Callback here to be consistent with other ranging technologies.
         mCallbacks.onStarted(csConfig.getPeerDevice());
+        if (mConfig.getSessionConfig().getRangingMeasurementsLimit() > 0) {
+            RangingUtils.setMeasurementsLimitTimeout(
+                    mAlarmManager,
+                    mMeasurementLimitListener,
+                    mConfig.getSessionConfig().getRangingMeasurementsLimit(),
+                    getIntervalInMs(mConfig.getRangingParams().getRangingUpdateRate()));
+        }
+    }
+
+    @Override
+    public void appMovedToBackground() {
+        if (mNonPrivilegedAttributionSource != null && mStateMachine.getState() != State.STOPPED) {
+            mDataNotificationManager.updateConfigAppMovedToBackground();
+        }
+    }
+
+    @Override
+    public void appMovedToForeground() {
+        if (mNonPrivilegedAttributionSource != null && mStateMachine.getState() != State.STOPPED) {
+            mDataNotificationManager.updateConfigAppMovedToForeground();
+        }
+    }
+
+    @Override
+    public void appInBackgroundTimeout() {
+        if (mNonPrivilegedAttributionSource != null && mStateMachine.getState() != State.STOPPED) {
+            stop();
+        }
     }
 
     @Override
@@ -157,6 +225,20 @@ public class CsAdapter implements RangingAdapter {
         return DistanceMeasurementParams.REPORT_FREQUENCY_LOW;
     }
 
+    public static int getIntervalInMs(int updateRate) {
+        switch (updateRate) {
+            case UPDATE_RATE_FREQUENT -> {
+                return 200;
+            }
+            case UPDATE_RATE_INFREQUENT -> {
+                return 5000;
+            }
+            default -> {
+                return 3000;
+            }
+        }
+    }
+
     private void closeForReason(@Callback.ClosedReason int reason) {
         mCallbacks.onStopped(mRangingDevice);
         mCallbacks.onClosed(reason);
@@ -164,8 +246,12 @@ public class CsAdapter implements RangingAdapter {
     }
 
     private void clear() {
+        if (mConfig.getSessionConfig().getRangingMeasurementsLimit() > 0) {
+            mAlarmManager.cancel(mMeasurementLimitListener);
+        }
         mSession = null;
         mCallbacks = null;
+        mConfig = null;
     }
 
     public enum State {
@@ -195,10 +281,13 @@ public class CsAdapter implements RangingAdapter {
                 }
 
                 public void onResult(BluetoothDevice device, DistanceMeasurementResult result) {
+                    if (!mDataNotificationManager.shouldSendResult(result.getResultMeters())) {
+                        return;
+                    }
                     Log.i(TAG, "DistanceMeasurement onResult ! "
-                                    + result.getResultMeters()
-                                    + ", "
-                                    + result.getErrorMeters());
+                            + result.getResultMeters()
+                            + ", "
+                            + result.getErrorMeters());
                     RangingData.Builder dataBuilder = new RangingData.Builder()
                             .setRangingTechnology((int) RangingTechnology.CS.getValue())
                             .setDistance(new RangingMeasurement.Builder()

@@ -16,4 +16,4 @@
 
 package android.ranging.raw;
 
-parcelable RawResponderRangingParams;
+parcelable RawResponderRangingConfig;
