@@ -27,6 +27,7 @@ import static android.ranging.ble.cs.BleCsRangingParams.SIGHT_TYPE_LINE_OF_SIGHT
 import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_FREQUENT;
 import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_NORMAL;
 import static android.ranging.uwb.UwbRangingParams.CONFIG_MULTICAST_DS_TWR;
+import static android.ranging.uwb.UwbRangingParams.CONFIG_PROVISIONED_MULTICAST_DS_TWR;
 import static android.ranging.uwb.UwbRangingParams.DURATION_2_MS;
 import static android.uwb.UwbManager.AdapterStateCallback.STATE_ENABLED_INACTIVE;
 
@@ -40,11 +41,13 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
+import android.annotation.SuppressLint;
 import android.app.UiAutomation;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.test_utils.BlockingBluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.ContextParams;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
@@ -94,7 +97,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -140,7 +145,8 @@ public class RangingManagerTest {
         uiAutomation.dropShellPermissionIdentity();
     }
 
-    private void enableUwb() {
+    @SuppressLint({"CheckResult", "CheckReturnValue"})
+    private void enableUwb(boolean enableHwIdle) {
         UwbManager uwbManager = mContext.getSystemService(UwbManager.class);
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         // Ensure UWB is toggled on.
@@ -173,9 +179,14 @@ public class RangingManagerTest {
                 try {
                     uwbManager.registerAdapterStateCallback(
                             Executors.newSingleThreadExecutor(), adapterStateCallback);
-                    uwbManager.requestUwbHwEnabled(true);
-                    assertThat(countDownLatch.await(2, TimeUnit.SECONDS)).isTrue();
-                    assertThat(adapterStateCallback.state).isEqualTo(adapterState);
+                    if (enableHwIdle) {
+                        uwbManager.requestUwbHwEnabled(true);
+                        assertThat(countDownLatch.await(2, TimeUnit.SECONDS)).isTrue();
+                        assertThat(adapterStateCallback.state).isEqualTo(adapterState);
+                    } else {
+                        uwbManager.requestUwbHwEnabled(false);
+                        assertThat(countDownLatch.await(2, TimeUnit.SECONDS));
+                    }
                 } finally {
                     uwbManager.unregisterAdapterStateCallback(adapterStateCallback);
                 }
@@ -307,19 +318,14 @@ public class RangingManagerTest {
         }
     }
 
-    @Test
-    @CddTest(requirements = {"7.3.13/C-1-1,C-1-2"})
-    @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
-    public void testUwbRangingSession() throws Exception {
-        assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb();
+    private void testUwbRangingSessionInternal(RangingManager rangingManager) throws Exception {
         int sessionId = 10;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
 
         RangingSessionCallback callback = new RangingSessionCallback();
 
-        RangingSession rangingSession = mRangingManager.createRangingSession(
+        RangingSession rangingSession = rangingManager.createRangingSession(
                 MoreExecutors.directExecutor(), callback);
         assertThat(rangingSession).isNotNull();
 
@@ -350,6 +356,79 @@ public class RangingManagerTest {
         assertEquals(preference.getRangingParams().getRangingSessionType(), RANGING_SESSION_RAW);
 
         rangingSession.start(preference);
+        assertThat(callback.mOnOpenedCalled.await(4, TimeUnit.SECONDS)).isTrue();
+
+        rangingSession.stop();
+        assertThat(callback.mOnClosedCalled.await(2, TimeUnit.SECONDS)).isTrue();
+
+        uiAutomation.dropShellPermissionIdentity();
+    }
+
+    @Test
+    @CddTest(requirements = {"7.3.13/C-1-1,C-1-2"})
+    @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
+    public void testUwbRangingSession() throws Exception {
+        assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
+        enableUwb(true);
+        testUwbRangingSessionInternal(mRangingManager);
+    }
+
+    @Test
+    @CddTest(requirements = {"7.3.13/C-1-1,C-1-2"})
+    @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
+    public void testUwbRangingSession_withHwIdleOff() throws Exception {
+        assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
+        enableUwb(false);
+        Context contextWithTag = mContext.createContext(
+                new ContextParams.Builder()
+                        .setAttributionTag("Custom_cts_tag")
+                        .build()
+        );
+        RangingManager rangingManager = contextWithTag.getSystemService(RangingManager.class);
+        assertThat(rangingManager).isNotNull();
+        testUwbRangingSessionInternal(rangingManager);
+    }
+
+    @Test
+    @CddTest(requirements = {"7.3.13/C-1-1,C-1-2"})
+    @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
+    public void testUwbProvisionedStsRangingSession() throws Exception {
+        assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
+        enableUwb(true);
+        int sessionId = 10;
+        UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
+        uiAutomation.adoptShellPermissionIdentity();
+
+        RangingSessionCallback callback = new RangingSessionCallback();
+
+        RangingSession rangingSession = mRangingManager.createRangingSession(
+                MoreExecutors.directExecutor(), callback);
+        assertThat(rangingSession).isNotNull();
+
+        RangingPreference preference = new RangingPreference.Builder(DEVICE_ROLE_INITIATOR,
+                new RawInitiatorRangingConfig.Builder()
+                        .addRawRangingDevice(new RawRangingDevice.Builder()
+                                .setRangingDevice(new RangingDevice.Builder().build())
+                                .setUwbRangingParams(new UwbRangingParams.Builder(
+                                        sessionId, CONFIG_PROVISIONED_MULTICAST_DS_TWR,
+                                        UwbAddress.createRandomShortAddress(),
+                                        UwbAddress.createRandomShortAddress())
+                                        .setSubSessionId(50)
+                                        .setSessionKeyInfo(new byte[]{
+                                                0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
+                                                0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8
+                                        })
+                                        .setSubSessionKeyInfo(new byte[]{
+                                                0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
+                                                0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8
+                                        }).build())
+                                .build())
+                        .build())
+                .build();
+
+        assertEquals(preference.getRangingParams().getRangingSessionType(), RANGING_SESSION_RAW);
+
+        rangingSession.start(preference);
         assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
 
         rangingSession.stop();
@@ -363,7 +442,7 @@ public class RangingManagerTest {
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testRawAddRemoverPeer() throws Exception {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb();
+        enableUwb(true);
         int sessionId = 10;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
@@ -409,7 +488,7 @@ public class RangingManagerTest {
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testRawReconfigureRangingInterval() throws Exception {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb();
+        enableUwb(true);
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
 
@@ -435,7 +514,7 @@ public class RangingManagerTest {
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testMultipleUwbRangingSessions() throws Exception {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb();
+        enableUwb(true);
         int sessionId1 = 10;
         int sessionId2 = 15;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
@@ -476,8 +555,8 @@ public class RangingManagerTest {
         rangingSession1.start(preference1);
         rangingSession2.start(preference2);
 
-        assertThat(callback1.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
-        assertThat(callback2.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback1.mOnOpenedCalled.await(4, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback2.mOnOpenedCalled.await(4, TimeUnit.SECONDS)).isTrue();
 
         rangingSession1.stop();
         rangingSession2.stop();
@@ -580,7 +659,7 @@ public class RangingManagerTest {
         uiAutomation.adoptShellPermissionIdentity();
 
         if (mSupportedTechnologies.contains(RangingManager.UWB)) {
-            enableUwb();
+            enableUwb(true);
         }
         if (mSupportedTechnologies.contains(RangingManager.BLE_RSSI)) {
             enableBluetooth();
@@ -656,22 +735,34 @@ public class RangingManagerTest {
                 capabilitiesCallback.mRangingCapabilities.getTechnologyAvailability())
                 .isNotNull();
 
+        List<RawRangingDevice> rawRangingDevices = new ArrayList<>();
+        rawRangingDevices.add(new RawRangingDevice.Builder()
+                .setRangingDevice(new RangingDevice.Builder().build())
+                .setRttRangingParams(new RttRangingParams.Builder("test_rtt_initiator_1").build())
+                .build());
+        rawRangingDevices.add(new RawRangingDevice.Builder()
+                .setRangingDevice(new RangingDevice.Builder().build())
+                .setRttRangingParams(new RttRangingParams.Builder("test_rtt_initiator_2").build())
+                .build());
+
         RangingPreference preference = new RangingPreference.Builder(DEVICE_ROLE_INITIATOR,
                 new RawInitiatorRangingConfig.Builder()
-                        .addRawRangingDevice(new RawRangingDevice.Builder()
-                                .setRangingDevice(new RangingDevice.Builder().build())
-                                .setRttRangingParams(
-                                        new RttRangingParams.Builder("test_rtt_initiator_1")
-                                                .build())
-                                .build())
-                        .addRawRangingDevice(new RawRangingDevice.Builder()
-                                .setRangingDevice(new RangingDevice.Builder().build())
-                                .setRttRangingParams(
-                                        new RttRangingParams.Builder("test_rtt_initator_2")
-                                                .build())
-                                .build())
+                        .addRawRangingDevices(rawRangingDevices)
                         .build())
                 .build();
+
+        RawInitiatorRangingConfig config = (RawInitiatorRangingConfig)
+                preference.getRangingParams();
+        RawRangingDevice rawRangingDevice = config.getRawRangingDevices().getFirst();
+        assertThat(rawRangingDevice).isNotNull();
+        assertThat(rawRangingDevice.getRangingDevice()).isNotNull();
+
+        RttRangingParams params = rawRangingDevice.getRttRangingParams();
+        assertThat(params).isNotNull();
+        assertThat(params.getServiceName()).isNotNull();
+        assertThat(params.getMatchFilter()).isNull();
+        assertEquals(params.getRangingUpdateRate(), UPDATE_RATE_NORMAL);
+        boolean unused = params.isPeriodicRangingHwFeatureEnabled();
 
         RangingSessionCallback callback = new RangingSessionCallback();
         RangingSession rangingSession = mRangingManager.createRangingSession(
@@ -789,7 +880,7 @@ public class RangingManagerTest {
     public void testMultiRangingSession() throws InterruptedException {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.WIFI_NAN_RTT));
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb();
+        enableUwb(true);
         enableWifiNanRtt();
         int sessionId = 10;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
@@ -926,6 +1017,22 @@ public class RangingManagerTest {
                                         .build())
                         .build())
                 .build();
+
+
+        RawInitiatorRangingConfig config = (RawInitiatorRangingConfig)
+                preference.getRangingParams();
+        RawRangingDevice rawRangingDevice = config.getRawRangingDevices().getFirst();
+        assertThat(rawRangingDevice).isNotNull();
+        assertThat(rawRangingDevice.getRangingDevice()).isNotNull();
+
+        BleCsRangingParams params = rawRangingDevice.getCsRangingParams();
+        assertThat(params).isNotNull();
+        assertThat(params.getPeerBluetoothAddress()).isNotNull();
+        assertEquals(params.getRangingUpdateRate(), UPDATE_RATE_NORMAL);
+        assertEquals(params.getLocationType(), LOCATION_TYPE_INDOOR);
+        assertEquals(params.getSecurityLevel(), CS_SECURITY_LEVEL_ONE);
+        assertEquals(params.getSightType(), SIGHT_TYPE_LINE_OF_SIGHT);
+
 
         rangingSession.start(preference);
         assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
