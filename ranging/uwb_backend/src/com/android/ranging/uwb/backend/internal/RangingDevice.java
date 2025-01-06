@@ -45,6 +45,7 @@ import androidx.annotation.WorkerThread;
 
 import com.google.common.hash.Hashing;
 import com.google.uwb.support.dltdoa.DlTDoARangingRoundsUpdate;
+import com.google.uwb.support.fira.FiraOnControleeAddRemoveParams;
 import com.google.uwb.support.fira.FiraOpenSessionParams;
 import com.google.uwb.support.multichip.ChipInfoParams;
 
@@ -106,6 +107,9 @@ public abstract class RangingDevice {
 
     private final HashMap<String, UwbAddress> mMultiChipMap;
 
+    private UwbRangeDataNtfConfig mLastNtfConfig;
+    private final boolean mIsHwTurnOffEnabled;
+
     RangingDevice(UwbManager manager, Executor executor,
             OpAsyncCallbackRunner<Boolean> opAsyncCallbackRunner, UwbFeatureFlags uwbFeatureFlags) {
         mUwbManager = manager;
@@ -115,6 +119,16 @@ public abstract class RangingDevice {
         mUwbFeatureFlags = uwbFeatureFlags;
         this.mMultiChipMap = new HashMap<>();
         initializeUwbAddress();
+        mLastNtfConfig = new UwbRangeDataNtfConfig.Builder().build();
+        if (VERSION.SDK_INT < VERSION_CODES.VANILLA_ICE_CREAM) {
+            mIsHwTurnOffEnabled = false;
+        } else {
+            mIsHwTurnOffEnabled = manager.isUwbHwIdleTurnOffEnabled();
+        }
+    }
+
+    public boolean isHwTurnOffEnabled() {
+        return mIsHwTurnOffEnabled;
     }
 
     /** Sets the chip ID. By default, the default chip is used. */
@@ -195,7 +209,8 @@ public abstract class RangingDevice {
                             rangingParameters.getRangingUpdateRate(),
                             rangingParameters.getUwbRangeDataNtfConfig(),
                             rangingParameters.getSlotDuration(),
-                            rangingParameters.isAoaDisabled());
+                            rangingParameters.isAoaDisabled(),
+                            rangingParameters.getUwbRangeLimitsConfig());
         } else {
             mRangingParameters = rangingParameters;
         }
@@ -295,7 +310,7 @@ public abstract class RangingDevice {
             @Override
             public void onOpenFailed(int reason, PersistableBundle params) {
                 Log.i(TAG, String.format("Session open failed: reason %s", reason));
-                int suspendedReason = Conversions.convertReason(reason);
+                int suspendedReason = Conversions.toRangingSuspendedReason(reason);
                 if (suspendedReason == REASON_UNKNOWN) {
                     suspendedReason = REASON_FAILED_TO_START;
                 }
@@ -318,7 +333,7 @@ public abstract class RangingDevice {
             @Override
             public void onStartFailed(int reason, PersistableBundle params) {
 
-                int suspendedReason = Conversions.convertReason(reason);
+                int suspendedReason = Conversions.toRangingSuspendedReason(reason);
                 if (suspendedReason != REASON_WRONG_PARAMETERS) {
                     suspendedReason = REASON_FAILED_TO_START;
                 }
@@ -347,13 +362,16 @@ public abstract class RangingDevice {
             @WorkerThread
             @Override
             public void onStopped(int reason, PersistableBundle params) {
-                int suspendedReason = Conversions.convertReason(reason);
+                int suspendedReason = Conversions.toRangingSuspendedReason(reason);
                 UwbDevice device = getUwbDevice();
                 runOnBackendCallbackThread(
                         () -> {
                             mIsRanging.set(false);
                             callback.onRangingSuspended(device, suspendedReason);
                         });
+                if (mRangingSession != null) {
+                    mRangingSession.close();
+                }
                 if (suspendedReason == REASON_STOP_RANGING_CALLED
                         && mOpAsyncCallbackRunner.isActive()) {
                     mOpAsyncCallbackRunner.complete(true);
@@ -400,7 +418,7 @@ public abstract class RangingDevice {
             @WorkerThread
             @Override
             public void onControleeAdded(PersistableBundle params) {
-                mOpAsyncCallbackRunner.complete(true);
+                mOpAsyncCallbackRunner.completeIfActive(true);
             }
 
             @WorkerThread
@@ -412,9 +430,24 @@ public abstract class RangingDevice {
             @WorkerThread
             @Override
             public void onControleeRemoved(PersistableBundle params) {
-                if (mOpAsyncCallbackRunner.isActive()) {
-                    mOpAsyncCallbackRunner.complete(true);
-                }
+                FiraOnControleeAddRemoveParams removalParams =
+                        FiraOnControleeAddRemoveParams.fromBundle(params);
+
+                runOnBackendCallbackThread(
+                        () -> {
+                            byte[] removedAddress = removalParams.getAddress().toBytes();
+                            UwbDevice removedDevice =
+                                    UwbDevice.createForAddress(
+                                            mUwbFeatureFlags.isReversedByteOrderFiraParams()
+                                                    ? Conversions.getReverseBytes(removedAddress)
+                                                    : removedAddress);
+
+                            handlePeerDisconnected(removedDevice);
+                            callback.onPeerDisconnected(
+                                    removedDevice, Conversions.toPeerDisconnectedReason(
+                                            removalParams.getReason()));
+                        });
+                mOpAsyncCallbackRunner.completeIfActive(true);
             }
 
             @WorkerThread
@@ -447,11 +480,7 @@ public abstract class RangingDevice {
     }
 
     private void printStartRangingParameters(PersistableBundle parameters) {
-        Log.i(TAG, "Opens UWB session with bundle parameters:");
-        for (String key : parameters.keySet()) {
-            Log.i(TAG, String.format(
-                    "UWB parameter: %s, value: %s", key, getString(parameters.get(key))));
-        }
+        Log.i(TAG, "Opens UWB session with bundle parameters: " + parameters.toString());
     }
 
     /**
@@ -469,6 +498,7 @@ public abstract class RangingDevice {
             return INVALID_API_CALL;
         }
 
+        mLastNtfConfig = mRangingParameters.getUwbRangeDataNtfConfig();
         FiraOpenSessionParams openSessionParams = getOpenSessionParams();
         printStartRangingParameters(openSessionParams.toBundle());
         mBackendCallbackExecutor = backendCallbackExecutor;
@@ -601,6 +631,13 @@ public abstract class RangingDevice {
         return success && result != null && result;
     }
 
+    /**
+     * Called when a peer is disconnected from the ranging session.
+     *
+     * @param peer the peer that disconnected.
+     */
+    protected synchronized void handlePeerDisconnected(UwbDevice peer) {
+    }
 
     /**
      * Reconfigures range data notification for an ongoing session.
@@ -615,6 +652,10 @@ public abstract class RangingDevice {
             return INVALID_API_CALL;
         }
 
+        if (mLastNtfConfig.equals(config)) {
+            return STATUS_OK;
+        }
+
         boolean success =
                 reconfigureRanging(
                         ConfigurationManager.createReconfigureParamsRangeDataNtf(
@@ -624,6 +665,7 @@ public abstract class RangingDevice {
             Log.w(TAG, "Reconfiguring range data notification config failed.");
             return UWB_RECONFIGURATION_FAILURE;
         }
+        mLastNtfConfig = config;
         return STATUS_OK;
     }
 

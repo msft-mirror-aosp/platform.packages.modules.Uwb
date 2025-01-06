@@ -17,12 +17,15 @@
 package android.ranging;
 
 import android.content.AttributionSource;
-import android.ranging.IOobSendDataListener;
 import android.ranging.IRangingCapabilitiesCallback;
 import android.ranging.IRangingCallbacks;
-import android.ranging.OobHandle;
 import android.ranging.SessionHandle;
 import android.ranging.RangingPreference;
+import android.ranging.RangingDevice;
+import android.ranging.raw.RawResponderRangingConfig;
+import android.ranging.oob.OobHandle;
+import android.ranging.oob.IOobSendDataListener;
+import android.ranging.oob.OobResponderRangingConfig;
 
 /**
 *  @hide
@@ -31,6 +34,14 @@ interface IRangingAdapter {
 
     void startRanging(in AttributionSource attributionSource, in SessionHandle sessionHandle,
                  in RangingPreference rangingPreference, in IRangingCallbacks callbacks);
+
+    void reconfigureRangingInterval(in SessionHandle sessionHandle, int intervalSkipCount);
+
+    void addRawDevice(in SessionHandle sessionHandle, in RawResponderRangingConfig rangingConfig);
+
+    void addOobDevice(in SessionHandle sessionHandle, in OobResponderRangingConfig rangingConfig);
+
+    void removeDevice(in SessionHandle sessionHandle, in RangingDevice rangingDevice);
 
     void stopRanging(in SessionHandle sessionHandle);
 

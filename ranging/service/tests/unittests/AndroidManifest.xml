@@ -21,13 +21,13 @@
 
     <uses-sdk android:minSdkVersion="34" android:targetSdkVersion="34" />
 
-    <application>
+    <application android:debuggable="true">
         <uses-library android:name="android.test.runner" />
     </application>
 
     <instrumentation
         android:name="androidx.test.runner.AndroidJUnitRunner"
         android:targetPackage="com.android.ranging.tests"
-        android:label="Generic Ranging Unit Tests" >
+        android:label="Ranging service unit tests" >
     </instrumentation>
 </manifest>

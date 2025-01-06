@@ -22,13 +22,16 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.ranging.params.DataNotificationConfig;
-import android.ranging.params.SensorFusionParams;
+import android.ranging.oob.OobInitiatorRangingConfig;
+import android.ranging.oob.OobResponderRangingConfig;
+import android.ranging.raw.RawInitiatorRangingConfig;
+import android.ranging.raw.RawResponderRangingConfig;
 
 import com.android.ranging.flags.Flags;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Objects;
 
 /**
  * Represents the configuration preferences for a ranging session.
@@ -37,8 +40,6 @@ import java.lang.annotation.RetentionPolicy;
  * required for a ranging session, including ranging parameters, sensor fusion settings,
  * and data notification configurations. It provides a {@link Builder} to construct
  * an instance with custom configurations.</p>
- *
- * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class RangingPreference implements Parcelable {
@@ -61,32 +62,23 @@ public final class RangingPreference implements Parcelable {
 
     @DeviceRole
     private final int mDeviceRole;
-    private final android.ranging.params.RangingParams mRangingParameters;
-    private final android.ranging.params.SensorFusionParams mFusionParameters;
+    private final RangingConfig mRangingParams;
 
-    private final android.ranging.params.DataNotificationConfig mDataNotificationConfig;
-    private final boolean mIsAoaNeeded;
+    private final SessionConfig mSessionConfig;
 
     private RangingPreference(Builder builder) {
         mDeviceRole = builder.mDeviceRole;
-        mRangingParameters = builder.mRangingParameters;
-        mDataNotificationConfig = builder.mDataNotificationConfig;
-        mFusionParameters = builder.mFusionParameters;
-        mIsAoaNeeded = builder.mIsAoaNeeded;
+        mRangingParams = builder.mRangingConfig;
+        mSessionConfig = builder.mSessionConfig;
     }
 
     private RangingPreference(Parcel in) {
         mDeviceRole = in.readInt();
-        mRangingParameters = in.readParcelable(
-                android.ranging.params.RangingParams.class.getClassLoader(),
-                android.ranging.params.RangingParams.class);
-        mFusionParameters = in.readParcelable(
-                android.ranging.params.SensorFusionParams.class.getClassLoader(),
-                android.ranging.params.SensorFusionParams.class);
-        mDataNotificationConfig = in.readParcelable(
-                android.ranging.params.DataNotificationConfig.class.getClassLoader(),
-                android.ranging.params.DataNotificationConfig.class);
-        mIsAoaNeeded = in.readBoolean();
+        mRangingParams = in.readParcelable(
+                RangingConfig.class.getClassLoader(),
+                RangingConfig.class);
+        mSessionConfig = in.readParcelable(
+                SessionConfig.class.getClassLoader(), SessionConfig.class);
     }
 
     @NonNull
@@ -105,45 +97,29 @@ public final class RangingPreference implements Parcelable {
     /**
      * Returns the device role.
      */
+    @DeviceRole
     public int getDeviceRole() {
         return mDeviceRole;
     }
 
     /**
-     * Returns whether Aoa was requested by the app.
-     */
-    public boolean isAoaNeeded() {
-        return mIsAoaNeeded;
-    }
-
-    /**
      * Returns the ranging parameters associated with this preference.
      *
-     * @return the {@link android.ranging.params.RangingParams} or {@code null} if not set.
+     * @return the {@link RangingConfig} or {@code null} if not set.
      */
     @Nullable
-    public android.ranging.params.RangingParams getRangingParameters() {
-        return mRangingParameters;
+    public RangingConfig getRangingParams() {
+        return mRangingParams;
     }
 
     /**
-     * Returns the sensor fusion parameters used for this preference.
+     * Returns the ranging session configuration params.
      *
-     * @return a non-null {@link android.ranging.params.SensorFusionParams} instance.
+     * @return a non-null {@link SessionConfig} instance.
      */
     @NonNull
-    public android.ranging.params.SensorFusionParams getSensorFusionParameters() {
-        return mFusionParameters;
-    }
-
-    /**
-     * Returns the data notification configuration for this preference.
-     *
-     * @return a non-null {@link android.ranging.params.DataNotificationConfig} instance.
-     */
-    @NonNull
-    public android.ranging.params.DataNotificationConfig getDataNotificationConfig() {
-        return mDataNotificationConfig;
+    public SessionConfig getSessionConfig() {
+        return mSessionConfig;
     }
 
     @Override
@@ -154,109 +130,100 @@ public final class RangingPreference implements Parcelable {
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
         dest.writeInt(mDeviceRole);
-        dest.writeParcelable(mRangingParameters, flags);
-        dest.writeParcelable(mFusionParameters, flags);
-        dest.writeParcelable(mDataNotificationConfig, flags);
-        dest.writeBoolean(mIsAoaNeeded);
+        dest.writeParcelable(mRangingParams, flags);
+        dest.writeParcelable(mSessionConfig, flags);
     }
 
     /**
      * Builder for creating instances of {@code RangingPreference}.
+     *
+     * <p>This Builder class provides a flexible way to construct a {@link RangingPreference}
+     * instance by setting required and optional parameters. It ensures that all necessary
+     * parameters are specified and provides default values for optional configurations.</p>
+     *
+     * <p>Example usage:</p>
+     *
+     * <pre>{@code
+     * RangingPreference rangingPreference = new RangingPreference.Builder(DEVICE_ROLE_RESPONDER,
+     *     new RawResponderRangingParams.Builder()
+     *         .setRawRangingDevice(
+     *             new RawRangingDevice.Builder()
+     *                 .setRangingDevice(
+     *                     new RangingDevice.Builder()
+     *                         .build())
+     *                .setBleRssiRangingParams(
+     *                new BleRssiRangingParams.Builder("AA:BB:CC:00:11:22")
+     *                    .build())
+     *            .build())
+     *        build())
+     *    .build();
+     * }</pre>
      */
     public static final class Builder {
         @DeviceRole
-        private int mDeviceRole;
-        private android.ranging.params.RangingParams mRangingParameters;
-        private android.ranging.params.DataNotificationConfig mDataNotificationConfig;
-        private android.ranging.params.SensorFusionParams mFusionParameters;
-        private boolean mIsAoaNeeded = false;
+        private final int mDeviceRole;
+        private final RangingConfig mRangingConfig;
+        private SessionConfig mSessionConfig = new SessionConfig.Builder().build();
 
         /**
-         * Sets the role of the device within the session.
+         * Creates a Builder instance with the required device role and {@link RangingConfig}.
          *
-         * @param role the role of the device, either {@link DEVICE_ROLE_RESPONDER or
-         *             {@link DEVICE_ROLE_INITIATOR}.
-         * @return this Builder instance.
+         * @param role          the role of the device in {@link DeviceRole}
+         * @param rangingConfig the {@link RangingConfig} to use.
+         *                      Needs to be an instance of one of the following:
+         *                      <ul>
+         *                         <li>{@link RawResponderRangingConfig}</li>
+         *                         <li>{@link RawInitiatorRangingConfig}</li>
+         *                         <li>{@link OobResponderRangingConfig}</li>
+         *                         <li>{@link OobInitiatorRangingConfig}</li>
+         *                      </ul>
+         * @throws NullPointerException if {@code rangingParams} is null.
          */
-        @NonNull
-        public Builder setDeviceRole(@DeviceRole int role) {
+        public Builder(@DeviceRole int role, @NonNull RangingConfig rangingConfig) {
+            Objects.requireNonNull(rangingConfig);
             mDeviceRole = role;
-            return this;
+            mRangingConfig = rangingConfig;
         }
 
         /**
-         * Sets the ranging parameters for this preference.
+         * Sets the configuration parameters for the ranging session policy.
          *
-         * @param rangingParameters the {@link android.ranging.params.RangingParams} to use.
-         * @return the builder instance.
-         * @throws IllegalArgumentException if the uwbParameters is null.
+         * <p>This method allows specifying additional configuration parameters encapsulated in
+         * {@link SessionConfig} for fine-tuning the behavior of the ranging session.
+         *
+         * @param config the {@link SessionConfig}.
+         * @return this {@link Builder} instance.
+         * @throws NullPointerException if {@code params} is null.
          */
         @NonNull
-        public Builder setRangingParameters(
-                @NonNull android.ranging.params.RangingParams rangingParameters) {
-            mRangingParameters = rangingParameters;
-            return this;
-        }
-
-        /**
-         * Sets the sensor fusion parameters for this preference.
-         *
-         * @param parameters the {@link android.ranging.params.SensorFusionParams} to use.
-         * @return the builder instance.
-         * @throws IllegalArgumentException if the parameters is null.
-         */
-        @NonNull
-        public Builder setSensorFusionParameters(
-                @NonNull android.ranging.params.SensorFusionParams parameters) {
-            mFusionParameters = parameters;
-            return this;
-        }
-
-        /**
-         * Sets the data notification configuration for this preference.
-         *
-         * @param config the {@link android.ranging.params.DataNotificationConfig} to use.
-         * @return the builder instance for chaining.
-         * @throws IllegalArgumentException if the config is null.
-         */
-        @NonNull
-        public Builder setDataNotificationConfig(
-                @NonNull android.ranging.params.DataNotificationConfig config) {
-            mDataNotificationConfig = config;
-            return this;
-        }
-
-        /**
-         * Sets whether Angle of Arrival (AoA) is required for the ranging operation.
-         *
-         * @param isAoaNeeded {@code true} if AoA data is required; {@code false} otherwise.
-         * @return The {@link Builder} instance.
-         */
-        @NonNull
-        public Builder setAoaNeeded(boolean isAoaNeeded) {
-            mIsAoaNeeded = isAoaNeeded;
+        public Builder setSessionConfig(@NonNull SessionConfig config) {
+            Objects.requireNonNull(config);
+            mSessionConfig = config;
             return this;
         }
 
         /**
          * Builds the {@code RangingPreference} instance.
          *
-         * <p>If the {@link android.ranging.params.DataNotificationConfig} or
-         * {@link android.ranging.params.SensorFusionParams}
-         * are not set, default instances will be used.</p>
+         * <p>If the {@link SessionConfig} is not set, default instances will be used.
          *
          * @return a new {@code RangingPreference} instance.
          */
         @NonNull
         public RangingPreference build() {
-            if (mDataNotificationConfig == null) {
-                mDataNotificationConfig = new DataNotificationConfig.Builder().build();
-            }
-            if (mFusionParameters == null) {
-                mFusionParameters = new SensorFusionParams.Builder().build();
-            }
             return new RangingPreference(this);
         }
+    }
 
+    @Override
+    public String toString() {
+        return "RangingPreference{ "
+                + "mDeviceRole="
+                + mDeviceRole
+                + ", mRangingParameters="
+                + mRangingParams
+                + ", mSessionConfig="
+                + mSessionConfig
+                + " }";
     }
 }

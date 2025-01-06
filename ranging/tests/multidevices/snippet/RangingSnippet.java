@@ -14,18 +14,24 @@
  * limitations under the License.
  */
 
-package multidevices.snippet.ranging;
+package com.google.snippet.ranging;
 
 import android.app.UiAutomation;
 import android.content.Context;
 import android.net.ConnectivityManager;
+import android.net.wifi.WifiManager;
 import android.ranging.RangingCapabilities;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
 import android.ranging.RangingManager;
 import android.ranging.RangingManager.RangingTechnology;
+import android.ranging.RangingMeasurement;
 import android.ranging.RangingPreference;
 import android.ranging.RangingSession;
+import android.ranging.oob.DeviceHandle;
+import android.ranging.oob.OobInitiatorRangingConfig;
+import android.ranging.oob.OobResponderRangingConfig;
+import android.ranging.oob.TransportHandle;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -37,14 +43,16 @@ import com.google.android.mobly.snippet.event.SnippetEvent;
 import com.google.android.mobly.snippet.rpc.AsyncRpc;
 import com.google.android.mobly.snippet.rpc.Rpc;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 public class RangingSnippet implements Snippet {
     private static final String TAG = "GenericRangingSnippet";
@@ -54,13 +62,16 @@ public class RangingSnippet implements Snippet {
     private final Executor mExecutor = Executors.newSingleThreadExecutor();
     private final EventCache mEventCache = EventCache.getInstance();
     private final ConnectivityManager mConnectivityManager;
+    private final WifiManager mWifiManager;
     private final ConcurrentMap<String, RangingSessionInfo> mSessions;
     private final ConcurrentMap<Integer, Integer> mTechnologyAvailability;
+    private final AtomicReference<RangingCapabilities> mRangingCapabilities =
+            new AtomicReference<>();
 
     public RangingSnippet() {
-        adoptShellPermission();
         mContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
         mConnectivityManager = mContext.getSystemService(ConnectivityManager.class);
+        mWifiManager = mContext.getSystemService(WifiManager.class);
         mRangingManager = mContext.getSystemService(RangingManager.class);
 
         mSessions = new ConcurrentHashMap<>();
@@ -80,73 +91,108 @@ public class RangingSnippet implements Snippet {
         }
     }
 
+    private void dropShellPermission() throws Throwable {
+        UiAutomation uia = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        uia.dropShellPermissionIdentity();
+        try {
+            Class<?> cls = Class.forName("android.app.UiAutomation");
+            Method destroyMethod = cls.getDeclaredMethod("destroy");
+            destroyMethod.invoke(uia);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Failed to cleanup ui automation", e);
+        }
+    }
+
     private enum Event {
+        OPENED,
+        OPEN_FAILED,
         STARTED,
-        START_FAILED,
-        CLOSED,
+        DATA,
         STOPPED,
-        RESULTS_RECEIVED;
+        CLOSED,
+        OOB_SEND_CAPABILITIES_REQUEST,
+        OOB_SEND_CAPABILITIES_RESPONSE,
+        OOB_SEND_SET_CONFIGURATION,
+        OOB_SEND_UNKNOWN,
+        OOB_CLOSED
     }
 
     private class RangingSessionCallback implements RangingSession.Callback {
 
         private final String mCallbackId;
-        private final ConcurrentMap<RangingDevice, ConcurrentMap<Integer, RangingData>>
-                mReceivedData;
 
         RangingSessionCallback(String callbackId) {
             mCallbackId = callbackId;
-            mReceivedData = new ConcurrentHashMap<>();
         }
 
         @Override
-        public void onStarted(int technology) {
-            Log.d(TAG, "RangingCallback#onStarted() called");
-            mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.STARTED.toString()));
+        public void onOpened() {
+            Log.d(TAG, "onOpened");
+            mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.OPENED.toString()));
         }
 
         @Override
-        public void onStartFailed(int reason, RangingDevice device) {
+        public void onOpenFailed(@Reason int reason) {
+            Log.d(TAG, "onOpenFailed");
+            mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.OPEN_FAILED.toString()));
         }
 
         @Override
-        public void onClosed(int reasonCode) {
-            Log.d(TAG, "RangingCallback#onClosed() called");
-            mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.CLOSED.toString()));
-        }
-
-        @Override
-        public void onRangingStopped(@NonNull RangingDevice device) {
+        public void onStarted(@NonNull RangingDevice peer, @RangingTechnology int technology) {
+            Log.d(TAG, "onStarted");
+            SnippetEvent event = new SnippetEvent(mCallbackId, Event.STARTED.toString());
+            event.getData().putString("peer_id", peer.getUuid().toString());
+            event.getData().putInt("technology", technology);
+            mEventCache.postEvent(event);
         }
 
         @Override
         public void onResults(@NonNull RangingDevice peer, @NonNull RangingData data) {
-            Log.d(TAG, "RangingCallback#onResults() called");
-            SnippetEvent event = new SnippetEvent(mCallbackId, Event.RESULTS_RECEIVED.toString());
-            event.getData().putString("peer", peer.getUuid().toString());
+            Log.d(TAG, "onData { peer: " + peer.getUuid()
+                    + " Distance: " + data.getDistance()
+                    + " Azimuth: " + data.getAzimuth()
+                    + " Elevation: " + data.getElevation()
+                    + " RangingTechnology: " + data.getRangingTechnology()
+                    + " Timestamp: " + data.getTimestampMillis()
+                    + " hasRssi: " + data.hasRssi()
+                    + " getRssi: " + (data.hasRssi() ? data.getRssi() : "null")
+                    + " }");
+            RangingMeasurement distance = data.getDistance();
+            if (distance != null) {
+                Log.d(TAG, " Distance: " + distance.getMeasurement()
+                        + "  Confidence: " + distance.getConfidence());
+            }
+            SnippetEvent event = new SnippetEvent(mCallbackId, Event.DATA.toString());
+            event.getData().putString("peer_id", peer.getUuid().toString());
             event.getData().putInt("technology", data.getRangingTechnology());
             mEventCache.postEvent(event);
         }
 
-        Optional<RangingData> getLastDataReceived(
-                RangingDevice peer, @RangingTechnology int technology
-        ) {
-            if (mReceivedData.containsKey(peer)) {
-                return Optional.ofNullable(mReceivedData.get(peer).remove(technology));
-            } else {
-                return Optional.empty();
-            }
+        @Override
+        public void onStopped(@NonNull RangingDevice peer, @RangingTechnology int technology) {
+            Log.d(TAG, "onStopped");
+            SnippetEvent event = new SnippetEvent(mCallbackId, Event.STOPPED.toString());
+            event.getData().putString("peer_id", peer.getUuid().toString());
+            event.getData().putInt("technology", technology);
+            mEventCache.postEvent(event);
         }
 
+        @Override
+        public void onClosed(@Reason int reason) {
+            Log.d(TAG, "onClosed");
+            mEventCache.postEvent(new SnippetEvent(mCallbackId, Event.CLOSED.toString()));
+        }
     }
 
     private static class RangingSessionInfo {
         private final RangingSession mSession;
         private final RangingSessionCallback mCallback;
+        private final ConcurrentMap<RangingDevice, OobTransportImpl> mOobTransports;
 
         RangingSessionInfo(RangingSession session, RangingSessionCallback callback) {
             mSession = session;
             mCallback = callback;
+            mOobTransports = new ConcurrentHashMap<>();
         }
 
         public RangingSession getSession() {
@@ -156,16 +202,73 @@ public class RangingSnippet implements Snippet {
         public RangingSessionCallback getCallback() {
             return mCallback;
         }
+
     }
 
     private class AvailabilityListener implements RangingManager.RangingCapabilitiesCallback {
         @Override
         public void onRangingCapabilities(@NonNull RangingCapabilities capabilities) {
-            Map<Integer, Integer> availabilities = capabilities.getTechnologyAvailabilityMap();
+            Map<Integer, Integer> availabilities = capabilities.getTechnologyAvailability();
             mTechnologyAvailability.putAll(availabilities);
+            mRangingCapabilities.set(capabilities);
         }
     }
 
+    private class OobTransportImpl implements TransportHandle {
+
+        private final String mCallbackId;
+        private final RangingDevice mPeer;
+        private ReceiveCallback mReceiveCallback;
+
+        OobTransportImpl(String callbackId, RangingDevice peer) {
+            mCallbackId = callbackId;
+            mPeer = peer;
+        }
+
+        private SnippetEvent getOobEvent(@NonNull byte[] data) {
+            int messageType = data[1];
+            switch (messageType) {
+                case 0:
+                    return new SnippetEvent(
+                            mCallbackId,
+                            Event.OOB_SEND_CAPABILITIES_REQUEST.toString());
+                case 1:
+                    return new SnippetEvent(
+                            mCallbackId,
+                            Event.OOB_SEND_CAPABILITIES_RESPONSE.toString());
+                case 2:
+                    return new SnippetEvent(
+                            mCallbackId,
+                            Event.OOB_SEND_SET_CONFIGURATION.toString());
+                default:
+                    return new SnippetEvent(
+                            mCallbackId,
+                            Event.OOB_SEND_UNKNOWN.toString());
+            }
+        }
+        @Override
+        public void sendData(@NonNull byte[] data) {
+            SnippetEvent event = getOobEvent(data);
+            event.getData().putString("peer_id", mPeer.getUuid().toString());
+            event.getData().putByteArray("data", data);
+            mEventCache.postEvent(event);
+        }
+
+        @Override
+        public void registerReceiveCallback(
+                @NonNull Executor executor, @NonNull ReceiveCallback callback
+        ) {
+            mReceiveCallback = callback;
+        }
+
+        @Override
+        public void close() throws Exception {
+            Log.d(TAG, "TransportHandle close");
+            SnippetEvent event = new SnippetEvent(mCallbackId, Event.OOB_CLOSED.toString());
+            event.getData().putString("peer_id", mPeer.getUuid().toString());
+            mEventCache.postEvent(event);
+        }
+    }
 
     @AsyncRpc(description = "Start a ranging session")
     public void startRanging(
@@ -173,7 +276,10 @@ public class RangingSnippet implements Snippet {
     ) {
         RangingSessionCallback callback = new RangingSessionCallback(callbackId);
         RangingSession session = mRangingManager.createRangingSession(mExecutor, callback);
-        mSessions.put(sessionHandle, new RangingSessionInfo(session, callback));
+        RangingSessionInfo sessionInfo = new RangingSessionInfo(session, callback);
+        mSessions.put(sessionHandle, sessionInfo);
+
+        createTransportHandlesIfUsingOob(preference, sessionInfo, callbackId);
         session.start(preference);
     }
 
@@ -186,39 +292,147 @@ public class RangingSnippet implements Snippet {
         }
     }
 
-    @Rpc(description = "Check whether the cached ranging results include data from the specified "
-            + "peer with the specified technology")
-    public boolean verifyPeerFoundWithTechnology(
-            String sessionHandle, String peerId, int technology
-    ) {
-        RangingSessionInfo sessionInfo = mSessions.get(sessionHandle);
-        if (sessionInfo == null) {
-            throw new IllegalArgumentException("Could not find session with id " + sessionHandle);
-        }
+    @Rpc(description = "Handle data received from a peer via OOB")
+    public void handleOobDataReceived(String sessionHandle, String peerId, byte[] data) {
+        mSessions.get(sessionHandle)
+                .mOobTransports.get(new RangingDevice.Builder()
+                        .setUuid(UUID.fromString(peerId))
+                        .build())
+                .mReceiveCallback.onReceiveData(data);
+    }
 
-        return sessionInfo
-                .getCallback()
-                .getLastDataReceived(
-                        new RangingDevice.Builder().setUuid(UUID.fromString(peerId)).build(),
-                        technology
-                )
-                .isPresent();
+    @Rpc(description = "Handle an OOB peer disconnecting")
+    public void handleOobPeerDisconnected(String sessionHandle, String peerId) {
+        mSessions.get(sessionHandle)
+                .mOobTransports.get(new RangingDevice.Builder()
+                        .setUuid(UUID.fromString(peerId))
+                        .build())
+                .mReceiveCallback.onDisconnect();
+    }
+
+    @Rpc(description = "Handle an OOB peer reconnecting")
+    public void handleOobPeerReconnect(String sessionHandle, String peerId) {
+        mSessions.get(sessionHandle)
+                .mOobTransports.get(new RangingDevice.Builder()
+                        .setUuid(UUID.fromString(peerId))
+                        .build())
+                .mReceiveCallback.onReconnect();
+    }
+
+    @Rpc(description = "Handle an OOB transport closing")
+    public void handleOobClosed(String sessionHandle, String peerId) {
+        mSessions.get(sessionHandle)
+                .mOobTransports.get(new RangingDevice.Builder()
+                        .setUuid(UUID.fromString(peerId))
+                        .build())
+                .mReceiveCallback.onClose();
     }
 
     @Rpc(description = "Check whether the provided ranging technology is enabled")
     public boolean isTechnologyEnabled(int technology) {
         Integer availability = mTechnologyAvailability.get(technology);
         return availability != null
-                && availability == RangingManager.RangingTechnologyAvailability.ENABLED;
+                && availability == RangingCapabilities.ENABLED;
+    }
+
+    @Rpc(description = "Check whether the provided ranging technology is supported")
+    public boolean isTechnologySupported(int technology) {
+        Integer availability = mTechnologyAvailability.get(technology);
+        return availability != null
+                && availability != RangingCapabilities.NOT_SUPPORTED;
+    }
+
+    @Rpc(description = "Check whether periodic RTT ranging technology is supported")
+    public boolean hasPeriodicRangingHwFeature() {
+        RangingCapabilities capabilities = mRangingCapabilities.get();
+        if (capabilities == null) {
+            return false;
+        }
+        return capabilities.getRttRangingCapabilities().hasPeriodicRangingHardwareFeature();
     }
 
     @Rpc(description = "Set airplane mode")
-    public void setAirplaneMode(boolean enabled) {
-        mConnectivityManager.setAirplaneMode(enabled);
+    public void setAirplaneMode(boolean enabled) throws Throwable {
+        runWithShellPermission(() -> mConnectivityManager.setAirplaneMode(enabled));
+    }
+
+    @Rpc(description = "Set wifi mode")
+    public void setWifiEnabled(boolean enabled) throws Throwable {
+        runWithShellPermission(() -> mWifiManager.setWifiEnabled(enabled));
+    }
+
+    @Rpc(description = "Return wifi mode")
+    public boolean isWifiEnabled() throws Throwable {
+        return runWithShellPermission(() -> mWifiManager.isWifiEnabled());
     }
 
     @Rpc(description = "Log info level message to device logcat")
     public void logInfo(String message) {
         Log.i(TAG, message);
+    }
+
+    public void runWithShellPermission(Runnable action) throws Throwable {
+        adoptShellPermission();
+        try {
+            action.run();
+        } finally {
+            dropShellPermission();
+        }
+    }
+
+    public <T> T runWithShellPermission(ThrowingSupplier<T> action) throws Throwable {
+        adoptShellPermission();
+        try {
+            return action.get();
+        } finally {
+            dropShellPermission();
+        }
+    }
+
+    /**
+     * Similar to {@link Supplier} but has {@code throws Exception}.
+     *
+     * @param <T> type of the value produced
+     */
+    public interface ThrowingSupplier<T> {
+        /**
+         * Similar to {@link Supplier#get} but has {@code throws Exception}.
+         */
+        T get() throws Exception;
+    }
+
+
+    private void createTransportHandlesIfUsingOob(
+            RangingPreference preference, RangingSessionInfo sessionInfo, String callbackId
+    ) {
+        if (preference.getRangingParams() instanceof OobInitiatorRangingConfig config) {
+            for (DeviceHandle deviceHandle : config.getDeviceHandles()) {
+                OobTransportImpl transportHandle =
+                        new OobTransportImpl(callbackId, deviceHandle.getRangingDevice());
+                sessionInfo.mOobTransports.put(deviceHandle.getRangingDevice(), transportHandle);
+                assignTransportHandleUsingReflection(deviceHandle, transportHandle);
+            }
+        } else if (preference.getRangingParams() instanceof OobResponderRangingConfig config) {
+            OobTransportImpl transportHandle = new OobTransportImpl(
+                    callbackId, config.getDeviceHandle().getRangingDevice());
+            sessionInfo.mOobTransports.put(
+                    config.getDeviceHandle().getRangingDevice(),
+                    transportHandle);
+            assignTransportHandleUsingReflection(config.getDeviceHandle(), transportHandle);
+        }
+    }
+
+    private void assignTransportHandleUsingReflection(
+            DeviceHandle deviceHandle, TransportHandle transportHandle
+    ) {
+        try {
+            Field f = deviceHandle.getClass().getDeclaredField("mTransportHandle");
+            f.setAccessible(true);
+            f.set(deviceHandle, transportHandle);
+            f.setAccessible(false);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to set transport handle: " + e);
+            throw new RuntimeException(e);
+        }
     }
 }

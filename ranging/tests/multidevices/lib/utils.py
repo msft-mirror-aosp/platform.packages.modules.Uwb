@@ -49,6 +49,27 @@ def initialize_uwb_country_code_if_necessary(ad: android_device.AndroidDevice):
       "Uwb was not enabled after setting country code",
   )
 
+def _is_technology_state(
+    ad: android_device.AndroidDevice,
+    technology: RangingTechnology,
+    state: bool,
+    timeout_s=WAIT_TIME_SEC,
+) -> bool:
+  """Checks if the provided technology becomes enabled/disabled
+
+  Args:
+
+  ad: android device object.
+  technology: to check for enablement.
+  state: bool, True for on, False for off.
+  timeout_s: how long to wait for enablement before failing, in seconds.
+  """
+  start_time = time.time()
+  while state != ad.ranging.isTechnologyEnabled(technology):
+    if time.time() - start_time > timeout_s:
+      return False
+  return True
+
 
 def is_technology_enabled(
     ad: android_device.AndroidDevice,
@@ -63,27 +84,22 @@ def is_technology_enabled(
   technology: to check for enablement.
   timeout_s: how long to wait for enablement before failing, in seconds.
   """
-  start_time = time.time()
-  while not ad.ranging.isTechnologyEnabled(technology):
-    if time.time() - start_time > timeout_s:
-      return False
-
-  return True
+  return _is_technology_state(ad, technology, True, timeout_s)
 
 
-def set_airplane_mode(ad: android_device.AndroidDevice, isEnabled: bool):
+def set_airplane_mode(ad: android_device.AndroidDevice, state: bool):
   """Sets the airplane mode to the given state.
 
   Args:
     ad: android device object.
-    isEnabled: True for Airplane mode enabled, False for disabled.
+    state: True for Airplane mode enabled, False for disabled.
   """
-  ad.ranging.setAirplaneMode(isEnabled)
+  ad.ranging.setAirplaneMode(state)
   start_time = time.time()
-  while get_airplane_mode(ad) != isEnabled:
+  while get_airplane_mode(ad) != state:
     time.sleep(0.5)
     if time.time() - start_time > WAIT_TIME_SEC:
-      asserts.fail(f"Failed to set airplane mode to: {isEnabled}")
+      asserts.fail(f"Failed to set airplane mode to: {state}")
 
 
 def get_airplane_mode(ad: android_device.AndroidDevice) -> bool:
@@ -97,6 +113,99 @@ def get_airplane_mode(ad: android_device.AndroidDevice) -> bool:
   """
   state = ad.adb.shell(["settings", "get", "global", "airplane_mode_on"])
   return bool(int(state.decode().strip()))
+
+def set_uwb_state_and_verify(
+    ad: android_device.AndroidDevice,
+    state: bool
+):
+  """Sets UWB state to on or off and verifies it.
+
+  Args:
+    ad: android device object.
+    state: bool, True for UWB on, False for off.
+  """
+  failure_msg = "enabled" if state else "disabled"
+  ad.uwb.setUwbEnabled(state)
+  asserts.assert_true(_is_technology_state(ad, RangingTechnology.UWB, state, timeout_s=60),
+                      "Uwb is not %s" % failure_msg)
+
+def reset_bt_state(
+    ad: android_device.AndroidDevice
+):
+  """Reset BT state to off and then on before each test.
+
+  Args:
+    ad: android device object.
+  """
+  ad.bluetooth.disableBluetooth()
+  time.sleep(2)
+  asserts.assert_false(ad.bluetooth.isBluetoothOn(), 'Bluetooth did not stop')
+  ad.bluetooth.enableBluetooth()
+  time.sleep(2)
+  asserts.assert_true(ad.bluetooth.isBluetoothOn(), 'Bluetooth did not stop')
+  # Check for BLE RSSI or BLE CS availability
+  asserts.assert_true(_is_technology_state(ad, RangingTechnology.BLE_RSSI, True, timeout_s=60),
+                      "BT is not enabled in ranging API")
+  ad.bluetooth.reset()
+
+
+def set_bt_state_and_verify(
+    ad: android_device.AndroidDevice,
+    state: bool
+):
+  """Sets BT state to on or off and verifies it.
+
+  Args:
+    ad: android device object.
+    state: bool, True for BT on, False for off.
+  """
+  failure_msg = "enabled" if state else "disabled"
+  if state:
+    ad.bluetooth.enableBluetooth()
+  else:
+    ad.bluetooth.disableBluetooth()
+  time.sleep(1)
+  asserts.assert_equal(ad.bluetooth.isBluetoothOn(), state, 'Bluetooth state change failed')
+  # Check for BLE RSSI or BLE CS availability
+  asserts.assert_true(_is_technology_state(ad, RangingTechnology.BLE_RSSI, state, timeout_s=60),
+                      "BT is not %s in ranging API" % failure_msg)
+
+
+def reset_wifi_state(
+    ad: android_device.AndroidDevice
+):
+  """Reset Wifi state to off and then on before each test.
+
+  Args:
+    ad: android device object.
+  """
+  ad.ranging.setWifiEnabled(False)
+  time.sleep(2)
+  asserts.assert_false(ad.ranging.isWifiEnabled(), 'Wifi did not stop')
+  ad.ranging.setWifiEnabled(True)
+  time.sleep(2)
+  asserts.assert_true(ad.ranging.isWifiEnabled(), 'Wifi did not stop')
+  # Check for WIFI RTT availability
+  asserts.assert_true(_is_technology_state(ad, RangingTechnology.WIFI_RTT, True, timeout_s=60),
+                      "Wifi RTT is not enabled in ranging API")
+
+def set_wifi_state_and_verify(
+    ad: android_device.AndroidDevice,
+    state: bool
+):
+  """Sets Wifi state to on or off and verifies it.
+
+  Args:
+    ad: android device object.
+    state: bool, True for BT on, False for off.
+  """
+  failure_msg = "enabled" if state else "disabled"
+  ad.ranging.setWifiEnabled(state)
+  time.sleep(1)
+  asserts.assert_equal(ad.ranging.isWifiEnabled(), state, 'Wifi state change failed')
+  # Check for WIFI RTT availability
+  asserts.assert_true(_is_technology_state(ad, RangingTechnology.WIFI_RTT, state, timeout_s=60),
+                      "Wifi RTT is not %s in ranging API" % failure_msg)
 
 
 def set_screen_rotation_landscape(
@@ -131,6 +240,20 @@ def set_snippet_foreground_state(
       "cmd",
       "uwb",
       "simulate-app-state-change",
-      "multidevices.snippet.ranging",
+      "com.google.snippet.ranging",
       "foreground" if isForeground else "background",
+  ])
+
+
+def set_screen_state(
+    ad: android_device.AndroidDevice, on: bool
+):
+  """Sets the device screen state on/off.
+
+  Args:
+    ad: android device object.
+    on: True for screen on, False for screen off.
+  """
+  ad.adb.shell([
+      "svc", "power", "stayon", "true" if on else "false",
   ])

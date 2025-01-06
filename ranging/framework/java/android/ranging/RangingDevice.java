@@ -31,7 +31,6 @@ import java.util.UUID;
  * <p> This class is designed for ranging operations, where each device involved in the ranging
  * session is uniquely identified by a {@link UUID}.
  *
- * @hide
  */
 @FlaggedApi(Flags.FLAG_RANGING_STACK_ENABLED)
 public final class RangingDevice implements Parcelable {
@@ -125,5 +124,12 @@ public final class RangingDevice implements Parcelable {
         public RangingDevice build() {
             return new RangingDevice(this);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "RangingDevice{ "
+                + mId
+                + " }";
     }
 }

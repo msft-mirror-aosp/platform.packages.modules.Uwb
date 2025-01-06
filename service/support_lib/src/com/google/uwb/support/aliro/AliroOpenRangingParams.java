@@ -18,12 +18,6 @@ package com.google.uwb.support.aliro;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.uwb.support.aliro.AliroParams.RANGE_DATA_NTF_PROXIMITY_NEAR_DEFAULT;
-import static com.google.uwb.support.aliro.AliroParams.RANGE_DATA_NTF_PROXIMITY_FAR_DEFAULT;
-import static com.google.uwb.support.aliro.AliroParams.RANGE_DATA_NTF_AOA_AZIMUTH_LOWER_DEFAULT;
-import static com.google.uwb.support.aliro.AliroParams.RANGE_DATA_NTF_AOA_AZIMUTH_UPPER_DEFAULT;
-import static com.google.uwb.support.aliro.AliroParams.RANGE_DATA_NTF_AOA_ELEVATION_LOWER_DEFAULT;
-import static com.google.uwb.support.aliro.AliroParams.RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT;
 
 import android.os.Build.VERSION_CODES;
 import android.os.PersistableBundle;
@@ -57,6 +51,7 @@ public class AliroOpenRangingParams extends AliroParams {
     private static final String KEY_NUM_RESPONDER_NODES = "num_responder_nodes";
     private static final String KEY_NUM_SLOTS_PER_ROUND = "num_slots_per_round";
     private static final String KEY_SYNC_CODE_INDEX = "sync_code_index";
+    private static final String KEY_HOP_MODE_KEY = "hop_mode_key";
     private static final String KEY_HOPPING_CONFIG_MODE = "hopping_config_mode";
     private static final String KEY_HOPPING_SEQUENCE = "hopping_sequence";
     private static final String KEY_STS_INDEX = "sts_index";
@@ -73,6 +68,9 @@ public class AliroOpenRangingParams extends AliroParams {
             "range_data_ntf_aoa_elevation_lower";
     private static final String KEY_RANGE_DATA_NTF_AOA_ELEVATION_UPPER =
             "range_data_ntf_aoa_elevation_upper";
+    private static final String KEY_SESSION_KEY = "session_key";
+    private static final String KEY_MAC_MODE_ROUND = "mac_mode_round";
+    private static final String KEY_MAC_MODE_OFFSET = "mac_mode_offset";
 
     private final AliroProtocolVersion mProtocolVersion;
     @UwbConfig private final int mUwbConfig;
@@ -85,6 +83,7 @@ public class AliroOpenRangingParams extends AliroParams {
     private final int mNumResponderNodes;
     private final int mNumSlotsPerRound;
     @SyncCodeIndex private final int mSyncCodeIndex;
+    private final int mHopModeKey;
     @HoppingConfigMode private final int mHoppingConfigMode;
     @HoppingSequence private final int mHoppingSequence;
     private final int mStsIndex;
@@ -103,6 +102,9 @@ public class AliroOpenRangingParams extends AliroParams {
     private double mRangeDataNtfAoaAzimuthUpper;
     private double mRangeDataNtfAoaElevationLower;
     private double mRangeDataNtfAoaElevationUpper;
+    private final byte[] mSessionKey;
+    private @MacModeRound int mMacModeRound = MAC_MODE_ROUND_DEFAULT;
+    private final int mMacModeOffset;
 
     private AliroOpenRangingParams(
             AliroProtocolVersion protocolVersion,
@@ -116,6 +118,7 @@ public class AliroOpenRangingParams extends AliroParams {
             int numResponderNodes,
             int numSlotsPerRound,
             @SyncCodeIndex int syncCodeIndex,
+            int hopModeKey,
             @HoppingConfigMode int hoppingConfigMode,
             @HoppingSequence int hoppingSequence,
             int stsIndex,
@@ -127,7 +130,10 @@ public class AliroOpenRangingParams extends AliroParams {
             double rangeDataNtfAoaAzimuthLower,
             double rangeDataNtfAoaAzimuthUpper,
             double rangeDataNtfAoaElevationLower,
-            double rangeDataNtfAoaElevationUpper) {
+            double rangeDataNtfAoaElevationUpper,
+            byte[] sessionKey,
+            @MacModeRound int macModeRound,
+            int macModeOffset) {
         mProtocolVersion = protocolVersion;
         mUwbConfig = uwbConfig;
         mPulseShapeCombo = pulseShapeCombo;
@@ -139,6 +145,7 @@ public class AliroOpenRangingParams extends AliroParams {
         mNumResponderNodes = numResponderNodes;
         mNumSlotsPerRound = numSlotsPerRound;
         mSyncCodeIndex = syncCodeIndex;
+        mHopModeKey = hopModeKey;
         mHoppingConfigMode = hoppingConfigMode;
         mHoppingSequence = hoppingSequence;
         mStsIndex = stsIndex;
@@ -151,11 +158,37 @@ public class AliroOpenRangingParams extends AliroParams {
         mRangeDataNtfAoaAzimuthUpper = rangeDataNtfAoaAzimuthUpper;
         mRangeDataNtfAoaElevationLower = rangeDataNtfAoaElevationLower;
         mRangeDataNtfAoaElevationUpper = rangeDataNtfAoaElevationUpper;
+        mSessionKey = sessionKey;
+        mMacModeRound = macModeRound;
+        mMacModeOffset = macModeOffset;
     }
 
     @Override
     protected int getBundleVersion() {
         return BUNDLE_VERSION_CURRENT;
+    }
+
+    private static int[] byteArrayToIntArray(byte[] bytes) {
+        if (bytes == null) {
+            return null;
+        }
+
+        int[] values = new int[bytes.length];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = bytes[i];
+        }
+        return values;
+    }
+
+    private static byte[] intArrayToByteArray(int[] values) {
+        if (values == null) {
+            return null;
+        }
+        byte[] bytes = new byte[values.length];
+        for (int i = 0; i < values.length; i++) {
+            bytes[i] = (byte) values[i];
+        }
+        return bytes;
     }
 
     @Override
@@ -172,6 +205,7 @@ public class AliroOpenRangingParams extends AliroParams {
         bundle.putInt(KEY_NUM_RESPONDER_NODES, mNumResponderNodes);
         bundle.putInt(KEY_NUM_SLOTS_PER_ROUND, mNumSlotsPerRound);
         bundle.putInt(KEY_SYNC_CODE_INDEX, mSyncCodeIndex);
+        bundle.putInt(KEY_HOP_MODE_KEY, mHopModeKey);
         bundle.putInt(KEY_HOPPING_CONFIG_MODE, mHoppingConfigMode);
         bundle.putInt(KEY_HOPPING_SEQUENCE, mHoppingSequence);
         bundle.putInt(KEY_STS_INDEX, mStsIndex);
@@ -184,6 +218,9 @@ public class AliroOpenRangingParams extends AliroParams {
         bundle.putDouble(KEY_RANGE_DATA_NTF_AOA_AZIMUTH_UPPER, mRangeDataNtfAoaAzimuthUpper);
         bundle.putDouble(KEY_RANGE_DATA_NTF_AOA_ELEVATION_LOWER, mRangeDataNtfAoaElevationLower);
         bundle.putDouble(KEY_RANGE_DATA_NTF_AOA_ELEVATION_UPPER, mRangeDataNtfAoaElevationUpper);
+        bundle.putIntArray(KEY_SESSION_KEY, byteArrayToIntArray(mSessionKey));
+        bundle.putInt(KEY_MAC_MODE_ROUND, mMacModeRound);
+        bundle.putInt(KEY_MAC_MODE_OFFSET, mMacModeOffset);
         return bundle;
     }
 
@@ -217,6 +254,7 @@ public class AliroOpenRangingParams extends AliroParams {
                 .setNumResponderNodes(bundle.getInt(KEY_NUM_RESPONDER_NODES))
                 .setNumSlotsPerRound(bundle.getInt(KEY_NUM_SLOTS_PER_ROUND))
                 .setSyncCodeIndex(bundle.getInt(KEY_SYNC_CODE_INDEX))
+                .setHopModeKey(bundle.getInt(KEY_HOP_MODE_KEY))
                 .setHoppingConfigMode(bundle.getInt(KEY_HOPPING_CONFIG_MODE))
                 .setHoppingSequence(bundle.getInt(KEY_HOPPING_SEQUENCE))
                 .setStsIndex(bundle.getInt(KEY_STS_INDEX))
@@ -242,6 +280,9 @@ public class AliroOpenRangingParams extends AliroParams {
                 .setRangeDataNtfAoaElevationUpper(
                         bundle.getDouble(KEY_RANGE_DATA_NTF_AOA_ELEVATION_UPPER,
                                 RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT))
+                .setSessionKey(intArrayToByteArray(bundle.getIntArray(KEY_SESSION_KEY)))
+                .setMacModeRound(bundle.getInt(KEY_MAC_MODE_ROUND, MAC_MODE_ROUND_DEFAULT))
+                .setMacModeOffset(bundle.getInt(KEY_MAC_MODE_OFFSET, MAC_MODE_OFFSET_DEFAULT))
                 .build();
     }
 
@@ -292,6 +333,10 @@ public class AliroOpenRangingParams extends AliroParams {
     @SyncCodeIndex
     public int getSyncCodeIndex() {
         return mSyncCodeIndex;
+    }
+
+    public int getHopModeKey() {
+        return mHopModeKey;
     }
 
     @HoppingConfigMode
@@ -350,6 +395,19 @@ public class AliroOpenRangingParams extends AliroParams {
         return new AliroOpenRangingParams.Builder(this);
     }
 
+    public byte[] getSessionKey() {
+        return mSessionKey;
+    }
+
+    public @MacModeRound int getMacModeRound() {
+        return mMacModeRound;
+    }
+
+    public int getMacModeOffset() {
+        return mMacModeOffset;
+    }
+
+
     /** Builder */
     public static final class Builder {
         private RequiredParam<AliroProtocolVersion> mProtocolVersion = new RequiredParam<>();
@@ -374,6 +432,7 @@ public class AliroOpenRangingParams extends AliroParams {
         private long mInitiationTimeMs = 0;
         private long mAbsoluteInitiationTimeUs = 0;
 
+        private int mHopModeKey = 0;
         /** ALIRO default: Ranging notification disabled. */
         @RangeDataNtfConfig private int mRangeDataNtfConfig = RANGE_DATA_NTF_CONFIG_DISABLE;
 
@@ -394,6 +453,11 @@ public class AliroOpenRangingParams extends AliroParams {
 
         /** UCI spec default: +90 (No upper-bound filtering) */
         private double mRangeDataNtfAoaElevationUpper = RANGE_DATA_NTF_AOA_ELEVATION_UPPER_DEFAULT;
+        /** Similar to PROVISIONED STS only. 128-bit or 256-bit long */
+        private byte[] mSessionKey = null;
+        private @MacModeRound int mMacModeRound = MAC_MODE_ROUND_DEFAULT;
+        private int mMacModeOffset = 0;
+
 
         public Builder() {}
 
@@ -409,6 +473,7 @@ public class AliroOpenRangingParams extends AliroParams {
             mNumResponderNodes.set(builder.mNumResponderNodes.get());
             mNumSlotsPerRound.set(builder.mNumSlotsPerRound.get());
             mSyncCodeIndex.set(builder.mSyncCodeIndex.get());
+            mHopModeKey = builder.mHopModeKey;
             mHoppingConfigMode.set(builder.mHoppingConfigMode.get());
             mHoppingSequence.set(builder.mHoppingSequence.get());
             mStsIndex = builder.mStsIndex;
@@ -421,6 +486,9 @@ public class AliroOpenRangingParams extends AliroParams {
             mRangeDataNtfAoaAzimuthUpper = builder.mRangeDataNtfAoaAzimuthUpper;
             mRangeDataNtfAoaElevationLower = builder.mRangeDataNtfAoaElevationLower;
             mRangeDataNtfAoaElevationUpper = builder.mRangeDataNtfAoaElevationUpper;
+            mSessionKey = builder.mSessionKey;
+            mMacModeRound = builder.mMacModeRound;
+            mMacModeOffset = builder.mMacModeOffset;
         }
 
         public Builder(@NonNull AliroOpenRangingParams params) {
@@ -435,6 +503,7 @@ public class AliroOpenRangingParams extends AliroParams {
             mNumResponderNodes.set(params.mNumResponderNodes);
             mNumSlotsPerRound.set(params.mNumSlotsPerRound);
             mSyncCodeIndex.set(params.mSyncCodeIndex);
+            mHopModeKey = params.mHopModeKey;
             mHoppingConfigMode.set(params.mHoppingConfigMode);
             mHoppingSequence.set(params.mHoppingSequence);
             mRangeDataNtfConfig = params.mRangeDataNtfConfig;
@@ -444,6 +513,9 @@ public class AliroOpenRangingParams extends AliroParams {
             mRangeDataNtfAoaAzimuthUpper = params.mRangeDataNtfAoaAzimuthUpper;
             mRangeDataNtfAoaElevationLower = params.mRangeDataNtfAoaElevationLower;
             mRangeDataNtfAoaElevationUpper = params.mRangeDataNtfAoaElevationUpper;
+            mSessionKey = params.mSessionKey;
+            mMacModeRound = params.mMacModeRound;
+            mMacModeOffset = params.mMacModeOffset;
         }
 
         public Builder setProtocolVersion(AliroProtocolVersion version) {
@@ -493,6 +565,12 @@ public class AliroOpenRangingParams extends AliroParams {
 
         public Builder setSyncCodeIndex(@SyncCodeIndex int syncCodeIndex) {
             mSyncCodeIndex.set(syncCodeIndex);
+            return this;
+        }
+
+        /** Sets hop mode key. */
+        public Builder setHopModeKey(int hopModeKey) {
+            mHopModeKey = hopModeKey;
             return this;
         }
 
@@ -582,6 +660,24 @@ public class AliroOpenRangingParams extends AliroParams {
             return this;
         }
 
+        /** set session key */
+        public Builder setSessionKey(byte[] sessionKey) {
+            mSessionKey = sessionKey;
+            return this;
+        }
+
+        /** set mac mode round */
+        public Builder setMacModeRound(@MacModeRound int macModeRound) {
+            mMacModeRound = macModeRound;
+            return this;
+        }
+
+        /** set mac mode offset */
+        public Builder setMacModeOffset(int macModeOffset) {
+            mMacModeOffset = macModeOffset;
+            return this;
+        }
+
         private void checkRangeDataNtfConfig() {
             if (mRangeDataNtfConfig == RANGE_DATA_NTF_CONFIG_DISABLE) {
                 checkArgument(mRangeDataNtfProximityNear
@@ -642,6 +738,10 @@ public class AliroOpenRangingParams extends AliroParams {
 
         public AliroOpenRangingParams build() {
             checkRangeDataNtfConfig();
+            checkArgument(mSessionKey != null
+                              && (mSessionKey.length == 16 || mSessionKey.length == 32));
+            checkArgument(mMacModeRound == MAC_MODE_ROUND_1 || mMacModeRound == MAC_MODE_ROUND_2);
+            checkArgument(mMacModeOffset == 0 ^ mMacModeRound == MAC_MODE_ROUND_2);
             return new AliroOpenRangingParams(
                     mProtocolVersion.get(),
                     mUwbConfig.get(),
@@ -654,6 +754,7 @@ public class AliroOpenRangingParams extends AliroParams {
                     mNumResponderNodes.get(),
                     mNumSlotsPerRound.get(),
                     mSyncCodeIndex.get(),
+                    mHopModeKey,
                     mHoppingConfigMode.get(),
                     mHoppingSequence.get(),
                     mStsIndex,
@@ -665,7 +766,10 @@ public class AliroOpenRangingParams extends AliroParams {
                     mRangeDataNtfAoaAzimuthLower,
                     mRangeDataNtfAoaAzimuthUpper,
                     mRangeDataNtfAoaElevationLower,
-                    mRangeDataNtfAoaElevationUpper);
+                    mRangeDataNtfAoaElevationUpper,
+                    mSessionKey,
+                    mMacModeRound,
+                    mMacModeOffset);
         }
     }
 }

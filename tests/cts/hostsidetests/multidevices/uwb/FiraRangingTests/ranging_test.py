@@ -811,8 +811,8 @@ class RangingTest(uwb_base_test.UwbBaseTest):
                                     self.responder_addr)
     self._verify_one_to_one_ranging_reconfigure_ranging_interval(
         self.initiator, self.block_stride_length, self.responder_addr)
-    self.responder.stop_ranging()
-    self.initiator.stop_ranging()
+    self.responder.stop_ranging(0, 10)
+    self.initiator.stop_ranging(0, 10)
 
   def test_ranging_nearby_share_profile_reconfigure_ranging_interval(self):
     """Verifies ranging for device nearby share with default profile."""
@@ -839,8 +839,8 @@ class RangingTest(uwb_base_test.UwbBaseTest):
                                     self.responder_addr)
     self._verify_one_to_one_ranging_reconfigure_ranging_interval(
         self.initiator, self.block_stride_length, self.responder_addr)
-    self.responder.stop_ranging()
-    self.initiator.stop_ranging()
+    self.responder.stop_ranging(0, 10)
+    self.initiator.stop_ranging(0, 10)
 
   def test_ranging_device_tracker_profile_ch9_pr12(self):
     """Verifies ranging with device tracker for channel 9 and preamble 12."""
@@ -1614,6 +1614,11 @@ class RangingTest(uwb_base_test.UwbBaseTest):
         .getSpecificationInfo()["fira"]["max_ranging_session_number"])
     max_fira_ranging_sessions = min(initiator_max_fira_ranging_sessions,
                                     responder_max_fira_ranging_sessions)
+    max_supported_session_count = (
+        self.initiator.ad.uwb
+        .getSpecificationInfo()["max_supported_session_count"])
+    max_fira_ranging_sessions = min(max_supported_session_count,
+                                    max_fira_ranging_sessions)
     initiator_params = uwb_ranging_params.UwbRangingParams(
         device_role=uwb_ranging_params.FiraParamEnums.DEVICE_ROLE_INITIATOR,
         device_type=uwb_ranging_params.FiraParamEnums.DEVICE_TYPE_CONTROLLER,

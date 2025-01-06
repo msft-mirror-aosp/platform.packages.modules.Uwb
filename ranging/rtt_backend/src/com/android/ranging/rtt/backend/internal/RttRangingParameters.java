@@ -22,6 +22,7 @@ import androidx.annotation.NonNull;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.time.Duration;
+import java.util.Arrays;
 
 public class RttRangingParameters {
 
@@ -35,6 +36,28 @@ public class RttRangingParameters {
         int SUBSCRIBER = 1;
     }
 
+    @IntDef({
+            INFREQUENT,
+            NORMAL,
+            FAST,
+    })
+    public @interface RangingUpdateRate {}
+
+    /**
+     * Requests for ranging data in 512 milliseconds
+     */
+    public static final int NORMAL = 1;
+
+    /**
+     * Requests for ranging data in 8192 milliseconds
+     */
+    public static final int INFREQUENT = 2;
+
+    /**
+     * Requests for ranging data in 256 milliseconds
+     */
+    public static final int FAST = 3;
+
     private final @DeviceRole int mDeviceRole;
     /**
      * Returns Service ID for WiFi Aware
@@ -46,6 +69,11 @@ public class RttRangingParameters {
     protected final int mMinDistanceMm;
     protected final boolean mEnablePublisherRanging;
     protected final Duration mPublisherPingDuration;
+
+    @RangingUpdateRate
+    private final int mUpdateRate;
+
+    private final boolean mEnablePeriodicRangingHwFeature;
 
     public int getDeviceRole() {
         return mDeviceRole;
@@ -115,6 +143,14 @@ public class RttRangingParameters {
         return mPublisherPingDuration;
     }
 
+    public int getUpdateRate() {
+        return mUpdateRate;
+    }
+
+    public boolean isPeriodicRangingHwFeatureEnabled() {
+        return mEnablePeriodicRangingHwFeature;
+    }
+
     public RttRangingParameters(Builder builder) {
         mDeviceRole = builder.mDeviceRole;
         mServiceId = builder.mServiceId;
@@ -124,7 +160,10 @@ public class RttRangingParameters {
         mMinDistanceMm = builder.mMinDistanceMm;
         mEnablePublisherRanging = builder.mEnablePublisherRanging;
         mPublisherPingDuration = builder.mPublisherPingDuration;
+        mUpdateRate = builder.mRangingUpdateRate;
+        mEnablePeriodicRangingHwFeature = builder.mEnablePeriodicRangingHwFeature;
     }
+
 
     /**
      * Returns a builder for {@link com.android.ranging.generic.ranging.rtt.RttRangingParameters}.
@@ -136,8 +175,10 @@ public class RttRangingParameters {
         protected byte[] mMatchFilter = new byte[]{};
         protected int mMaxDistanceMm = 30 * 100 * 100;
         protected int mMinDistanceMm = 0;
-        protected boolean mEnablePublisherRanging = false;
+        protected boolean mEnablePublisherRanging = true;
         protected Duration mPublisherPingDuration = Duration.ofSeconds(10);
+        private int mRangingUpdateRate = NORMAL;
+        private boolean mEnablePeriodicRangingHwFeature = false;
 
         public Builder setDeviceRole(int deviceRole) {
             mDeviceRole = deviceRole;
@@ -180,8 +221,56 @@ public class RttRangingParameters {
             return this;
         }
 
+        public Builder setUpdateRate(int updateRate) {
+            mRangingUpdateRate = updateRate;
+            return this;
+        }
+
+        public Builder setPeriodicRangingHwFeatureEnabled(boolean enabled) {
+            mEnablePeriodicRangingHwFeature = enabled;
+            return this;
+        }
+
         public RttRangingParameters build() {
             return new RttRangingParameters(this);
         }
+    }
+
+    public static int getIntervalMs(@NonNull RttRangingParameters rttRangingParameters) {
+        switch (rttRangingParameters.getUpdateRate()) {
+            case FAST -> {
+                return rttRangingParameters.isPeriodicRangingHwFeatureEnabled() ? 128 : 256;
+            }
+            case INFREQUENT -> {
+                return 8192;
+            }
+            default -> {
+                return rttRangingParameters.isPeriodicRangingHwFeatureEnabled() ? 256 : 512;
+            }
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "RttRangingParameters{ "
+                + "deviceRole: "
+                + mDeviceRole
+                + ", serviceId: "
+                + mServiceId
+                + ", serviceName: "
+                + mServiceName
+                + ", matchFilter: "
+                + Arrays.toString(mMatchFilter)
+                + ", maxDistanceMm: "
+                + mMaxDistanceMm
+                + ", minDistanceMm: "
+                + mMinDistanceMm
+                + ", enablePublisherRanging: "
+                + mEnablePublisherRanging
+                + ", publisherPingDuration: "
+                + mPublisherPingDuration
+                + ", enablePeriodicRangingHwFeature: "
+                + mEnablePeriodicRangingHwFeature
+                + " }";
     }
 }

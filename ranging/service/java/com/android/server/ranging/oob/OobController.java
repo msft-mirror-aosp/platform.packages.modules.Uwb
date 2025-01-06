@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 The Android Open Source Project
+ * Copyright (C) 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,165 +13,119 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.android.server.ranging.oob;
 
 import android.os.RemoteException;
-import android.ranging.IOobSendDataListener;
-import android.ranging.OobHandle;
+import android.ranging.oob.IOobSendDataListener;
+import android.ranging.oob.OobHandle;
+import android.util.Log;
 
-import java.util.Arrays;
+import androidx.annotation.Nullable;
+
+import com.google.common.util.concurrent.FluentFuture;
+import com.google.common.util.concurrent.SettableFuture;
+
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class OobController {
+    private static final String TAG = OobController.class.getSimpleName();
 
-    private final IOobDataReceiveCallback mDataReceiveCallback;
-    private IOobSendDataListener mOobSendDataListener;
+    private final ConcurrentMap<OobHandle, OobConnection> mActiveConnections;
 
-    public OobController(IOobDataReceiveCallback callback) {
-        mDataReceiveCallback = callback;
-    }
+    private @Nullable IOobSendDataListener mOobDataSender = null;
 
-    /**
-     * Send Capability Request Message to the peer device.
-     *
-     * @param oobHandle uniquely identifies the session/device pair for OOB communication.
-     * @param message   payload.
-     * @return false if there was no listener, true otherwise.
-     * @throws RemoteException if failed to send the IPC request.
-     */
-    public boolean sendCapabilityRequest(OobHandle oobHandle, CapabilityRequestMessage message)
-            throws RemoteException {
-        if (mOobSendDataListener == null) {
-            return false;
+    public static class ReceivedMessage {
+        private final OobHandle mOobHandle;
+        private final byte[] mMessageBytes;
 
+        ReceivedMessage(OobHandle handle, byte[] message) {
+            mOobHandle = handle;
+            mMessageBytes = message;
         }
-        mOobSendDataListener.sendOobData(oobHandle, message.toBytes());
-        return true;
-    }
 
-    /**
-     * Send Ranging Configuration Message to the peer device.
-     *
-     * @param oobHandle uniquely identifies the session/device pair for OOB communication.
-     * @param message   payload.
-     * @return false if there was no listener, true otherwise.
-     * @throws RemoteException if failed to send the IPC request.
-     */
-    public boolean sendRangingConfiguration(OobHandle oobHandle, SetConfigurationMessage message)
-            throws RemoteException {
-        if (mOobSendDataListener == null) {
-            return false;
-
+        public OobHandle getOobHandle() {
+            return mOobHandle;
         }
-        mOobSendDataListener.sendOobData(oobHandle, message.toBytes());
-        return true;
-    }
 
-    /**
-     * Send Start Ranging Message to the peer device.
-     *
-     * @param oobHandle uniquely identifies the session/device pair for OOB communication.
-     * @param message   payload.
-     * @return false if there was no listener, true otherwise.
-     * @throws RemoteException if failed to send the IPC request.
-     */
-    public boolean sendStartRanging(OobHandle oobHandle, StartRangingMessage message)
-            throws RemoteException {
-        if (mOobSendDataListener == null) {
-            return false;
-
-        }
-        mOobSendDataListener.sendOobData(oobHandle, new byte[]{message.toByte()});
-        return true;
-    }
-
-    /**
-     * Send Stop Ranging Message to the peer device.
-     *
-     * @param oobHandle uniquely identifies the session/device pair for OOB communication.
-     * @param message   payload.
-     * @return false if there was no listener, true otherwise.
-     * @throws RemoteException if failed to send the IPC request.
-     */
-    public boolean sendStopRanging(OobHandle oobHandle, StopRangingMessage message)
-            throws RemoteException {
-        if (mOobSendDataListener == null) {
-            return false;
-
-        }
-        mOobSendDataListener.sendOobData(oobHandle, new byte[]{message.toByte()});
-        return true;
-    }
-
-    /**
-     * Receive the data from the peer device.
-     *
-     * @param oobHandle uniquely identifies the session/device pair for OOB communication.
-     * @param data      payload.
-     */
-    public void receiveData(OobHandle oobHandle, byte[] data) {
-        MessageType type = MessageType.fromOobData(data);
-        byte[] message = Arrays.copyOfRange(data, 1, data.length);
-        // TODO: parse vendor data
-        switch (type) {
-            case RANGING_CAPABILITY_REQUEST -> mDataReceiveCallback.onCapabilityRequestMessage(
-                    oobHandle, CapabilityRequestMessage.parseBytes(message));
-            case RANGING_CAPABILITY_RESPONSE -> mDataReceiveCallback.onCapabilityResponseMessage(
-                    oobHandle, CapabilityResponseMessage.parseBytes(message));
-            case RANGING_CONFIGURATION -> mDataReceiveCallback.onConfigurationMessage(oobHandle,
-                    SetConfigurationMessage.parseBytes(message));
-            case START_RANGING -> mDataReceiveCallback.onStartRangingMessage(oobHandle,
-                    StartRangingMessage.parseBytes(message));
-            case STOP_RANGING -> mDataReceiveCallback.onStopRangingMessage(oobHandle,
-                    StopRangingMessage.parseBytes(message));
+        public byte[] asBytes() {
+            return mMessageBytes;
         }
     }
 
-    /**
-     * Set the OOB Send Data Listener.
-     *
-     * @param oobSendDataListener listener.
-     */
-    public void setOobSendDataListener(IOobSendDataListener oobSendDataListener) {
-        mOobSendDataListener = oobSendDataListener;
+    private static class OobConnection {
+        private boolean mIsConnected = true;
+        private final SettableFuture<ReceivedMessage> mAwaitingMessage;
+
+        OobConnection(SettableFuture<ReceivedMessage> awaitingMessage) {
+            mAwaitingMessage = awaitingMessage;
+        }
     }
 
-    /**
-     * Interface for receiving data callbacks.
-     */
-    public interface IOobDataReceiveCallback {
-        /**
-         * On Capability Request Message
-         * @param oobHandle uniquely identifies the session/device pair for OOB communication.
-         * @param message payload.
-         */
-        void onCapabilityRequestMessage(OobHandle oobHandle, CapabilityRequestMessage message);
+    public OobController() {
+        mActiveConnections = new ConcurrentHashMap<>();
+    }
 
-        /**
-         * On Capability Response Message
-         * @param oobHandle uniquely identifies the session/device pair for OOB communication.
-         * @param message payload.
-         */
-        void onCapabilityResponseMessage(OobHandle oobHandle, CapabilityResponseMessage message);
+    public void registerDataSender(IOobSendDataListener oobDataSender) {
+        if (mOobDataSender != null) {
+            Log.w(TAG, "Re-registered oob send data listener");
+        }
+        mOobDataSender = oobDataSender;
+    }
 
-        /**
-         * On Configuration Message
-         * @param oobHandle uniquely identifies the session/device pair for OOB communication.
-         * @param message payload.
-         */
-        void onConfigurationMessage(OobHandle oobHandle, SetConfigurationMessage message);
+    public FluentFuture<ReceivedMessage> registerMessageListener(OobHandle handle) {
+        SettableFuture<ReceivedMessage> future = SettableFuture.create();
+        mActiveConnections.put(handle, new OobConnection(future));
+        return FluentFuture.from(future);
+    }
 
-        /**
-         * On Start Ranging Message
-         * @param oobHandle uniquely identifies the session/device pair for OOB communication.
-         * @param message payload.
-         */
-        void onStartRangingMessage(OobHandle oobHandle, StartRangingMessage message);
+    public void sendMessage(OobHandle handle, byte[] message) {
+        if (mOobDataSender == null) {
+            Log.e(TAG, "Attempt to send oob message with no data sender registered");
+            return;
+        }
 
-        /**
-         * On Capability Request Message
-         * @param oobHandle uniquely identifies the session/device pair for OOB communication.
-         * @param message payload.
-         */
-        void onStopRangingMessage(OobHandle oobHandle, StopRangingMessage message);
+        try {
+            mOobDataSender.sendOobData(handle, message);
+        } catch (RemoteException e) {
+            Log.e(TAG, "Failed to send OOB message over binder: ", e);
+        }
+    }
+
+    public void handleOobDataReceived(OobHandle oobHandle, byte[] data) {
+        OobConnection connection = mActiveConnections.remove(oobHandle);
+        if (connection == null) {
+            Log.w(TAG, "Received OOB message on unknown handle " + oobHandle
+                    + ". Ignoring...");
+        } else {
+            connection.mAwaitingMessage.set(new ReceivedMessage(oobHandle, data));
+        }
+    }
+
+    public void handleOobDeviceDisconnected(OobHandle oobHandle) {
+        OobConnection connection = mActiveConnections.get(oobHandle);
+        if (connection != null) {
+            Log.i(TAG, "A peer with an active connection has disconnected on handle " + oobHandle);
+            connection.mIsConnected = false;
+        }
+    }
+
+    public void handleOobDeviceReconnected(OobHandle oobHandle) {
+        OobConnection connection = mActiveConnections.get(oobHandle);
+        if (connection == null) {
+            Log.w(TAG, "Unknown peer reconnected on handle " + oobHandle + ". Ignoring...");
+        } else {
+            Log.i(TAG, "The peer on handle " + oobHandle + " has reconnected");
+            connection.mIsConnected = true;
+        }
+    }
+
+    public void handleOobClosed(OobHandle oobHandle) {
+        OobConnection connection = mActiveConnections.remove(oobHandle);
+        if (connection != null) {
+            Log.w(TAG, "Oob handle " + oobHandle + " closed with an active connection");
+            connection.mAwaitingMessage.setException(new IllegalStateException("Oob closed"));
+        }
     }
 }

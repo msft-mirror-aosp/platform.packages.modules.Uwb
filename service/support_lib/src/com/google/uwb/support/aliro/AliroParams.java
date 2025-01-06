@@ -246,4 +246,20 @@ public abstract class AliroParams extends Params {
     public static final long UWB_INITIATION_TIME_MS_UNSET = 0;
 
     public static final int STS_INDEX_UNSET = 0;
+
+    public static final int HOP_MODE_KEY_UNSET = 0;
+
+    /** Mac Mode */
+    @IntDef(
+            value = {
+                MAC_MODE_ROUND_1,
+                MAC_MODE_ROUND_2,
+            })
+    public @interface MacModeRound {}
+    public static final int MAC_MODE_ROUND_1 = 0;
+    public static final int MAC_MODE_ROUND_2 = 1;
+
+    public static final int MAC_MODE_ROUND_DEFAULT = MAC_MODE_ROUND_1;
+
+    public static final int MAC_MODE_OFFSET_DEFAULT = 0;
 }

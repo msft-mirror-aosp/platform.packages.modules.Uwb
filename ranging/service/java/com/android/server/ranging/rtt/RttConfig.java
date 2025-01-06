@@ -16,35 +16,46 @@
 
 package com.android.server.ranging.rtt;
 
+import android.ranging.DataNotificationConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingPreference;
-import android.ranging.params.DataNotificationConfig;
-import android.ranging.rtt.RttRangingParams;
+import android.ranging.SessionConfig;
+import android.ranging.wifi.rtt.RttRangingParams;
+
+import androidx.annotation.NonNull;
 
 import com.android.ranging.rtt.backend.internal.RttRangingParameters;
-import com.android.server.ranging.RangingConfig;
+import com.android.server.ranging.RangingTechnology;
+import com.android.server.ranging.session.RangingSessionConfig;
 
-public class RttConfig implements RangingConfig.TechnologyConfig {
+public class RttConfig implements RangingSessionConfig.UnicastTechnologyConfig {
 
-    private final DataNotificationConfig mDataNotificationConfig;
+    private final SessionConfig mSessionConfig;
     private final RttRangingParams mRangingParams;
     private final RangingDevice mPeerDevice;
 
-    @RangingPreference.DeviceRole
-    private final int mDeviceRole;
+    private final @RangingPreference.DeviceRole int mDeviceRole;
 
-    public RttConfig(int deviceRole,
-            RttRangingParams rttRangingParams,
-            DataNotificationConfig dataNotificationConfig,
-            RangingDevice peerDevice) {
+    public RttConfig(
+            int deviceRole,
+            @NonNull RttRangingParams rttRangingParams,
+            @NonNull SessionConfig sessionConfig,
+            @NonNull RangingDevice peerDevice
+    ) {
         mDeviceRole = deviceRole;
         mRangingParams = rttRangingParams;
-        mDataNotificationConfig = dataNotificationConfig;
+        mSessionConfig = sessionConfig;
         mPeerDevice = peerDevice;
     }
 
-    public DataNotificationConfig getDataNotificationConfig() {
-        return mDataNotificationConfig;
+    @Override
+    @NonNull
+    public RangingTechnology getTechnology() {
+        return RangingTechnology.RTT;
+    }
+
+    public SessionConfig getSessionConfig() {
+        return mSessionConfig;
     }
 
     public RttRangingParams getRangingParams() {
@@ -55,18 +66,50 @@ public class RttConfig implements RangingConfig.TechnologyConfig {
         return mDeviceRole;
     }
 
-    public RangingDevice getPeerDevice() {
+    @Override
+    public @NonNull RangingDevice getPeerDevice() {
         return mPeerDevice;
     }
 
     public RttRangingParameters asBackendParameters() {
-        return new RttRangingParameters.Builder()
+        RttRangingParameters.Builder builder = new RttRangingParameters.Builder()
                 .setDeviceRole(mDeviceRole)
                 .setServiceName(mRangingParams.getServiceName())
                 .setMatchFilter(mRangingParams.getMatchFilter())
-                .setMaxDistanceMm(mDataNotificationConfig.getProximityFarCm() * 100)
-                .setMinDistanceMm(mDataNotificationConfig.getProximityNearCm() * 100)
                 .setEnablePublisherRanging(true)
-                .build();
+                .setUpdateRate(mRangingParams.getRangingUpdateRate())
+                .setPeriodicRangingHwFeatureEnabled(
+                        mRangingParams.isPeriodicRangingHwFeatureEnabled());
+
+        DataNotificationConfig ntfConfig = mSessionConfig.getDataNotificationConfig();
+        switch (ntfConfig.getNotificationConfigType()) {
+            case DataNotificationConfig.NOTIFICATION_CONFIG_ENABLE,
+                    // Handled in adapter.
+                    DataNotificationConfig.NOTIFICATION_CONFIG_PROXIMITY_EDGE -> builder
+                    .setMinDistanceMm(0)
+                    .setMaxDistanceMm(50 * 100 * 100); // 50 meters.
+            case DataNotificationConfig.NOTIFICATION_CONFIG_DISABLE -> builder.setMinDistanceMm(0)
+                    //Set to 1 millimeter to get around mMaxDistanceMm <= mMinDistanceMm
+                    .setMaxDistanceMm(1);
+            case DataNotificationConfig.NOTIFICATION_CONFIG_PROXIMITY_LEVEL ->
+                    builder.setMinDistanceMm(
+                                    ntfConfig.getProximityNearCm() * 100)
+                            .setMaxDistanceMm(ntfConfig.getProximityFarCm() * 100);
+        }
+        return builder.build();
+    }
+
+    @Override
+    public String toString() {
+        return "RttConfig{ "
+                + "mSessionConfig="
+                + mSessionConfig
+                + ", mRangingParams="
+                + mRangingParams
+                + ", mPeerDevice="
+                + mPeerDevice
+                + ", mDeviceRole="
+                + mDeviceRole
+                + " }";
     }
 }

@@ -20,17 +20,23 @@ package {
 }
 
 android_test {
-    name: "GenericRangingTests",
+    name: "RangingServiceTests",
     srcs: ["src/**/*.java"],
-    sdk_version: "34",
+    sdk_version: "system_server_current",
     certificate: "platform",
     static_libs: [
         "service-ranging-pre-jarjar",
+        "framework-bluetooth.stubs.module_lib",
         "framework-uwb.stubs.module_lib",
         "androidx.test.rules",
         "androidx.test.ext.junit",
         "androidx.test.runner",
-        "mockito-target-minus-junit4",
+        "mockito-target-extended-minus-junit4",
+    ],
+    jni_libs: [
+        // these are needed for Extended Mockito
+        "libdexmakerjvmtiagent",
+        "libstaticjvmtiagent",
     ],
     test_suites: ["device-tests"],
 }
