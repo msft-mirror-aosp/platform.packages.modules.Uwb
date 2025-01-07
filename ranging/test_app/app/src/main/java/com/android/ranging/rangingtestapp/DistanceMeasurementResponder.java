@@ -83,7 +83,7 @@ class DistanceMeasurementResponder {
     }
 
     private void printLog(String log) {
-        mLoggingListener.onLog(log);
+        mLoggingListener.log(log);
     }
 
     private String getRangingTechnologyName(int technology) {
