@@ -25,6 +25,7 @@ import android.ranging.RangingConfig;
 import android.ranging.RangingDevice;
 import android.ranging.RangingManager;
 import android.ranging.RangingPreference;
+import android.ranging.SensorFusionParams;
 import android.ranging.SessionConfig;
 import android.ranging.ble.cs.BleCsRangingParams;
 import android.ranging.ble.rssi.BleRssiRangingParams;
@@ -149,6 +150,7 @@ public class RangingParameters {
             rawRangingDeviceBuilder.setCsRangingParams(
                     new BleCsRangingParams.Builder(targetBtDevice.getAddress())
                             .setRangingUpdateRate(Freq.fromName(freqName).freq)
+                            .setSecurityLevel(configParams.bleCs.securityLevel)
                             .build());
         } else if (Technology.fromName(rangingTechnologyName).equals(Technology.BLE_RSSI)) {
             rawRangingDeviceBuilder.setBleRssiRangingParams(
@@ -159,6 +161,8 @@ public class RangingParameters {
             rawRangingDeviceBuilder.setRttRangingParams(
                     new RttRangingParams.Builder(configParams.wifiNanRtt.serviceName)
                             .setRangingUpdateRate(Freq.fromName(freqName).freq)
+                            .setPeriodicRangingHwFeatureEnabled(
+                                    configParams.wifiNanRtt.isPeriodicRangingEnabled)
                             .build());
         }
         return new RawInitiatorRangingConfig.Builder()
@@ -187,7 +191,8 @@ public class RangingParameters {
                                 .build(),
                         oobBleClient)
                     .build())
-            .setSecurityLevel(OobInitiatorRangingConfig.SECURITY_LEVEL_SECURE)
+            .setSecurityLevel(configParams.oob.securityLevel)
+            .setRangingMode(configParams.oob.mode)
             .setSlowestRangingInterval(Freq.fromName(freqName).getSlowestIntervalDuration())
             .setFastestRangingInterval(Freq.fromName(freqName).getFastestIntervalDuration())
             .build();
@@ -209,6 +214,9 @@ public class RangingParameters {
         }
         if (initiatorRangingConfig == null) return null;
         SessionConfig sessionConfig = new SessionConfig.Builder()
+                .setSensorFusionParams(new SensorFusionParams.Builder()
+                        .setSensorFusionEnabled(configParams.global.sensorFusionEnabled)
+                        .build())
                 .setRangingMeasurementsLimit(duration)
                 .build();
         RangingPreference rangingPreference = new RangingPreference.Builder(
@@ -246,6 +254,7 @@ public class RangingParameters {
             rawRangingDeviceBuilder.setCsRangingParams(
                     new BleCsRangingParams.Builder(targetBtDevice.getAddress())
                             .setRangingUpdateRate(Freq.fromName(freqName).freq)
+                            .setSecurityLevel(configParams.bleCs.securityLevel)
                             .build());
         } else if (Technology.fromName(rangingTechnologyName).equals(Technology.BLE_RSSI)) {
             rawRangingDeviceBuilder.setBleRssiRangingParams(
@@ -256,6 +265,8 @@ public class RangingParameters {
             rawRangingDeviceBuilder.setRttRangingParams(
                     new RttRangingParams.Builder(configParams.wifiNanRtt.serviceName)
                             .setRangingUpdateRate(Freq.fromName(freqName).freq)
+                            .setPeriodicRangingHwFeatureEnabled(
+                                    configParams.wifiNanRtt.isPeriodicRangingEnabled)
                             .build());
         }
         return new RawResponderRangingConfig.Builder()
@@ -300,6 +311,9 @@ public class RangingParameters {
         }
         if (responderRangingConfig == null) return null;
         SessionConfig sessionConfig = new SessionConfig.Builder()
+                .setSensorFusionParams(new SensorFusionParams.Builder()
+                        .setSensorFusionEnabled(configParams.global.sensorFusionEnabled)
+                        .build())
                 .setRangingMeasurementsLimit(duration)
                 .build();
         RangingPreference rangingPreference = new RangingPreference.Builder(
