@@ -304,7 +304,8 @@ public class CsAdapter implements RangingAdapter {
                             .setDistance(new RangingMeasurement.Builder()
                                     .setMeasurement(result.getResultMeters())
                                     .build())
-                            .setTimestampMillis(result.getMeasurementTimestampNanos() * 1000);
+                            .setTimestampMillis(RangingUtils.convertNanosToMillis(
+                                    result.getMeasurementTimestampNanos()));
                     if (!Double.isNaN(result.getAzimuthAngle())) {
                         dataBuilder.setAzimuth(new RangingMeasurement.Builder()
                                 .setMeasurement(result.getAzimuthAngle())
