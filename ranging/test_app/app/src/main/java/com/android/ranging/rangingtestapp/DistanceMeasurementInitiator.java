@@ -18,6 +18,7 @@ package com.android.ranging.rangingtestapp;
 
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.os.CancellationSignal;
 import android.ranging.RangingCapabilities;
@@ -83,7 +84,7 @@ class DistanceMeasurementInitiator {
     }
 
     private void printLog(String log) {
-        mLoggingListener.onLog(log);
+        mLoggingListener.log(log);
     }
 
     private String getRangingTechnologyName(int technology) {
@@ -143,6 +144,7 @@ class DistanceMeasurementInitiator {
                 printLog("Please bond the devices for channel sounding");
                 return false;
             }
+            printLog("Bonded Devices: " + mApplicationContext.getSystemService(BluetoothManager.class).getAdapter().getBondedDevices());
         }
         printLog("Start ranging with device: " + mTargetDevice.getName());
         mSession = mRangingManager.createRangingSession(
