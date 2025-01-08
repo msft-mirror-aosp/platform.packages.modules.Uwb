@@ -51,6 +51,7 @@ import com.android.server.ranging.CapabilitiesProvider;
 import com.android.server.ranging.RangingAdapter;
 import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingTechnology;
+import com.android.server.ranging.RangingUtils;
 import com.android.server.ranging.RangingUtils.StateMachine;
 import com.android.server.ranging.session.RangingSessionConfig;
 import com.android.server.ranging.util.DataNotificationManager;
@@ -317,7 +318,8 @@ public class UwbAdapter implements RangingAdapter {
             RangingData.Builder dataBuilder = new RangingData.Builder()
                     .setRangingTechnology((int) RangingTechnology.UWB.getValue())
                     .setDistance(convertMeasurement(position.getDistance()))
-                    .setTimestampMillis(position.getElapsedRealtimeNanos());
+                    .setTimestampMillis(RangingUtils.convertNanosToMillis(
+                            position.getElapsedRealtimeNanos()));
 
             if (position.getAzimuth() != null) {
                 dataBuilder.setAzimuth(convertMeasurement(position.getAzimuth()));
