@@ -117,6 +117,7 @@ public class RttRangingDevice {
                 return;
             } else if (status == RangingResult.STATUS_FAIL) {
                 onRangingFailure(RttRangerListener.STATUS_CODE_FAIL_RESULT_FAIL);
+                return;
             }
             if (!mIsRunning) {
                 Log.w(TAG, "onRangingResult - ranging has stopped already.");
