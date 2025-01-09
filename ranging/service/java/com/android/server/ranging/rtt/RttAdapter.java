@@ -140,6 +140,7 @@ public class RttAdapter implements RangingAdapter {
     ) {
         Log.i(TAG, "Start called.");
         mNonPrivilegedAttributionSource = nonPrivilegedAttributionSource;
+        mCallbacks = callbacks;
         if (mNonPrivilegedAttributionSource != null && !mRangingInjector.isForegroundAppOrService(
                 mNonPrivilegedAttributionSource.getUid(),
                 mNonPrivilegedAttributionSource.getPackageName())) {
@@ -157,7 +158,6 @@ public class RttAdapter implements RangingAdapter {
             closeForReason(FAILED_TO_START);
             return;
         }
-        mCallbacks = callbacks;
         mConfig = rttConfig;
         mPeerDevice = rttConfig.getPeerDevice();
         mRttClient.setRangingParameters(rttConfig.asBackendParameters());
