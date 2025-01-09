@@ -36,13 +36,13 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import com.android.ranging.rtt.backend.internal.RttDevice;
-import com.android.ranging.rtt.backend.internal.RttRangingDevice;
-import com.android.ranging.rtt.backend.internal.RttRangingParameters;
-import com.android.ranging.rtt.backend.internal.RttRangingPosition;
-import com.android.ranging.rtt.backend.internal.RttRangingSessionCallback;
-import com.android.ranging.rtt.backend.internal.RttService;
-import com.android.ranging.rtt.backend.internal.RttServiceImpl;
+import com.android.ranging.rtt.backend.RttDevice;
+import com.android.ranging.rtt.backend.RttRangingDevice;
+import com.android.ranging.rtt.backend.RttRangingParameters;
+import com.android.ranging.rtt.backend.RttRangingPosition;
+import com.android.ranging.rtt.backend.RttRangingSessionCallback;
+import com.android.ranging.rtt.backend.RttService;
+import com.android.ranging.rtt.backend.RttServiceImpl;
 import com.android.server.ranging.RangingAdapter;
 import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingTechnology;
