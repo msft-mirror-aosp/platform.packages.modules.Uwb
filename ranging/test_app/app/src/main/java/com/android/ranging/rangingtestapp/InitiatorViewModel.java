@@ -37,19 +37,19 @@ public class InitiatorViewModel extends AndroidViewModel {
 
     private final MutableLiveData<Double> mDistanceResult = new MutableLiveData<>();
 
-    private final DistanceMeasurementInitiator
-            mDistanceMeasurementInitiator; // mDistanceMeasurementInitiator;
+    private final DistanceMeasurementManager
+            mDistanceMeasurementManager; // mDistanceMeasurementManager;
 
     public static class Factory implements ViewModelProvider.Factory {
         private Application mApplication;
-        private BleConnectionCentralViewModel mBleConnectionCentralViewModel;
+        private BleConnection mBleConnection;
         private LoggingListener mLoggingListener;
 
         public Factory(Application application,
-                       BleConnectionCentralViewModel bleConnectionCentralViewModel,
+                       BleConnection bleConnection,
                        LoggingListener loggingListener) {
             mApplication = application;
-            mBleConnectionCentralViewModel = bleConnectionCentralViewModel;
+            mBleConnection = bleConnection;
             mLoggingListener = loggingListener;
         }
 
@@ -57,25 +57,26 @@ public class InitiatorViewModel extends AndroidViewModel {
         @Override
         public <T extends ViewModel> T create(Class<T> modelClass) {
             return (T) new InitiatorViewModel(
-                    mApplication, mBleConnectionCentralViewModel, mLoggingListener);
+                    mApplication, mBleConnection, mLoggingListener);
         }
     }
 
     public InitiatorViewModel(@NonNull Application application,
-                              BleConnectionCentralViewModel bleConnectionCentralViewModel,
+                              BleConnection bleConnection,
                               LoggingListener loggingListener) {
         super(application);
 
-        mDistanceMeasurementInitiator =
-                new DistanceMeasurementInitiator(
+        mDistanceMeasurementManager =
+                new DistanceMeasurementManager(
                         application,
-                        bleConnectionCentralViewModel,
-                        mDistanceMeasurementCallback,
-                        loggingListener);
+                        bleConnection,
+                        mCallback,
+                        loggingListener,
+                        false);
     }
 
     void setTargetDevice(BluetoothDevice targetDevice) {
-        mDistanceMeasurementInitiator.setTargetDevice(targetDevice);
+        mDistanceMeasurementManager.setTargetDevice(targetDevice);
     }
 
     LiveData<Constants.RangeSessionState> getSessionState() {
@@ -87,21 +88,21 @@ public class InitiatorViewModel extends AndroidViewModel {
     }
 
     List<String> getSupportedTechnologies() {
-        return mDistanceMeasurementInitiator.getSupportedTechnologies();
+        return mDistanceMeasurementManager.getSupportedTechnologies();
     }
 
     List<String> getMeasurementFreqs() {
-        return mDistanceMeasurementInitiator.getMeasurementFreqs();
+        return mDistanceMeasurementManager.getMeasurementFreqs();
     }
 
     List<String> getMeasurementDurations() {
-        return mDistanceMeasurementInitiator.getMeasureDurationsInIntervalRounds();
+        return mDistanceMeasurementManager.getMeasureDurationsInIntervalRounds();
     }
 
     void toggleStartStop(String technology, String freq, int duration) {
         if (mSessionState.getValue() == Constants.RangeSessionState.STOPPED) {
             boolean success =
-                    mDistanceMeasurementInitiator.startDistanceMeasurement(
+                    mDistanceMeasurementManager.startDistanceMeasurementManager(
                             technology, freq, duration);
             if (success) {
                 mSessionState.postValue(Constants.RangeSessionState.STARTING);
@@ -109,13 +110,13 @@ public class InitiatorViewModel extends AndroidViewModel {
                 mSessionState.postValue(Constants.RangeSessionState.STOPPED);
             }
         } else {
-            mDistanceMeasurementInitiator.stopDistanceMeasurement();
+            mDistanceMeasurementManager.stopDistanceMeasurementManager();
             mSessionState.postValue(Constants.RangeSessionState.STOPPING);
         }
     }
 
-    private DistanceMeasurementInitiator.DistanceMeasurementCallback mDistanceMeasurementCallback =
-            new DistanceMeasurementInitiator.DistanceMeasurementCallback() {
+    private DistanceMeasurementManager.Callback mCallback =
+            new DistanceMeasurementManager.Callback() {
                 @Override
                 public void onStartSuccess() {
                     mSessionState.postValue(Constants.RangeSessionState.STARTED);
