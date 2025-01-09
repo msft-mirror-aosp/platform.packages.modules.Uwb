@@ -160,6 +160,7 @@ public class UwbAdapter implements RangingAdapter {
             @NonNull Callback callbacks
     ) {
         Log.i(TAG, "Start called.");
+        mCallbacks = callbacks;
         mNonPrivilegedAttributionSource = nonPrivilegedAttributionSource;
         if (!(config instanceof UwbConfig uwbConfig)) {
             Log.w(TAG, "Tried to start adapter with invalid ranging parameters");
@@ -171,7 +172,6 @@ public class UwbAdapter implements RangingAdapter {
             closeForReason(FAILED_TO_START);
             return;
         }
-        mCallbacks = callbacks;
         mDataNotificationManager = new DataNotificationManager(
                 uwbConfig.getSessionConfig().getDataNotificationConfig(),
                 uwbConfig.getSessionConfig().getDataNotificationConfig());
