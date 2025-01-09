@@ -17,9 +17,10 @@
 package com.android.ranging.rangingtestapp;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
-import android.content.Context;
+import android.content.DialogInterface;
 import android.os.CancellationSignal;
 import android.ranging.RangingCapabilities;
 import android.ranging.RangingData;
@@ -29,8 +30,10 @@ import android.ranging.RangingPreference;
 import android.ranging.RangingSession;
 
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 
 import com.android.ranging.rangingtestapp.RangingParameters.Technology;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +48,7 @@ class DistanceMeasurementManager {
     private final RangingManager mRangingManager;
     private final LoggingListener mLoggingListener;
 
-    private final Context mApplicationContext;
+    private final Activity mActivity;
     private final BleConnection mBleConnection;
     private final Executor mExecutor;
     private final Callback mCallback;
@@ -57,20 +60,21 @@ class DistanceMeasurementManager {
     @Nullable private AtomicReference<RangingCapabilities> mRangingCapabilities =
             new AtomicReference<>();
     @Nullable private BluetoothDevice mTargetDevice = null;
+    private AlertDialog mAlertDialog = null;
 
     DistanceMeasurementManager(
-            Context applicationContext,
+            Activity activity,
             BleConnection bleConnection,
             Callback distanceMeasurementCallback,
             com.android.ranging.rangingtestapp.LoggingListener loggingListener,
             boolean isResponder) {
-        mApplicationContext = applicationContext;
+        mActivity = activity;
         mBleConnection = bleConnection;
         mCallback = distanceMeasurementCallback;
         mLoggingListener = loggingListener;
         mIsResponder = isResponder;
 
-        mRangingManager = mApplicationContext.getSystemService(RangingManager.class);
+        mRangingManager = mActivity.getApplication().getSystemService(RangingManager.class);
         mExecutor = Executors.newSingleThreadExecutor();
 
         mRangingManager.registerCapabilitiesCallback(mExecutor, (capabilities -> {
@@ -82,7 +86,7 @@ class DistanceMeasurementManager {
     void setTargetDevice(BluetoothDevice targetDevice) {
         mTargetDevice = targetDevice;
         if (mTargetDevice == null) {
-            stopDistanceMeasurementManager();
+            stop();
         }
     }
 
@@ -135,19 +139,52 @@ class DistanceMeasurementManager {
         return List.of("10000", "1000", "100", "10", "5");
     }
 
+    private void showBondAlertDialog() {
+        DialogInterface.OnDismissListener onDismissListener = (d) -> {
+            mAlertDialog.dismiss();
+        };
+        DialogInterface.OnClickListener onClickListener = (d, b) -> {
+            switch (b) {
+                case DialogInterface.BUTTON_POSITIVE:
+                    printLog("Initiating bond with " + mTargetDevice.getName());
+                    if (!mTargetDevice.createBond()) {
+                        printLog("Failed to initiate bond with " + mTargetDevice.getName());
+                    }
+                    break;
+                default:
+                    break;
+            }
+            mAlertDialog.dismiss();
+        };
+        mAlertDialog = new MaterialAlertDialogBuilder(mActivity, R.style.MaterialAlertDialog_rounded)
+                .setTitle(R.string.bond_title)
+                .setMessage(R.string.bond_message)
+                .setCancelable(false)
+                .setOnDismissListener(onDismissListener)
+                .setNegativeButton(R.string.bond_ignore, onClickListener)
+                .setPositiveButton(R.string.bond_create, onClickListener)
+                .create();
+        mAlertDialog.show();
+    }
+
     @SuppressLint("MissingPermission") // permissions are checked upfront
-    boolean startDistanceMeasurementManager(
+    boolean start(
             String rangingTechnologyName, String freqName, int duration) {
         if (mTargetDevice == null) {
             printLog("Please connect the device over Gatt first");
             return false;
         }
-        if (Technology.fromName(rangingTechnologyName).equals(Technology.BLE_CS)) {
+        if (Technology.fromName(rangingTechnologyName).equals(Technology.BLE_CS)
+             || Technology.fromName(rangingTechnologyName).equals(Technology.OOB)) {
             if (mTargetDevice.getBondState() != BluetoothDevice.BOND_BONDED) {
                 printLog("Please bond the devices for channel sounding");
+                printLog("Bonded Devices: " + mActivity.getApplication()
+                        .getSystemService(BluetoothManager.class)
+                        .getAdapter()
+                        .getBondedDevices());
+                showBondAlertDialog();
                 return false;
             }
-            printLog("Bonded Devices: " + mApplicationContext.getSystemService(BluetoothManager.class).getAdapter().getBondedDevices());
         }
         printLog("Start ranging with device: " + mTargetDevice.getName());
         mSession = mRangingManager.createRangingSession(
@@ -158,16 +195,18 @@ class DistanceMeasurementManager {
             if (mIsResponder) {
                 rangingPreference =
                         RangingParameters.createResponderRangingPreference(
-                                mApplicationContext, mBleConnection, mLoggingListener,
+                                mActivity.getApplication(), mBleConnection, mLoggingListener,
                                 rangingTechnologyName, freqName,
-                                ConfigurationParameters.restoreInstance(mApplicationContext, false),
+                                ConfigurationParameters.restoreInstance(
+                                        mActivity.getApplication(), mIsResponder),
                                 duration, mTargetDevice);
             } else {
                 rangingPreference =
                         RangingParameters.createInitiatorRangingPreference(
-                                mApplicationContext, mBleConnection, mLoggingListener,
+                                mActivity.getApplication(), mBleConnection, mLoggingListener,
                                 rangingTechnologyName, freqName,
-                                ConfigurationParameters.restoreInstance(mApplicationContext, false),
+                                ConfigurationParameters.restoreInstance(
+                                        mActivity.getApplication(), mIsResponder),
                                 duration, mTargetDevice);
             }
             if (rangingPreference == null) {
@@ -180,13 +219,16 @@ class DistanceMeasurementManager {
         return true;
     }
 
-    void stopDistanceMeasurementManager() {
-        if (mSession == null || mCancellationSignal.get() == null) {
-            return;
+    void stop() {
+        if (mCancellationSignal.get() != null) {
+            printLog("Stop ranging with device: " + mTargetDevice.getName());
+            mCancellationSignal.get().cancel();
+            mCancellationSignal.set(null);
         }
-        mCancellationSignal.get().cancel();
+        if (mAlertDialog != null) {
+            mAlertDialog.dismiss();
+        }
         mSession = null;
-        mCancellationSignal.set(null);
     }
 
     private RangingSession.Callback mRangingSessionCallback =

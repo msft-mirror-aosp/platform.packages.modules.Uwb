@@ -16,7 +16,7 @@
 
 package com.android.ranging.rangingtestapp;
 
-import android.app.Application;
+import android.app.Activity;
 import android.bluetooth.BluetoothDevice;
 import android.util.Log;
 
@@ -29,8 +29,8 @@ import androidx.lifecycle.ViewModelProvider;
 
 import java.util.List;
 
-/** ViewModel for the Initiator. */
-public class InitiatorViewModel extends AndroidViewModel {
+/** ViewModel for the Initiator/Responder. */
+public class DistanceMeasurementViewModel extends AndroidViewModel {
 
     private final MutableLiveData<Constants.RangeSessionState> mSessionState =
             new MutableLiveData<>(Constants.RangeSessionState.STOPPED);
@@ -41,38 +41,41 @@ public class InitiatorViewModel extends AndroidViewModel {
             mDistanceMeasurementManager; // mDistanceMeasurementManager;
 
     public static class Factory implements ViewModelProvider.Factory {
-        private Application mApplication;
+        private Activity mActivity;
         private BleConnection mBleConnection;
         private LoggingListener mLoggingListener;
+        private boolean mIsResponder;
 
-        public Factory(Application application,
+        public Factory(Activity activity,
                        BleConnection bleConnection,
-                       LoggingListener loggingListener) {
-            mApplication = application;
+                       LoggingListener loggingListener,
+                       boolean isResponder) {
+            mActivity = activity;
             mBleConnection = bleConnection;
             mLoggingListener = loggingListener;
+            mIsResponder = isResponder;
         }
 
 
         @Override
         public <T extends ViewModel> T create(Class<T> modelClass) {
-            return (T) new InitiatorViewModel(
-                    mApplication, mBleConnection, mLoggingListener);
+            return (T) new DistanceMeasurementViewModel(
+                    mActivity, mBleConnection, mLoggingListener, mIsResponder);
         }
     }
 
-    public InitiatorViewModel(@NonNull Application application,
-                              BleConnection bleConnection,
-                              LoggingListener loggingListener) {
-        super(application);
-
+    public DistanceMeasurementViewModel(@NonNull Activity activity,
+                                        BleConnection bleConnection,
+                                        LoggingListener loggingListener,
+                                        boolean isResponder) {
+        super(activity.getApplication());
         mDistanceMeasurementManager =
                 new DistanceMeasurementManager(
-                        application,
+                        activity,
                         bleConnection,
                         mCallback,
                         loggingListener,
-                        false);
+                        isResponder);
     }
 
     void setTargetDevice(BluetoothDevice targetDevice) {
@@ -102,7 +105,7 @@ public class InitiatorViewModel extends AndroidViewModel {
     void toggleStartStop(String technology, String freq, int duration) {
         if (mSessionState.getValue() == Constants.RangeSessionState.STOPPED) {
             boolean success =
-                    mDistanceMeasurementManager.startDistanceMeasurementManager(
+                    mDistanceMeasurementManager.start(
                             technology, freq, duration);
             if (success) {
                 mSessionState.postValue(Constants.RangeSessionState.STARTING);
@@ -110,7 +113,7 @@ public class InitiatorViewModel extends AndroidViewModel {
                 mSessionState.postValue(Constants.RangeSessionState.STOPPED);
             }
         } else {
-            mDistanceMeasurementManager.stopDistanceMeasurementManager();
+            mDistanceMeasurementManager.stop();
             mSessionState.postValue(Constants.RangeSessionState.STOPPING);
         }
     }
@@ -131,7 +134,6 @@ public class InitiatorViewModel extends AndroidViewModel {
                 public void onStop() {
                     mSessionState.postValue(Constants.RangeSessionState.STOPPED);
                 }
-
 
                 @Override
                 public void onDistanceResult(double distanceMeters) {
