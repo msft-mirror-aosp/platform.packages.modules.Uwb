@@ -41,14 +41,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-class DistanceMeasurementInitiator {
+class DistanceMeasurementManager {
     private final RangingManager mRangingManager;
     private final LoggingListener mLoggingListener;
 
     private final Context mApplicationContext;
-    private final BleConnectionCentralViewModel mBleConnectionCentralViewModel;
+    private final BleConnection mBleConnection;
     private final Executor mExecutor;
-    private final DistanceMeasurementCallback mDistanceMeasurementCallback;
+    private final Callback mCallback;
+    private final boolean mIsResponder;
     @Nullable private RangingSession mSession = null;
     private AtomicReference<CancellationSignal> mCancellationSignal =
             new AtomicReference<>(null);
@@ -57,15 +58,17 @@ class DistanceMeasurementInitiator {
             new AtomicReference<>();
     @Nullable private BluetoothDevice mTargetDevice = null;
 
-    DistanceMeasurementInitiator(
+    DistanceMeasurementManager(
             Context applicationContext,
-            BleConnectionCentralViewModel bleConnectionCentralViewModel,
-            DistanceMeasurementCallback distanceMeasurementCallback,
-            com.android.ranging.rangingtestapp.LoggingListener loggingListener) {
+            BleConnection bleConnection,
+            Callback distanceMeasurementCallback,
+            com.android.ranging.rangingtestapp.LoggingListener loggingListener,
+            boolean isResponder) {
         mApplicationContext = applicationContext;
-        mBleConnectionCentralViewModel = bleConnectionCentralViewModel;
-        mDistanceMeasurementCallback = distanceMeasurementCallback;
+        mBleConnection = bleConnection;
+        mCallback = distanceMeasurementCallback;
         mLoggingListener = loggingListener;
+        mIsResponder = isResponder;
 
         mRangingManager = mApplicationContext.getSystemService(RangingManager.class);
         mExecutor = Executors.newSingleThreadExecutor();
@@ -79,7 +82,7 @@ class DistanceMeasurementInitiator {
     void setTargetDevice(BluetoothDevice targetDevice) {
         mTargetDevice = targetDevice;
         if (mTargetDevice == null) {
-            stopDistanceMeasurement();
+            stopDistanceMeasurementManager();
         }
     }
 
@@ -133,7 +136,7 @@ class DistanceMeasurementInitiator {
     }
 
     @SuppressLint("MissingPermission") // permissions are checked upfront
-    boolean startDistanceMeasurement(
+    boolean startDistanceMeasurementManager(
             String rangingTechnologyName, String freqName, int duration) {
         if (mTargetDevice == null) {
             printLog("Please connect the device over Gatt first");
@@ -151,15 +154,25 @@ class DistanceMeasurementInitiator {
                 Executors.newSingleThreadExecutor(), mRangingSessionCallback);
         // Don't block here to avoid making the UX unresponsive (especially for OOB handshaking)
         mExecutor.execute(() -> {
-            RangingPreference rangingPreference =
-                    RangingParameters.createInitiatorRangingPreference(
-                            mApplicationContext, mBleConnectionCentralViewModel, mLoggingListener,
-                            rangingTechnologyName, freqName,
-                            ConfigurationParameters.restoreInstance(mApplicationContext, false),
-                            duration, mTargetDevice);
+            RangingPreference rangingPreference = null;
+            if (mIsResponder) {
+                rangingPreference =
+                        RangingParameters.createResponderRangingPreference(
+                                mApplicationContext, mBleConnection, mLoggingListener,
+                                rangingTechnologyName, freqName,
+                                ConfigurationParameters.restoreInstance(mApplicationContext, false),
+                                duration, mTargetDevice);
+            } else {
+                rangingPreference =
+                        RangingParameters.createInitiatorRangingPreference(
+                                mApplicationContext, mBleConnection, mLoggingListener,
+                                rangingTechnologyName, freqName,
+                                ConfigurationParameters.restoreInstance(mApplicationContext, false),
+                                duration, mTargetDevice);
+            }
             if (rangingPreference == null) {
                 printLog("Failed to start ranging session");
-                mDistanceMeasurementCallback.onStartFail();
+                mCallback.onStartFail();
                 return;
             }
             mCancellationSignal.set(mSession.start(rangingPreference));
@@ -167,7 +180,7 @@ class DistanceMeasurementInitiator {
         return true;
     }
 
-    void stopDistanceMeasurement() {
+    void stopDistanceMeasurementManager() {
         if (mSession == null || mCancellationSignal.get() == null) {
             return;
         }
@@ -180,38 +193,38 @@ class DistanceMeasurementInitiator {
             new RangingSession.Callback() {
 
                 public void onOpened() {
-                    printLog("DistanceMeasurement onOpened! ");
+                    printLog("DistanceMeasurementManager onOpened! ");
                 }
 
                 public void onOpenFailed(int reason) {
-                    printLog("DistanceMeasurement onOpenFailed! " + reason);
-                    mDistanceMeasurementCallback.onStartFail();
+                    printLog("DistanceMeasurementManager onOpenFailed! " + reason);
+                    mCallback.onStartFail();
                 }
 
                 public void onStarted(RangingDevice peer, int technology) {
-                    printLog("DistanceMeasurement onStarted ! ");
-                    mDistanceMeasurementCallback.onStartSuccess();
+                    printLog("DistanceMeasurementManager onStarted ! ");
+                    mCallback.onStartSuccess();
                 }
 
                 public void onStopped(RangingDevice peer, int technology) {
-                    printLog("DistanceMeasurement onStopped! " + technology);
-                    mDistanceMeasurementCallback.onStop();
+                    printLog("DistanceMeasurementManager onStopped! " + technology);
+                    mCallback.onStop();
                 }
 
                 public void onClosed(int reason) {
-                    printLog("DistanceMeasurement onClosed! " + reason);
-                    mDistanceMeasurementCallback.onStop();
+                    printLog("DistanceMeasurementManager onClosed! " + reason);
+                    mCallback.onStop();
                 }
 
                 public void onResults(RangingDevice peer, RangingData data) {
                     printLog(
-                            "DistanceMeasurement onResults ! " + peer + ": " + data);
-                    mDistanceMeasurementCallback.onDistanceResult(
+                            "DistanceMeasurementManager onResults ! " + peer + ": " + data);
+                    mCallback.onDistanceResult(
                             data.getDistance().getMeasurement());
                 }
             };
 
-    interface DistanceMeasurementCallback {
+    interface Callback {
 
         void onStartSuccess();
 
