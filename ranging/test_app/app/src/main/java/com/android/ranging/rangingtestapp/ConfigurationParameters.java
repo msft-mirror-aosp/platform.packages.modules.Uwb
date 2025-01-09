@@ -21,6 +21,8 @@ import static android.ranging.uwb.UwbComplexChannel.UWB_PREAMBLE_CODE_INDEX_11;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.ranging.ble.cs.BleCsRangingCapabilities;
+import android.ranging.oob.OobInitiatorRangingConfig;
 import android.ranging.uwb.UwbAddress;
 import android.ranging.uwb.UwbRangingParams;
 
@@ -28,14 +30,16 @@ import android.ranging.uwb.UwbRangingParams;
 public class ConfigurationParameters {
     private static String PREF_CONFIG = "PrefConfig";
 
+    public Global global;
     public Uwb uwb;
     public BleCs bleCs;
     public BleRssi bleRssi;
     public WifiNanRtt wifiNanRtt;
     public Oob oob;
 
-    private ConfigurationParameters(Uwb uwb, BleCs bleCs, BleRssi bleRssi,
+    private ConfigurationParameters(Global global, Uwb uwb, BleCs bleCs, BleRssi bleRssi,
             WifiNanRtt wifiNanRtt, Oob oob) {
+        this.global = global;
         this.uwb = uwb;
         this.bleCs = bleCs;
         this.bleRssi = bleRssi;
@@ -44,7 +48,8 @@ public class ConfigurationParameters {
     }
 
     private ConfigurationParameters(boolean isResponder) {
-        this.uwb = new Uwb(isResponder);
+        global = new Global();
+        uwb = new Uwb(isResponder);
         bleCs = new BleCs();
         bleRssi = new BleRssi();
         wifiNanRtt = new WifiNanRtt();
@@ -54,6 +59,7 @@ public class ConfigurationParameters {
     public void saveInstance(Context context) {
         SharedPreferences pref = context.getSharedPreferences(PREF_CONFIG, Context.MODE_PRIVATE);
         SharedPreferences.Editor prefEditor = pref.edit();
+        global.toPref(prefEditor);
         uwb.toPref(prefEditor);
         bleCs.toPref(prefEditor);
         bleRssi.toPref(prefEditor);
@@ -73,6 +79,7 @@ public class ConfigurationParameters {
     public static ConfigurationParameters restoreInstance(Context context, boolean isResponder) {
         SharedPreferences pref = context.getSharedPreferences(PREF_CONFIG, Context.MODE_PRIVATE);
         return new ConfigurationParameters(
+                Global.fromPref(pref, isResponder),
                 Uwb.fromPref(pref, isResponder),
                 BleCs.fromPref(pref, isResponder),
                 BleRssi.fromPref(pref, isResponder),
@@ -86,6 +93,26 @@ public class ConfigurationParameters {
         public BaseTechConfig(RangingParameters.Technology technology) {
             this.technology = technology;
         }
+    }
+
+    public static class Global extends BaseTechConfig {
+        public boolean sensorFusionEnabled = true;
+
+        public Global() {
+            super(RangingParameters.Technology.OOB);
+        }
+
+        public void toPref(SharedPreferences.Editor prefEditor) {
+            prefEditor.putBoolean("sensorFusionEnabled", sensorFusionEnabled);
+        }
+
+        public static Global fromPref(SharedPreferences pref, boolean isResponder) {
+            Global global = new Global();
+            global.sensorFusionEnabled = pref.getBoolean("sensorFusionEnabled",
+                    global.sensorFusionEnabled);
+            return global;
+        }
+
     }
 
     public static class Uwb extends BaseTechConfig {
@@ -142,32 +169,36 @@ public class ConfigurationParameters {
                 uwb = new Uwb(
                         isResponder,
                         UwbAddress.fromBytes(pref.getString(
-                                "devicAddress",
+                                "deviceAddress",
                                 new String(UWB_ADDRESSES[0].getAddressBytes())).getBytes()),
                         UwbAddress.fromBytes(pref.getString(
-                                "devicAddress",
+                                "peerDeviceAddress",
                                 new String(UWB_ADDRESSES[1].getAddressBytes())).getBytes()));
 
             }
-            uwb.channel = pref.getInt("channel", UWB_CHANNEL_9);
-            uwb.preamble = pref.getInt("preamble", UWB_PREAMBLE_CODE_INDEX_11);
-            uwb.configId =
-                    pref.getInt("configId", UwbRangingParams.CONFIG_PROVISIONED_UNICAST_DS_TWR);
-            uwb.sessionId = pref.getInt("sessionId", 5);
+            uwb.channel = pref.getInt("channel", uwb.channel);
+            uwb.preamble = pref.getInt("preamble", uwb.preamble);
+            uwb.configId = pref.getInt("configId", uwb.configId);
+            uwb.sessionId = pref.getInt("sessionId", uwb.sessionId);
             return uwb;
         }
     }
 
     public static class BleCs extends BaseTechConfig {
+        public int securityLevel = BleCsRangingCapabilities.CS_SECURITY_LEVEL_ONE;
+
         public BleCs() {
             super(RangingParameters.Technology.BLE_CS);
         }
 
         public void toPref(SharedPreferences.Editor prefEditor) {
+            prefEditor.putInt("securityLevel", securityLevel);
         }
 
         public static BleCs fromPref(SharedPreferences pref, boolean isResponder) {
-            return new BleCs();
+            BleCs bleCs = new BleCs();
+            bleCs.securityLevel = pref.getInt("securityLevel", bleCs.securityLevel);
+            return bleCs;
         }
     }
 
@@ -186,32 +217,43 @@ public class ConfigurationParameters {
 
     public static class WifiNanRtt extends BaseTechConfig {
         public String serviceName = "ranging_service";
+        public boolean isPeriodicRangingEnabled = false;
         public WifiNanRtt() {
             super(RangingParameters.Technology.WIFI_NAN_RTT);
         }
 
         public void toPref(SharedPreferences.Editor prefEditor) {
-            WifiNanRtt wifiNanRtt = new WifiNanRtt();
-            prefEditor.putString("serviceName", wifiNanRtt.serviceName);
+            prefEditor.putString("serviceName", serviceName);
+            prefEditor.putBoolean("isPeriodicRangingEnabled", isPeriodicRangingEnabled);
         }
 
         public static WifiNanRtt fromPref(SharedPreferences pref, boolean isResponder) {
             WifiNanRtt wifiNanRtt = new WifiNanRtt();
-            wifiNanRtt.serviceName = pref.getString("serviceName", "ranging_service");
+            wifiNanRtt.serviceName = pref.getString("serviceName", wifiNanRtt.serviceName);
+            wifiNanRtt.isPeriodicRangingEnabled = pref.getBoolean("isPeriodicRangingEnabled",
+                    wifiNanRtt.isPeriodicRangingEnabled);
             return wifiNanRtt;
         }
     }
 
     public static class Oob extends BaseTechConfig {
+        public int securityLevel = OobInitiatorRangingConfig.SECURITY_LEVEL_BASIC;
+        public int mode = OobInitiatorRangingConfig.RANGING_MODE_AUTO;
+
         public Oob() {
             super(RangingParameters.Technology.OOB);
         }
 
         public void toPref(SharedPreferences.Editor prefEditor) {
+            prefEditor.putInt("securitylevel", securityLevel);
+            prefEditor.putInt("mode", mode);
         }
 
         public static Oob fromPref(SharedPreferences pref, boolean isResponder) {
-            return new Oob();
+            Oob oob = new Oob();
+            oob.securityLevel = pref.getInt("securityLevel", oob.securityLevel);
+            oob.mode = pref.getInt("mode", oob.mode);
+            return oob;
         }
     }
 }
