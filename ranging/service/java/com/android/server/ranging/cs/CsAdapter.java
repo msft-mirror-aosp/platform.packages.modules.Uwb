@@ -130,6 +130,7 @@ public class CsAdapter implements RangingAdapter {
             @NonNull Callback callback
     ) {
         Log.i(TAG, "Start called.");
+        mCallbacks = callback;
         mNonPrivilegedAttributionSource = nonPrivilegedAttributionSource;
         if (mNonPrivilegedAttributionSource != null && !mRangingInjector.isForegroundAppOrService(
                 mNonPrivilegedAttributionSource.getUid(),
@@ -156,7 +157,6 @@ public class CsAdapter implements RangingAdapter {
             return;
         }
         mConfig = csConfig;
-        mCallbacks = callback;
         mRangingDevice = csConfig.getPeerDevice();
         mDeviceFromPeerBluetoothAddress =
                 mBluetoothAdapter.getRemoteDevice(bleCsRangingParams.getPeerBluetoothAddress());
@@ -266,13 +266,15 @@ public class CsAdapter implements RangingAdapter {
     }
 
     private void closeForReason(@Callback.ClosedReason int reason) {
-        mCallbacks.onStopped(mRangingDevice);
+        if (mRangingDevice != null) {
+            mCallbacks.onStopped(mRangingDevice);
+        }
         mCallbacks.onClosed(reason);
         clear();
     }
 
     private void clear() {
-        if (mConfig.getSessionConfig().getRangingMeasurementsLimit() > 0) {
+        if (mConfig != null && mConfig.getSessionConfig().getRangingMeasurementsLimit() > 0) {
             mAlarmManager.cancel(mMeasurementLimitListener);
         }
         mSession = null;

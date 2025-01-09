@@ -121,6 +121,7 @@ public class BleRssiAdapter implements RangingAdapter {
             @NonNull Callback callback
     ) {
         Log.i(TAG, "Start called.");
+        mCallbacks = callback;
         mNonPrivilegedAttributionSource = nonPrivilegedAttributionSource;
         if (mNonPrivilegedAttributionSource != null && !mRangingInjector.isForegroundAppOrService(
                 mNonPrivilegedAttributionSource.getUid(),
@@ -148,7 +149,6 @@ public class BleRssiAdapter implements RangingAdapter {
         }
 
         mConfig = bleRssiConfig;
-        mCallbacks = callback;
         mRangingDevice = bleRssiConfig.getPeerDevice();
         mDeviceFromPeerBluetoothAddress =
                 mBluetoothAdapter.getRemoteDevice(bleRssiRangingParams.getPeerBluetoothAddress());
@@ -246,7 +246,7 @@ public class BleRssiAdapter implements RangingAdapter {
     }
 
     private void clear() {
-        if (mConfig.getSessionConfig().getRangingMeasurementsLimit() > 0) {
+        if (mConfig != null && mConfig.getSessionConfig().getRangingMeasurementsLimit() > 0) {
             mAlarmManager.cancel(mMeasurementLimitListener);
         }
         mSession = null;
@@ -255,7 +255,9 @@ public class BleRssiAdapter implements RangingAdapter {
     }
 
     private void closeForReason(@Callback.ClosedReason int reason) {
-        mCallbacks.onStopped(mConfig.getPeerDevice());
+        if (mRangingDevice != null) {
+            mCallbacks.onStopped(mRangingDevice);
+        }
         mCallbacks.onClosed(reason);
         clear();
     }
