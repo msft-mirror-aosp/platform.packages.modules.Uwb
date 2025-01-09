@@ -19,6 +19,10 @@ package com.android.server.ranging.blerssi;
 import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_FREQUENT;
 import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_INFREQUENT;
 
+import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.ERROR;
+import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.FAILED_TO_START;
+import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.SYSTEM_POLICY;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.AlarmManager;
@@ -122,23 +126,24 @@ public class BleRssiAdapter implements RangingAdapter {
                 mNonPrivilegedAttributionSource.getUid(),
                 mNonPrivilegedAttributionSource.getPackageName())) {
             Log.w(TAG, "Background ranging is not supported");
+            closeForReason(SYSTEM_POLICY);
             return;
         }
-
-        if (!mStateMachine.transition(State.STOPPED, State.STARTED)) {
-            Log.v(TAG, "Attempted to start adapter when it was already started");
-            return;
-        }
-
         if (!(config instanceof BleRssiConfig bleRssiConfig)) {
             Log.w(TAG, "Tried to start adapter with invalid ranging parameters");
+            closeForReason(ERROR);
             return;
         }
-
         BleRssiRangingParams bleRssiRangingParams = bleRssiConfig.getRangingParams();
         if ((bleRssiConfig.getPeerDevice() == null)
                 || (bleRssiRangingParams.getPeerBluetoothAddress() == null)) {
             Log.e(TAG, "Peer device is null");
+            closeForReason(ERROR);
+            return;
+        }
+        if (!mStateMachine.transition(State.STOPPED, State.STARTED)) {
+            Log.v(TAG, "Attempted to start adapter when it was already started");
+            closeForReason(FAILED_TO_START);
             return;
         }
 
