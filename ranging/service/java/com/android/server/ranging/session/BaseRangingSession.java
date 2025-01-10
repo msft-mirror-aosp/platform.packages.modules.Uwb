@@ -19,7 +19,6 @@ package com.android.server.ranging.session;
 import android.app.AlarmManager;
 import android.content.AttributionSource;
 import android.os.Binder;
-import android.os.Handler;
 import android.os.SystemClock;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
@@ -57,15 +56,15 @@ import java.util.concurrent.ConcurrentMap;
 public class BaseRangingSession {
     private static final String TAG = BaseRangingSession.class.getSimpleName();
 
-    private static final int NON_PRIVILEGED_RANGING_BG_APP_TIMEOUT_MS = 1000;
+    private static final int NON_PRIVILEGED_RANGING_BG_APP_TIMEOUT_MS = 60_000;
 
     public static final String NON_PRIVILEGED_RANGING_BG_APP_TIMER_TAG =
             "RangingSessionNonPrivilegedBgAppTimeout";
-    private final RangingInjector mInjector;
     private final AttributionSource mAttributionSource;
     private final RangingServiceManager.SessionListener mSessionListener;
     private final ListeningExecutorService mAdapterExecutor;
 
+    protected final RangingInjector mInjector;
     protected final SessionHandle mSessionHandle;
     protected final RangingSessionConfig mConfig;
 
@@ -185,7 +184,7 @@ public class BaseRangingSession {
                 // done with a clear calling identity.
                 long token = Binder.clearCallingIdentity();
                 RangingAdapter adapter = mInjector.createAdapter(
-                        config, mConfig.getDeviceRole(), mAdapterExecutor);
+                        mAttributionSource, config, mConfig.getDeviceRole(), mAdapterExecutor);
                 mAdapters.put(config, adapter);
                 adapter.start(config, nonPrivilegedAttributionSource, new AdapterListener(config));
                 Binder.restoreCallingIdentity(token);
@@ -402,6 +401,7 @@ public class BaseRangingSession {
         pw.println("---- Dump of RangingSession ----");
         pw.println("Session handle: " + mSessionHandle);
         pw.println("Attribution source: " + mAttributionSource);
+        pw.println("Config: " + mConfig);
         pw.println("Adapters:");
         for (RangingAdapter adapter : mAdapters.values()) {
             pw.println(adapter);

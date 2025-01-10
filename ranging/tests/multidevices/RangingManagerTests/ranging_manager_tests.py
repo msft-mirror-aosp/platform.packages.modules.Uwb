@@ -21,14 +21,17 @@ from lib import rssi
 from lib import rtt
 from lib import utils
 from lib import uwb
+from lib.session import RangingSession
 from lib.params import *
 from lib.ranging_decorator import *
 from mobly import asserts
 from mobly import config_parser
 from mobly import suite_runner
+from mobly.controllers import android_device
+from android.platform.test.annotations import ApiTest
 
 
-_TEST_CASES = (
+_TEST_CASES = [
     "test_one_to_one_uwb_ranging",
     "test_one_to_one_uwb_ranging_provisioned_sts",
     "test_one_to_one_uwb_ranging_disable_range_data_ntf",
@@ -36,7 +39,9 @@ _TEST_CASES = (
     "test_one_to_one_wifi_periodic_rtt_ranging",
     "test_one_to_one_ble_rssi_ranging",
     "test_one_to_one_ble_cs_ranging",
-)
+    "test_one_to_one_ranging_with_oob",
+]
+
 
 SERVICE_UUID = "0000fffb-0000-1000-8000-00805f9b34fc"
 
@@ -57,6 +62,10 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     """
     super().__init__(configs)
     self.tests = _TEST_CASES
+
+  def _is_cuttlefish_device(self, ad: android_device.AndroidDevice) -> bool:
+    product_name = ad.adb.getprop("ro.product.name")
+    return "cf_x86" in product_name
 
   def setup_class(self):
     super().setup_class()
@@ -168,6 +177,22 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
 
   ### Test Cases ###
 
+  @ApiTest(apis=[
+    'android.ranging.RangingData#getDistance',
+    'android.ranging.RangingData#getAzimuth',
+    'android.ranging.RangingData#getElevation',
+    'android.ranging.RangingData#getRangingTechnology',
+    'android.ranging.RangingData#getRssi',
+    'android.ranging.RangingData#hasRssi',
+    'android.ranging.RangingData#getTimestampMillis',
+    'android.ranging.RangingMeasurement#getMeasurement',
+    'android.ranging.RangingMeasurement#getConfidence',
+    'android.ranging.RangingSession.Callback#onOpened()',
+    'android.ranging.RangingSession.Callback#onClosed(int)',
+    'android.ranging.RangingSession.Callback#onResults(android.ranging.RangingDevice, android.ranging.RangingData)',
+    'android.ranging.RangingSession.Callback#onStarted(android.ranging.RangingDevice, int)',
+    'android.ranging.RangingSession.Callback#onStopped(android.ranging.RangingDevice, int)',
+  ])
   def test_one_to_one_uwb_ranging(self):
     """Verifies uwb ranging with peer device, devices range for 10 seconds."""
     SESSION_HANDLE = str(uuid4())
@@ -369,6 +394,8 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
 
   def test_one_to_one_wifi_rtt_ranging(self):
     """Verifies wifi rtt ranging with peer device, devices range for 10 seconds."""
+    asserts.skip_if(self._is_cuttlefish_device(self.initiator.ad),
+                    "Skipping WiFi RTT test on Cuttlefish")
     SESSION_HANDLE = str(uuid4())
     TECHNOLOGIES = {RangingTechnology.WIFI_RTT}
 
@@ -438,6 +465,8 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
 
   def test_one_to_one_wifi_periodic_rtt_ranging(self):
     """Verifies wifi periodic rtt ranging with peer device, devices range for 10 seconds."""
+    asserts.skip_if(self._is_cuttlefish_device(self.initiator.ad),
+                    "Skipping WiFi periodic RTT test on Cuttlefish")
     SESSION_HANDLE = str(uuid4())
     TECHNOLOGIES = {RangingTechnology.WIFI_RTT}
 
@@ -516,6 +545,8 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
 
   def test_one_to_one_ble_rssi_ranging(self):
     """Verifies cs ranging with peer device, devices range for 10 seconds."""
+    asserts.skip_if(self._is_cuttlefish_device(self.initiator.ad),
+                    "Skipping BLE RSSI test on Cuttlefish")
     SESSION_HANDLE = str(uuid4())
     TECHNOLOGIES = {RangingTechnology.BLE_RSSI}
 
@@ -594,6 +625,8 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     Verifies cs ranging with peer device, devices range for 10 seconds.
     This test is only one way since we don't test if responder also can simultaneously get the data.
     """
+    asserts.skip_if(self._is_cuttlefish_device(self.initiator.ad),
+                    "Skipping BLE CS test on Cuttlefish")
     SESSION_HANDLE = str(uuid4())
     TECHNOLOGIES = {RangingTechnology.BLE_CS}
 
@@ -645,6 +678,35 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
       self.initiator.stop_ranging_and_assert_closed(SESSION_HANDLE)
 
       self._ble_unbond()
+
+  def test_one_to_one_ranging_with_oob(self):
+    asserts.skip_if(
+        not self.responder.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by responder",
+    )
+    asserts.skip_if(
+        not self.initiator.is_ranging_technology_supported(RangingTechnology.UWB),
+        f"UWB not supported by initiator",
+    )
+
+    initiator_preference = RangingPreference(
+        device_role=DeviceRole.INITIATOR,
+        ranging_params=OobInitiatorRangingParams(peer_ids=[self.responder.id]),
+    )
+
+    responder_preference = RangingPreference(
+        device_role=DeviceRole.RESPONDER,
+        ranging_params=OobResponderRangingParams(peer_id=self.initiator.id),
+    )
+
+    session = RangingSession()
+    session.set_initiator(self.initiator, initiator_preference)
+    session.add_responder(self.responder, responder_preference)
+
+    session.start_and_assert_opened()
+    session.assert_exchanged_data()
+    # TODO(jmes): Send Stop Ranging message instead of manually closing both devices
+    session.stop_and_assert_closed()
 
 if __name__ == "__main__":
   if "--" in sys.argv:

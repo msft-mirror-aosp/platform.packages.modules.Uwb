@@ -90,7 +90,7 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
         return mCountryCode;
     }
 
-    public int getDeviceRole() {
+    public @RangingPreference.DeviceRole int getDeviceRole() {
         return mDeviceRole;
     }
 
@@ -127,7 +127,8 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
                 (int) mParameters.getRangingUpdateRate(),
                 toBackend(dataNotificationConfig),
                 (int) mParameters.getSlotDuration(),
-                mSessionConfig.isAngleOfArrivalNeeded(),
+                // RangingParameters has isAoaDisabled field, Inverting here.
+                !mSessionConfig.isAngleOfArrivalNeeded(),
                 new UwbRangeLimitsConfig.Builder().setRangeMaxNumberOfMeasurements(
                         mSessionConfig.getRangingMeasurementsLimit()
                 ).build()
