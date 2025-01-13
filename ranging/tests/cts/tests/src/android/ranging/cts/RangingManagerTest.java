@@ -87,6 +87,7 @@ import android.ranging.uwb.UwbRangingParams;
 import android.ranging.wifi.rtt.RttRangingCapabilities;
 import android.ranging.wifi.rtt.RttRangingParams;
 import android.util.Log;
+import android.util.Range;
 import android.uwb.UwbManager;
 
 import androidx.annotation.NonNull;
@@ -1084,6 +1085,8 @@ public class RangingManagerTest {
 
         assertEquals(Duration.ofMillis(100), config.getFastestRangingInterval());
         assertEquals(Duration.ofMillis(5000), config.getSlowestRangingInterval());
+        assertEquals(Range.create(Duration.ofMillis(100), Duration.ofMillis(5000)),
+                config.getRangingIntervalRange());
         assertEquals(RANGING_MODE_AUTO, config.getRangingMode());
         assertEquals(SECURITY_LEVEL_BASIC, config.getSecurityLevel());
         assertThat(
@@ -1211,12 +1214,10 @@ public class RangingManagerTest {
         public void registerReceiveCallback(
                 @NonNull Executor executor, @NonNull ReceiveCallback callback
         ) {
-
         }
 
         @Override
         public void close() throws Exception {
-
         }
     }
 
