@@ -187,7 +187,7 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
     'android.ranging.RangingData#getTimestampMillis',
     'android.ranging.RangingMeasurement#getMeasurement',
     'android.ranging.RangingMeasurement#getConfidence',
-    'android.ranging.RangingSession.Callback#onOpened(int)',
+    'android.ranging.RangingSession.Callback#onOpened()',
     'android.ranging.RangingSession.Callback#onClosed(int)',
     'android.ranging.RangingSession.Callback#onResults(android.ranging.RangingDevice, android.ranging.RangingData)',
     'android.ranging.RangingSession.Callback#onStarted(android.ranging.RangingDevice, int)',
@@ -679,6 +679,10 @@ class RangingManagerTest(ranging_base_test.RangingBaseTest):
 
       self._ble_unbond()
 
+  @ApiTest(apis=[
+    'android.ranging.oob.TransportHandle#sendData',
+    'android.ranging.oob.TransportHandle#registerReceiveCallback',
+  ])
   def test_one_to_one_ranging_with_oob(self):
     asserts.skip_if(
         not self.responder.is_ranging_technology_supported(RangingTechnology.UWB),
