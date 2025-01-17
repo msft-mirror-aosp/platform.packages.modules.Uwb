@@ -116,10 +116,8 @@ public class UwbConfigSelector {
                         .getSupportedConfigIds().contains(CONFIG_PROVISIONED_UNICAST_DS_TWR)
         ) return false;
 
-        if (!oobConfig.getRangingIntervalRange()
-                .contains(Range.create(
-                        capabilities.getMinimumRangingInterval(),
-                        oobConfig.getSlowestRangingInterval()))
+        if (capabilities.getMinimumRangingInterval()
+                .compareTo(oobConfig.getSlowestRangingInterval()) > 0
         ) return false;
 
         // TODO: If we add support for AoA via ARCore in the future, this will need to be changed.
@@ -155,6 +153,10 @@ public class UwbConfigSelector {
     public void restrictConfigToCapabilities(
             @NonNull RangingDevice peer, @NonNull UwbOobCapabilities capabilities
     ) throws ConfigSelectionException {
+        if (!capabilities.getSupportedDeviceRole().contains(UwbOobConfig.OobDeviceRole.RESPONDER)) {
+            throw new ConfigSelectionException("Peer does not support responder role");
+        }
+
         mPeerAddresses.put(peer, capabilities.getUwbAddress());
         mConfigIds.retainAll(capabilities.getSupportedConfigIds());
         mChannels.retainAll(capabilities.getSupportedChannels());
