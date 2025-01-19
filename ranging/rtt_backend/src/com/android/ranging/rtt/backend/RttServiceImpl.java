@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-package com.android.ranging.rtt.backend.internal;
+package com.android.ranging.rtt.backend;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.net.wifi.aware.WifiAwareManager;
@@ -60,6 +61,7 @@ public class RttServiceImpl implements RttService {
         return true;
     }
 
+    @SuppressLint("NewApi") // FLAG_RANGING_RTT_ENABLED will be enabled from Android 16.
     @Override
     public boolean hasPeriodicRangingSupport() {
         if (mWifiAwareManager == null) {
