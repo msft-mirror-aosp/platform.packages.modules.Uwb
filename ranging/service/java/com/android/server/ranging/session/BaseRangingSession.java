@@ -116,7 +116,8 @@ public class BaseRangingSession {
             technologies = Sets.newConcurrentHashSet(Set.of(initialTechnology));
             if (mConfig.getSessionConfig().getSensorFusionParams().isSensorFusionEnabled()) {
                 fusionEngine = new FilteringFusionEngine(
-                        new DataFusers.PreferentialDataFuser(RangingTechnology.UWB));
+                        new DataFusers.PreferentialDataFuser(RangingTechnology.UWB),
+                        mConfig.getSessionConfig().isAngleOfArrivalNeeded(), mInjector);
             } else {
                 fusionEngine = new NoOpFusionEngine(device);
             }
