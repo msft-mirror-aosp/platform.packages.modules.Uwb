@@ -27,6 +27,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.android.server.ranging.RangingEngine;
 import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingServiceManager;
 import com.android.server.ranging.RangingTechnology;
@@ -141,7 +142,7 @@ public class OobResponderRangingSession
 
     private ListenableFuture<ImmutableSet<TechnologyConfig>> handleSetConfiguration(
             ReceivedMessage message
-    ) {
+    ) throws RangingEngine.ConfigSelectionException {
         Log.i(TAG, "Received set configuration message");
 
         ImmutableSet.Builder<TechnologyConfig> configs = ImmutableSet.builder();
