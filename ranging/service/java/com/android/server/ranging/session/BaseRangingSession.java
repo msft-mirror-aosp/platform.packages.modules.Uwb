@@ -192,7 +192,7 @@ public class BaseRangingSession {
                 // done with a clear calling identity.
                 long token = Binder.clearCallingIdentity();
                 RangingAdapter adapter = mInjector.createAdapter(
-                        mAttributionSource, config, mConfig.getDeviceRole(), mAdapterExecutor);
+                        mAttributionSource, config, mAdapterExecutor);
                 mAdapters.put(config, adapter);
                 Log.v(TAG, "Starting ranging with technology : " + config.getTechnology());
                 adapter.start(config, nonPrivilegedAttributionSource, new AdapterListener(config));
