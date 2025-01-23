@@ -53,6 +53,8 @@ public class RangingSessionConfig {
     public interface TechnologyConfig {
         @NonNull
         RangingTechnology getTechnology();
+
+        @RangingPreference.DeviceRole int getDeviceRole();
     }
 
     /** A config for a technology that only supports 1 peer per session. */

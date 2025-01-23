@@ -76,7 +76,8 @@ public class CsConfig implements UnicastTechnologyConfig {
         return mRangingParams;
     }
 
-    public int getDeviceRole() {
+    @Override
+    public @RangingPreference.DeviceRole int getDeviceRole() {
         return mDeviceRole;
     }
 
