@@ -19,7 +19,7 @@ package com.android.server.ranging.oob;
 import com.android.server.ranging.RangingTechnology;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -39,6 +39,13 @@ public abstract class CapabilityRequestMessage {
     public static CapabilityRequestMessage parseBytes(byte[] payload) {
         OobHeader header = OobHeader.parseBytes(payload);
 
+        if (header.getMessageType() != MessageType.CAPABILITY_REQUEST) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Invalid message type: %s, expected %s",
+                            header.getMessageType(), MessageType.CAPABILITY_REQUEST));
+        }
+
         if (payload.length < header.getSize() + CAPABILITY_SIZE_BYTES) {
             throw new IllegalArgumentException(
                     String.format("CapabilityRequestMessage payload size is %d bytes",
@@ -48,11 +55,13 @@ public abstract class CapabilityRequestMessage {
         int parseCursor = header.getSize();
         byte[] capabilityBytes =
                 Arrays.copyOfRange(payload, parseCursor, parseCursor + CAPABILITY_SIZE_BYTES);
-        ImmutableList<RangingTechnology> rangingTechnologies =
-                RangingTechnology.fromBitmap(capabilityBytes);
+        ImmutableSet<RangingTechnology> rangingTechnologies =
+                ImmutableSet.copyOf(RangingTechnology.fromBitmap(capabilityBytes));
 
-        return builder().setHeader(header).setRequestedRangingTechnologies(
-                rangingTechnologies).build();
+        return builder()
+                .setHeader(header)
+                .setRequestedRangingTechnologies(rangingTechnologies)
+                .build();
     }
 
     /** Serializes this {@link CapabilityRequestMessage} object to bytes. */
@@ -69,7 +78,7 @@ public abstract class CapabilityRequestMessage {
     public abstract OobHeader getHeader();
 
     /** Returns a list of ranging technologies for which capabilities are requested. */
-    public abstract ImmutableList<RangingTechnology> getRequestedRangingTechnologies();
+    public abstract ImmutableSet<RangingTechnology> getRequestedRangingTechnologies();
 
     /** Returns a builder for {@link CapabilityRequestMessage}. */
     public static Builder builder() {
@@ -80,7 +89,7 @@ public abstract class CapabilityRequestMessage {
     @AutoValue.Builder
     public abstract static class Builder {
         public abstract Builder setRequestedRangingTechnologies(
-                ImmutableList<RangingTechnology> requestedRangingTechnologies);
+                ImmutableSet<RangingTechnology> requestedRangingTechnologies);
 
         public abstract Builder setHeader(OobHeader header);
 
