@@ -64,6 +64,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /** Selects a {@link UwbConfig} from local and peer device capabilities */
@@ -71,10 +72,9 @@ public class UwbConfigSelector {
     private static final String TAG = UwbConfigSelector.class.getSimpleName();
 
     private static final Set<@UwbComplexChannel.UwbPreambleCodeIndex Integer> HPRF_INDEXES =
-            Set.copyOf(
-                    IntStream.rangeClosed(UWB_PREAMBLE_CODE_INDEX_25, UWB_PREAMBLE_CODE_INDEX_32)
-                            .boxed()
-                            .toList());
+            IntStream.rangeClosed(UWB_PREAMBLE_CODE_INDEX_25, UWB_PREAMBLE_CODE_INDEX_32)
+                        .boxed()
+                        .collect(Collectors.toSet());
 
     private final SessionConfig mSessionConfig;
     private final OobInitiatorRangingConfig mOobConfig;
