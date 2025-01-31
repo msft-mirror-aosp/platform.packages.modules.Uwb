@@ -86,6 +86,7 @@ public class UwbConfigSelector {
     private final Set<@UwbComplexChannel.UwbPreambleCodeIndex Integer> mPreambleIndexes;
     private @UwbRangingParams.SlotDuration int mMinSlotDurationMs;
     private Range<Duration> mRangingIntervals;
+    private final String mCountryCode;
 
     public static boolean isCapableOfConfig(
             @NonNull SessionConfig sessionConfig, @NonNull OobInitiatorRangingConfig oobConfig,
@@ -145,6 +146,7 @@ public class UwbConfigSelector {
         mRangingIntervals = mOobConfig.getRangingIntervalRange().intersect(
                 capabilities.getMinimumRangingInterval(),
                 mOobConfig.getSlowestRangingInterval());
+        mCountryCode = capabilities.getCountryCode();
     }
 
     /**
@@ -190,7 +192,6 @@ public class UwbConfigSelector {
         private final @UwbComplexChannel.UwbPreambleCodeIndex int mPreambleIndex;
         private final @RawRangingDevice.RangingUpdateRate int mRangingUpdateRate;
         private final byte[] mSessionKeyInfo;
-        private final String mCountryCode;
 
         SelectedUwbConfig() throws ConfigSelectionException {
             mSessionId = mSessionHandle.hashCode();
@@ -200,8 +201,6 @@ public class UwbConfigSelector {
             mPreambleIndex = selectPreambleIndex();
             mRangingUpdateRate = selectRangingUpdateRate();
             mSessionKeyInfo = selectSessionKeyInfo();
-            // TODO: Set based on geolocation
-            mCountryCode = "US";
         }
 
         // For now, each GRAPI responder will be a UWB initiator for a unicast session. In the
@@ -223,7 +222,6 @@ public class UwbConfigSelector {
                                     .build())
                             .setSessionConfig(mSessionConfig)
                             .setDeviceRole(DEVICE_ROLE_RESPONDER)
-                            .setCountryCode(mCountryCode)
                             .setPeerAddresses(ImmutableBiMap.of(device, mPeerAddresses.get(device)))
                             .build())
                     .collect(ImmutableSet.toImmutableSet());
