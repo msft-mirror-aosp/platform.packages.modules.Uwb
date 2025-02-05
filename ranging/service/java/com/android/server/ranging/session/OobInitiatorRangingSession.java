@@ -31,6 +31,7 @@ import androidx.annotation.NonNull;
 import com.android.server.ranging.RangingEngine;
 import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingServiceManager;
+import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.oob.CapabilityRequestMessage;
 import com.android.server.ranging.oob.CapabilityResponseMessage;
 import com.android.server.ranging.oob.MessageType;
@@ -151,6 +152,11 @@ public class OobInitiatorRangingSession
             OobHandle handle = new OobHandle(mSessionHandle, deviceHandle.getRangingDevice());
             mOobConnections.put(handle, mInjector.getOobController().createConnection(handle));
         }
+        ImmutableSet<RangingTechnology> requestedTechnologies =
+                mRangingEngine.getRequestedTechnologies();
+        Log.v(TAG, "Requesting technologies " + requestedTechnologies
+                + " based on local capabilities");
+
         byte[] message = CapabilityRequestMessage.builder()
                 .setHeader(OobHeader.builder()
                         .setMessageType(MessageType.CAPABILITY_REQUEST)
@@ -211,7 +217,7 @@ public class OobInitiatorRangingSession
     private void handleCapabilitiesResponses(
             Map<OobHandle, byte[]> responses
     ) throws RangingEngine.ConfigSelectionException {
-        Log.i(TAG, "Received capabilities response message");
+        Log.i(TAG, "Received capabilities response messages");
 
         for (OobHandle oobHandle : responses.keySet()) {
             CapabilityResponseMessage response =
