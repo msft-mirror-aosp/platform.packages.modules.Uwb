@@ -31,6 +31,7 @@ import androidx.annotation.NonNull;
 import com.android.server.ranging.RangingEngine;
 import com.android.server.ranging.RangingInjector;
 import com.android.server.ranging.RangingServiceManager;
+import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.oob.CapabilityRequestMessage;
 import com.android.server.ranging.oob.CapabilityResponseMessage;
 import com.android.server.ranging.oob.MessageType;
@@ -113,20 +114,23 @@ public class OobInitiatorRangingSession
     public void stop() {
         Map<OobHandle, FluentFuture<Void>> pendingSends = new HashMap<>(mOobConnections.size());
 
-        mOobConnections.forEach((oobHandle, connection) -> pendingSends.put(
-                oobHandle,
-                mOobConnections.get(oobHandle)
-                        .sendData(StopRangingMessage.builder()
-                                .setOobHeader(OobHeader.builder()
-                                        .setMessageType(MessageType.STOP_RANGING)
-                                        .setVersion(OobHeader.OobVersion.CURRENT)
-                                        .build())
-                                .setRangingTechnologiesToStop(ImmutableList.copyOf(
-                                        OobInitiatorRangingSession.super
-                                                .getTechnologiesUsedByPeer(
-                                                        oobHandle.getRangingDevice())))
-                                .build()
-                                .toBytes())));
+        mOobConnections.forEach((oobHandle, connection) -> {
+            ImmutableSet<RangingTechnology> technologies = OobInitiatorRangingSession.super
+                    .getTechnologiesUsedByPeer(oobHandle.getRangingDevice());
+
+            Log.v(TAG, "Sending stop ranging to peer " + oobHandle + " with technologies "
+                    + technologies);
+
+            pendingSends.put(oobHandle, mOobConnections.get(oobHandle)
+                    .sendData(StopRangingMessage.builder()
+                            .setOobHeader(OobHeader.builder()
+                                    .setMessageType(MessageType.STOP_RANGING)
+                                    .setVersion(OobHeader.OobVersion.CURRENT)
+                                    .build())
+                            .setRangingTechnologiesToStop(ImmutableList.copyOf(technologies))
+                            .build()
+                            .toBytes()));
+        });
 
         FluentFuture.from(
                         Futures.whenAllComplete(pendingSends.values())
