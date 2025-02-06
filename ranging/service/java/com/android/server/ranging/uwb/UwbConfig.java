@@ -32,7 +32,7 @@ import com.android.ranging.uwb.backend.internal.RangingParameters;
 import com.android.ranging.uwb.backend.internal.UwbRangeDataNtfConfig;
 import com.android.ranging.uwb.backend.internal.UwbRangeLimitsConfig;
 import com.android.server.ranging.RangingTechnology;
-import com.android.server.ranging.session.RangingSessionConfig;
+import com.android.server.ranging.session.RangingSessionConfig.MulticastTechnologyConfig;
 
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableSet;
@@ -46,10 +46,9 @@ import java.util.stream.Collectors;
  * configuration message sent over OOB and everything required to start a session in the underlying
  * UWB system API.
  */
-public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig {
+public class UwbConfig implements MulticastTechnologyConfig {
     private static final String TAG = UwbConfig.class.getSimpleName();
 
-    private final String mCountryCode;
     private final SessionConfig mSessionConfig;
     private final UwbRangingParams mParameters;
     private final int mDeviceRole;
@@ -57,7 +56,6 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
 
     private UwbConfig(Builder builder) {
         mParameters = builder.mParameters;
-        mCountryCode = builder.mCountryCode.get();
         mSessionConfig = builder.mSessionConfig;
         mDeviceRole = builder.mDeviceRole;
         mPeerAddresses = builder.mPeerAddresses.get();
@@ -86,10 +84,7 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
         return mParameters;
     }
 
-    public @NonNull String getCountryCode() {
-        return mCountryCode;
-    }
-
+    @Override
     public @RangingPreference.DeviceRole int getDeviceRole() {
         return mDeviceRole;
     }
@@ -165,7 +160,6 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
         private final UwbRangingParams mParameters;
         private final RequiredParam<ImmutableBiMap<RangingDevice, UwbAddress>> mPeerAddresses =
                 new RequiredParam<>();
-        private final RequiredParam<String> mCountryCode = new RequiredParam<>();
         private SessionConfig mSessionConfig = new SessionConfig.Builder().build();
 
         private int mDeviceRole = DEVICE_ROLE_RESPONDER;
@@ -186,11 +180,6 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
             return this;
         }
 
-        public Builder setCountryCode(@NonNull String countryCode) {
-            mCountryCode.set(countryCode);
-            return this;
-        }
-
         public Builder setDeviceRole(@RangingPreference.DeviceRole int deviceRole) {
             mDeviceRole = deviceRole;
             return this;
@@ -207,8 +196,6 @@ public class UwbConfig implements RangingSessionConfig.MulticastTechnologyConfig
         return "UwbConfig{"
                 + "mParameters="
                 + mParameters
-                + ", mCountryCode='"
-                + mCountryCode
                 + ", mSessionConfig="
                 + mSessionConfig
                 + ", mDeviceRole="

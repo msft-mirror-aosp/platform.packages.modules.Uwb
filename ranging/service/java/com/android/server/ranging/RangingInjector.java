@@ -33,7 +33,6 @@ import android.os.Looper;
 import android.os.Process;
 import android.os.UserHandle;
 import android.permission.PermissionManager;
-import android.ranging.RangingPreference;
 import android.util.Log;
 
 import com.android.server.ranging.CapabilitiesProvider.CapabilitiesAdapter;
@@ -70,6 +69,7 @@ public class RangingInjector {
     private final Looper mLooper;
 
     private final Handler mAlarmHandler;
+    private final DeviceConfigFacade mDeviceConfigFacade;
 
     public RangingInjector(@NonNull Context context) {
         HandlerThread rangingHandlerThread = new HandlerThread("RangingServiceHandler");
@@ -80,9 +80,10 @@ public class RangingInjector {
         mRangingServiceManager = new RangingServiceManager(this,
                 mContext.getSystemService(ActivityManager.class),
                 mLooper);
-        mOobController = new OobController();
+        mOobController = new OobController(this);
         mPermissionManager = context.getSystemService(PermissionManager.class);
         mAlarmHandler = new Handler(mLooper);
+        mDeviceConfigFacade = new DeviceConfigFacade(new Handler(mLooper), mContext);
     }
 
     public Context getContext() {
@@ -105,22 +106,26 @@ public class RangingInjector {
         return mAlarmHandler;
     }
 
+    public DeviceConfigFacade getDeviceConfigFacade() {
+        return mDeviceConfigFacade;
+    }
+
     /**
      * Create a new adapter for a technology.
      */
     public @NonNull RangingAdapter createAdapter(
             @NonNull AttributionSource attributionSource,
             @NonNull RangingSessionConfig.TechnologyConfig config,
-            @RangingPreference.DeviceRole int role,
             @NonNull ListeningExecutorService executor
     ) {
         switch (config.getTechnology()) {
             case UWB:
-                return new UwbAdapter(mContext, this, attributionSource, executor, role);
+                return new UwbAdapter(
+                        mContext, this, attributionSource, executor, config.getDeviceRole());
             case CS:
                 return new CsAdapter(mContext, this);
             case RTT:
-                return new RttAdapter(mContext, this, executor, role);
+                return new RttAdapter(mContext, this, executor, config.getDeviceRole());
             case RSSI:
                 return new BleRssiAdapter(mContext, this);
             default:

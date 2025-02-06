@@ -32,7 +32,7 @@ import android.ranging.wifi.rtt.RttRangingCapabilities;
 
 import androidx.annotation.Nullable;
 
-import com.android.ranging.rtt.backend.internal.RttServiceImpl;
+import com.android.ranging.rtt.backend.RttServiceImpl;
 import com.android.server.ranging.CapabilitiesProvider;
 import com.android.server.ranging.CapabilitiesProvider.CapabilitiesAdapter;
 import com.android.server.ranging.CapabilitiesProvider.TechnologyAvailabilityListener;
@@ -44,7 +44,8 @@ public class RttCapabilitiesAdapter extends CapabilitiesAdapter {
 
     /** @return true if WiFi RTT is supported in the provided context, false otherwise */
     public static boolean isSupported(Context context) {
-        return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_AWARE);
+        return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_AWARE)
+                && context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_RTT);
     }
 
     public RttCapabilitiesAdapter(
@@ -80,6 +81,8 @@ public class RttCapabilitiesAdapter extends CapabilitiesAdapter {
         if (getAvailability() == ENABLED) {
             return new RttRangingCapabilities.Builder()
                     .setPeriodicRangingHardwareFeature(mRttService.hasPeriodicRangingSupport())
+                    .setMaxSupportedBandwidth(mRttService.getMaxSupportedBandwidth())
+                    .setMaxSupportedRxChain(mRttService.getMaxSupportedRxChains())
                     .build();
         }
         return null;

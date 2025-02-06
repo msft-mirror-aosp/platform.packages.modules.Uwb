@@ -17,6 +17,9 @@
 package com.android.server.ranging.oob;
 
 import com.android.server.ranging.RangingTechnology;
+import com.android.server.ranging.blerssi.BleRssiOobConfig;
+import com.android.server.ranging.cs.CsOobConfig;
+import com.android.server.ranging.rtt.RttOobConfig;
 import com.android.server.ranging.uwb.UwbOobConfig;
 
 import com.google.auto.value.AutoValue;
@@ -73,6 +76,9 @@ public abstract class SetConfigurationMessage {
 
         // Parse Configs for ranging technologies that are set
         UwbOobConfig uwbConfig = null;
+        CsOobConfig csConfig = null;
+        RttOobConfig rttConfig = null;
+        BleRssiOobConfig bleRssiConfig = null;
         int countTechsParsed = 0;
         while (parseCursor < payload.length && countTechsParsed++ < rangingTechnologiesSet.size()) {
             byte[] remainingBytes = Arrays.copyOfRange(payload, parseCursor, payload.length);
@@ -87,6 +93,33 @@ public abstract class SetConfigurationMessage {
                     uwbConfig = UwbOobConfig.parseBytes(remainingBytes);
                     parseCursor += uwbConfig.getSize();
                     break;
+                case CS:
+                    if (csConfig != null) {
+                        throw new IllegalArgumentException(
+                                "Failed to parse SetConfigurationMessage, CsConfig already set. "
+                                        + "Bytes: " + Arrays.toString(payload));
+                    }
+                    csConfig = CsOobConfig.parseBytes(remainingBytes);
+                    parseCursor += csConfig.getSize();
+                    break;
+                case RTT:
+                    if (rttConfig != null) {
+                        throw new IllegalArgumentException(
+                                "Failed to parse SetConfigurationMessage, RttConfig already set. "
+                                        + "Bytes: " + Arrays.toString(payload));
+                    }
+                    rttConfig = RttOobConfig.parseBytes(remainingBytes);
+                    parseCursor += rttConfig.getSize();
+                    break;
+                case RSSI:
+                    if (bleRssiConfig != null) {
+                        throw new IllegalArgumentException(
+                                "Failed to parse SetConfigurationMessage, BleRssiConfig already "
+                                        + "set. Bytes: " + Arrays.toString(payload));
+                    }
+                    bleRssiConfig = BleRssiOobConfig.parseBytes(remainingBytes);
+                    parseCursor += bleRssiConfig.getSize();
+                    break;
                 default:
                     parseCursor += techHeader.getSize();
             }
@@ -97,6 +130,9 @@ public abstract class SetConfigurationMessage {
                 .setRangingTechnologiesSet(rangingTechnologiesSet)
                 .setStartRangingList(startRangingList)
                 .setUwbConfig(uwbConfig)
+                .setCsConfig(csConfig)
+                .setRttConfig(rttConfig)
+                .setBleRssiConfig(bleRssiConfig)
                 .build();
     }
 
@@ -104,8 +140,20 @@ public abstract class SetConfigurationMessage {
     public final byte[] toBytes() {
         int size = MIN_SIZE_BYTES + getHeader().getSize();
         UwbOobConfig uwbConfig = getUwbConfig();
+        CsOobConfig csConfig = getCsConfig();
+        RttOobConfig rttConfig = getRttConfig();
+        BleRssiOobConfig bleRssiConfig = getBleRssiConfig();
         if (uwbConfig != null) {
             size += uwbConfig.getSize();
+        }
+        if (csConfig != null) {
+            size += csConfig.getSize();
+        }
+        if (rttConfig != null) {
+            size += rttConfig.getSize();
+        }
+        if (bleRssiConfig != null) {
+            size += bleRssiConfig.getSize();
         }
         ByteBuffer byteBuffer = ByteBuffer.allocate(size);
         byteBuffer
@@ -114,6 +162,15 @@ public abstract class SetConfigurationMessage {
                 .put(RangingTechnology.toBitmap(getStartRangingList()));
         if (uwbConfig != null) {
             byteBuffer.put(uwbConfig.toBytes());
+        }
+        if (csConfig != null) {
+            byteBuffer.put(csConfig.toBytes());
+        }
+        if (rttConfig != null) {
+            byteBuffer.put(rttConfig.toBytes());
+        }
+        if (bleRssiConfig != null) {
+            byteBuffer.put(bleRssiConfig.toBytes());
         }
         return byteBuffer.array();
     }
@@ -133,6 +190,16 @@ public abstract class SetConfigurationMessage {
     /** Returns @Nullable UwbConfig data that should be used to configure UWB ranging session. */
     @Nullable
     public abstract UwbOobConfig getUwbConfig();
+
+    /** Returns @Nullable CsConfig data that should be used to configure CS ranging session. */
+    @Nullable
+    public abstract CsOobConfig getCsConfig();
+
+    @Nullable
+    public abstract RttOobConfig getRttConfig();
+
+    @Nullable
+    public abstract BleRssiOobConfig getBleRssiConfig();
 
     /** Returns a builder for {@link SetConfigurationMessage}. */
     public static Builder builder() {
@@ -156,6 +223,12 @@ public abstract class SetConfigurationMessage {
 
         public abstract Builder setUwbConfig(@Nullable UwbOobConfig uwbConfig);
 
+        public abstract Builder setCsConfig(@Nullable CsOobConfig csConfig);
+
+        public abstract Builder setRttConfig(@Nullable RttOobConfig rttConfig);
+
+        public abstract Builder setBleRssiConfig(@Nullable BleRssiOobConfig bleRssiConfig);
+
         abstract SetConfigurationMessage autoBuild();
 
         public SetConfigurationMessage build() {
@@ -171,6 +244,24 @@ public abstract class SetConfigurationMessage {
                             .contains(RangingTechnology.UWB)
                             == (setConfigurationMessage.getUwbConfig() != null),
                     "UwbConfig or rangingTechnologiesSet for UWB not set properly.");
+            Preconditions.checkArgument(
+                    setConfigurationMessage
+                            .getRangingTechnologiesSet()
+                            .contains(RangingTechnology.CS)
+                            == (setConfigurationMessage.getCsConfig() != null),
+                    "csConfig or rangingTechnologiesSet for CS not set properly.");
+            Preconditions.checkArgument(
+                    setConfigurationMessage
+                            .getRangingTechnologiesSet()
+                            .contains(RangingTechnology.RTT)
+                            == (setConfigurationMessage.getRttConfig() != null),
+                    "rttConfig or rangingTechnologiesSet for Rtt not set properly.");
+            Preconditions.checkArgument(
+                    setConfigurationMessage
+                            .getRangingTechnologiesSet()
+                            .contains(RangingTechnology.RSSI)
+                            == (setConfigurationMessage.getBleRssiConfig() != null),
+                    "BleRssiConfig or rangingTechnologiesSet for BLE RSSI not set properly.");
             return setConfigurationMessage;
         }
     }

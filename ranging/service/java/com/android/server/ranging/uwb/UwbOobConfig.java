@@ -16,16 +16,30 @@
 
 package com.android.server.ranging.uwb;
 
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_FREQUENT;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_INFREQUENT;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_NORMAL;
+
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
+import android.ranging.RangingDevice;
+import android.ranging.raw.RawRangingDevice;
 import android.ranging.uwb.UwbAddress;
+import android.ranging.uwb.UwbComplexChannel;
+import android.ranging.uwb.UwbRangingParams;
 
+import androidx.annotation.NonNull;
+
+import com.android.ranging.uwb.backend.internal.RangingTimingParams;
+import com.android.ranging.uwb.backend.internal.Utils;
+import com.android.server.ranging.RangingEngine;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.Conversions;
 import com.android.server.ranging.oob.TechnologyHeader;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableBiMap;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -182,6 +196,42 @@ public abstract class UwbOobConfig {
                 .put(Conversions.intToByteArray(getDeviceRole(), DEVICE_ROLE_SIZE))
                 .put(Conversions.intToByteArray(getDeviceMode(), DEVICE_MODE_SIZE))
                 .array();
+    }
+
+    public @NonNull UwbConfig toTechnologyConfig(UwbAddress localAddress, RangingDevice peer)
+            throws RangingEngine.ConfigSelectionException {
+
+        return new UwbConfig.Builder(
+                new UwbRangingParams.Builder(
+                        getSessionId(), getSelectedConfigId(), localAddress, getUwbAddress())
+                        .setSessionKeyInfo(getSessionKey())
+                        .setComplexChannel(new UwbComplexChannel.Builder()
+                                .setChannel(getSelectedChannel())
+                                .setPreambleIndex(getSelectedPreambleIndex())
+                                .build())
+                        .setRangingUpdateRate(getUpdateRateFromIntervalMs())
+                        .setSlotDuration(getSelectedSlotDurationMs())
+                        .build())
+                .setPeerAddresses(ImmutableBiMap.of(peer, getUwbAddress()))
+                .setDeviceRole(getDeviceRole())
+                .build();
+    }
+
+    private @RawRangingDevice.RangingUpdateRate int getUpdateRateFromIntervalMs()
+            throws RangingEngine.ConfigSelectionException {
+
+        RangingTimingParams timings = Utils.getRangingTimingParams((int) getSelectedConfigId());
+
+        if (getSelectedRangingIntervalMs() == timings.getRangingIntervalFast()) {
+            return UPDATE_RATE_FREQUENT;
+        } else if (getSelectedRangingIntervalMs() == timings.getRangingIntervalNormal()) {
+            return UPDATE_RATE_NORMAL;
+        } else if (getSelectedRangingIntervalMs() == timings.getRangingIntervalInfrequent()) {
+            return UPDATE_RATE_INFREQUENT;
+        } else {
+            throw new RangingEngine.ConfigSelectionException(
+                    "Unsupported ranging interval ms " + getSelectedRangingIntervalMs());
+        }
     }
 
     /** Returns {@link UwbAddress} of the device. */

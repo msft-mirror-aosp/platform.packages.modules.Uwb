@@ -29,7 +29,7 @@ import com.android.server.ranging.uwb.UwbCapabilitiesAdapter;
 import com.google.common.collect.ImmutableList;
 
 import java.util.BitSet;
-import java.util.List;
+import java.util.Collection;
 
 /** Enum representing an individual ranging technology. */
 public enum RangingTechnology {
@@ -88,7 +88,7 @@ public enum RangingTechnology {
         return technologies.build();
     }
 
-    public static byte[] toBitmap(List<RangingTechnology> technologies) {
+    public static byte[] toBitmap(Collection<RangingTechnology> technologies) {
         if (technologies.isEmpty()) {
             return new byte[BITMAP_SIZE_BYTES];
         }
@@ -108,11 +108,23 @@ public enum RangingTechnology {
         BitSet bitSet = BitSet.valueOf(technologiesBitmap);
         for (int i = 0; i < BITMAP_SIZE_BYTES * 8; i++) {
             if (bitSet.get(i)) {
-                if (i < RangingTechnology.values().length) {
-                    techs.add(RangingTechnology.values()[i]);
+                try {
+                    techs.add(RangingTechnology.TECHNOLOGIES.get(i));
+                } catch (IndexOutOfBoundsException e) {
+                    throw new IllegalArgumentException("Unknown technology " + i);
                 }
             }
         }
         return techs.build();
+    }
+
+    @Override
+    public String toString() {
+        return name();
+    }
+
+    /** Create enum from string */
+    public static RangingTechnology fromName(String name) {
+        return RangingTechnology.valueOf(name);
     }
 }

@@ -24,7 +24,7 @@ import android.ranging.wifi.rtt.RttRangingParams;
 
 import androidx.annotation.NonNull;
 
-import com.android.ranging.rtt.backend.internal.RttRangingParameters;
+import com.android.ranging.rtt.backend.RttRangingParameters;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.session.RangingSessionConfig;
 
@@ -62,7 +62,8 @@ public class RttConfig implements RangingSessionConfig.UnicastTechnologyConfig {
         return mRangingParams;
     }
 
-    public int getDeviceRole() {
+    @Override
+    public @RangingPreference.DeviceRole int getDeviceRole() {
         return mDeviceRole;
     }
 
@@ -76,7 +77,6 @@ public class RttConfig implements RangingSessionConfig.UnicastTechnologyConfig {
                 .setDeviceRole(mDeviceRole)
                 .setServiceName(mRangingParams.getServiceName())
                 .setMatchFilter(mRangingParams.getMatchFilter())
-                .setEnablePublisherRanging(true)
                 .setUpdateRate(mRangingParams.getRangingUpdateRate())
                 .setPeriodicRangingHwFeatureEnabled(
                         mRangingParams.isPeriodicRangingHwFeatureEnabled());

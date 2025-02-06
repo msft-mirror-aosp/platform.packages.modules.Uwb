@@ -16,8 +16,10 @@
 
 package com.android.server.ranging.session;
 
+import static android.ranging.RangingSession.Callback.REASON_NO_PEERS_FOUND;
+import static android.ranging.RangingSession.Callback.REASON_UNSUPPORTED;
+
 import android.content.AttributionSource;
-import android.ranging.RangingDevice;
 import android.ranging.SessionHandle;
 import android.ranging.oob.DeviceHandle;
 import android.ranging.oob.OobHandle;
@@ -33,23 +35,22 @@ import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.oob.CapabilityRequestMessage;
 import com.android.server.ranging.oob.CapabilityResponseMessage;
 import com.android.server.ranging.oob.MessageType;
-import com.android.server.ranging.oob.OobController.ReceivedMessage;
+import com.android.server.ranging.oob.OobController;
 import com.android.server.ranging.oob.OobHeader;
 import com.android.server.ranging.oob.SetConfigurationMessage;
+import com.android.server.ranging.oob.StopRangingMessage;
 import com.android.server.ranging.session.RangingSessionConfig.TechnologyConfig;
-import com.android.server.ranging.uwb.UwbConfig;
-import com.android.server.ranging.uwb.UwbOobConfig;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.FluentFuture;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -60,11 +61,10 @@ public class OobInitiatorRangingSession
 
     private static final String TAG = OobInitiatorRangingSession.class.getSimpleName();
 
-    private static final long MESSAGE_TIMEOUT_MS = 2000;
+    private static final long MESSAGE_TIMEOUT_MS = 4000;
 
-    private final Map<OobHandle, FluentFuture<ReceivedMessage>> mPeers =
-            new ConcurrentHashMap<>();
     private final ScheduledExecutorService mOobExecutor;
+    private final ConcurrentHashMap<OobHandle, OobController.OobConnection> mOobConnections;
 
     private RangingEngine mRangingEngine;
 
@@ -78,47 +78,88 @@ public class OobInitiatorRangingSession
     ) {
         super(attributionSource, sessionHandle, injector, config, listener, executor);
         mOobExecutor = executor;
+        mOobConnections = new ConcurrentHashMap<>();
     }
 
     @Override
     public void start(@NonNull OobInitiatorRangingConfig config) {
-        mRangingEngine = new RangingEngine(
-                mSessionHandle, config.getRangingMode(), mInjector.getCapabilitiesProvider());
-
-        for (DeviceHandle deviceHandle : config.getDeviceHandles()) {
-            OobHandle handle = new OobHandle(mSessionHandle, deviceHandle.getRangingDevice());
-            mPeers.put(
-                    handle,
-                    mInjector.getOobController()
-                            .registerMessageListener(handle)
-                            .withTimeout(MESSAGE_TIMEOUT_MS, TimeUnit.MILLISECONDS, mOobExecutor));
+        try {
+            mRangingEngine = new RangingEngine(
+                    mConfig.getSessionConfig(), config, mSessionHandle, mInjector);
+        } catch (RangingEngine.ConfigSelectionException e) {
+            Log.w(TAG, "Provided config incompatible with local capabilities: ", e);
+            mSessionListener.onSessionStopped(REASON_UNSUPPORTED);
+            return;
         }
 
-        sendCapabilitiesRequest();
-        ListenableFuture<ImmutableSet<TechnologyConfig>> capabilitiesResponseFutures =
-                Futures.whenAllComplete(mPeers.values())
-                        .callAsync(this::getConfigsFromPeerCapabilities, mOobExecutor);
-
-        Futures.addCallback(
-                capabilitiesResponseFutures,
-                new FutureCallback<>() {
+        sendCapabilityRequestMessages(config.getDeviceHandles())
+                .transformAsync((unused) -> this.sendSetConfigMessages(), mOobExecutor)
+                .addCallback(new FutureCallback<>() {
                     @Override
-                    public void onSuccess(ImmutableSet<TechnologyConfig> configs) {
-                        sendSetConfigurationMessages(configs);
+                    public void onSuccess(ImmutableSet<TechnologyConfig> localConfigs) {
                         // TODO: Send start ranging message to peers who don't have all active
                         //  technologies in their start ranging list
-                        OobInitiatorRangingSession.super.start(configs);
+                        OobInitiatorRangingSession.super.start(localConfigs);
                     }
 
                     @Override
                     public void onFailure(@NonNull Throwable t) {
-                        Log.e(TAG, "OOB failed: ", t);
+                        Log.e(TAG, "Failed to negotiate config over oob", t);
+                        mSessionListener.onSessionStopped(REASON_NO_PEERS_FOUND);
                     }
-                },
-                mOobExecutor);
+                }, mOobExecutor);
     }
 
-    private void sendCapabilitiesRequest() {
+    @Override
+    public void stop() {
+        Map<OobHandle, FluentFuture<Void>> pendingSends = new HashMap<>(mOobConnections.size());
+
+        mOobConnections.forEach((oobHandle, connection) -> {
+            ImmutableSet<RangingTechnology> technologies = OobInitiatorRangingSession.super
+                    .getTechnologiesUsedByPeer(oobHandle.getRangingDevice());
+
+            Log.v(TAG, "Sending stop ranging to peer " + oobHandle + " with technologies "
+                    + technologies);
+
+            pendingSends.put(oobHandle, mOobConnections.get(oobHandle)
+                    .sendData(StopRangingMessage.builder()
+                            .setOobHeader(OobHeader.builder()
+                                    .setMessageType(MessageType.STOP_RANGING)
+                                    .setVersion(OobHeader.OobVersion.CURRENT)
+                                    .build())
+                            .setRangingTechnologiesToStop(ImmutableList.copyOf(technologies))
+                            .build()
+                            .toBytes()));
+        });
+
+        FluentFuture.from(
+                        Futures.whenAllComplete(pendingSends.values())
+                                .call(() -> handleFailedFutures(pendingSends), mOobExecutor))
+                .addCallback(new FutureCallback<>() {
+                    @Override
+                    public void onSuccess(Map<OobHandle, Void> result) {
+                        OobInitiatorRangingSession.super.stop();
+                    }
+
+                    @Override
+                    public void onFailure(Throwable t) {
+                        Log.e(TAG, "Failed to send stop ranging message over oob", t);
+                        OobInitiatorRangingSession.super.stop();
+                    }
+                }, mOobExecutor);
+    }
+
+    private FluentFuture<Void> sendCapabilityRequestMessages(List<DeviceHandle> deviceHandles) {
+        Map<OobHandle, FluentFuture<byte[]>> pendingResponses = new HashMap<>();
+        for (DeviceHandle deviceHandle : deviceHandles) {
+            OobHandle handle = new OobHandle(mSessionHandle, deviceHandle.getRangingDevice());
+            mOobConnections.put(handle, mInjector.getOobController().createConnection(handle));
+        }
+        ImmutableSet<RangingTechnology> requestedTechnologies =
+                mRangingEngine.getRequestedTechnologies();
+        Log.v(TAG, "Requesting technologies " + requestedTechnologies
+                + " based on local capabilities");
+
         byte[] message = CapabilityRequestMessage.builder()
                 .setHeader(OobHeader.builder()
                         .setMessageType(MessageType.CAPABILITY_REQUEST)
@@ -128,68 +169,85 @@ public class OobInitiatorRangingSession
                 .build()
                 .toBytes();
 
-        mPeers.keySet().forEach(
-                (handle) -> mInjector.getOobController().sendMessage(handle, message));
+        mOobConnections.forEach((peer, connection) ->
+                pendingResponses.put(
+                        peer,
+                        connection
+                                .sendData(message)
+                                .transformAsync((unused) -> connection.receiveData(), mOobExecutor)
+                                .withTimeout(MESSAGE_TIMEOUT_MS, TimeUnit.MILLISECONDS,
+                                        mOobExecutor)));
+
+        return FluentFuture.from(
+                Futures.whenAllComplete(pendingResponses.values())
+                        .call(() -> {
+                            handleCapabilitiesResponses(handleFailedFutures(pendingResponses));
+                            return null;
+                        }, mOobExecutor));
     }
 
-    private ListenableFuture<ImmutableSet<TechnologyConfig>> getConfigsFromPeerCapabilities() {
-        Log.i(TAG, "Received capabilities response message");
-        for (OobHandle handle : Set.copyOf(mPeers.keySet())) {
-            CapabilityResponseMessage body;
+    private FluentFuture<ImmutableSet<TechnologyConfig>> sendSetConfigMessages()
+            throws RangingEngine.ConfigSelectionException {
+
+        RangingEngine.SelectedConfig configs = mRangingEngine.selectConfigs();
+
+        Map<OobHandle, FluentFuture<Void>> pendingSends = new HashMap<>(mOobConnections.size());
+        mOobConnections.forEach((oobHandle, connection) -> {
+            SetConfigurationMessage message = configs
+                    .getPeerConfigMessages()
+                    .get(oobHandle.getRangingDevice());
+
+            if (message == null) {
+                pendingSends.put(
+                        oobHandle,
+                        FluentFuture.from(Futures.immediateFailedFuture(
+                                new RangingEngine.ConfigSelectionException("No config selected"))));
+            } else {
+                pendingSends.put(
+                        oobHandle,
+                        mOobConnections.get(oobHandle).sendData(message.toBytes()));
+            }
+        });
+
+        return FluentFuture.from(
+                Futures.whenAllComplete(pendingSends.values())
+                        .call(() -> {
+                            handleFailedFutures(pendingSends);
+                            return configs.getLocalConfigs();
+                        }, mOobExecutor));
+    }
+
+    private void handleCapabilitiesResponses(
+            Map<OobHandle, byte[]> responses
+    ) throws RangingEngine.ConfigSelectionException {
+        Log.i(TAG, "Received capabilities response messages");
+
+        for (OobHandle oobHandle : responses.keySet()) {
+            CapabilityResponseMessage response =
+                    CapabilityResponseMessage.parseBytes(responses.get(oobHandle));
+            mRangingEngine.addPeerCapabilities(oobHandle.getRangingDevice(), response);
+        }
+    }
+
+    private <T> Map<OobHandle, T> handleFailedFutures(Map<OobHandle, FluentFuture<T>> futures) {
+        Map<OobHandle, T> unwrapped = new HashMap<>(futures.size());
+        for (OobHandle handle : futures.keySet()) {
             try {
-                byte[] responseData = Futures.getDone(mPeers.get(handle)).asBytes();
-                body = CapabilityResponseMessage.parseBytes(responseData);
+                unwrapped.put(handle, futures.get(handle).get());
             } catch (Exception e) {
-                Log.w(TAG, "Peer with handle " + handle + " dropped from ongoing OOB: ", e);
-                mPeers.remove(handle);
-                continue;
+                Log.w(TAG, "Peer " + handle + " dropped from ongoing OOB", e);
+                mOobConnections.remove(handle).close();
             }
-            mRangingEngine.addPeerCapabilities(handle.getRangingDevice(), body);
         }
-
-        return Futures.immediateFuture(mRangingEngine.getConfigsSatisfyingCapabilities());
+        if (mOobConnections.isEmpty()) {
+            throw new IllegalStateException("All peers dropped from OOB");
+        }
+        return unwrapped;
     }
 
-    private void sendSetConfigurationMessages(ImmutableSet<TechnologyConfig> configs) {
-        for (TechnologyConfig technologyConfig : configs) {
-            // TODO: Handle other technologies
-            UwbConfig config = (UwbConfig) technologyConfig;
-
-            for (RangingDevice peer : config.getPeerDevices()) {
-                SetConfigurationMessage response = SetConfigurationMessage.builder()
-                        .setHeader(OobHeader.builder()
-                                .setMessageType(MessageType.SET_CONFIGURATION)
-                                .setVersion(OobHeader.OobVersion.CURRENT)
-                                .build())
-                        .setRangingTechnologiesSet(ImmutableList.of(RangingTechnology.UWB))
-                        .setStartRangingList(ImmutableList.of(RangingTechnology.UWB))
-                        .setUwbConfig(UwbOobConfig.builder()
-                                .setSessionId(mSessionHandle.hashCode())
-                                .setSelectedConfigId(
-                                        config.getParameters().getConfigId())
-                                .setUwbAddress(
-                                        config.getParameters().getDeviceAddress())
-                                .setSelectedChannel(config.getParameters()
-                                        .getComplexChannel()
-                                        .getChannel())
-                                .setSessionKey(config.getParameters().getSessionKeyInfo())
-                                .setSelectedPreambleIndex(config.getParameters()
-                                        .getComplexChannel()
-                                        .getPreambleIndex())
-                                .setSelectedRangingIntervalMs(
-                                        config.getParameters().getRangingUpdateRate())
-                                .setSelectedSlotDurationMs(
-                                        config.getParameters().getSlotDuration())
-                                .setCountryCode(config.getCountryCode())
-                                .setDeviceRole(UwbOobConfig.OobDeviceRole.RESPONDER)
-                                .setDeviceMode(UwbOobConfig.OobDeviceMode.CONTROLEE)
-                                .build())
-                        .build();
-
-                mInjector.getOobController().sendMessage(
-                        new OobHandle(mSessionHandle, peer),
-                        response.toBytes());
-            }
-        }
+    @Override
+    public void close() {
+        mOobConnections.values().forEach(OobController.OobConnection::close);
+        mOobConnections.clear();
     }
 }

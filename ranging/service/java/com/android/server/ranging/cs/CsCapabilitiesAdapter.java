@@ -30,6 +30,7 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.ranging.RangingCapabilities.RangingTechnologyAvailability;
 import android.ranging.ble.cs.BleCsRangingCapabilities;
+import android.util.Log;
 
 import androidx.annotation.Nullable;
 
@@ -37,10 +38,11 @@ import com.android.server.ranging.CapabilitiesProvider;
 import com.android.server.ranging.CapabilitiesProvider.CapabilitiesAdapter;
 import com.android.server.ranging.CapabilitiesProvider.TechnologyAvailabilityListener;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class CsCapabilitiesAdapter extends CapabilitiesAdapter {
+
+    private static final String TAG = CsCapabilitiesAdapter.class.getSimpleName();
 
     private final Context mContext;
 
@@ -66,14 +68,20 @@ public class CsCapabilitiesAdapter extends CapabilitiesAdapter {
     @Override
     public @Nullable BleCsRangingCapabilities getCapabilities() {
         if (getAvailability() == ENABLED) {
-            List<Integer> securityLevels = new ArrayList<>(
-                mContext.getSystemService(BluetoothManager.class)
-                    .getAdapter()
-                    .getDistanceMeasurementManager()
-                    .getChannelSoundingSupportedSecurityLevels());
-            return new BleCsRangingCapabilities.Builder()
-                    .setSupportedSecurityLevels(securityLevels)
-                    .build();
+            try {
+                BluetoothAdapter btAdapter = mContext
+                        .getSystemService(BluetoothManager.class).getAdapter();
+
+                return new BleCsRangingCapabilities.Builder()
+                        .setBluetoothAddress(btAdapter.getAddress())
+                        .setSupportedSecurityLevels(List.copyOf(btAdapter
+                                .getDistanceMeasurementManager()
+                                .getChannelSoundingSupportedSecurityLevels()))
+                        .build();
+            } catch (UnsupportedOperationException e) {
+                Log.e(TAG, "Failed to get channel sounding capabilities: " + e);
+                return null;
+            }
         } else {
             return null;
         }

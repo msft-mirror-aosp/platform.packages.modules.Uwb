@@ -100,13 +100,12 @@ public final class RangingSession implements AutoCloseable {
     @RequiresPermission(Manifest.permission.RANGING)
     @NonNull
     public CancellationSignal start(@NonNull RangingPreference rangingPreference) {
-        //TODO : check whether this needs to be called after start, or handle when a session is
-        // created in ranging service.
         if (rangingPreference.getRangingParams().getRangingSessionType()
                 == RangingConfig.RANGING_SESSION_OOB) {
             mRangingSessionManager.registerOobSendDataListener();
             setupTransportHandles(rangingPreference);
         }
+        Log.v(TAG, "Start ranging - " + mSessionHandle);
         try {
             mRangingAdapter.startRanging(mAttributionSource, mSessionHandle, rangingPreference,
                     mRangingSessionManager);
@@ -141,18 +140,15 @@ public final class RangingSession implements AutoCloseable {
     /**
      * Adds a new device to an ongoing ranging session.
      * <p>
-     * This method allows for adding a new device to an active ranging session using either
-     * raw or out-of-band (OOB) ranging parameters. Only devices represented by
-     * {@link RawResponderRangingConfig} or {@link OobResponderRangingConfig} are supported.
+     * This method allows for adding a new device to an active ranging session using raw ranging
+     * parameters. Only devices represented by {@link RawResponderRangingConfig} is supported.
      * If the provided {@link RangingConfig} does not match one of these types, the addition fails
      * and invokes {@link Callback#onOpenFailed(int)} with a reason of
      * {@link Callback#REASON_UNSUPPORTED}.
      * </p>
      *
      * @param deviceRangingParams the ranging parameters for the device to be added,
-     *                            which must be an instance of either
-     *                            {@link RawResponderRangingConfig}
-     *                            or {@link OobResponderRangingConfig}.
+     *                            which must be an instance of {@link RawResponderRangingConfig}
      *
      * @apiNote If the underlying ranging technology cannot support this dynamic addition, failure
      * will be indicated via {@code Callback#onStartFailed(REASON_UNSUPPORTED, RangingDevice)}
@@ -160,13 +156,11 @@ public final class RangingSession implements AutoCloseable {
      */
     @RequiresPermission(Manifest.permission.RANGING)
     public void addDeviceToRangingSession(@NonNull RangingConfig deviceRangingParams) {
+        Log.v(TAG, " Add device - " + mSessionHandle);
         try {
             if (deviceRangingParams instanceof RawResponderRangingConfig) {
                 mRangingAdapter.addRawDevice(mSessionHandle,
                         (RawResponderRangingConfig) deviceRangingParams);
-            } else if (deviceRangingParams instanceof OobResponderRangingConfig) {
-                mRangingAdapter.addOobDevice(mSessionHandle,
-                        (OobResponderRangingConfig) deviceRangingParams);
             } else {
                 mCallback.onOpenFailed(Callback.REASON_UNSUPPORTED);
             }
@@ -191,6 +185,7 @@ public final class RangingSession implements AutoCloseable {
      */
     @RequiresPermission(Manifest.permission.RANGING)
     public void removeDeviceFromRangingSession(@NonNull RangingDevice rangingDevice) {
+        Log.v(TAG, " Remove device - " + mSessionHandle);
         try {
             mRangingAdapter.removeDevice(mSessionHandle, rangingDevice);
         } catch (RemoteException e) {
@@ -207,6 +202,7 @@ public final class RangingSession implements AutoCloseable {
      */
     @RequiresPermission(Manifest.permission.RANGING)
     public void reconfigureRangingInterval(@IntRange(from = 0, to = 255) int intervalSkipCount) {
+        Log.v(TAG, " Reconfiguring ranging interval - " + mSessionHandle);
         try {
             mRangingAdapter.reconfigureRangingInterval(mSessionHandle, intervalSkipCount);
         } catch (RemoteException e) {
@@ -222,6 +218,7 @@ public final class RangingSession implements AutoCloseable {
      */
     @RequiresPermission(Manifest.permission.RANGING)
     public void stop() {
+        Log.v(TAG, "Stop ranging - " + mSessionHandle);
         try {
             mRangingAdapter.stopRanging(mSessionHandle);
         } catch (RemoteException e) {

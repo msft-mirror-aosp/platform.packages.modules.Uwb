@@ -55,19 +55,20 @@ public class InitiatorFragment extends Fragment {
     private LinearLayout mDistanceViewLayout;
     private TextView mLogText;
 
-    private BleConnectionViewModelCentral mBleConnectionViewModel;
-    private InitiatorViewModel mInitiatorViewModel;
+    private BleConnectionCentralViewModel mBleConnectionViewModel;
+    private DistanceMeasurementViewModel mDistanceMeasurementViewModel;
+    private LoggingListener mLoggingListener;
 
     @Override
     public View onCreateView(
             @NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View root = inflater.inflate(R.layout.fragment_initiator, container, false);
-        Fragment bleConnectionFragment = new BleConnectionFragmentCentral();
+        Fragment bleConnectionFragment = new BleConnectionCentralFragment();
         FragmentTransaction transaction = getChildFragmentManager().beginTransaction();
         transaction.replace(R.id.init_ble_connection_container, bleConnectionFragment).commit();
 
-        mButton = (Button) root.findViewById(R.id.btn_cs);
-        mSpinnerTechnology = (Spinner) root.findViewById(R.id.spinner_dm_method);
+        mButton = (Button) root.findViewById(R.id.btn_measure);
+        mSpinnerTechnology = (Spinner) root.findViewById(R.id.spinner_dm_tech);
         mSpinnerFreq = (Spinner) root.findViewById(R.id.spinner_freq);
         mSpinnerDuration = (Spinner) root.findViewById(R.id.spinner_duration);
         mDistanceViewLayout = (LinearLayout) root.findViewById(R.id.layout_distance_view);
@@ -79,6 +80,7 @@ public class InitiatorFragment extends Fragment {
         mDistanceCanvasView = new CanvasView(getContext(), "Distance");
         mDistanceViewLayout.addView(mDistanceCanvasView);
         mDistanceViewLayout.setPadding(0, 0, 0, 600);
+        mLoggingListener = new LoggingListener(getActivity().getApplicationContext(), false);
         mLogText = (TextView) root.findViewById(R.id.text_log);
         return root;
     }
@@ -103,52 +105,58 @@ public class InitiatorFragment extends Fragment {
         mDurationArrayAdapter.setDropDownViewResource(
                 android.R.layout.simple_spinner_dropdown_item);
         mSpinnerDuration.setAdapter(mDurationArrayAdapter);
-
-        mBleConnectionViewModel =
-                new ViewModelProvider(this).get(BleConnectionViewModelCentral.class);
-        mInitiatorViewModel = new ViewModelProvider(
-                this,
-                new InitiatorViewModel.Factory(
-                        getActivity().getApplication(), mBleConnectionViewModel))
-                .get(InitiatorViewModel.class);
-        mBleConnectionViewModel
+        mLoggingListener
                 .getLogText()
                 .observe(
                         getActivity(),
                         log -> {
                             mLogText.setText(log);
-                            Log.i("Initiator", log);
                         });
+        mBleConnectionViewModel =
+                new ViewModelProvider(this,
+                        new BleConnectionCentralViewModel.Factory(
+                                getActivity().getApplication(), mLoggingListener))
+                        .get(BleConnectionCentralViewModel.class);
+        mDistanceMeasurementViewModel = new ViewModelProvider(
+                this,
+                new DistanceMeasurementViewModel.Factory(
+                        getActivity(), mBleConnectionViewModel,
+                        mLoggingListener, false))
+                .get(DistanceMeasurementViewModel.class);
         mBleConnectionViewModel
                 .getTargetDevice()
                 .observe(
                         getActivity(),
                         targetDevice -> {
-                            mInitiatorViewModel.setTargetDevice(targetDevice);
+                            mDistanceMeasurementViewModel.setTargetDevice(targetDevice);
                         });
 
-        mInitiatorViewModel
-                .getStarted()
+        mDistanceMeasurementViewModel
+                .getSessionState()
                 .observe(
                         getActivity(),
-                        started -> {
-                            if (started) {
-                                mButton.setText("Stop Distance Measurement");
-                                mDistanceCanvasView.cleanUp();
-                            } else {
-                                mButton.setText("Start Distance Measurement");
+                        state-> {
+                            switch (state) {
+                                case STARTED:
+                                    mButton.setText(R.string.stop_measurement);
+                                    mDistanceCanvasView.cleanUp();
+                                    mButton.setClickable(true);
+                                    break;
+                                case STOPPED:
+                                    mButton.setText(R.string.start_measurement);
+                                    mButton.setClickable(true);
+                                    break;
+                                case STARTING:
+                                    mButton.setText(R.string.starting_measurement);
+                                    mButton.setClickable(false);
+                                    break;
+                                case STOPPING:
+                                    mButton.setText(R.string.stopping_measurement);
+                                    mButton.setClickable(false);
+                                    break;
                             }
                         });
-        mInitiatorViewModel
-                .getLogText()
-                .observe(
-                        getActivity(),
-                        log -> {
-                            mLogText.setText(log);
-                            Log.i("Initiator", log);
-                        });
-
-        mInitiatorViewModel
+        mDistanceMeasurementViewModel
                 .getDistanceResult()
                 .observe(
                         getActivity(),
@@ -158,9 +166,9 @@ public class InitiatorFragment extends Fragment {
                                     DISTANCE_DECIMAL_FMT.format(distanceMeters) + " m");
                         });
 
-        mTechnologyArrayAdapter.addAll(mInitiatorViewModel.getSupportedTechnologies());
-        mFreqArrayAdapter.addAll(mInitiatorViewModel.getMeasurementFreqs());
-        mDurationArrayAdapter.addAll(mInitiatorViewModel.getMeasurementDurations());
+        mTechnologyArrayAdapter.addAll(mDistanceMeasurementViewModel.getSupportedTechnologies());
+        mFreqArrayAdapter.addAll(mDistanceMeasurementViewModel.getMeasurementFreqs());
+        mDurationArrayAdapter.addAll(mDistanceMeasurementViewModel.getMeasurementDurations());
         mButton.setOnClickListener(
                 v -> {
                     String methodName = mSpinnerTechnology.getSelectedItem().toString();
@@ -171,12 +179,12 @@ public class InitiatorFragment extends Fragment {
                         printLog("the device doesn't support any distance measurement methods.");
                     }
 
-                    mInitiatorViewModel.toggleStartStop(methodName, freq, duration);
+                    mDistanceMeasurementViewModel.toggleStartStop(methodName, freq, duration);
                 });
     }
 
     private void printLog(String logMessage) {
-        mLogText.setText("LOG: " + logMessage);
+        mLoggingListener.log(logMessage);
     }
 
     @Override

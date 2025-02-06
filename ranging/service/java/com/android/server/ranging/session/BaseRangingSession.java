@@ -16,12 +16,19 @@
 
 package com.android.server.ranging.session;
 
+import static android.ranging.RangingSession.Callback.REASON_LOCAL_REQUEST;
+import static android.ranging.RangingSession.Callback.REASON_NO_PEERS_FOUND;
+import static android.ranging.RangingSession.Callback.REASON_SYSTEM_POLICY;
+import static android.ranging.RangingSession.Callback.REASON_UNKNOWN;
+import static android.ranging.RangingSession.Callback.REASON_UNSUPPORTED;
+
 import android.app.AlarmManager;
 import android.content.AttributionSource;
 import android.os.Binder;
 import android.os.SystemClock;
 import android.ranging.RangingData;
 import android.ranging.RangingDevice;
+import android.ranging.RangingSession;
 import android.ranging.SessionHandle;
 import android.ranging.raw.RawResponderRangingConfig;
 import android.util.Log;
@@ -61,12 +68,12 @@ public class BaseRangingSession {
     public static final String NON_PRIVILEGED_RANGING_BG_APP_TIMER_TAG =
             "RangingSessionNonPrivilegedBgAppTimeout";
     private final AttributionSource mAttributionSource;
-    private final RangingServiceManager.SessionListener mSessionListener;
     private final ListeningExecutorService mAdapterExecutor;
 
     protected final RangingInjector mInjector;
     protected final SessionHandle mSessionHandle;
     protected final RangingSessionConfig mConfig;
+    protected final RangingServiceManager.SessionListener mSessionListener;
 
     private final AlarmManager mAlarmManager;
     private AlarmManager.OnAlarmListener mNonPrivilegedBgAppTimerListener;
@@ -109,7 +116,8 @@ public class BaseRangingSession {
             technologies = Sets.newConcurrentHashSet(Set.of(initialTechnology));
             if (mConfig.getSessionConfig().getSensorFusionParams().isSensorFusionEnabled()) {
                 fusionEngine = new FilteringFusionEngine(
-                        new DataFusers.PreferentialDataFuser(RangingTechnology.UWB));
+                        new DataFusers.PreferentialDataFuser(RangingTechnology.UWB),
+                        mConfig.getSessionConfig().isAngleOfArrivalNeeded(), mInjector);
             } else {
                 fusionEngine = new NoOpFusionEngine(device);
             }
@@ -149,6 +157,7 @@ public class BaseRangingSession {
 
     /** Start ranging in this session. */
     public void start(ImmutableSet<TechnologyConfig> technologyConfigs) {
+        Log.v(TAG, "Starting session");
         synchronized (mLock) {
             if (!mStateMachine.transition(State.STOPPED, State.STARTING)) {
                 Log.w(TAG, "Failed transition STOPPED -> STARTING");
@@ -167,8 +176,7 @@ public class BaseRangingSession {
                 } else {
                     Log.e(TAG,
                             "Received unsupported config for technology " + config.getTechnology());
-                    mSessionListener.onSessionStopped(
-                            RangingAdapter.Callback.ClosedReason.FAILED_TO_START);
+                    mSessionListener.onSessionStopped(REASON_UNSUPPORTED);
                     return;
                 }
 
@@ -184,8 +192,9 @@ public class BaseRangingSession {
                 // done with a clear calling identity.
                 long token = Binder.clearCallingIdentity();
                 RangingAdapter adapter = mInjector.createAdapter(
-                        mAttributionSource, config, mConfig.getDeviceRole(), mAdapterExecutor);
+                        mAttributionSource, config, mAdapterExecutor);
                 mAdapters.put(config, adapter);
+                Log.v(TAG, "Starting ranging with technology : " + config.getTechnology());
                 adapter.start(config, nonPrivilegedAttributionSource, new AdapterListener(config));
                 Binder.restoreCallingIdentity(token);
             }
@@ -272,6 +281,7 @@ public class BaseRangingSession {
 
     /** Stop ranging in this session. */
     public void stop() {
+        Log.v(TAG, "Stop ranging, stopping all adapters");
         synchronized (mLock) {
             if (mStateMachine.getState() == State.STOPPING
                     || mStateMachine.getState() == State.STOPPED) {
@@ -286,6 +296,30 @@ public class BaseRangingSession {
             long token = Binder.clearCallingIdentity();
             for (RangingAdapter adapter : mAdapters.values()) {
                 adapter.stop();
+            }
+            Binder.restoreCallingIdentity(token);
+        }
+    }
+
+    protected ImmutableSet<RangingTechnology> getTechnologiesUsedByPeer(RangingDevice device) {
+        synchronized (mLock) {
+            Peer peer = mPeers.get(device);
+            if (peer == null) {
+                return ImmutableSet.of();
+            } else {
+                return ImmutableSet.copyOf(peer.technologies);
+            }
+        }
+    }
+
+    protected void stopTechnologies(Set<RangingTechnology> technologies) {
+        Log.v(TAG, "Stop ranging with technologies " + technologies);
+        synchronized (mLock) {
+            long token = Binder.clearCallingIdentity();
+            for (RangingAdapter adapter : mAdapters.values()) {
+                if (technologies.contains(adapter.getTechnology())) {
+                    adapter.stop();
+                }
             }
             Binder.restoreCallingIdentity(token);
         }
@@ -345,10 +379,28 @@ public class BaseRangingSession {
                 mAdapters.remove(mConfig);
                 if (mAdapters.isEmpty()) {
                     mStateMachine.setState(State.STOPPED);
-                    mSessionListener.onSessionStopped(reason);
+                    mSessionListener.onSessionStopped(convertReason(reason));
                 }
             }
         }
+
+        private @RangingSession.Callback.Reason int convertReason(
+                @RangingAdapter.Callback.ClosedReason int reason
+        ) {
+            switch (reason) {
+                case RangingAdapter.Callback.ClosedReason.REQUESTED:
+                    return REASON_LOCAL_REQUEST;
+                case RangingAdapter.Callback.ClosedReason.FAILED_TO_START:
+                    return REASON_UNSUPPORTED;
+                case RangingAdapter.Callback.ClosedReason.LOST_CONNECTION:
+                    return REASON_NO_PEERS_FOUND;
+                case RangingAdapter.Callback.ClosedReason.SYSTEM_POLICY:
+                    return REASON_SYSTEM_POLICY;
+                default:
+                    return REASON_UNKNOWN;
+            }
+        }
+
     }
 
     /** Listens for fusion engine events. */

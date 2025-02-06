@@ -16,17 +16,35 @@
 
 package com.android.server.ranging;
 
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_FREQUENT;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_INFREQUENT;
+import static android.ranging.raw.RawRangingDevice.UPDATE_RATE_NORMAL;
+
+import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.ERROR;
+import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.LOST_CONNECTION;
+import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.REQUESTED;
+import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.SYSTEM_POLICY;
+import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.UNKNOWN;
+
 import static java.lang.Math.min;
 
 import android.app.AlarmManager;
+import android.bluetooth.BluetoothStatusCodes;
 import android.os.SystemClock;
+import android.ranging.raw.RawRangingDevice;
+import android.util.Range;
 
+import com.google.common.base.Ascii;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.time.Duration;
 import java.util.BitSet;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Utilities for {@link com.android.ranging}.
@@ -34,8 +52,10 @@ import java.util.List;
 public class RangingUtils {
 
     private static final String MEASUREMENT_TIME_LIMIT_EXCEEDED = "measurementTimeLimitExceeded";
+
     /**
      * A basic synchronized state machine.
+     *
      * @param <E> enum representing the different states of the machine.
      */
     public static class StateMachine<E extends Enum<E>> {
@@ -57,6 +77,7 @@ public class RangingUtils {
 
         /**
          * Sets the current state.
+         *
          * @return true if the state was successfully changed, false if the current state is
          * already {@code state}.
          */
@@ -70,6 +91,7 @@ public class RangingUtils {
 
         /**
          * If the current state is {@code from}, sets it to {@code to}.
+         *
          * @return true if the current state is {@code from}, false otherwise.
          */
         public synchronized boolean transition(E from, E to) {
@@ -137,6 +159,74 @@ public class RangingUtils {
             buffer.put(byteArray).rewind();
             return buffer.getInt();
         }
+
+        /**
+         * Converts a Bluetooth MAC address from byte array to string format. Throws if input byte
+         * array is not of correct format.
+         *
+         * <p>e.g. {-84, 55, 67, -68, -87, 40} -> "AC:37:43:BC:A9:28".
+         */
+        public static String macAddressToString(byte[] macAddress) {
+            if (macAddress == null || macAddress.length != 6) {
+                throw new IllegalArgumentException("Invalid mac address byte array");
+            }
+            StringBuilder sb = new StringBuilder(18);
+            for (byte b : macAddress) {
+                if (sb.length() > 0) {
+                    sb.append(':');
+                }
+                sb.append(String.format("%02x", b));
+            }
+            return Ascii.toUpperCase(sb.toString());
+        }
+
+        /**
+         * Convert a Bluetooth MAC address from string to byte array format. Throws if input string
+         * is not of correct format.
+         *
+         * <p>e.g. "AC:37:43:BC:A9:28" -> {-84, 55, 67, -68, -87, 40}.
+         */
+        public static byte[] macAddressToBytes(String macAddress) {
+            if (macAddress.isEmpty()) {
+                throw new IllegalArgumentException("MAC address cannot be empty");
+            }
+
+            byte[] bytes = new byte[6];
+            List<String> address = Splitter.on(':').splitToList(macAddress);
+            if (address.size() != 6) {
+                throw new IllegalArgumentException("Invalid MAC address format");
+            }
+            for (int i = 0; i < 6; i++) {
+                bytes[i] = Integer.decode("0x" + address.get(i)).byteValue();
+            }
+            return bytes;
+        }
+
+        /**
+         * Convert the hex string to byte array.
+         */
+        public static byte[] hexStringToByteArray(String hex) {
+            // remove whitespace in the hex string.
+            hex = hex.replaceAll("\\s", "");
+
+            int len = hex.length();
+            if (len % 2 != 0) {
+                // Pad the hex string with a leading zero.
+                hex = String.format("0%s", hex);
+                len++;
+            }
+            byte[] data = new byte[len / 2];
+            for (int i = 0; i < len; i += 2) {
+                data[i / 2] =
+                        (byte) ((Character.digit(hex.charAt(i), 16) << 4)
+                                | Character.digit(hex.charAt(i + 1), 16));
+            }
+            return data;
+        }
+    }
+
+    public static long convertNanosToMillis(long timestampNanos) {
+        return timestampNanos / 1_000_000L;
     }
 
     public static void setMeasurementsLimitTimeout(
@@ -154,4 +244,37 @@ public class RangingUtils {
                 null
         );
     }
+
+    /**
+     * Covert bluetooth reason code to ranging reason code.
+     */
+    public static int convertBluetoothReasonCode(int bluetoothReasonCode) {
+        return switch (bluetoothReasonCode) {
+            case BluetoothStatusCodes.REASON_LOCAL_APP_REQUEST,
+                    BluetoothStatusCodes.REASON_REMOTE_REQUEST ->
+                    REQUESTED;
+            case BluetoothStatusCodes.ERROR_TIMEOUT,
+                    BluetoothStatusCodes.ERROR_REMOTE_OPERATION_NOT_SUPPORTED ->
+                    SYSTEM_POLICY;
+            case BluetoothStatusCodes.ERROR_NO_LE_CONNECTION -> LOST_CONNECTION;
+            case BluetoothStatusCodes.ERROR_BAD_PARAMETERS -> ERROR;
+            default -> UNKNOWN;
+        };
+    }
+
+    public static Optional<@RawRangingDevice.RangingUpdateRate Integer> getDurationFromUpdateRate(
+            Range<Duration> allowedRates,
+            ImmutableMap<@RawRangingDevice.RangingUpdateRate Integer, Duration> durations
+    ) {
+        if (allowedRates.contains(durations.get(UPDATE_RATE_FREQUENT))) {
+            return Optional.of(UPDATE_RATE_FREQUENT);
+        } else if (allowedRates.contains(durations.get(UPDATE_RATE_NORMAL))) {
+            return Optional.of(UPDATE_RATE_NORMAL);
+        } else if (allowedRates.contains(durations.get(UPDATE_RATE_INFREQUENT))) {
+            return Optional.of(UPDATE_RATE_INFREQUENT);
+        } else {
+            return Optional.empty();
+        }
+    }
+
 }

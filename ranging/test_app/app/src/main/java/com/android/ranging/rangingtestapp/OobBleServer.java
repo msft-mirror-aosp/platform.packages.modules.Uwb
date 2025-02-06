@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class OobBleServer implements TransportHandle {
     private static final String TAG = "OobBleServer";
-    private final BleConnectionViewModelPeripheral mBleConnectionViewModelPeripheral;
+    private final BleConnection mBleConnection;
     private final LoggingListener mLoggingListener;
     private final BluetoothDevice mBluetoothDevice;
     private final BluetoothManager mBluetoothManager;
@@ -47,9 +47,9 @@ public class OobBleServer implements TransportHandle {
     private Executor mReceiveExecutor;
 
     public OobBleServer(
-            Context context, BleConnectionViewModelPeripheral bleConnectionViewModelPeripheral,
+            Context context, BleConnection bleConnection,
             BluetoothDevice device, LoggingListener loggingListener) {
-        mBleConnectionViewModelPeripheral = bleConnectionViewModelPeripheral;
+        mBleConnection = bleConnection;
         mLoggingListener = loggingListener;
         mBluetoothDevice = device;
         mBluetoothManager = context.getSystemService(BluetoothManager.class);
@@ -102,7 +102,7 @@ public class OobBleServer implements TransportHandle {
                             + OobBleServer.this.mBluetoothDevice.getAddress()
                             + " on "
                             + mServerSocket.getPsm());
-                    mBleConnectionViewModelPeripheral.notifyPsm(mServerSocket.getPsm());
+                    mBleConnection.notifyPsm(mServerSocket.getPsm());
                     BluetoothSocket socket = mServerSocket.accept();
                     printLog("Accepted connection from " + socket.getRemoteDevice().getAddress());
                     if (OobBleServer.this.mBluetoothDevice.equals(socket.getRemoteDevice())) {
@@ -161,6 +161,6 @@ public class OobBleServer implements TransportHandle {
     }
 
     private void printLog(String log) {
-        mLoggingListener.onLog(log);
+        mLoggingListener.log(log);
     }
 }
