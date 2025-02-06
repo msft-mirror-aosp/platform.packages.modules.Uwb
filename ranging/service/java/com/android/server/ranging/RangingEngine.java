@@ -155,6 +155,7 @@ public class RangingEngine {
 
         EnumSet<RangingTechnology> selectedTechnologies =
                 selectTechnologiesToUseWithPeer(capabilities);
+        Log.v(TAG, "Selected technologies " + selectedTechnologies + " for peer " + device);
 
         UwbOobCapabilities uwbCapabilities = capabilities.getUwbCapabilities();
         CsOobCapabilities csCapabilities = capabilities.getCsCapabilities();
