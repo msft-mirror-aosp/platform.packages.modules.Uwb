@@ -301,6 +301,30 @@ public class BaseRangingSession {
         }
     }
 
+    protected ImmutableSet<RangingTechnology> getTechnologiesUsedByPeer(RangingDevice device) {
+        synchronized (mLock) {
+            Peer peer = mPeers.get(device);
+            if (peer == null) {
+                return ImmutableSet.of();
+            } else {
+                return ImmutableSet.copyOf(peer.technologies);
+            }
+        }
+    }
+
+    protected void stopTechnologies(Set<RangingTechnology> technologies) {
+        Log.v(TAG, "Stop ranging with technologies " + technologies);
+        synchronized (mLock) {
+            long token = Binder.clearCallingIdentity();
+            for (RangingAdapter adapter : mAdapters.values()) {
+                if (technologies.contains(adapter.getTechnology())) {
+                    adapter.stop();
+                }
+            }
+            Binder.restoreCallingIdentity(token);
+        }
+    }
+
     private class AdapterListener implements RangingAdapter.Callback {
         private final TechnologyConfig mConfig;
 

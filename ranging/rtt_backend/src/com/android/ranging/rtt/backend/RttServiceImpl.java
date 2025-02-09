@@ -19,6 +19,7 @@ package com.android.ranging.rtt.backend;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.net.wifi.aware.Characteristics;
 import android.net.wifi.aware.WifiAwareManager;
 import android.util.Log;
 
@@ -31,6 +32,7 @@ public class RttServiceImpl implements RttService {
     private static final String TAG = RttServiceImpl.class.getSimpleName();
     private final Context mContext;
     private WifiAwareManager mWifiAwareManager;
+    private Characteristics mCharacteristics;
 
     public RttServiceImpl(@NonNull Context context) {
         this.mContext = context;
@@ -61,19 +63,58 @@ public class RttServiceImpl implements RttService {
         return true;
     }
 
-    @SuppressLint("NewApi") // FLAG_RANGING_RTT_ENABLED will be enabled from Android 16.
-    @Override
-    public boolean hasPeriodicRangingSupport() {
+    public void getCharacteristics() {
+        if (mCharacteristics != null) {
+            return;
+        }
         if (mWifiAwareManager == null) {
             Log.e(TAG, "WifiAwareManager is null");
-            return false;
+            return;
         }
         try {
-            // Uncommented in goog/main.
-            // return mWifiAwareManager.getCharacteristics().isPeriodicRangingSupported();
+            mCharacteristics = mWifiAwareManager.getCharacteristics();
         } catch (RuntimeException e) {
             Log.e(TAG, "Failed to get WifiAwareManager#characteristics");
         }
+    }
+
+    @SuppressLint("NewApi") // FLAG_RANGING_RTT_ENABLED will be enabled from Android 16.
+    @Override
+    public boolean hasPeriodicRangingSupport() {
+        getCharacteristics();
+        if (mCharacteristics == null) {
+            Log.e(TAG, "Not able to get WiFi aware characteristics");
+            return false;
+        }
+        // Uncommented in goog/main.
+        //return mCharacteristics.isPeriodicRangingSupported();
         return false;
     }
+
+    @SuppressLint("NewApi") // FLAG_RANGING_RTT_ENABLED will be enabled from Android 16.
+    @Override
+    public int getMaxSupportedBandwidth() {
+        getCharacteristics();
+        if (mCharacteristics == null) {
+            Log.e(TAG, "Not able to get WiFi aware characteristics");
+            return 255;
+        }
+        // Uncommented in goog/main.
+        //return mCharacteristics.getMaxSupportedRangingPacketBandwidth();
+        return 255;
+    }
+
+    @SuppressLint("NewApi") // FLAG_RANGING_RTT_ENABLED will be enabled from Android 16.
+    @Override
+    public int getMaxSupportedRxChains() {
+        getCharacteristics();
+        if (mCharacteristics == null) {
+            Log.e(TAG, "Not able to get WiFi aware characteristics");
+            return 255;
+        }
+        // Uncommented in goog/main.
+        //return mCharacteristics.getMaxSupportedRxChains();
+        return 255;
+    }
+
 }
