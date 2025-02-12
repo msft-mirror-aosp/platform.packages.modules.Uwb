@@ -18,9 +18,12 @@ package com.android.server.ranging.uwb;
 
 import static com.android.ranging.uwb.backend.internal.RangingMeasurement.CONFIDENCE_HIGH;
 import static com.android.ranging.uwb.backend.internal.RangingMeasurement.CONFIDENCE_MEDIUM;
-import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.ERROR;
-import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.FAILED_TO_START;
-import static com.android.server.ranging.RangingAdapter.Callback.ClosedReason.SYSTEM_POLICY;
+import static com.android.server.ranging.RangingAdapter.Callback.Reason.ERROR;
+import static com.android.server.ranging.RangingAdapter.Callback.Reason.FAILED_TO_START;
+import static com.android.server.ranging.RangingAdapter.Callback.Reason.LOCAL_REQUEST;
+import static com.android.server.ranging.RangingAdapter.Callback.Reason.LOST_CONNECTION;
+import static com.android.server.ranging.RangingAdapter.Callback.Reason.SYSTEM_POLICY;
+import static com.android.server.ranging.RangingAdapter.Callback.Reason.UNKNOWN;
 import static com.android.server.ranging.uwb.UwbConfig.toBackend;
 
 import android.content.AttributionSource;
@@ -59,6 +62,7 @@ import com.android.server.ranging.util.DataNotificationManager;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
@@ -289,7 +293,6 @@ public class UwbAdapter implements RangingAdapter {
         }
         var future = Futures.submit(mUwbClient::stopRanging, mExecutorService);
         Futures.addCallback(future, mUwbClientResultHandlers.stopRanging, mExecutorService);
-
     }
 
     public @Nullable UwbComplexChannel getComplexChannel() {
@@ -310,8 +313,8 @@ public class UwbAdapter implements RangingAdapter {
         public void onRangingInitialized(UwbDevice localDevice) {
             Log.i(TAG, "onRangingInitialized");
             synchronized (mStateMachine) {
-                if (mStateMachine.getState() == State.STARTED) {
-                    mPeers.keySet().forEach(mCallbacks::onStarted);
+                if (mStateMachine.getState() == State.STARTED && !mPeers.isEmpty()) {
+                    mCallbacks.onStarted(ImmutableSet.copyOf(mPeers.keySet()));
                 }
             }
         }
@@ -347,11 +350,10 @@ public class UwbAdapter implements RangingAdapter {
         @Override
         public void onRangingSuspended(UwbDevice localDevice, @RangingSuspendedReason int reason) {
             Log.i(TAG, "onRangingSuspended: " + reason);
-            if (reason != REASON_STOP_RANGING_CALLED && mUwbClient.isHwTurnOffEnabled()) {
-                mBackendExecutor.execute(() -> UwbHwSwitchHelper.disable(mContext,
-                        mAttributionSource));
+            if (mUwbClient.isHwTurnOffEnabled()) {
+                UwbHwSwitchHelper.disable(mContext, mAttributionSource);
             }
-            closeForReason(convertReason(reason));
+            closeForReason(convertClosedReason(reason));
         }
 
         @Override
@@ -362,7 +364,8 @@ public class UwbAdapter implements RangingAdapter {
                 RangingDevice device = convertPeerDevice(peer);
                 if (device != null) {
                     mPeers.remove(device);
-                    mCallbacks.onStopped(device);
+                    mCallbacks.onStopped(
+                            ImmutableSet.of(device), convertDisconnectedReason(reason));
                 }
             }
         }
@@ -371,25 +374,39 @@ public class UwbAdapter implements RangingAdapter {
         public void onPeerConnected(UwbDevice peer) {
             RangingDevice device = convertPeerDevice(peer);
             if (device != null) {
-                mCallbacks.onStarted(device);
+                mCallbacks.onStarted(ImmutableSet.of(device));
             }
         }
 
-        private static @Callback.ClosedReason int convertReason(
+
+        private static @Callback.Reason int convertDisconnectedReason(
+                @PeerDisconnectedReason int reason
+        ) {
+            return switch (reason) {
+                case PeerDisconnectedReason.UNKNOWN -> UNKNOWN;
+                case PeerDisconnectedReason.LOCAL_DEVICE_REQUEST -> LOCAL_REQUEST;
+                case PeerDisconnectedReason.SYSTEM_POLICY -> SYSTEM_POLICY;
+                case PeerDisconnectedReason.FAILED_TO_ADD_CONTROLEE -> LOST_CONNECTION;
+                default -> UNKNOWN;
+            };
+        }
+
+        private static @Callback.Reason int convertClosedReason(
                 @RangingSessionCallback.RangingSuspendedReason int reason) {
             switch (reason) {
                 case REASON_WRONG_PARAMETERS:
                 case REASON_FAILED_TO_START:
                     return FAILED_TO_START;
                 case REASON_STOPPED_BY_PEER:
+                    return Callback.Reason.REMOTE_REQUEST;
                 case REASON_STOP_RANGING_CALLED:
-                    return Callback.ClosedReason.REQUESTED;
+                    return Callback.Reason.LOCAL_REQUEST;
                 case REASON_MAX_RANGING_ROUND_RETRY_REACHED:
-                    return Callback.ClosedReason.LOST_CONNECTION;
+                    return Callback.Reason.LOST_CONNECTION;
                 case REASON_SYSTEM_POLICY:
-                    return Callback.ClosedReason.SYSTEM_POLICY;
+                    return Callback.Reason.SYSTEM_POLICY;
                 default:
-                    return Callback.ClosedReason.UNKNOWN;
+                    return Callback.Reason.UNKNOWN;
             }
         }
 
@@ -417,15 +434,20 @@ public class UwbAdapter implements RangingAdapter {
         }
     }
 
-    /** Close the session, disconnecting all peers and resetting internal state. */
-    private void closeForReason(@Callback.ClosedReason int reason) {
+    /**
+     * Informs callbacks that all peers disconnected and the session closed. Resets internal
+     * state.
+     */
+    private void closeForReason(@Callback.Reason int reason) {
         synchronized (mStateMachine) {
             mStateMachine.setState(State.STOPPED);
             if (mCallbacks == null) {
                 Log.i(TAG, "Callback is empty.");
                 return;
             }
-            mPeers.keySet().forEach(mCallbacks::onStopped);
+            if (!mPeers.isEmpty()) {
+                mCallbacks.onStopped(ImmutableSet.copyOf(mPeers.keySet()), reason);
+            }
             mCallbacks.onClosed(reason);
             clear();
         }
@@ -458,9 +480,6 @@ public class UwbAdapter implements RangingAdapter {
         public final FutureCallback<Integer> stopRanging = new FutureCallback<>() {
             @Override
             public void onSuccess(@Utils.UwbStatusCodes Integer status) {
-                if (mUwbClient.isHwTurnOffEnabled()) {
-                    UwbHwSwitchHelper.disable(mContext, mAttributionSource);
-                }
             }
 
             @Override
