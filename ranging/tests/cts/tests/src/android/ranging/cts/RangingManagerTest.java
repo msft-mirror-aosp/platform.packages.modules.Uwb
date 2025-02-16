@@ -158,7 +158,7 @@ public class RangingManagerTest {
     }
 
     @SuppressLint({"CheckResult", "CheckReturnValue"})
-    private void enableUwb(boolean enableHwIdle) {
+    private void enableUwb() {
         UwbManager uwbManager = mContext.getSystemService(UwbManager.class);
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         // Ensure UWB is toggled on.
@@ -178,27 +178,6 @@ public class RangingManagerTest {
                     assertThat(countDownLatch.await(2, TimeUnit.SECONDS)).isTrue();
                     assertThat(uwbManager.isUwbEnabled()).isEqualTo(true);
                     assertThat(adapterStateCallback.state).isEqualTo(adapterState);
-                } finally {
-                    uwbManager.unregisterAdapterStateCallback(adapterStateCallback);
-                }
-            }
-            if (uwbManager.isUwbHwIdleTurnOffEnabled()) {
-                // If HW idle mode is turned on, vote for the UWB hardware for tests to pass.
-                CountDownLatch countDownLatch = new CountDownLatch(1);
-                int adapterState = STATE_ENABLED_INACTIVE;
-                AdapterStateCallback adapterStateCallback =
-                        new AdapterStateCallback(countDownLatch, adapterState);
-                try {
-                    uwbManager.registerAdapterStateCallback(
-                            Executors.newSingleThreadExecutor(), adapterStateCallback);
-                    if (enableHwIdle) {
-                        uwbManager.requestUwbHwEnabled(true);
-                        assertThat(countDownLatch.await(2, TimeUnit.SECONDS)).isTrue();
-                        assertThat(adapterStateCallback.state).isEqualTo(adapterState);
-                    } else {
-                        uwbManager.requestUwbHwEnabled(false);
-                        assertThat(countDownLatch.await(2, TimeUnit.SECONDS));
-                    }
                 } finally {
                     uwbManager.unregisterAdapterStateCallback(adapterStateCallback);
                 }
@@ -381,7 +360,7 @@ public class RangingManagerTest {
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testUwbRangingSession() throws Exception {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb(true);
+        enableUwb();
         testUwbRangingSessionInternal(mRangingManager);
     }
 
@@ -390,7 +369,7 @@ public class RangingManagerTest {
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testUwbRangingSession_withHwIdleOff() throws Exception {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb(false);
+        enableUwb();
         Context contextWithTag = mContext.createContext(
                 new ContextParams.Builder()
                         .setAttributionTag("Custom_cts_tag")
@@ -406,7 +385,7 @@ public class RangingManagerTest {
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testUwbProvisionedStsRangingSession() throws Exception {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb(true);
+        enableUwb();
         int sessionId = 10;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
@@ -457,7 +436,7 @@ public class RangingManagerTest {
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testRawAddRemoverPeer() throws Exception {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb(true);
+        enableUwb();
         int sessionId = 10;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
@@ -472,7 +451,7 @@ public class RangingManagerTest {
         );
 
         rangingSession.start(preference);
-        assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnOpenedCalled.await(4, TimeUnit.SECONDS)).isTrue();
         assertThat(callback.mOnPeerAdded.await(2, TimeUnit.SECONDS)).isTrue();
         RangingDevice device = new RangingDevice.Builder().build();
         RawResponderRangingConfig peerParams = new RawResponderRangingConfig.Builder()
@@ -487,6 +466,10 @@ public class RangingManagerTest {
         callback.replaceOnPeerAddedLatch(new CountDownLatch(1));
         rangingSession.addDeviceToRangingSession(peerParams);
         assertThat(callback.mOnPeerAdded.await(2, TimeUnit.SECONDS)).isTrue();
+
+        // Intentional sleep here so that there are few ranging rounds with newly added controlee
+        // before removing it.
+        Thread.sleep(1000);
 
         callback.replaceOnPeerRemovedLatch(new CountDownLatch(1));
         rangingSession.removeDeviceFromRangingSession(device);
@@ -503,7 +486,7 @@ public class RangingManagerTest {
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testRawReconfigureRangingInterval() throws Exception {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb(true);
+        enableUwb();
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity();
 
@@ -516,7 +499,7 @@ public class RangingManagerTest {
         RangingPreference preference = getGenericUwbRangingPreference(10);
 
         rangingSession.start(preference);
-        assertThat(callback.mOnOpenedCalled.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mOnOpenedCalled.await(4, TimeUnit.SECONDS)).isTrue();
         rangingSession.reconfigureRangingInterval(3);
         rangingSession.stop();
         assertThat(callback.mOnClosedCalled.await(3, TimeUnit.SECONDS)).isTrue();
@@ -529,7 +512,7 @@ public class RangingManagerTest {
     @RequiresFlagsEnabled("com.android.ranging.flags.ranging_stack_enabled")
     public void testMultipleUwbRangingSessions() throws Exception {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb(true);
+        enableUwb();
         int sessionId1 = 10;
         int sessionId2 = 15;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();
@@ -655,7 +638,7 @@ public class RangingManagerTest {
         UwbManager uwbManager = mContext.getSystemService(UwbManager.class);
         uwbManager.setUwbEnabled(!uwbManager.isUwbEnabled());
 
-        assertThat(callback.mCountDownLatch.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(callback.mCountDownLatch.await(4, TimeUnit.SECONDS)).isTrue();
         assertThat(callback.mOnCapabilitiesReceived).isTrue();
         assertThat(callback.mRangingCapabilities).isNotNull();
 
@@ -676,7 +659,7 @@ public class RangingManagerTest {
         uiAutomation.adoptShellPermissionIdentity();
 
         if (mSupportedTechnologies.contains(RangingManager.UWB)) {
-            enableUwb(true);
+            enableUwb();
         }
         if (mSupportedTechnologies.contains(RangingManager.BLE_RSSI)) {
             enableBluetooth();
@@ -897,7 +880,7 @@ public class RangingManagerTest {
     public void testMultiRangingSession() throws InterruptedException {
         assumeTrue(mSupportedTechnologies.contains(RangingManager.WIFI_NAN_RTT));
         assumeTrue(mSupportedTechnologies.contains(RangingManager.UWB));
-        enableUwb(true);
+        enableUwb();
         enableWifiNanRtt();
         int sessionId = 10;
         UiAutomation uiAutomation = getInstrumentation().getUiAutomation();

@@ -30,6 +30,8 @@ filegroup {
     name: "service-ranging-srcs",
     srcs: [
         "java/**/*.java",
+        ":service-uwb-shared-with-ranging-srcs",
+        ":statslog-ranging-java-gen",
     ],
 }
 
@@ -54,6 +56,7 @@ java_library {
         "framework-wifi.stubs.module_lib",
         "framework-bluetooth.stubs.module_lib",
         "framework-location.stubs.module_lib",
+        "ServiceUwbResources",
     ],
 
     static_libs: [
@@ -119,4 +122,17 @@ java_library {
     apex_available: [
         "com.android.uwb",
     ],
+}
+
+// Metrics logging
+// ============================================================
+genrule {
+    name: "statslog-ranging-java-gen",
+    tools: ["stats-log-api-gen"],
+    cmd: "$(location stats-log-api-gen) " +
+        "--java $(out) " +
+        "--module ranging " +
+        "--javaPackage com.android.server.ranging.metrics " +
+        "--javaClass RangingStatsLog",
+    out: ["com/android/server/ranging/metrics/RangingStatsLog.java"],
 }
