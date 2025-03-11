@@ -32,9 +32,9 @@ import androidx.annotation.NonNull;
 
 import com.android.ranging.uwb.backend.internal.RangingTimingParams;
 import com.android.ranging.uwb.backend.internal.Utils;
-import com.android.server.ranging.RangingEngine;
 import com.android.server.ranging.RangingTechnology;
 import com.android.server.ranging.RangingUtils.Conversions;
+import com.android.server.ranging.oob.SetConfigurationMessage;
 import com.android.server.ranging.oob.TechnologyHeader;
 
 import com.google.auto.value.AutoValue;
@@ -46,7 +46,7 @@ import java.util.Arrays;
 
 /** Configuration for UWB sent as part SetConfigurationMessage for Finder OOB. */
 @AutoValue
-public abstract class UwbOobConfig {
+public abstract class UwbOobConfig implements SetConfigurationMessage.TechnologyOobConfig {
 
     private static final int MIN_SIZE_BYTES = 19;
 
@@ -198,9 +198,10 @@ public abstract class UwbOobConfig {
                 .array();
     }
 
-    public @NonNull UwbConfig toTechnologyConfig(UwbAddress localAddress, RangingDevice peer)
-            throws RangingEngine.ConfigSelectionException {
-
+    /**
+     * Throws {@link IllegalArgumentException} if the conversion could not be completed successfully
+     */
+    public @NonNull UwbConfig toTechnologyConfig(UwbAddress localAddress, RangingDevice peer) {
         return new UwbConfig.Builder(
                 new UwbRangingParams.Builder(
                         getSessionId(), getSelectedConfigId(), localAddress, getUwbAddress())
@@ -217,9 +218,11 @@ public abstract class UwbOobConfig {
                 .build();
     }
 
-    private @RawRangingDevice.RangingUpdateRate int getUpdateRateFromIntervalMs()
-            throws RangingEngine.ConfigSelectionException {
-
+    /**
+     * Throws {@link IllegalArgumentException} if the ranging interval does not correspond to an
+     * update rate.
+     */
+    private @RawRangingDevice.RangingUpdateRate int getUpdateRateFromIntervalMs() {
         RangingTimingParams timings = Utils.getRangingTimingParams((int) getSelectedConfigId());
 
         if (getSelectedRangingIntervalMs() == timings.getRangingIntervalFast()) {
@@ -229,7 +232,7 @@ public abstract class UwbOobConfig {
         } else if (getSelectedRangingIntervalMs() == timings.getRangingIntervalInfrequent()) {
             return UPDATE_RATE_INFREQUENT;
         } else {
-            throw new RangingEngine.ConfigSelectionException(
+            throw new IllegalArgumentException(
                     "Unsupported ranging interval ms " + getSelectedRangingIntervalMs());
         }
     }
