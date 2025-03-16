@@ -17,6 +17,8 @@
 package com.android.ranging.tests.rtt.backend;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,9 +73,20 @@ public class RttRangerTest {
 
     @Test
     public void testStartStopRanging() {
-        mRttRanger.startRanging(mMockPeerHandle, mMockListener, 200);
+        mRttRanger.startRanging(mMockPeerHandle, mMockListener, 200, 0);
 
         verify(mMockRttManager, times(1)).startRanging(any(), any(), any());
+
+        mRttRanger.stopRanging();
+        verify(mMockAlarmManager, times(0)).cancel(any(AlarmManager.OnAlarmListener.class));
+    }
+
+    @Test
+    public void testStartStopRanging_withDelay() {
+        mRttRanger.startRanging(mMockPeerHandle, mMockListener, 200, 100);
+
+        verify(mMockRttManager, times(0)).startRanging(any(), any(), any());
+        verify(mMockAlarmManager, times(1)).setExact(anyInt(), anyLong(), any(), any(), any());
 
         mRttRanger.stopRanging();
         verify(mMockAlarmManager, times(1)).cancel(any(AlarmManager.OnAlarmListener.class));
@@ -82,7 +95,7 @@ public class RttRangerTest {
     @Test
     public void testStartRanging_whenDisabled() {
         when(mMockRttManager.isAvailable()).thenReturn(false);
-        mRttRanger.startRanging(mMockPeerHandle, mMockListener, 200);
+        mRttRanger.startRanging(mMockPeerHandle, mMockListener, 200, 0);
 
         verify(mMockRttManager, times(0)).startRanging(any(), any(), any());
         verify(mMockListener).onRangingFailure(
